@@ -53,7 +53,7 @@ Roadmap отражает статус реализации, но не замен
 - [x] Retry/dead-letter policies
 - [x] Transactional outbox
 - [x] Correlation-aware audit service
-- [ ] Entity/property REST API
+- [x] Entity/property REST API
 - [ ] Backup and restore smoke test
 
 ## Decision gates
