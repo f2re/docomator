@@ -20,6 +20,13 @@ function migratedFixture(): {
   const databasePath = path.join(directory, "docomator.db");
   const database = new DatabaseSync(databasePath);
   database.exec("PRAGMA foreign_keys = ON;");
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      name TEXT PRIMARY KEY,
+      checksum TEXT NOT NULL,
+      applied_at TEXT NOT NULL
+    );
+  `);
   const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
   const migrationsDirectory = path.resolve(currentDirectory, "../../../migrations");
   for (const migration of fs
