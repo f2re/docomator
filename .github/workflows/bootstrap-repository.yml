@@ -27,10 +27,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          test -f .bootstrap-payload.b64
-          base64 --decode .bootstrap-payload.b64 > /tmp/docomator-bootstrap.tar.xz
+          compgen -G '.bootstrap-payload.part-*' >/dev/null
+          cat .bootstrap-payload.part-* | base64 --decode > /tmp/docomator-bootstrap.tar.xz
           tar -xJf /tmp/docomator-bootstrap.tar.xz
-          rm -f .bootstrap-payload.b64 .bootstrap-ready
+          rm -f .bootstrap-payload.part-* .bootstrap-ready
           rm -f .github/workflows/bootstrap-repository.yml
           git diff --check
 
