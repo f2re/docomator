@@ -1,3 +1,4 @@
+import { hostname } from "node:os";
 import path from "node:path";
 
 export interface CommonConfig {
@@ -14,8 +15,12 @@ export interface ApiConfig extends CommonConfig {
 }
 
 export interface WorkerConfig extends CommonConfig {
+  workerId: string;
   pollIntervalMs: number;
   heartbeatIntervalMs: number;
+  leaseDurationMs: number;
+  retryBaseMs: number;
+  retryMaxMs: number;
 }
 
 const LOG_LEVELS = new Set<CommonConfig["logLevel"]>([
@@ -88,8 +93,31 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
 }
 
 export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
+  const retryBaseMs = parseInteger(
+    "DOCOMATOR_WORKER_RETRY_BASE_MS",
+    env.DOCOMATOR_WORKER_RETRY_BASE_MS,
+    1_000,
+    100,
+    3_600_000
+  );
+  const retryMaxMs = parseInteger(
+    "DOCOMATOR_WORKER_RETRY_MAX_MS",
+    env.DOCOMATOR_WORKER_RETRY_MAX_MS,
+    300_000,
+    100,
+    86_400_000
+  );
+  if (retryBaseMs > retryMaxMs) {
+    throw new Error("DOCOMATOR_WORKER_RETRY_BASE_MS must not exceed DOCOMATOR_WORKER_RETRY_MAX_MS");
+  }
+
+  const configuredWorkerId = env.DOCOMATOR_WORKER_ID?.trim();
   return {
     ...common(env),
+    workerId:
+      configuredWorkerId === undefined || configuredWorkerId.length === 0
+        ? `${hostname()}:${process.pid}`
+        : configuredWorkerId,
     pollIntervalMs: parseInteger(
       "DOCOMATOR_WORKER_POLL_MS",
       env.DOCOMATOR_WORKER_POLL_MS,
@@ -103,6 +131,15 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
       30_000,
       1000,
       3_600_000
-    )
+    ),
+    leaseDurationMs: parseInteger(
+      "DOCOMATOR_WORKER_LEASE_MS",
+      env.DOCOMATOR_WORKER_LEASE_MS,
+      60_000,
+      1_000,
+      86_400_000
+    ),
+    retryBaseMs,
+    retryMaxMs
   };
 }

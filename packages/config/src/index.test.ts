@@ -18,11 +18,30 @@ test("invalid ports are rejected", () => {
   );
 });
 
-test("worker intervals are configurable", () => {
+test("worker queue timings and identity are configurable", () => {
   const config = loadWorkerConfig({
+    DOCOMATOR_WORKER_ID: "worker-test",
     DOCOMATOR_WORKER_POLL_MS: "250",
-    DOCOMATOR_WORKER_HEARTBEAT_MS: "5000"
+    DOCOMATOR_WORKER_HEARTBEAT_MS: "5000",
+    DOCOMATOR_WORKER_LEASE_MS: "20000",
+    DOCOMATOR_WORKER_RETRY_BASE_MS: "500",
+    DOCOMATOR_WORKER_RETRY_MAX_MS: "10000"
   });
+  assert.equal(config.workerId, "worker-test");
   assert.equal(config.pollIntervalMs, 250);
   assert.equal(config.heartbeatIntervalMs, 5000);
+  assert.equal(config.leaseDurationMs, 20_000);
+  assert.equal(config.retryBaseMs, 500);
+  assert.equal(config.retryMaxMs, 10_000);
+});
+
+test("worker retry range must be coherent", () => {
+  assert.throws(
+    () =>
+      loadWorkerConfig({
+        DOCOMATOR_WORKER_RETRY_BASE_MS: "2000",
+        DOCOMATOR_WORKER_RETRY_MAX_MS: "1000"
+      }),
+    /must not exceed/
+  );
 });
