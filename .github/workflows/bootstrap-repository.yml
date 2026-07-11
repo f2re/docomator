@@ -44,7 +44,9 @@ jobs:
                   if root not in target.parents and target != root:
                       raise SystemExit(f"Bootstrap path escaped repository: {relative}")
                   target.parent.mkdir(parents=True, exist_ok=True)
-                  target.write_text(entry['content'], encoding='utf-8', newline='')
+                  mode = 'a' if entry.get('append', False) else 'w'
+                  with target.open(mode, encoding='utf-8', newline='') as stream:
+                      stream.write(entry['content'])
                   os.chmod(target, int(entry['mode'], 8))
           PY
           rm -f .bootstrap-manifest-*.json .bootstrap-payload.part-* .bootstrap-ready
