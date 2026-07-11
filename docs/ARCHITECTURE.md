@@ -83,7 +83,7 @@ flowchart LR
 - **Template field** — потребность конкретного документа.
 - **Binding** — техническая координата в DOCX/XLSX.
 
-EAV без типов не используется. Значение хранится в JSON в bootstrap-схеме, но repository layer обязан валидировать его по `property_definitions.value_type`; при появлении измеренного bottleneck допускается выделение typed projection columns новой migration.
+EAV без типов не используется. `value_json` остаётся каноническим сериализованным представлением, а migration `0002_persistence_kernel.sql` добавляет индексируемые typed projection columns. Repository layer обязан валидировать значение через codec registry до записи.
 
 ## 5. Document intake и компиляция
 
@@ -231,7 +231,7 @@ Delivery имеет отдельный key, чтобы повторить оди
 
 ## 11. Persistent queue
 
-`worker_jobs` использует состояния `pending`, `running`, `retry`, `complete`, `dead`.
+`worker_jobs` использует состояния `pending`, `running`, `retry`, `completed`, `dead_letter`.
 
 Claim algorithm:
 
@@ -242,7 +242,7 @@ Claim algorithm:
 5. выполнить работу без transaction;
 6. зафиксировать результат либо retry.
 
-Worker periodically reclaims expired leases. LLM concurrency по умолчанию — 1.
+Worker periodically reclaims expired leases. Завершение и retry требуют действующего lease текущего worker. LLM concurrency по умолчанию — 1. Подробный контракт: [PERSISTENCE_KERNEL.md](PERSISTENCE_KERNEL.md).
 
 ## 12. Delivery
 

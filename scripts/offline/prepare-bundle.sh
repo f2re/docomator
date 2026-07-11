@@ -154,6 +154,7 @@ mkdir -p \
   "$BUNDLE_DIR/payload/app/apps/worker" \
   "$BUNDLE_DIR/payload/app/packages/config" \
   "$BUNDLE_DIR/payload/app/packages/contracts" \
+  "$BUNDLE_DIR/payload/app/packages/storage" \
   "$BUNDLE_DIR/payload/app/scripts/runtime" \
   "$BUNDLE_DIR/payload/runtime/node" \
   "$BUNDLE_DIR/payload/runtime/llama" \
@@ -167,7 +168,7 @@ cp "$ROOT_DIR/package.json" "$ROOT_DIR/package-lock.json" "$ROOT_DIR/VERSION" \
 cp -a "$ROOT_DIR/migrations" "$BUNDLE_DIR/payload/app/"
 cp -a "$ROOT_DIR/scripts/runtime/." "$BUNDLE_DIR/payload/app/scripts/runtime/"
 
-for workspace in apps/api apps/worker packages/config packages/contracts; do
+for workspace in apps/api apps/worker packages/config packages/contracts packages/storage; do
   destination="$BUNDLE_DIR/payload/app/$workspace"
   cp "$ROOT_DIR/$workspace/package.json" "$destination/"
   cp -a "$ROOT_DIR/$workspace/dist" "$destination/"

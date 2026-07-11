@@ -14,7 +14,7 @@ Roadmap отражает статус реализации, но не замен
 | Milestone | Статус | Результат |
 |---|---:|---|
 | M0 Repository bootstrap | 🟡 | runnable API/worker, schema, docs, Codex agents, offline scripts |
-| M1 Persistence kernel | ⬜ | repositories, typed properties, queue, outbox, audit |
+| M1 Persistence kernel | 🟡 | storage kernel, typed properties, queue, outbox, audit |
 | M2 Secure OOXML intake | ⬜ | upload, security checks, DOCX/XLSX Document IR |
 | M3 Template compiler | ⬜ | content controls, defined names, Safe Scalar render |
 | M4 Manual workflow/UI | ⬜ | catalog, forms, review, download, RBAC |
@@ -42,17 +42,17 @@ Roadmap отражает статус реализации, но не замен
 - [x] CI workflow definition
 - [ ] Validate full bundle under Node.js 24.18 on reference Debian/Astra image
 - [ ] Validate install/update rollback on clean systemd VM
-- [ ] Merge bootstrap PR
+- [x] Merge bootstrap PR
 
 ## M1 candidate issues
 
-- [ ] Storage transaction API and unit-of-work
-- [ ] Typed property codec registry
-- [ ] Content-addressed object storage
-- [ ] Worker queue claim and lease renewal
-- [ ] Retry/dead-letter policies
-- [ ] Transactional outbox
-- [ ] Correlation-aware audit service
+- [x] Storage transaction API and unit-of-work
+- [x] Typed property codec registry
+- [x] Content-addressed object storage
+- [x] Worker queue claim and lease renewal
+- [x] Retry/dead-letter policies
+- [x] Transactional outbox
+- [x] Correlation-aware audit service
 - [ ] Entity/property REST API
 - [ ] Backup and restore smoke test
 
