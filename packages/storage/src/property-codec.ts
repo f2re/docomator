@@ -19,7 +19,7 @@ export const PROPERTY_VALUE_TYPES = [
 export type PropertyValueType = (typeof PROPERTY_VALUE_TYPES)[number];
 
 export interface PropertyCodecOptions {
-  allowedValues?: readonly string[];
+  allowedValues?: readonly string[] | undefined;
 }
 
 export interface EncodedPropertyValue {
