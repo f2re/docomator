@@ -1,0 +1,41 @@
+# Dependencies and build output
+node_modules/
+**/node_modules/
+**/dist/
+coverage/
+.cache/
+.tmp/
+
+# Runtime data
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+objects/
+previews/
+backups/
+logs/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+config/docomator.env
+*.pem
+*.key
+
+# Offline release artifacts
+offline-bundles/
+*.tar.gz
+*.tar.zst
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Codex local state
+.codex-log/
+.codex/sessions/
