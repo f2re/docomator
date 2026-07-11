@@ -1,0 +1,89 @@
+name: Refresh knowledge registry PR metadata
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/knowledge-registry-api'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout knowledge registry branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Refresh lockfile and project status
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"Expected text not found in {path}: {old!r}")
+              target.write_text(text.replace(old, new), encoding="utf-8")
+
+          replace(
+              "README.md",
+              '> Проект находится на этапе persistence kernel. Уже работают API/worker bootstrap, SQLite unit-of-work, типизированные projections, content-addressed storage, persistent queue, transactional outbox, audit, миграции и офлайн-упаковка. DOCX/XLSX renderer, Template Studio, scheduler и delivery-коннекторы находятся в roadmap и ещё не заявлены как готовые функции.',
+              '> Проект находится на этапе persistence kernel. Уже работают API/worker bootstrap, Knowledge Registry REST API, SQLite unit-of-work, типизированные projections, content-addressed storage, persistent queue, transactional outbox, audit, миграции и офлайн-упаковка. DOCX/XLSX renderer, Template Studio, scheduler и delivery-коннекторы находятся в roadmap и ещё не заявлены как готовые функции.',
+          )
+          replace(
+              "README.md",
+              '| API | 🟡 | `/healthz`, `/readyz`, `/api/v1/system/info` |',
+              '| API | 🟡 | health/readiness, system info и Knowledge Registry REST API |',
+          )
+          replace(
+              "README.md",
+              'Подробный статус: [ROADMAP.md](docs/ROADMAP.md).',
+              'Подробный статус: [ROADMAP.md](docs/ROADMAP.md). Контракт данных: [KNOWLEDGE_REGISTRY_API.md](docs/KNOWLEDGE_REGISTRY_API.md).',
+          )
+          replace(
+              "README.md",
+              'curl http://127.0.0.1:8080/api/v1/system/info\n',
+              'curl http://127.0.0.1:8080/api/v1/system/info\ncurl http://127.0.0.1:8080/api/v1/knowledge/entity-types\n',
+          )
+          replace(
+              "docs/ROADMAP.md",
+              '- [ ] Entity/property REST API',
+              '- [x] Entity/property REST API',
+          )
+          PY
+
+      - name: Commit generated lockfile and status updates
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git add package-lock.json README.md docs/ROADMAP.md
+          if git diff --cached --quiet; then
+            echo 'Generated files are current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'refresh knowledge registry lockfile and roadmap'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
