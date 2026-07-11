@@ -119,9 +119,10 @@ test("knowledge API creates typed data with outbox and audit", async () => {
     const history = historyResponse.json() as {
       data: Array<{ value: number; valueType: string; version: number }>;
     };
-    assert.deepEqual(history.data, [
-      assert.match(history.data[0]?.valueType ?? "", /^number$/) as never
-    ]);
+    assert.equal(history.data.length, 1);
+    assert.equal(history.data[0]?.value, 181.5);
+    assert.equal(history.data[0]?.valueType, "number");
+    assert.equal(history.data[0]?.version, 1);
   } finally {
     await app.close();
   }
