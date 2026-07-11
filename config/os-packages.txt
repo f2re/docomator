@@ -1,0 +1,11 @@
+# Collect these packages on a connected reference host with the same OS release.
+ca-certificates
+fontconfig
+fonts-liberation
+libreoffice-core
+libreoffice-writer
+libreoffice-calc
+cifs-utils
+nfs-common
+sqlite3
+xz-utils

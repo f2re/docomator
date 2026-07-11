@@ -1,0 +1,30 @@
+[Unit]
+Description=Docomator local llama.cpp server
+After=network.target
+
+[Service]
+Type=simple
+User=@DOCOMATOR_USER@
+Group=@DOCOMATOR_GROUP@
+EnvironmentFile=@DOCOMATOR_CONFIG_DIR@/docomator.env
+WorkingDirectory=@DOCOMATOR_INSTALL_ROOT@/current
+ExecStart=@DOCOMATOR_INSTALL_ROOT@/current/runtime/llama/llama-server -m ${DOCOMATOR_LLM_MODEL} --host ${DOCOMATOR_LLM_HOST} --port ${DOCOMATOR_LLM_PORT} --ctx-size ${DOCOMATOR_LLM_CONTEXT} --threads ${DOCOMATOR_LLM_THREADS} --parallel 1
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+ReadOnlyPaths=@DOCOMATOR_INSTALL_ROOT@/current/runtime/llama @DOCOMATOR_DATA_DIR@/models
+
+[Install]
+WantedBy=multi-user.target

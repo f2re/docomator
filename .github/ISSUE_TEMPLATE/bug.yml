@@ -1,0 +1,37 @@
+name: Ошибка
+description: Сообщить о воспроизводимом дефекте
+labels: []
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Наблюдаемое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Шаги воспроизведения
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия/release и commit
+      placeholder: 0.1.0-alpha.0 / SHA
+  - type: textarea
+    id: environment
+    attributes:
+      label: Среда
+      description: ОС, архитектура, Node.js, LibreOffice, модель GGUF и релевантная конфигурация без секретов.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи и correlation ID
+      description: Не прикладывайте пароли, токены и restricted-данные.

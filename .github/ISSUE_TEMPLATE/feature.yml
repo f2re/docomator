@@ -1,0 +1,45 @@
+name: Функция или технический инкремент
+description: Зафиксировать требование, границы и критерии приёмки
+title: "[Feature]: "
+labels: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Проблема и контекст
+      description: Какую пользовательскую или эксплуатационную задачу решаем?
+    validations:
+      required: true
+  - type: input
+    id: requirements
+    attributes:
+      label: Requirement IDs
+      description: Например, FR-TPL-004, SEC-002, OFF-005.
+      placeholder: FR-...
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Объём и границы
+      description: Что входит и что явно не входит в изменение?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерии приёмки
+      description: Наблюдаемые и проверяемые результаты.
+    validations:
+      required: true
+  - type: checkboxes
+    id: impacts
+    attributes:
+      label: Области воздействия
+      options:
+        - label: Модель данных или миграции
+        - label: DOCX/XLSX совместимость
+        - label: LLM/агенты
+        - label: Автоматизация или внешние side effects
+        - label: Offline bundle/install/update
+        - label: Безопасность или чувствительные данные
