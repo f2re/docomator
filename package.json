@@ -1,0 +1,33 @@
+{
+  "name": "docomator",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "description": "Offline-first AI-assisted document automation platform for DOCX and XLSX.",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24.18.0",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "clean": "node scripts/ci/clean.mjs",
+    "build": "npm run build -w @docomator/contracts && npm run build -w @docomator/config && npm run build -w @docomator/api && npm run build -w @docomator/worker",
+    "test": "npm run test -w @docomator/contracts && npm run test -w @docomator/config && npm run test -w @docomator/api && npm run test -w @docomator/worker && node --test scripts/runtime/*.test.mjs",
+    "check:docs": "node scripts/ci/check-doc-links.mjs",
+    "check:shell": "bash scripts/ci/validate-shell.sh",
+    "check": "npm run clean && npm run build && npm run test && npm run check:docs && npm run check:shell",
+    "start:api": "node apps/api/dist/server.js",
+    "start:worker": "node apps/worker/dist/main.js",
+    "migrate": "node scripts/runtime/migrate.mjs",
+    "bundle:offline": "bash scripts/offline/prepare-bundle.sh",
+    "bundle:verify": "bash scripts/offline/verify-bundle.sh",
+    "bundle:smoke": "bash scripts/offline/smoke-test.sh"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.9",
+    "typescript": "7.0.2"
+  }
+}

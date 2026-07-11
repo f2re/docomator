@@ -1,0 +1,31 @@
+[Unit]
+Description=Docomator background worker
+After=docomator-api.service
+Requires=docomator-api.service
+
+[Service]
+Type=simple
+User=@DOCOMATOR_USER@
+Group=@DOCOMATOR_GROUP@
+EnvironmentFile=@DOCOMATOR_CONFIG_DIR@/docomator.env
+WorkingDirectory=@DOCOMATOR_INSTALL_ROOT@/current/app
+ExecStart=@DOCOMATOR_INSTALL_ROOT@/current/runtime/node/bin/node @DOCOMATOR_INSTALL_ROOT@/current/app/apps/worker/dist/main.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+ReadWritePaths=@DOCOMATOR_DATA_DIR@
+
+[Install]
+WantedBy=multi-user.target
