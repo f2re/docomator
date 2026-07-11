@@ -41,6 +41,10 @@ jobs:
                   relative = Path(entry['path'])
                   if relative.is_absolute() or '..' in relative.parts:
                       raise SystemExit(f'Unsafe bootstrap path: {relative}')
+                  # GitHub Actions' GITHUB_TOKEN cannot update workflow files.
+                  # Those files are published separately through the GitHub App.
+                  if relative.parts[:2] == ('.github', 'workflows'):
+                      continue
                   target = (root / relative).resolve()
                   if root not in target.parents and target != root:
                       raise SystemExit(f'Bootstrap path escaped repository: {relative}')
@@ -52,7 +56,6 @@ jobs:
           PY
 
           rm -f .bootstrap-manifest-*.json .bootstrap-payload.part-* .bootstrap-ready
-          rm -f .github/workflows/bootstrap-repository.yml
           git diff --check
 
       - name: Commit expanded repository
