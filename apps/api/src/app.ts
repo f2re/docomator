@@ -12,6 +12,7 @@ import {
   KnowledgeNotFoundError,
   KnowledgeRegistry,
   KnowledgeValidationError,
+  PropertyValueValidationError,
   SqliteStore
 } from "@docomator/storage";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -72,8 +73,7 @@ export function buildApp(
   const store =
     dependencies.store ??
     new SqliteStore({ databasePath: path.join(config.dataDir, "docomator.db") });
-  const registry =
-    dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
+  const registry = dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
 
   const app = Fastify({
     logger: {
@@ -108,6 +108,10 @@ export function buildApp(
     if (error instanceof KnowledgeValidationError) {
       statusCode = 400;
       code = "knowledge_validation_failed";
+      message = error.message;
+    } else if (error instanceof PropertyValueValidationError) {
+      statusCode = 400;
+      code = "property_value_validation_failed";
       message = error.message;
     } else if (error instanceof KnowledgeNotFoundError) {
       statusCode = 404;

@@ -35,9 +35,28 @@ export interface EncodedPropertyValue {
   valueFileId: string | null;
 }
 
+export class PropertyValueValidationError extends TypeError {
+  override name = "PropertyValueValidationError";
+}
+
+function invalid(message: string): never {
+  throw new PropertyValueValidationError(message);
+}
+
+function normalizeJson(value: unknown): JsonValue {
+  try {
+    return toJsonValue(value);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      invalid(error.message);
+    }
+    throw error;
+  }
+}
+
 function requireString(value: unknown, type: PropertyValueType): string {
   if (typeof value !== "string") {
-    throw new TypeError(`${type} value must be a string`);
+    invalid(`${type} value must be a string`);
   }
   return value;
 }
@@ -45,7 +64,7 @@ function requireString(value: unknown, type: PropertyValueType): string {
 function requireIdentifier(value: unknown, type: PropertyValueType): string {
   const identifier = requireString(value, type).trim();
   if (identifier.length === 0) {
-    throw new TypeError(`${type} value must not be empty`);
+    invalid(`${type} value must not be empty`);
   }
   return identifier;
 }
@@ -53,11 +72,11 @@ function requireIdentifier(value: unknown, type: PropertyValueType): string {
 function normalizeDate(value: unknown): string {
   const text = requireString(value, "date");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    throw new TypeError("date value must use YYYY-MM-DD");
+    invalid("date value must use YYYY-MM-DD");
   }
   const parsed = new Date(`${text}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== text) {
-    throw new TypeError("date value is not a valid calendar date");
+    invalid("date value is not a valid calendar date");
   }
   return text;
 }
@@ -65,11 +84,11 @@ function normalizeDate(value: unknown): string {
 function normalizeDateTime(value: unknown): string {
   const text = requireString(value, "date-time");
   if (!/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(text)) {
-    throw new TypeError("date-time value must include an explicit timezone");
+    invalid("date-time value must include an explicit timezone");
   }
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) {
-    throw new TypeError("date-time value is invalid");
+    invalid("date-time value is invalid");
   }
   return parsed.toISOString();
 }
@@ -103,19 +122,19 @@ export class PropertyValueCodecRegistry {
       }
       case "number": {
         if (typeof value !== "number" || !Number.isFinite(value)) {
-          throw new TypeError("number value must be finite");
+          invalid("number value must be finite");
         }
         return { ...emptyEncoded(valueType, value), valueNumber: value };
       }
       case "integer": {
         if (typeof value !== "number" || !Number.isSafeInteger(value)) {
-          throw new TypeError("integer value must be a safe integer");
+          invalid("integer value must be a safe integer");
         }
         return { ...emptyEncoded(valueType, value), valueInteger: value };
       }
       case "boolean": {
         if (typeof value !== "boolean") {
-          throw new TypeError("boolean value must be true or false");
+          invalid("boolean value must be true or false");
         }
         return { ...emptyEncoded(valueType, value), valueBoolean: value ? 1 : 0 };
       }
@@ -133,7 +152,7 @@ export class PropertyValueCodecRegistry {
           options.allowedValues !== undefined &&
           !options.allowedValues.includes(normalized)
         ) {
-          throw new TypeError(`enum value is not allowed: ${normalized}`);
+          invalid(`enum value is not allowed: ${normalized}`);
         }
         return { ...emptyEncoded(valueType, normalized), valueText: normalized };
       }
@@ -148,12 +167,12 @@ export class PropertyValueCodecRegistry {
       }
       case "list": {
         if (!Array.isArray(value)) {
-          throw new TypeError("list value must be an array");
+          invalid("list value must be an array");
         }
-        return emptyEncoded(valueType, toJsonValue(value));
+        return emptyEncoded(valueType, normalizeJson(value));
       }
       case "json":
-        return emptyEncoded(valueType, toJsonValue(value));
+        return emptyEncoded(valueType, normalizeJson(value));
     }
   }
 
