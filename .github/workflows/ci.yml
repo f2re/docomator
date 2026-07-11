@@ -35,27 +35,7 @@ jobs:
           cache: npm
 
       - name: Install locked dependencies
-        id: npm_ci
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          node --version
-          npm --version
-          npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee npm-ci.log
-
-      - name: Upload npm diagnostic
-        if: steps.npm_ci.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-ci-diagnostic
-          path: npm-ci.log
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Stop after failed dependency installation
-        if: steps.npm_ci.outcome == 'failure'
-        run: exit 1
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Verify repository
         run: npm run check
