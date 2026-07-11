@@ -205,6 +205,8 @@ cp "$SCRIPT_DIR/lib.sh" \
   "$SCRIPT_DIR/verify-bundle.sh" \
   "$SCRIPT_DIR/install.sh" \
   "$SCRIPT_DIR/update.sh" \
+  "$SCRIPT_DIR/backup.sh" \
+  "$SCRIPT_DIR/restore.sh" \
   "$SCRIPT_DIR/healthcheck.mjs" \
   "$BUNDLE_DIR/"
 chmod 0755 "$BUNDLE_DIR"/*.sh "$BUNDLE_DIR/healthcheck.mjs"
