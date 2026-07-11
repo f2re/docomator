@@ -1,0 +1,70 @@
+name: Expand Docomator bootstrap PR
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  expand:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/bootstrap-docomator'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout bootstrap branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Expand reviewed manifests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! compgen -G '.bootstrap-manifest-*.json' >/dev/null; then
+            echo 'Bootstrap manifests are already expanded.'
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path.cwd().resolve()
+          for manifest in sorted(root.glob('.bootstrap-manifest-*.json')):
+              entries = json.loads(manifest.read_text(encoding='utf-8'))
+              for entry in entries:
+                  relative = Path(entry['path'])
+                  if relative.is_absolute() or '..' in relative.parts:
+                      raise SystemExit(f'Unsafe bootstrap path: {relative}')
+                  target = (root / relative).resolve()
+                  if root not in target.parents and target != root:
+                      raise SystemExit(f'Bootstrap path escaped repository: {relative}')
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  mode = 'a' if entry.get('append', False) else 'w'
+                  with target.open(mode, encoding='utf-8', newline='') as stream:
+                      stream.write(entry['content'])
+                  os.chmod(target, int(entry['mode'], 8))
+          PY
+
+          rm -f .bootstrap-manifest-*.json .bootstrap-payload.part-* .bootstrap-ready
+          rm -f .github/workflows/bootstrap-repository.yml
+          git diff --check
+
+      - name: Commit expanded repository
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git add --all
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'bootstrap Docomator platform'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
