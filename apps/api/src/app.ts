@@ -7,9 +7,24 @@ import type {
   ReadinessResponse,
   SystemInfoResponse
 } from "@docomator/contracts";
+import {
+  KnowledgeConflictError,
+  KnowledgeNotFoundError,
+  KnowledgeRegistry,
+  KnowledgeValidationError,
+  SqliteStore
+} from "@docomator/storage";
 import Fastify, { type FastifyInstance } from "fastify";
 
+import { registerKnowledgeRoutes } from "./knowledge-routes.js";
+import { correlationId } from "./request-context.js";
+
 const startedAt = Date.now();
+
+export interface AppDependencies {
+  store?: SqliteStore;
+  knowledgeRegistry?: KnowledgeRegistry;
+}
 
 function uptimeSeconds(): number {
   return Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
@@ -24,7 +39,42 @@ async function pathAccessible(targetPath: string): Promise<boolean> {
   }
 }
 
-export function buildApp(config: ApiConfig): FastifyInstance {
+function databaseSchemaReady(store: SqliteStore): boolean {
+  try {
+    return store.execute((database) => {
+      const requiredTables = [
+        "schema_migrations",
+        "entity_types",
+        "property_definitions",
+        "worker_jobs",
+        "domain_events"
+      ];
+      const rows = database
+        .prepare(`
+          SELECT name
+          FROM sqlite_master
+          WHERE type = 'table'
+            AND name IN ('schema_migrations', 'entity_types', 'property_definitions', 'worker_jobs', 'domain_events')
+        `)
+        .all() as unknown as Array<{ name: string }>;
+      return new Set(rows.map((row) => row.name)).size === requiredTables.length;
+    });
+  } catch {
+    return false;
+  }
+}
+
+export function buildApp(
+  config: ApiConfig,
+  dependencies: AppDependencies = {}
+): FastifyInstance {
+  const ownsStore = dependencies.store === undefined;
+  const store =
+    dependencies.store ??
+    new SqliteStore({ databasePath: path.join(config.dataDir, "docomator.db") });
+  const registry =
+    dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
+
   const app = Fastify({
     logger: {
       level: config.logLevel,
@@ -39,6 +89,59 @@ export function buildApp(config: ApiConfig): FastifyInstance {
     }
   });
 
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header("x-correlation-id", correlationId(request));
+  });
+
+  if (ownsStore) {
+    app.addHook("onClose", async () => {
+      store.close();
+    });
+  }
+
+  app.setErrorHandler((error, request, reply) => {
+    const requestCorrelationId = correlationId(request);
+    let statusCode = 500;
+    let code = "internal_error";
+    let message = "Internal server error";
+
+    if (error instanceof KnowledgeValidationError) {
+      statusCode = 400;
+      code = "knowledge_validation_failed";
+      message = error.message;
+    } else if (error instanceof KnowledgeNotFoundError) {
+      statusCode = 404;
+      code = "knowledge_not_found";
+      message = error.message;
+    } else if (error instanceof KnowledgeConflictError) {
+      statusCode = 409;
+      code = "knowledge_conflict";
+      message = error.message;
+    } else if (error.validation !== undefined) {
+      statusCode = 400;
+      code = "request_validation_failed";
+      message = error.message;
+    } else if (
+      error.statusCode !== undefined &&
+      error.statusCode >= 400 &&
+      error.statusCode < 500
+    ) {
+      statusCode = error.statusCode;
+      code = "request_failed";
+      message = error.message;
+    } else {
+      request.log.error(
+        { err: error, correlationId: requestCorrelationId },
+        "request failed"
+      );
+    }
+
+    void reply.code(statusCode).send({
+      error: { code, message },
+      correlationId: requestCorrelationId
+    });
+  });
+
   app.get("/healthz", async (): Promise<HealthResponse> => ({
     service: "api",
     status: "ok",
@@ -49,9 +152,7 @@ export function buildApp(config: ApiConfig): FastifyInstance {
 
   app.get("/readyz", async (_request, reply): Promise<ReadinessResponse> => {
     const dataDirectoryReady = await pathAccessible(config.dataDir);
-    const databaseReady = await pathAccessible(
-      path.join(config.dataDir, "docomator.db")
-    );
+    const databaseReady = databaseSchemaReady(store);
     const ready = dataDirectoryReady && databaseReady;
 
     if (!ready) {
@@ -86,6 +187,8 @@ export function buildApp(config: ApiConfig): FastifyInstance {
       documentFormats: ["docx", "xlsx"]
     }
   }));
+
+  registerKnowledgeRoutes(app, registry);
 
   return app;
 }
