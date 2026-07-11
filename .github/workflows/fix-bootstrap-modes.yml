@@ -1,0 +1,50 @@
+name: Fix bootstrap executable modes
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  chmod:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/bootstrap-docomator'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout bootstrap branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set executable modes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          chmod 0755 \
+            scripts/offline/lib.sh \
+            scripts/offline/prepare-bundle.sh \
+            scripts/offline/smoke-test.sh \
+            scripts/offline/update.sh \
+            scripts/offline/verify-bundle.sh \
+            scripts/runtime/migrate.mjs
+
+          if git diff --quiet; then
+            echo 'Executable modes are already correct.'
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            scripts/offline/lib.sh \
+            scripts/offline/prepare-bundle.sh \
+            scripts/offline/smoke-test.sh \
+            scripts/offline/update.sh \
+            scripts/offline/verify-bundle.sh \
+            scripts/runtime/migrate.mjs
+          git commit -m 'set executable modes for runtime scripts'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
