@@ -7,7 +7,7 @@
 [![Offline first](https://img.shields.io/badge/runtime-offline--first-6f42c1)](docs/OFFLINE_DEPLOYMENT.md)
 
 > [!IMPORTANT]
-> Проект находится на этапе persistence kernel. Уже работают API/worker bootstrap, SQLite unit-of-work, типизированные projections, content-addressed storage, persistent queue, transactional outbox, audit, миграции и офлайн-упаковка. DOCX/XLSX renderer, Template Studio, scheduler и delivery-коннекторы находятся в roadmap и ещё не заявлены как готовые функции.
+> Проект находится на этапе persistence kernel. Уже работают API/worker bootstrap, Knowledge Registry REST API, SQLite unit-of-work, типизированные projections, content-addressed storage, persistent queue, transactional outbox, audit, миграции и офлайн-упаковка. DOCX/XLSX renderer, Template Studio, scheduler и delivery-коннекторы находятся в roadmap и ещё не заявлены как готовые функции.
 
 ## 🎯 Что строится
 
@@ -31,7 +31,7 @@ Docomator должен позволять пользователю без про
 | Область | Статус | Что уже есть |
 |---|---:|---|
 | Project bootstrap | ✅ | npm workspaces, TypeScript strict, API и worker |
-| API | 🟡 | `/healthz`, `/readyz`, `/api/v1/system/info` |
+| API | 🟡 | health/readiness, system info и Knowledge Registry REST API |
 | Persistence kernel | 🟡 | SQLite transactions, typed codecs, object storage, queue, outbox и audit |
 | Offline release | 🟡 | подготовка bundle, проверка SHA-256, install/update/rollback |
 | Codex | ✅ | `AGENTS.md`, project config и специализированные subagents |
@@ -41,7 +41,7 @@ Docomator должен позволять пользователю без про
 | SMTP/network delivery | ⬜ | требования и deployment contracts зафиксированы |
 | Web UI | ⬜ | запланировано |
 
-Подробный статус: [ROADMAP.md](docs/ROADMAP.md).
+Подробный статус: [ROADMAP.md](docs/ROADMAP.md). Контракт данных: [KNOWLEDGE_REGISTRY_API.md](docs/KNOWLEDGE_REGISTRY_API.md).
 
 ## 🏗️ Архитектура
 
@@ -97,6 +97,7 @@ npm run start:worker
 curl http://127.0.0.1:8080/healthz
 curl http://127.0.0.1:8080/readyz
 curl http://127.0.0.1:8080/api/v1/system/info
+curl http://127.0.0.1:8080/api/v1/knowledge/entity-types
 ```
 
 > [!TIP]
