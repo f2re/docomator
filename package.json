@@ -22,6 +22,8 @@
     "start:api": "node apps/api/dist/server.js",
     "start:worker": "node apps/worker/dist/main.js",
     "migrate": "node scripts/runtime/migrate.mjs",
+    "backup": "node scripts/runtime/backup.mjs",
+    "restore": "node scripts/runtime/restore.mjs",
     "bundle:offline": "bash scripts/offline/prepare-bundle.sh",
     "bundle:verify": "bash scripts/offline/verify-bundle.sh",
     "bundle:smoke": "bash scripts/offline/smoke-test.sh"

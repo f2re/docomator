@@ -40,41 +40,52 @@ journalctl -u docomator-llm -f
 
 ## Backup
 
-Минимальный backup-set:
+Online backup не требует остановки API/worker:
 
-```text
-/etc/docomator/docomator.env
-/var/lib/docomator/docomator.db
-/var/lib/docomator/objects/
-/var/lib/docomator/models/   # можно восстановить из release media
-/opt/docomator/releases/     # можно восстановить из release media
+```bash
+sudo /opt/docomator/current/backup.sh
 ```
 
-Для согласованного copy SQLite:
+Скрипт создаёт согласованный SQLite snapshot через `VACUUM INTO`, проверяет `integrity_check` и foreign keys, копирует immutable object storage и конфигурацию, затем формирует SHA-256 manifest. Каталог публикуется только после полного завершения.
 
-1. остановить API и worker либо использовать будущую online-backup команду;
-2. скопировать `docomator.db` и возможные `-wal`/`-shm`;
-3. скопировать object storage;
-4. сохранить checksum и release version;
-5. снова запустить services.
+Проверка подготовленного backup без восстановления:
+
+```bash
+/opt/docomator/current/runtime/node/bin/node \
+  /opt/docomator/current/app/scripts/runtime/restore.mjs \
+  --backup /path/to/backup \
+  --verify-only
+```
+
+Подробный контракт: [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
+
+## Restore
+
+```bash
+sudo /opt/docomator/current/restore.sh \
+  --backup /path/to/backup
+```
+
+Restore создаёт отдельный pre-restore backup, останавливает services, атомарно заменяет БД/object storage/config, применяет migration текущего release и проверяет readiness. При ошибке migration или readiness прежнее состояние восстанавливается автоматически.
 
 ## Restore drill
 
 Не реже принятого эксплуатационного периода:
 
-1. развернуть clean offline VM;
-2. установить ту же release version;
-3. восстановить config, database и objects;
-4. проверить migrations checksums;
-5. открыть несколько historical documents;
-6. выполнить dry-run automation без доставки;
-7. зафиксировать фактический RTO.
+1. перенести backup на отдельный носитель;
+2. развернуть clean offline VM;
+3. установить ту же или более новую совместимую release version;
+4. выполнить `restore.sh`;
+5. проверить migration checksums и `/readyz`;
+6. открыть несколько сущностей и historical documents;
+7. выполнить dry-run automation без доставки после появления Automation Engine;
+8. зафиксировать фактические RPO/RTO и найденные отклонения.
 
 ## Capacity
 
 Контролировать:
 
-- свободное место object storage и previews;
+- свободное место object storage, backups и previews;
 - размер SQLite WAL;
 - queue depth и oldest pending age;
 - LLM request duration/timeouts;

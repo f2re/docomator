@@ -14,7 +14,7 @@ Roadmap отражает статус реализации, но не замен
 | Milestone | Статус | Результат |
 |---|---:|---|
 | M0 Repository bootstrap | 🟡 | runnable API/worker, schema, docs, Codex agents, offline scripts |
-| M1 Persistence kernel | 🟡 | storage kernel, typed properties, queue, outbox, audit |
+| M1 Persistence kernel | ✅ | transactions, typed values, object storage, queue, outbox, audit, Knowledge API, backup/restore |
 | M2 Secure OOXML intake | ⬜ | upload, security checks, DOCX/XLSX Document IR |
 | M3 Template compiler | ⬜ | content controls, defined names, Safe Scalar render |
 | M4 Manual workflow/UI | ⬜ | catalog, forms, review, download, RBAC |
@@ -44,7 +44,7 @@ Roadmap отражает статус реализации, но не замен
 - [ ] Validate install/update rollback on clean systemd VM
 - [x] Merge bootstrap PR
 
-## M1 candidate issues
+## M1 checklist
 
 - [x] Storage transaction API and unit-of-work
 - [x] Typed property codec registry
@@ -54,7 +54,21 @@ Roadmap отражает статус реализации, но не замен
 - [x] Transactional outbox
 - [x] Correlation-aware audit service
 - [x] Entity/property REST API
-- [ ] Backup and restore smoke test
+- [x] Online SQLite backup with integrity verification
+- [x] Object/config checksum manifest
+- [x] Atomic restore with pre-restore rollback
+- [x] Backup and restore integration tests
+
+## Следующий приоритет
+
+M2 начинается с безопасного intake без LLM:
+
+1. лимиты и проверка ZIP/OOXML;
+2. запрет path traversal и external relationships;
+3. compatibility report;
+4. DOCX/XLSX Document IR;
+5. детерминированные кандидаты вариативных полей;
+6. fixtures и negative security tests.
 
 ## Decision gates
 
