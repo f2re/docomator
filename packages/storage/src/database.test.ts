@@ -29,7 +29,10 @@ test("transactions commit, roll back and isolate nested savepoints", () => {
           value: number;
         }>
     );
-    assert.deepEqual(rows, [{ value: 1 }, { value: 3 }]);
+    assert.deepEqual(
+      rows.map((row) => row.value),
+      [1, 3]
+    );
 
     assert.throws(
       () =>
