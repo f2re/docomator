@@ -6,6 +6,7 @@ import {
   type SpaceActorRole,
   type SpaceMembershipStatus,
   type SpaceRegistry,
+  SpaceValidationError,
   type SpaceStatus
 } from "@docomator/storage";
 
@@ -13,6 +14,10 @@ import { correlationId, mutationContextFromRequest } from "./request-context.js"
 
 interface SpaceParams {
   spaceId: string;
+}
+
+interface ActorParams extends SpaceParams {
+  actorId: string;
 }
 
 interface EntityParams extends SpaceParams {
@@ -48,7 +53,6 @@ interface CreateSpaceBody {
 }
 
 interface UpsertActorMembershipBody {
-  actorId: string;
   role: SpaceActorRole;
   status?: SpaceMembershipStatus;
 }
@@ -111,12 +115,12 @@ function parseAudienceSource(source: AudienceSourceBody): AudienceSelectionSourc
   }
   if (source.kind === "group") {
     if (source.groupId === undefined) {
-      throw new TypeError("source.groupId is required for group selection");
+      throw new SpaceValidationError("source.groupId is required for group selection");
     }
     return { kind: "group", groupId: source.groupId };
   }
   if (source.entityIds === undefined) {
-    throw new TypeError("source.entityIds is required for selected selection");
+    throw new SpaceValidationError("source.entityIds is required for selected selection");
   }
   return { kind: "selected", entityIds: source.entityIds };
 }
@@ -184,7 +188,7 @@ export function registerSpaceRoutes(
       responseEnvelope(request, registry.getSpace(request.params.spaceId))
   );
 
-  app.put<{ Params: SpaceParams; Body: UpsertActorMembershipBody }>(
+  app.put<{ Params: ActorParams; Body: UpsertActorMembershipBody }>(
     "/api/v1/spaces/:spaceId/access-members/:actorId",
     {
       schema: {

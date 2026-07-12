@@ -791,7 +791,7 @@ export class SpaceRegistry {
 
       const row = connection
         .prepare("SELECT * FROM space_actor_memberships WHERE space_id = ? AND actor_id = ?")
-        .get(space.id, actorId) as SpaceActorMembershipRow;
+        .get(space.id, actorId) as unknown as SpaceActorMembershipRow;
       this.outbox.append(
         {
           eventType: "space.actor_membership.upserted",
@@ -924,7 +924,7 @@ export class SpaceRegistry {
       if (entity === undefined) {
         throw new SpaceNotFoundError(`Entity was not found: ${entityId}`);
       }
-      if (entity.spaceId === space.id) {
+      if (entity.space_id === space.id) {
         return mapSpaceEntity(entity);
       }
       const grouped = connection
@@ -936,7 +936,7 @@ export class SpaceRegistry {
         );
       }
 
-      const nextVersion = entity.ownershipVersion + 1;
+      const nextVersion = entity.ownership_version + 1;
       connection
         .prepare(`
           UPDATE space_entity_ownership
@@ -954,7 +954,7 @@ export class SpaceRegistry {
           entityId,
           payload: {
             entityId,
-            previousSpaceId: entity.spaceId,
+            previousSpaceId: entity.space_id,
             spaceId: space.id,
             ownershipVersion: nextVersion
           },
@@ -974,7 +974,7 @@ export class SpaceRegistry {
           correlationId: context.correlationId,
           details: {
             entityId,
-            previousSpaceId: entity.spaceId,
+            previousSpaceId: entity.space_id,
             ownershipVersion: nextVersion
           }
         },
@@ -1258,11 +1258,11 @@ export class SpaceRegistry {
             );
           }
           return {
-            entity_id: entity.entityId,
+            entity_id: entity.entity_id,
             position,
-            display_name: entity.displayName,
-            entity_type_key: entity.entityTypeKey,
-            entity_type_label: entity.entityTypeLabel,
+            display_name: entity.display_name,
+            entity_type_key: entity.entity_type_key,
+            entity_type_label: entity.entity_type_label,
             status: entity.status
           };
         });
