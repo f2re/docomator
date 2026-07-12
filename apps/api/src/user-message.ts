@@ -29,6 +29,12 @@ const rules: readonly MessageRule[] = [
     "Имя файла не должно содержать путь к каталогу."],
   [/^Document buffer must not be empty$/i, () =>
     "Нельзя сохранить пустой документ."],
+  [/^Compiled and trial documents must not be empty$/i, () =>
+    "Нельзя сохранить пустую скомпилированную или пробную копию."],
+  [/^Rendered value must match the read-back value$/i, () =>
+    "Пробное значение не прошло обратную проверку и версия не сохранена."],
+  [/^Test version format does not match the template draft$/i, () =>
+    "Формат проверяемой версии не совпадает с форматом черновика."],
   [/^expectedSha256 must contain 64 hexadecimal characters$/i, () =>
     "Контрольная сумма документа имеет недопустимый формат."],
   [/^Document checksum changed after the safety check$/i, () =>
@@ -41,6 +47,12 @@ const rules: readonly MessageRule[] = [
     "Сохранённый исходник не найден в выбранном пространстве."],
   [/^Template draft was not found in this space: (.+)$/i, () =>
     "Черновик шаблона не найден в выбранном пространстве."],
+  [/^Template draft field was not found in this space: (.+)$/i, () =>
+    "Поле черновика не найдено в выбранном пространстве."],
+  [/^Template field was not found in this draft: (.+)$/i, () =>
+    "Поле шаблона не найдено в этом черновике."],
+  [/^Template test version was not found in this space: (.+)$/i, () =>
+    "Проверенная версия шаблона не найдена в выбранном пространстве."],
   [/^Structure element was not found: (.+)$/i, () =>
     "Выбранный элемент не найден в сохранённой структуре. Постройте структуру заново и повторите выбор."],
   [/^Template field already exists: (.+)$/i, (match) =>
@@ -55,6 +67,8 @@ const rules: readonly MessageRule[] = [
     "Исходник черновика больше не соответствует проверенному документу."],
   [/^Stored source checksum changed before draft creation$/i, () =>
     "Контрольная сумма сохранённого исходника изменилась. Обратитесь к администратору."],
+  [/^Stored file metadata conflicts with content-addressed object$/i, () =>
+    "Метаданные сохранённого файла не совпадают с его контрольной суммой. Обратитесь к администратору."],
   [/^(.+) was not found: (.+)$/i, (match) =>
     `${russianObjectName(match[1] ?? "")} «${match[2]}» не найдено.`],
   [/^(.+) already exists: (.+)$/i, (match) =>
@@ -105,6 +119,7 @@ function russianObjectName(value: string): string {
     "audience snapshot": "Снимок состава",
     "template draft": "Черновик шаблона",
     "template field": "Поле шаблона",
+    "template test version": "Проверенная версия",
     "structure element": "Элемент структуры",
     "quarantine document": "Сохранённый исходник"
   };
