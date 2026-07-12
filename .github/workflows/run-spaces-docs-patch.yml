@@ -1,4 +1,5 @@
 name: Finalize merged spaces and audiences increment
+# One-time post-merge finalizer. It deletes itself after a successful run.
 
 on:
   push:
@@ -10,7 +11,6 @@ permissions:
 
 jobs:
   finalize:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
