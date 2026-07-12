@@ -47,6 +47,7 @@ jobs:
           set -Eeuo pipefail
           rm -f scripts/ci/apply-russian-interface.py .russian-interface-ready
           chmod 0755 scripts/offline/first-run.sh
+          sed -i 's/[[:blank:]]\+$//' docs/REQUIREMENTS.md
 
       - name: Validate browser JavaScript
         run: node --check apps/api/ui/app.js
