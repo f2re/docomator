@@ -58,10 +58,17 @@ jobs:
               stream.extractall('.')
           PY
 
-          python3 apply-interface-patch.py
+          # The payload contains new UI/TZ files and an old exact-text patcher.
+          # Existing files are updated explicitly in a reviewed follow-up commit,
+          # because main may have advanced since the payload was assembled.
           rm -f apply-interface-patch.py .interface-payload.part-* .interface-foundation-ready
+          test -f apps/api/ui/index.html
+          test -f apps/api/ui/styles.css
+          test -f apps/api/ui/app.js
+          test -f apps/api/src/ui-routes.ts
+          test -f docs/UX_UI_SPECIFICATION.md
+          test -f docs/TECHNICAL_SPECIFICATION.md
           node --check apps/api/ui/app.js
-          bash -n scripts/offline/prepare-bundle.sh
           git diff --check
 
       - name: Refresh lockfile
@@ -80,5 +87,5 @@ jobs:
           git diff --cached --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'implement interface foundation and UX contract'
+          git commit -m 'add guided interface assets and UX specifications'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
