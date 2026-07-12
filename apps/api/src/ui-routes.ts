@@ -22,7 +22,13 @@ const assets: Readonly<Record<string, UiAsset>> = {
   },
   "/ui/styles.css": {
     fileName: "styles.css",
-    appendFileNames: ["spaces.css", "intake.css", "quarantine.css", "structure.css"],
+    appendFileNames: [
+      "spaces.css",
+      "intake.css",
+      "quarantine.css",
+      "structure.css",
+      "template-field.css"
+    ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
   },
