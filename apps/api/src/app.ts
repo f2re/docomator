@@ -15,19 +15,18 @@ import {
   PropertyValueValidationError,
   SqliteStore
 } from "@docomator/storage";
-import Fastify, {
-  type FastifyError,
-  type FastifyInstance
-} from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { correlationId } from "./request-context.js";
+import { registerUiRoutes } from "./ui-routes.js";
 
 const startedAt = Date.now();
 
 export interface AppDependencies {
   store?: SqliteStore;
   knowledgeRegistry?: KnowledgeRegistry;
+  uiDirectory?: string;
 }
 
 function uptimeSeconds(): number {
@@ -102,7 +101,7 @@ export function buildApp(
     });
   }
 
-  app.setErrorHandler((error: FastifyError, request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const requestCorrelationId = correlationId(request);
     let statusCode = 500;
     let code = "internal_error";
@@ -195,6 +194,7 @@ export function buildApp(
     }
   }));
 
+  registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, registry);
 
   return app;
