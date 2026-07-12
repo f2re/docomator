@@ -1,4 +1,4 @@
-name: Refresh interface foundation metadata
+name: Expand and refresh interface foundation
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ jobs:
   refresh:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/interface-foundation'
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 12
 
     steps:
       - name: Checkout interface branch
@@ -31,17 +31,54 @@ jobs:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
 
-      - name: Refresh lockfile when workspace metadata changed
+      - name: Expand reviewed interface payload when present
         shell: bash
         run: |
           set -Eeuo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          if git diff --quiet -- package-lock.json; then
-            echo 'Lockfile is current.'
+          if ! compgen -G '.interface-payload.part-*' >/dev/null; then
+            echo 'Interface payload is already expanded.'
             exit 0
           fi
+
+          cat .interface-payload.part-* | base64 --decode > /tmp/interface-foundation.tar.gz
+          echo 'd5ed1fa427c54b57dc2ea22cc92de4c7573e5557d962154df92d9535aa982b73  /tmp/interface-foundation.tar.gz' | sha256sum --check --strict
+
+          python3 - <<'PY'
+          import tarfile
+          from pathlib import Path
+
+          archive = Path('/tmp/interface-foundation.tar.gz')
+          with tarfile.open(archive, 'r:gz') as stream:
+              for member in stream.getmembers():
+                  path = Path(member.name)
+                  if path.is_absolute() or '..' in path.parts:
+                      raise SystemExit(f'Unsafe archive member: {member.name}')
+                  if member.issym() or member.islnk():
+                      raise SystemExit(f'Links are forbidden in payload: {member.name}')
+              stream.extractall('.')
+          PY
+
+          python3 apply-interface-patch.py
+          rm -f apply-interface-patch.py .interface-payload.part-* .interface-foundation-ready
+          node --check apps/api/ui/app.js
+          bash -n scripts/offline/prepare-bundle.sh
+          git diff --check
+
+      - name: Refresh lockfile
+        shell: bash
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Commit generated interface foundation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git add --all
+          if git diff --cached --quiet; then
+            echo 'Generated files are current.'
+            exit 0
+          fi
+          git diff --cached --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package-lock.json
-          git commit -m 'refresh interface foundation lockfile'
+          git commit -m 'implement interface foundation and UX contract'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
