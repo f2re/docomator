@@ -98,6 +98,12 @@ curl --fail --silent --show-error \
 curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces?limit=10" \
   | grep -F 'Основное пространство' >/dev/null
+curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
+  | grep -F 'Проверяем архивную структуру' >/dev/null
+curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/" \
+  | grep -F 'Проверить документ' >/dev/null
 "$INSTALL_ROOT/current/first-run.sh" \
   --url "http://127.0.0.1:${DOCOMATOR_PORT}" \
   --check \

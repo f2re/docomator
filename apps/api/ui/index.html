@@ -11,6 +11,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/ui/styles.css" />
     <script type="module" src="/ui/app.js"></script>
+    <script type="module" src="/ui/document-intake.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">Перейти к содержимому</a>
@@ -33,7 +34,7 @@
             <span aria-hidden="true">🗂️</span><span>Схема данных</span>
           </button>
           <button class="nav-item" type="button" data-view-target="templates">
-            <span aria-hidden="true">📄</span><span>Шаблоны</span><span class="nav-badge">Скоро</span>
+            <span aria-hidden="true">📄</span><span>Шаблоны</span><span class="nav-badge">Проверка</span>
           </button>
           <button class="nav-item" type="button" data-view-target="documents">
             <span aria-hidden="true">✨</span><span>Документы</span><span class="nav-badge">Скоро</span>
@@ -201,9 +202,71 @@
           <div id="knowledgeContent" class="collection-grid" aria-live="polite" aria-busy="true"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
         </section>
 
-        <section class="view" data-view="templates" aria-labelledby="templates-heading">
-          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">📄</span><span class="pill">Этап M2–M3</span><h2 id="templates-heading">Шаблон сможет повторить строку для каждого участника</h2><p>Студия шаблонов свяжет повторяющуюся таблицу или список с выбранными участниками. До готовности безопасного приёма DOCX/XLSX файлы не принимаются.</p><div class="planned-details"><div><strong>Сводный документ</strong><span>Одна таблица с ФИО, должностью и другими выбранными свойствами.</span></div><div><strong>Индивидуальный комплект</strong><span>Один и тот же шаблон запускается отдельно для каждого участника.</span></div></div><button class="secondary-button" type="button" data-view-target="spaces">Подготовить аудиторию</button></div>
-        </section>
+<section class="view" data-view="templates" aria-labelledby="templates-heading">
+  <div class="section-intro">
+    <div>
+      <p class="eyebrow">Безопасный приём</p>
+      <h2 id="templates-heading">Проверка DOCX и XLSX</h2>
+      <p>До сохранения шаблона система проверяет архивную структуру, размеры, пути, макросы и внешние связи. Файл не запускается и на этом этапе не добавляется в каталог.</p>
+    </div>
+    <span class="pill pill-accent">Этап M2 · работает</span>
+  </div>
+
+  <div class="intake-layout">
+    <article class="panel intake-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Шаг 1 из 2</p>
+          <h2>Выберите документ</h2>
+          <p>Поддерживаются DOCX и XLSX размером до 32 МБ. Проверка выполняется только локальным сервером.</p>
+        </div>
+        <span class="large-emoji" aria-hidden="true">🛡️</span>
+      </div>
+
+      <div class="intake-drop-zone" id="documentIntakeDropZone">
+        <input
+          id="documentIntakeFile"
+          type="file"
+          accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        />
+        <label for="documentIntakeFile">
+          <span aria-hidden="true">📥</span>
+          <strong>Перетащите файл сюда или выберите его</strong>
+          <small>Файл будет передан только локальной службе Docomator. На этом этапе он не сохраняется как шаблон.</small>
+        </label>
+      </div>
+
+      <div class="intake-selected-file" id="documentIntakeSelected" hidden></div>
+      <div class="intake-actions">
+        <button class="primary-button" id="documentIntakeButton" type="button" disabled>Проверить документ</button>
+        <button class="quiet-button" id="documentIntakeClear" type="button" hidden>Выбрать другой файл</button>
+      </div>
+
+      <ul class="intake-limits" aria-label="Что проверяет система">
+        <li><span aria-hidden="true">✓</span><span>Количество и суммарный размер частей пакета.</span></li>
+        <li><span aria-hidden="true">✓</span><span>Опасные пути, шифрование, символические ссылки и подозрительное сжатие.</span></li>
+        <li><span aria-hidden="true">✓</span><span>Макросы, ActiveX, встроенные объекты, подписи и внешние связи.</span></li>
+      </ul>
+    </article>
+
+    <article class="panel intake-result-panel">
+      <div class="intake-status is-idle" id="documentIntakeStatus" role="status" aria-live="polite" aria-busy="false">
+        <span class="intake-status-mark" id="documentIntakeStatusIcon" aria-hidden="true">1</span>
+        <div>
+          <strong id="documentIntakeStatusTitle">Выберите документ</strong>
+          <p id="documentIntakeStatusDetail">После выбора система объяснит следующий шаг и не сохранит файл без отдельного подтверждения.</p>
+        </div>
+      </div>
+      <div id="documentIntakeResult" aria-live="polite">
+        <div class="intake-placeholder">
+          <span aria-hidden="true">🔎</span>
+          <h3>Отчёт появится после проверки</h3>
+          <p>Вы увидите найденные ограничения, предупреждения и безопасный следующий шаг.</p>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
 
         <section class="view" data-view="documents" aria-labelledby="documents-heading">
           <div class="planned-state"><span class="planned-emoji" aria-hidden="true">✨</span><span class="pill">Этап M4</span><h2 id="documents-heading">Создание документов будет начинаться с аудитории</h2><p>Пошаговый процесс покажет пространство, источник участников, точный состав, форму результата, найденные данные, предварительный просмотр и подтверждение.</p><div class="flow-preview"><span>1. Пространство</span><i>→</i><span>2. Аудитория</span><i>→</i><span>3. Данные</span><i>→</i><span>4. Проверка</span><i>→</i><span>5. Готово</span></div></div>
