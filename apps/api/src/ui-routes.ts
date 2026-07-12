@@ -27,7 +27,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "intake.css",
       "quarantine.css",
       "structure.css",
-      "template-field.css"
+      "template-field.css",
+      "template-trial.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -39,7 +40,10 @@ const assets: Readonly<Record<string, UiAsset>> = {
   },
   "/ui/document-intake.js": {
     fileName: "document-intake.js",
-    appendFileNames: ["document-structure.js"],
+    appendFileNames: [
+      "document-structure.js",
+      "template-trial.js"
+    ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
   },

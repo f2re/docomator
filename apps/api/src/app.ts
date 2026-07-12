@@ -26,8 +26,13 @@ import {
   TemplateDraftConflictError,
   TemplateDraftNotFoundError,
   TemplateDraftRegistry,
-  TemplateDraftValidationError
+  TemplateDraftValidationError,
+  TemplateTestVersionConflictError,
+  TemplateTestVersionNotFoundError,
+  TemplateTestVersionRegistry,
+  TemplateTestVersionValidationError
 } from "@docomator/storage";
+import { TemplateCompilerError } from "@docomator/template-compiler";
 import Fastify, {
   type FastifyError,
   type FastifyInstance
@@ -38,6 +43,7 @@ import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
 import { registerTemplateDraftRoutes } from "./template-draft-routes.js";
+import { registerTemplateTestVersionRoutes } from "./template-test-version-routes.js";
 import { registerUiRoutes } from "./ui-routes.js";
 import {
   internalErrorMessage,
@@ -54,6 +60,7 @@ export interface AppDependencies {
   spaceRegistry?: SpaceRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
+  templateTestVersionRegistry?: TemplateTestVersionRegistry;
   uiDirectory?: string;
 }
 
@@ -85,7 +92,8 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "audience_snapshots",
         "document_quarantine_records",
         "template_drafts",
-        "template_draft_fields"
+        "template_draft_fields",
+        "template_test_versions"
       ];
       const rows = database
         .prepare(`
@@ -97,7 +105,7 @@ function databaseSchemaReady(store: SqliteStore): boolean {
               'worker_jobs', 'domain_events', 'spaces',
               'space_entity_ownership', 'audience_groups', 'audience_snapshots',
               'document_quarantine_records', 'template_drafts',
-              'template_draft_fields'
+              'template_draft_fields', 'template_test_versions'
             )
         `)
         .all() as unknown as Array<{ name: string }>;
@@ -127,6 +135,9 @@ export function buildApp(
     new DocumentQuarantineRegistry(store, objectStore);
   const templateDraftRegistry =
     dependencies.templateDraftRegistry ?? new TemplateDraftRegistry(store);
+  const templateTestVersionRegistry =
+    dependencies.templateTestVersionRegistry ??
+    new TemplateTestVersionRegistry(store, objectStore);
 
   const app = Fastify({
     logger: {
@@ -162,6 +173,10 @@ export function buildApp(
       statusCode = error.statusCode;
       code = error.code;
       message = error.userMessage;
+    } else if (error instanceof TemplateCompilerError) {
+      statusCode = 422;
+      code = error.code;
+      message = error.userMessage;
     } else if (error instanceof DocumentQuarantineValidationError) {
       statusCode = 400;
       code = "document_quarantine_validation_failed";
@@ -181,6 +196,18 @@ export function buildApp(
     } else if (error instanceof TemplateDraftConflictError) {
       statusCode = 409;
       code = "template_draft_conflict";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplateTestVersionValidationError) {
+      statusCode = 400;
+      code = "template_test_version_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplateTestVersionNotFoundError) {
+      statusCode = 404;
+      code = "template_test_version_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplateTestVersionConflictError) {
+      statusCode = 409;
+      code = "template_test_version_conflict";
       message = toUserMessage(error);
     } else if (error instanceof KnowledgeValidationError) {
       statusCode = 400;
@@ -290,6 +317,12 @@ export function buildApp(
     quarantineRegistry,
     objectStore,
     templateDraftRegistry
+  );
+  registerTemplateTestVersionRoutes(
+    app,
+    objectStore,
+    templateDraftRegistry,
+    templateTestVersionRegistry
   );
 
   return app;
