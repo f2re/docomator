@@ -30,6 +30,7 @@ jobs:
           {
             python3 scripts/ci/apply-secure-intake-integration.py
             rm -f scripts/ci/apply-secure-intake-integration.py
+            sed -i 's/[[:space:]]\+$//' README.md
             node --check apps/api/ui/app.js
             node --check apps/api/ui/document-intake.js
             bash -n scripts/offline/prepare-bundle.sh
