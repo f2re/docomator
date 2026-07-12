@@ -3,6 +3,49 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const DEFAULT_SPACE_ID = "00000000-0000-4000-8000-000000000001";
 
+const displayNames = Object.freeze({
+  valueTypes: {
+    string: "Короткая строка",
+    text: "Длинный текст",
+    number: "Число",
+    integer: "Целое число",
+    boolean: "Да / нет",
+    date: "Дата",
+    "date-time": "Дата и время",
+    enum: "Список вариантов",
+    "entity-reference": "Ссылка на объект",
+    list: "Список",
+    json: "Структурированные данные",
+    file: "Файл",
+    image: "Изображение"
+  },
+  sensitivity: {
+    public: "Открытые",
+    internal: "Внутренние",
+    personal: "Персональные",
+    restricted: "Ограниченные"
+  },
+  entityStatus: {
+    active: "Активный",
+    inactive: "Неактивный",
+    archived: "Архивный"
+  },
+  spaceRole: {
+    owner: "Владелец",
+    manager: "Руководитель",
+    editor: "Редактор",
+    viewer: "Наблюдатель"
+  },
+  membershipStatus: {
+    active: "Доступ включён",
+    inactive: "Доступ отключён"
+  }
+});
+
+function displayLabel(group, value) {
+  return displayNames[group]?.[value] || String(value ?? "Не указано");
+}
+
 const state = {
   view: "overview",
   knowledgeTab: "types",
@@ -31,7 +74,7 @@ const views = {
   spaces: ["Изолированные наборы", "Пространства", "Люди, группы и точный план будущего документа.", "Создать пространство", "space"],
   knowledge: ["Общая схема", "Типы и свойства", "Переиспользуемая структура данных для всех пространств.", "Создать тип", "entity-type"],
   templates: ["Подготовка документов", "Шаблоны", "Повторяющиеся таблицы и списки подключаются следующим этапом.", null, null],
-  documents: ["Формирование", "Документы", "Будущий guided flow использует уже готовый снимок аудитории.", null, null],
+  documents: ["Формирование", "Документы", "Будущий пошаговый процесс использует уже готовый снимок состава.", null, null],
   automations: ["События и расписания", "Автоматизации", "Каждое правило будет ограничено одним пространством.", null, null]
 };
 
@@ -57,29 +100,29 @@ const knowledgeTabs = {
 const help = {
   overview: [
     ["Зачем нужны пространства?", "Они не дают смешать людей, группы и будущие документы разных подразделений, проектов или заказчиков."],
-    ["Можно сделать один документ на всех?", "Да. Режим «Один общий документ» передаёт шаблону коллекцию audience.members для таблицы или списка."],
+    ["Можно сделать один документ на всех?", "Да. Режим «Один общий документ» передаёт шаблону упорядоченный список участников для таблицы или перечня."],
     ["Можно сделать отдельный документ каждому?", "Да. Режим «По документу на каждого» создаёт отдельную единицу будущего запуска для каждого участника."],
-    ["Куда отправляются данные?", "Только на локальный сервер. Интерфейс не использует CDN, внешние шрифты, аналитику или облачные API."]
+    ["Куда отправляются данные?", "Только на локальный сервер. Интерфейс не использует внешние хранилища, шрифты, аналитику или облачные службы."]
   ],
   spaces: [
     ["Пространство и группа — это одно?", "Нет. Пространство является границей изоляции. Группа — сохранённый набор людей только внутри этого пространства."],
     ["Что такое снимок аудитории?", "Неизменяемая фиксация выбранных людей, их порядка и режима результата. Позднее изменение группы не меняет уже начатый запуск."],
-    ["Что значит «отмеченные»?", "Это разовый выбор чекбоксами. Его можно сразу зафиксировать для документа или сохранить как именованную группу."],
-    ["Почему общий документ пока не скачивается?", "Backend уже строит точный план и контекст. Запись списка в DOCX/XLSX появится вместе с безопасным Template Compiler."]
+    ["Что значит «отмеченные»?", "Это разовый выбор флажками. Его можно сразу зафиксировать для документа или сохранить как именованную группу."],
+    ["Почему общий документ пока не скачивается?", "Серверная часть уже строит точный план и состав. Запись списка в DOCX/XLSX появится вместе с компилятором шаблонов."]
   ],
   knowledge: [
     ["Почему здесь нет списка людей?", "Конкретные люди находятся в пространствах, чтобы не показывать данные одного подразделения в другом. Здесь хранится только общая схема типов и свойств."],
     ["Что такое стабильный ключ?", "Техническое имя на латинице: person, person.height, organization.inn. Оно остаётся неизменным при смене понятной подписи."],
     ["Можно добавить необычный параметр?", "Да. Рост, вес, количество животных и другие сведения создаются как обычные типизированные свойства."],
-    ["Что означает чувствительность?", "Будущий класс доступа: public, internal, personal или restricted. Проверка IAM будет выполняться до LLM, рендера и доставки."]
+    ["Что означает чувствительность?", "Будущий класс доступа: открытые, внутренние, персональные или ограниченные сведения. Проверка прав будет выполняться до обращения к локальной модели, формирования и доставки."]
   ],
   templates: [
-    ["Как таблица получит людей?", "Повторяющаяся строка будет связана с audience.members. Для каждой записи renderer подставит нужные свойства."],
-    ["Почему загрузка ещё закрыта?", "Недоверенный Office-файл нельзя принимать до проверки ZIP, XML, relationships, макросов и лимитов."]
+    ["Как таблица получит людей?", "Повторяющаяся строка будет связана со списком участников. Для каждой записи модуль формирования подставит нужные свойства."],
+    ["Почему загрузка ещё закрыта?", "Полученный DOCX/XLSX нельзя принимать до проверки архивной структуры, XML, внешних связей, макросов и ограничений размера."]
   ],
   documents: [
-    ["Как будет выглядеть процесс?", "Пространство → аудитория → режим результата → данные → проверка → рендер → скачивание или доставка."],
-    ["Можно работать без ИИ?", "Да. Активированный шаблон обязан заполняться обычной формой при недоступной LLM."]
+    ["Как будет выглядеть процесс?", "Пространство → состав → форма результата → данные → проверка → формирование → скачивание или доставка."],
+    ["Можно работать без ИИ?", "Да. Активированный шаблон обязан заполняться обычной формой при недоступной локальной модели."]
   ],
   automations: [
     ["Как правило выберет людей?", "Оно будет привязано к пространству и выберет всех активных, именованную группу или вычисленную выборку."],
@@ -171,14 +214,14 @@ const dialogs = {
   "space-access": {
     eyebrow: "Доступ к пространству",
     title: "Добавить пользователя приложения",
-    description: "Укажите технический ID пользователя и его роль в текущем пространстве.",
+    description: "Укажите внутренний идентификатор пользователя и его роль в текущем пространстве.",
     endpoint: (values) => spaceEndpoint(`/access-members/${encodeURIComponent(values.actorId)}`),
     method: "PUT",
     success: "Доступ обновлён",
     submit: "Сохранить доступ",
     fields: [
-      ["actorId", "ID пользователя", "text", true, "user-42", "Идентификатор локальной учётной записи. IAM-интерфейс будет добавлен отдельным этапом."],
-      ["role", "Роль", "space-role", true, "", "Owner управляет пространством; manager — составом; editor — данными; viewer — только просмотром."],
+      ["actorId", "Идентификатор пользователя", "text", true, "user-42", "Внутренний идентификатор локальной учётной записи. Раздел управления учётными записями будет добавлен отдельным этапом."],
+      ["role", "Роль", "space-role", true, "", "Владелец управляет пространством; руководитель — составом; редактор — данными; наблюдатель — только просматривает."],
       ["status", "Статус доступа", "membership-status", true, "", "Неактивный доступ сохраняется в истории, но не разрешает вход."]
     ],
     payload: (values) => ({ role: values.role, status: values.status })
@@ -340,7 +383,7 @@ function renderKnowledge() {
   }
   root.innerHTML = items.map((item) => {
     if (state.knowledgeTab === "types") return `<article class="collection-card"><header><div><h3>${escapeHtml(item.label)}</h3><code>${escapeHtml(item.key)}</code></div><span class="pill">Тип</span></header><p>${escapeHtml(item.description || "Описание пока не добавлено.")}</p></article>`;
-    return `<article class="collection-card"><header><div><h3>${escapeHtml(item.label)}</h3><code>${escapeHtml(item.key)}</code></div><span class="pill">${escapeHtml(item.valueType)}</span></header><p>${escapeHtml(item.description || "Описание пока не добавлено.")}</p><div class="card-meta"><span class="pill">${escapeHtml(item.sensitivity || "internal")}</span>${item.unit ? `<span class="pill">${escapeHtml(item.unit)}</span>` : ""}</div></article>`;
+    return `<article class="collection-card"><header><div><h3>${escapeHtml(item.label)}</h3><code>${escapeHtml(item.key)}</code></div><span class="pill">${escapeHtml(displayLabel("valueTypes", item.valueType))}</span></header><p>${escapeHtml(item.description || "Описание пока не добавлено.")}</p><div class="card-meta"><span class="pill">${escapeHtml(displayLabel("sensitivity", item.sensitivity || "internal"))}</span>${item.unit ? `<span class="pill">${escapeHtml(item.unit)}</span>` : ""}</div></article>`;
   }).join("");
 }
 
@@ -379,7 +422,7 @@ function renderMembers() {
     updateSelectedCount();
     return;
   }
-  root.innerHTML = state.data.spaceEntities.map((entity) => `<label class="member-row${state.selectedEntityIds.has(entity.entityId) ? " is-selected" : ""}"><input type="checkbox" data-select-entity="${escapeHtml(entity.entityId)}" ${state.selectedEntityIds.has(entity.entityId) ? "checked" : ""} /><span class="member-avatar" aria-hidden="true">${escapeHtml(entity.displayName.slice(0, 1).toUpperCase())}</span><span class="member-copy"><strong>${escapeHtml(entity.displayName)}</strong><small>${escapeHtml(entity.entityTypeLabel)} · ${escapeHtml(entity.status)}</small></span><span class="member-check" aria-hidden="true">✓</span></label>`).join("");
+  root.innerHTML = state.data.spaceEntities.map((entity) => `<label class="member-row${state.selectedEntityIds.has(entity.entityId) ? " is-selected" : ""}"><input type="checkbox" data-select-entity="${escapeHtml(entity.entityId)}" ${state.selectedEntityIds.has(entity.entityId) ? "checked" : ""} /><span class="member-avatar" aria-hidden="true">${escapeHtml(entity.displayName.slice(0, 1).toUpperCase())}</span><span class="member-copy"><strong>${escapeHtml(entity.displayName)}</strong><small>${escapeHtml(entity.entityTypeLabel)} · ${escapeHtml(displayLabel("entityStatus", entity.status))}</small></span><span class="member-check" aria-hidden="true">✓</span></label>`).join("");
   updateSelectedCount();
 }
 
@@ -395,10 +438,10 @@ function renderGroups() {
 function renderAccess() {
   const root = $("#spaceAccess");
   if (state.data.access.length === 0) {
-    root.innerHTML = '<div class="empty-state compact-empty"><div><span class="empty-emoji" aria-hidden="true">🔐</span><h3>Дополнительный доступ не настроен</h3><p>Создатель пространства уже имеет роль owner. Добавьте технический ID другого пользователя при необходимости.</p><button class="primary-button" type="button" data-create="space-access">Добавить доступ</button></div></div>';
+    root.innerHTML = '<div class="empty-state compact-empty"><div><span class="empty-emoji" aria-hidden="true">🔐</span><h3>Дополнительный доступ не настроен</h3><p>Создатель пространства уже имеет роль владельца. При необходимости добавьте внутренний идентификатор другого пользователя.</p><button class="primary-button" type="button" data-create="space-access">Добавить доступ</button></div></div>';
     return;
   }
-  root.innerHTML = state.data.access.map((member) => `<article class="access-row"><span class="member-avatar" aria-hidden="true">🔑</span><span><strong>${escapeHtml(member.actorId)}</strong><small>Роль: ${escapeHtml(member.role)} · ${escapeHtml(member.status)}</small></span><span class="pill">v${member.version}</span></article>`).join("");
+  root.innerHTML = state.data.access.map((member) => `<article class="access-row"><span class="member-avatar" aria-hidden="true">🔑</span><span><strong>${escapeHtml(member.actorId)}</strong><small>Роль: ${escapeHtml(displayLabel("spaceRole", member.role))} · ${escapeHtml(displayLabel("membershipStatus", member.status))}</small></span><span class="pill">Версия ${member.version}</span></article>`).join("");
 }
 
 function sourceLabel(snapshot) {
@@ -460,7 +503,7 @@ function renderPlan(result) {
   const root = $("#audiencePlan");
   const { snapshot, plan } = result;
   const memberNames = snapshot.members.map((member) => member.displayName);
-  root.innerHTML = `<article class="panel plan-card is-success"><div class="plan-icon" aria-hidden="true">${plan.targetMode === "aggregate" ? "📋" : "📄"}</div><div><p class="eyebrow">Состав зафиксирован</p><h2>${escapeHtml(modeLabel(plan.targetMode))}</h2><p>${plan.targetMode === "aggregate" ? `Создаётся одно задание. Шаблон получит <code>${escapeHtml(plan.collectionPath)}</code> с ${snapshot.memberCount} записями.` : `Создаётся ${plan.documentCount} независимых единиц — каждая с собственным subject.`}</p><div class="member-chip-list">${memberNames.slice(0, 12).map((name) => `<span class="pill">${escapeHtml(name)}</span>`).join("")}${memberNames.length > 12 ? `<span class="pill">ещё ${memberNames.length - 12}</span>` : ""}</div><small>Snapshot ID: <code>${escapeHtml(snapshot.id)}</code>. Изменение группы не изменит этот состав.</small></div></article>`;
+  root.innerHTML = `<article class="panel plan-card is-success"><div class="plan-icon" aria-hidden="true">${plan.targetMode === "aggregate" ? "📋" : "📄"}</div><div><p class="eyebrow">Состав зафиксирован</p><h2>${escapeHtml(modeLabel(plan.targetMode))}</h2><p>${plan.targetMode === "aggregate" ? `Создаётся одно задание. Шаблон получит упорядоченный список из ${snapshot.memberCount} участников.` : `Создаётся ${plan.documentCount} независимых заданий — каждое со своим основным участником.`}</p><div class="member-chip-list">${memberNames.slice(0, 12).map((name) => `<span class="pill">${escapeHtml(name)}</span>`).join("")}${memberNames.length > 12 ? `<span class="pill">ещё ${memberNames.length - 12}</span>` : ""}</div><small>Идентификатор снимка: <code>${escapeHtml(snapshot.id)}</code>. Изменение группы не изменит этот состав.</small></div></article>`;
   root.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
 }
 
@@ -559,9 +602,9 @@ async function loadData() {
   } catch (cause) {
     const error = cause instanceof ApiError ? cause : new ApiError("Неизвестная ошибка загрузки.");
     setConnection("error", "Нет связи с локальным сервером");
-    setStatus("error", "!", "Не удалось обновить данные", `${error.message}${error.correlationId ? ` Correlation ID: ${error.correlationId}.` : ""}`, loadData);
+    setStatus("error", "!", "Не удалось обновить данные", `${error.message}${error.correlationId ? ` Идентификатор операции: ${error.correlationId}.` : ""}`, loadData);
     $("#knowledgeContent").setAttribute("aria-busy", "false");
-    $("#knowledgeContent").innerHTML = `<div class="error-state"><div><span class="empty-emoji" aria-hidden="true">⚠️</span><h3>Не удалось загрузить данные</h3><p>${escapeHtml(error.message)}</p>${error.correlationId ? `<p><code>Correlation ID: ${escapeHtml(error.correlationId)}</code></p>` : ""}<button class="primary-button" type="button" data-retry-load>Повторить загрузку</button></div></div>`;
+    $("#knowledgeContent").innerHTML = `<div class="error-state"><div><span class="empty-emoji" aria-hidden="true">⚠️</span><h3>Не удалось загрузить данные</h3><p>${escapeHtml(error.message)}</p>${error.correlationId ? `<p><code>Идентификатор операции: ${escapeHtml(error.correlationId)}</code></p>` : ""}<button class="primary-button" type="button" data-retry-load>Повторить загрузку</button></div></div>`;
   } finally {
     state.loading = false;
     $("#refreshButton").disabled = false;
@@ -581,7 +624,7 @@ async function selectSpace(spaceId) {
     setStatus("success", "✓", "Пространство выбрано", `Рабочий контекст: «${currentSpace()?.name || "пространство"}». Данные других пространств не показаны.`);
   } catch (cause) {
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось открыть пространство.");
-    setStatus("error", "!", "Пространство не открыто", `${error.message}${error.correlationId ? ` Correlation ID: ${error.correlationId}.` : ""}`, () => selectSpace(spaceId));
+    setStatus("error", "!", "Пространство не открыто", `${error.message}${error.correlationId ? ` Идентификатор операции: ${error.correlationId}.` : ""}`, () => selectSpace(spaceId));
   }
 }
 
@@ -589,7 +632,7 @@ function optionsFor(type) {
   if (type === "value-type") return [["string", "Короткая строка"], ["text", "Длинный текст"], ["number", "Число"], ["integer", "Целое число"], ["boolean", "Да / нет"], ["date", "Дата"], ["date-time", "Дата и время"], ["enum", "Список вариантов"], ["entity-reference", "Ссылка на объект"], ["list", "Список"], ["json", "Структурированные данные"], ["file", "Файл"], ["image", "Изображение"]];
   if (type === "sensitivity") return [["internal", "Внутренние"], ["public", "Публичные"], ["personal", "Персональные"], ["restricted", "Ограниченные"]];
   if (type === "status") return [["active", "Активный"], ["inactive", "Неактивный"], ["archived", "Архивный"]];
-  if (type === "space-role") return [["viewer", "Viewer — просмотр"], ["editor", "Editor — изменение данных"], ["manager", "Manager — состав и группы"], ["owner", "Owner — полное управление"]];
+  if (type === "space-role") return [["viewer", "Наблюдатель — просмотр"], ["editor", "Редактор — изменение данных"], ["manager", "Руководитель — состав и группы"], ["owner", "Владелец — полное управление"]];
   if (type === "membership-status") return [["active", "Активный доступ"], ["inactive", "Доступ отключён"]];
   if (type === "entity-type") return state.data.types.map((item) => [item.key, item.label]);
   return null;
@@ -655,15 +698,15 @@ async function submitDialog(event) {
   button.textContent = "Сохраняем…";
   $("#formError").hidden = true;
   const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-  setStatus("", "⏳", "Сохраняем изменение", "Проверяем границу пространства, значения и аудит. Форма закроется только после подтверждения сервера.");
+  setStatus("", "⏳", "Сохраняем изменение", "Проверяем границу пространства, значения и запись в журнале. Форма закроется только после подтверждения сервера.");
   try {
     const endpoint = typeof definition.endpoint === "function" ? definition.endpoint(values) : definition.endpoint;
     const result = await api(endpoint, { method: definition.method || "POST", body: JSON.stringify(definition.payload(values)) });
     if (definition.afterCreate) await definition.afterCreate(result?.data);
     const createdSpaceId = kind === "space" ? result?.data?.id : null;
     closeDialog();
-    notify("✅", definition.success, "Изменение подтверждено сервером и записано в аудит.");
-    setStatus("success", "✓", definition.success, `Операция завершена. Correlation ID: ${result?.correlationId || "не указан"}.`);
+    notify("✅", definition.success, "Изменение подтверждено сервером и записано в журнал действий.");
+    setStatus("success", "✓", definition.success, `Операция завершена. Идентификатор операции: ${result?.correlationId || "не указан"}.`);
     if (kind === "entity-type" || kind === "property" || kind === "space") await loadData(); else await loadCurrentSpaceData();
     if (createdSpaceId) await selectSpace(createdSpaceId);
     if (kind === "entity-type" || kind === "property") selectView("knowledge"); else selectView("spaces");
@@ -673,7 +716,7 @@ async function submitDialog(event) {
   } catch (cause) {
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось сохранить изменение.");
     $("#formError").hidden = false;
-    $("#formError").innerHTML = `${escapeHtml(error.message)}${error.correlationId ? `<code>Correlation ID: ${escapeHtml(error.correlationId)}</code>` : ""}`;
+    $("#formError").innerHTML = `${escapeHtml(error.message)}${error.correlationId ? `<code>Идентификатор операции: ${escapeHtml(error.correlationId)}</code>` : ""}`;
     setStatus("error", "!", "Изменение не сохранено", "Введённые данные остались в форме. Исправьте причину или повторите действие.");
   } finally {
     button.disabled = false;
@@ -732,7 +775,7 @@ async function createAudienceSnapshot() {
     updateMetrics();
   } catch (cause) {
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось подготовить план.");
-    setStatus("error", "!", "План не создан", `${error.message}${error.correlationId ? ` Correlation ID: ${error.correlationId}.` : ""}`);
+    setStatus("error", "!", "План не создан", `${error.message}${error.correlationId ? ` Идентификатор операции: ${error.correlationId}.` : ""}`);
   } finally {
     button.disabled = false;
     button.textContent = "Зафиксировать состав и план";

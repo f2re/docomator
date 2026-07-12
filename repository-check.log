@@ -1,0 +1,169 @@
+
+> docomator@0.1.0-alpha.0 check
+> npm run clean && npm run build && npm run test && npm run check:docs && npm run check:shell && npm run check:ui && npm run check:language
+
+
+> docomator@0.1.0-alpha.0 clean
+> node scripts/ci/clean.mjs
+
+
+> docomator@0.1.0-alpha.0 build
+> npm run build -w @docomator/contracts && npm run build -w @docomator/config && npm run build -w @docomator/storage && npm run build -w @docomator/api && npm run build -w @docomator/worker
+
+
+> @docomator/contracts@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/config@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/storage@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/api@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/worker@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> docomator@0.1.0-alpha.0 test
+> npm run test -w @docomator/contracts && npm run test -w @docomator/config && npm run test -w @docomator/storage && npm run test -w @docomator/api && npm run test -w @docomator/worker && node --test scripts/runtime/*.test.mjs
+
+
+> @docomator/contracts@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ service contract contains the bootstrap processes (1.494072ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 64.591667
+
+> @docomator/config@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ api config applies safe defaults (1.157544ms)
+✔ invalid ports are rejected (0.45133ms)
+✔ worker queue timings and identity are configurable (0.270881ms)
+✔ worker retry range must be coherent (0.200827ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 66.472666
+
+> @docomator/storage@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ two worker connections cannot own the same active lease (218.980379ms)
+✔ transactions commit, roll back and isolate nested savepoints (3.710907ms)
+✔ asynchronous transaction callbacks are rejected (0.481705ms)
+✔ knowledge mutations append outbox and audit records atomically (245.393406ms)
+✔ property scope and enum validation are enforced before mutation (275.142425ms)
+✔ stable keys are unique and invalid keys are rejected (226.593415ms)
+✔ business mutation, outbox event and audit share one transaction (209.874865ms)
+✔ outbox append is idempotent and rejects conflicting reuse (264.883879ms)
+✔ outbox leases provide at-least-once retry and dead-letter semantics (228.492476ms)
+✔ outbox retry delay and publish acknowledgement are persisted (166.847083ms)
+✔ queue enqueue is idempotent and canonical JSON ignores object key order (264.232563ms)
+✔ queue claims by priority and completes only with a valid lease (229.33461ms)
+✔ expired leases are retried and then dead-lettered at max attempts (170.009825ms)
+✔ retry delay and permanent failure are persisted (145.072004ms)
+✔ spaces isolate entities and preserve default ownership (176.982822ms)
+✔ audience snapshots build one-per-member and aggregate document plans (131.743783ms)
+✔ cross-space members are rejected before group or snapshot mutation (95.78045ms)
+✔ space actor memberships are versioned and scoped (86.637337ms)
+✔ property codecs validate values and create typed projections (2.85055ms)
+✔ content-addressed object storage is immutable and deduplicated (15.160047ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1419.557299
+
+> @docomator/api@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ health endpoint reports the API service (230.037955ms)
+✔ readiness stays degraded before migrations create the database (108.213063ms)
+✔ knowledge API creates typed data with outbox and audit (406.599058ms)
+✔ knowledge API returns stable validation and conflict errors (251.22442ms)
+✔ valid correlation and actor identifiers are preserved (2.520834ms)
+✔ unsafe context headers are replaced with the internal request ID (0.302216ms)
+✔ spaces API isolates entities and creates aggregate target plan (424.194648ms)
+✔ spaces API rejects cross-space group membership (259.64838ms)
+✔ UI shell is served locally with security headers (239.333076ms)
+✔ UI assets are served without external runtime dependencies (80.132431ms)
+✔ domain validation messages are translated into clear Russian text (2.028332ms)
+✔ database errors do not expose raw English diagnostics (0.626041ms)
+✔ already Russian messages are preserved (0.184354ms)
+✔ unknown diagnostics are replaced with a safe Russian fallback (1.416549ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 990.498033
+
+> @docomator/worker@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ worker loop stops after abort (3.358891ms)
+✔ processor completes a registered job (97.003464ms)
+✔ processor retries transient errors with deterministic backoff (90.523267ms)
+✔ unknown or permanent jobs are dead-lettered without repeated execution (96.799084ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 361.494508
+✔ backup is verifiable and restore replaces database, objects, and config (56.505833ms)
+✔ verification detects modified backup files (16.219249ms)
+✔ bootstrap migration is repeatable (114.321444ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 179.734131
+
+> docomator@0.1.0-alpha.0 check:docs
+> node scripts/ci/check-doc-links.mjs
+
+Checked 23 Markdown files.
+
+> docomator@0.1.0-alpha.0 check:shell
+> bash scripts/ci/validate-shell.sh
+
+Validated 11 shell scripts.
+
+> docomator@0.1.0-alpha.0 check:ui
+> node --check apps/api/ui/app.js
+
+
+> docomator@0.1.0-alpha.0 check:language
+> node scripts/ci/check-user-facing-language.mjs
+
+Пользовательские тексты прошли проверку русской терминологии.

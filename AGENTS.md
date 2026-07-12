@@ -95,6 +95,10 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - State copy explains the current step, why it is happening, what comes next, and whether data is preserved.
 - Preserve form values after server errors and expose correlation IDs.
 - Keep runtime UI offline: no CDN, remote fonts, analytics, or external assets.
+
+- User-facing interface, API messages, installation help, notifications, roles, and states are Russian by default.
+- Do not expose raw English library/database errors or unexplained machine values to ordinary users.
+- Run `npm run check:language` for every user-facing change.
 - Verify 320 px, keyboard/focus, touch targets, dark mode, and reduced motion.
 
 ## Offline-release rules

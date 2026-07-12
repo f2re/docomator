@@ -18,12 +18,12 @@ INSTALL_SYSTEMD=1
 
 usage() {
   cat <<'USAGE'
-Usage: ./install.sh [options]
+Использование: ./install.sh [параметры]
 
-Installs a verified Docomator offline bundle. This script never accesses the
-network. Run update.sh for an existing installation.
+Устанавливает проверенный автономный комплект Docomator. Сценарий не обращается
+к сети. Для существующей установки используйте update.sh.
 
-Options:
+Параметры:
   --bundle-root DIR        Extracted bundle directory (default: script directory)
   --install-root DIR       Release root (default: /opt/docomator)
   --data-dir DIR           Persistent data directory (default: /var/lib/docomator)
@@ -51,7 +51,7 @@ while (($# > 0)); do
     --no-systemd) INSTALL_SYSTEMD=0; NO_START=1; shift ;;
     --upgrade) UPGRADE=1; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) die "Unknown option: $1" ;;
+    *) die "Неизвестный параметр: $1" ;;
   esac
 done
 
@@ -78,14 +78,14 @@ CONFIG_FILE="$CONFIG_DIR/docomator.env"
 DATABASE_PATH="$DATA_DIR/docomator.db"
 
 if ((UPGRADE == 1)) && [[ ! -L "$CURRENT_LINK" ]]; then
-  die "No existing Docomator installation was found at $CURRENT_LINK"
+  die "Не найдена существующая установка Docomator: $CURRENT_LINK"
 fi
 
 if ((INSTALL_OS_PACKAGES == 1)); then
   mapfile -d '' debs < <(find "$BUNDLE_ROOT/payload/os-packages" -maxdepth 1 -type f -name '*.deb' -print0 | sort -z)
-  ((${#debs[@]} > 0)) || die "No .deb packages are included in this bundle"
+  ((${#debs[@]} > 0)) || die "В комплекте нет пакетов .deb"
   require_command dpkg
-  info "Installing ${#debs[@]} bundled OS packages"
+  info "Устанавливаем пакеты ОС из комплекта: ${#debs[@]}"
   if ! dpkg -i "${debs[@]}"; then
     require_command apt-get
     APT_CACHE="$(mktemp -d "${TMPDIR:-/tmp}/docomator-apt.XXXXXX")"
@@ -137,7 +137,7 @@ if ((${#bundled_models[@]} > 0)); then
   for model in "${bundled_models[@]}"; do
     destination="$DATA_DIR/models/$(basename "$model")"
     if [[ -f "$destination" && "$(sha256_of "$destination")" == "$(sha256_of "$model")" ]]; then
-      info "Model already installed: $destination"
+      info "Модель уже установлена: $destination"
       continue
     fi
     temporary="$destination.tmp.$$"
@@ -173,11 +173,11 @@ if [[ -n "$OLD_TARGET" ]]; then
     done
   fi
   chown -R "$DOCOMATOR_USER:$DOCOMATOR_GROUP" "$BACKUP_DIR"
-  info "Pre-update backup created: $BACKUP_DIR"
+  info "Резервная копия перед обновлением создана: $BACKUP_DIR"
 fi
 
 rollback() {
-  warn "Rolling back failed installation/update"
+  warn "Возвращаем прежнее состояние после ошибки установки или обновления"
   if ((INSTALL_SYSTEMD == 1)); then
     stop_docomator_services
   fi
@@ -217,22 +217,26 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
   cp -a "$BUNDLE_ROOT/payload/runtime" "$TEMP_RELEASE/"
   cp -a "$BUNDLE_ROOT/payload/deploy" "$TEMP_RELEASE/"
   cp "$BUNDLE_ROOT/release.json" "$TEMP_RELEASE/"
+  if [[ -x "$BUNDLE_ROOT/first-run.sh" ]]; then
+    cp "$BUNDLE_ROOT/first-run.sh" "$TEMP_RELEASE/first-run.sh"
+    chmod 0755 "$TEMP_RELEASE/first-run.sh"
+  fi
   chown -R root:root "$TEMP_RELEASE"
   chmod -R go-w "$TEMP_RELEASE"
   mv "$TEMP_RELEASE" "$RELEASE_DIR"
 else
   [[ -f "$RELEASE_DIR/release.json" ]] || \
-    die "Existing release is incomplete: $RELEASE_DIR"
+    die "Существующий каталог версии неполон: $RELEASE_DIR"
   cmp -s "$BUNDLE_ROOT/release.json" "$RELEASE_DIR/release.json" || \
-    die "Version $VERSION is already installed with different release metadata. Build a new version."
-  info "Identical release directory already exists: $RELEASE_DIR"
+    die "Версия $VERSION уже установлена с другими сведениями. Подготовьте новый номер версии."
+  info "Такой же каталог версии уже существует: $RELEASE_DIR"
 fi
 
 if ! DOCOMATOR_DATA_DIR="$DATA_DIR" \
   "$RELEASE_DIR/runtime/node/bin/node" \
   "$RELEASE_DIR/app/scripts/runtime/migrate.mjs"; then
   rollback
-  die "Database migration failed"
+  die "Не удалось применить изменения базы данных"
 fi
 chown "$DOCOMATOR_USER:$DOCOMATOR_GROUP" "$DATABASE_PATH" 2>/dev/null || true
 chown "$DOCOMATOR_USER:$DOCOMATOR_GROUP" "$DATABASE_PATH-wal" "$DATABASE_PATH-shm" 2>/dev/null || true
@@ -251,13 +255,13 @@ if ((INSTALL_SYSTEMD == 1)); then
   done
   systemctl daemon-reload
 else
-  info "Skipping systemd unit installation and service control"
+  info "Пропускаем установку служб systemd и управление ими"
 fi
 
 if ((NO_START == 0)); then
   command -v systemctl >/dev/null 2>&1 || {
     rollback
-    die "systemd is required unless --no-start is used"
+    die "Требуется systemd; для установки без запуска используйте --no-start"
   }
 
   systemctl enable docomator-api.service docomator-worker.service
@@ -272,7 +276,7 @@ if ((NO_START == 0)); then
 
   if ! systemctl restart docomator-api.service docomator-worker.service; then
     rollback
-    die "Services failed to start"
+    die "Не удалось запустить службы Docomator"
   fi
 
   HOST="$(read_env_value "$CONFIG_FILE" DOCOMATOR_HOST)"
@@ -294,11 +298,15 @@ if ((NO_START == 0)); then
   if ((HEALTHY == 0)); then
     systemctl status docomator-api.service --no-pager >&2 || true
     rollback
-    die "Health check failed after installation"
+    die "Проверка готовности после установки завершилась ошибкой"
   fi
 fi
 
-info "Docomator $VERSION installed successfully"
-info "Current release: $(readlink -f "$CURRENT_LINK")"
-info "Configuration: $CONFIG_FILE"
-info "Persistent data: $DATA_DIR"
+info "Docomator $VERSION успешно установлен"
+info "Текущая версия: $(readlink -f "$CURRENT_LINK")"
+info "Файл настроек: $CONFIG_FILE"
+info "Постоянные данные: $DATA_DIR"
+
+if [[ -x "$CURRENT_LINK/first-run.sh" ]]; then
+  "$CURRENT_LINK/first-run.sh" --config "$CONFIG_FILE"
+fi
