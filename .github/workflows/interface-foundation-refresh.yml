@@ -1,4 +1,4 @@
-name: Expand and refresh interface foundation
+name: Apply interface foundation baseline
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ jobs:
   refresh:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/interface-foundation'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 10
 
     steps:
       - name: Checkout interface branch
@@ -31,84 +31,30 @@ jobs:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
 
-      - name: Detect interface payload
-        id: payload
+      - name: Apply reviewed baseline patch
         shell: bash
         run: |
-          if compgen -G '.interface-payload.part-*' >/dev/null; then
-            echo 'present=true' >> "$GITHUB_OUTPUT"
+          set -Eeuo pipefail
+          if [[ -f scripts/ci/apply-interface-baseline.py ]]; then
+            python3 scripts/ci/apply-interface-baseline.py
+            rm -f scripts/ci/apply-interface-baseline.py
           else
-            echo 'present=false' >> "$GITHUB_OUTPUT"
+            echo 'Interface baseline patch is already applied.'
           fi
-
-      - name: Verify reviewed payload blobs
-        if: steps.payload.outputs.present == 'true'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          test "$(git hash-object .interface-payload.part-00)" = '46b3f5538c321f009cd13fec6edd77658293fb55'
-          test "$(git hash-object .interface-payload.part-01)" = '9b48cff2ff9098039776c824814e4a2755493043'
-          test "$(git hash-object .interface-payload.part-02)" = '98db44128d1860c6b2f5be32c2ae22a7c369fb5e'
-          test "$(git hash-object .interface-payload.part-03)" = '3667abc08fc84223ea6db3dd261430d05466f4d6'
-
-      - name: Decode interface payload
-        if: steps.payload.outputs.present == 'true'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          cat .interface-payload.part-* | base64 --decode > /tmp/interface-foundation.tar.gz
-          sha256sum /tmp/interface-foundation.tar.gz
-
-      - name: Verify gzip stream
-        if: steps.payload.outputs.present == 'true'
-        shell: bash
-        run: gzip --test /tmp/interface-foundation.tar.gz
-
-      - name: Verify tar member names
-        if: steps.payload.outputs.present == 'true'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          tar --list --gzip --file /tmp/interface-foundation.tar.gz > /tmp/interface-members.txt
-          cat /tmp/interface-members.txt
-          python3 - <<'PY'
-          from pathlib import Path
-
-          for raw in Path('/tmp/interface-members.txt').read_text(encoding='utf-8').splitlines():
-              member = Path(raw)
-              if member.is_absolute() or '..' in member.parts:
-                  raise SystemExit(f'Unsafe archive member: {raw}')
-          PY
-
-      - name: Extract interface archive into staging
-        if: steps.payload.outputs.present == 'true'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          rm -rf /tmp/interface-stage
-          mkdir -p /tmp/interface-stage
-          tar --extract --gzip --file /tmp/interface-foundation.tar.gz \
-            --directory /tmp/interface-stage --no-same-owner --no-same-permissions
-          if find /tmp/interface-stage -type l -print -quit | grep -q .; then
-            echo 'Symbolic links are forbidden in interface payload.' >&2
-            exit 1
-          fi
-          find /tmp/interface-stage -maxdepth 5 -type f -print | sort
-
-      - name: Publish staged interface files
-        if: steps.payload.outputs.present == 'true'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          cp -a /tmp/interface-stage/. .
-          rm -f apply-interface-patch.py .interface-payload.part-* .interface-foundation-ready
-          git status --short
 
       - name: Refresh lockfile
         shell: bash
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
-      - name: Commit generated interface foundation
+      - name: Validate generated files before commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node --check apps/api/ui/app.js
+          bash -n scripts/offline/prepare-bundle.sh
+          git diff --check
+
+      - name: Commit generated baseline
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -120,5 +66,5 @@ jobs:
           git diff --cached --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'add guided interface assets and UX specifications'
+          git commit -m 'apply guided interface baseline to project plan'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
