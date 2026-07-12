@@ -1,0 +1,84 @@
+name: Подготовить структурное представление документов
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/document-structure'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Проверить необходимость подготовки
+        id: payload
+        shell: bash
+        run: |
+          if compgen -G '.structure-payload.part-*' >/dev/null; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Развернуть подготовленные изменения
+        if: steps.payload.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/docomator-structure-update
+          cat .structure-payload.part-* | base64 --decode > /tmp/docomator-structure-update.tar.gz
+          tar -xzf /tmp/docomator-structure-update.tar.gz -C /tmp/docomator-structure-update
+          python3 /tmp/docomator-structure-update/apply.py
+          rm -f .structure-payload.part-* .apply-document-structure
+          rm -f .github/workflows/apply-document-structure.yml
+          git diff --check
+
+      - name: Определить версию Node.js
+        if: steps.payload.outputs.present == 'true'
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        if: steps.payload.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зафиксированные зависимости
+        if: steps.payload.outputs.present == 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить весь репозиторий
+        if: steps.payload.outputs.present == 'true'
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        if: steps.payload.outputs.present == 'true'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-document-structure
+        run: npm run migrate
+
+      - name: Зафиксировать проверенный этап
+        if: steps.payload.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'add deterministic DOCX and XLSX structure analysis'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
