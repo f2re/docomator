@@ -1,0 +1,258 @@
+.template-trial-panel {
+  margin-top: 1.25rem;
+}
+
+.trial-card,
+.trial-content,
+.trial-form,
+.trial-history {
+  display: grid;
+  gap: 1rem;
+}
+
+.trial-guidance,
+.trial-empty,
+.trial-loading,
+.trial-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  padding: 1rem;
+  background: var(--surface-2);
+}
+
+.trial-guidance p,
+.trial-empty p,
+.trial-loading p,
+.trial-success p,
+.trial-empty small {
+  margin: 0;
+  color: var(--muted);
+}
+
+.trial-empty strong,
+.trial-loading strong,
+.trial-success strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.trial-empty.is-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: var(--danger-soft);
+}
+
+.trial-empty button {
+  margin-top: 0.75rem;
+}
+
+.trial-form {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.trial-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.trial-form-grid label,
+.trial-form-grid > div label {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+
+.trial-form-grid label > span:first-child {
+  font-weight: 650;
+  color: var(--text);
+}
+
+.trial-form-grid input,
+.trial-form-grid select,
+.trial-form-grid textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+}
+
+.trial-form-grid textarea {
+  resize: vertical;
+}
+
+.trial-form-grid input:focus,
+.trial-form-grid select:focus,
+.trial-form-grid textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 1px;
+}
+
+.trial-form-grid small,
+.trial-actions p,
+#templateTrialFieldDetail {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+#templateTrialFieldDetail {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.trial-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.trial-actions p {
+  margin: 0;
+  max-width: 52rem;
+}
+
+.trial-actions p.is-loading {
+  color: var(--accent);
+}
+
+.trial-actions p.is-success {
+  color: var(--success);
+}
+
+.trial-actions p.is-error {
+  color: var(--danger);
+}
+
+.trial-success {
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--surface));
+}
+
+.trial-success > span {
+  font-size: 1.35rem;
+}
+
+.trial-success > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.trial-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.trial-downloads a {
+  text-decoration: none;
+}
+
+.trial-success details {
+  margin-top: 0.85rem;
+}
+
+.trial-success dl {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.75rem 0 0;
+}
+
+.trial-success dl div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.trial-success dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.trial-success dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.trial-history {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.trial-history h3,
+.trial-history p {
+  margin: 0;
+}
+
+.trial-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  padding: 0.85rem;
+  background: var(--surface-2);
+}
+
+.trial-history-item > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.trial-history-item span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.trial-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.trial-history-actions a {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.trial-history-empty {
+  color: var(--muted);
+  padding: 0.75rem 0;
+}
+
+.trial-history-empty.is-error {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .trial-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .trial-actions,
+  .trial-history-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .trial-actions .primary-button,
+  .trial-downloads a {
+    width: 100%;
+    text-align: center;
+  }
+}
