@@ -23,6 +23,23 @@ async function testApp() {
   return { app, dataDir };
 }
 
+function docxWithParagraphs(): Buffer {
+  const documentXml = `<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+ <w:body>
+  <w:p><w:r><w:t>Первый абзац</w:t></w:r></w:p>
+  <w:p><w:r><w:t>Второй абзац</w:t></w:r></w:p>
+ </w:body>
+</w:document>`;
+  return buildZipFixture(
+    minimalDocxEntries().map((entry) =>
+      entry.name === "word/document.xml"
+        ? { ...entry, content: documentXml }
+        : entry
+    )
+  );
+}
+
 test("document intake API returns a Russian compatibility report", async () => {
   const { app, dataDir } = await testApp();
   try {
@@ -121,6 +138,56 @@ test("document intake API requires a file name", async () => {
     assert.equal(response.statusCode, 400, response.body);
     const body = response.json() as { error: { message: string } };
     assert.match(body.error.message, /Проверьте заполнение формы/u);
+  } finally {
+    await app.close();
+    await fs.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("document analysis API returns stable bounded structural coordinates", async () => {
+  const { app, dataDir } = await testApp();
+  try {
+    const payload = docxWithParagraphs();
+    const request = () =>
+      app.inject({
+        method: "POST",
+        url: "/api/v1/document-intake/analyze?fileName=%D0%9F%D0%B8%D1%81%D1%8C%D0%BC%D0%BE.docx&limit=10",
+        headers: {
+          "content-type":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "x-correlation-id": "corr-analysis-docx"
+        },
+        payload
+      });
+
+    const first = await request();
+    const second = await request();
+    assert.equal(first.statusCode, 200, first.body);
+    assert.equal(second.statusCode, 200, second.body);
+
+    const firstBody = first.json() as {
+      data: {
+        structure: {
+          sourceSha256: string;
+          totals: { paragraphs: number; returnedElements: number };
+          docx: { parts: Array<{ paragraphs: Array<{ id: string; text: string }> }> };
+        };
+      };
+      correlationId: string;
+    };
+    const secondBody = second.json() as typeof firstBody;
+    assert.equal(firstBody.data.structure.totals.paragraphs, 2);
+    assert.equal(firstBody.data.structure.totals.returnedElements, 2);
+    assert.deepEqual(
+      firstBody.data.structure.docx.parts[0]?.paragraphs.map((item) => item.text),
+      ["Первый абзац", "Второй абзац"]
+    );
+    assert.deepEqual(
+      firstBody.data.structure.docx.parts[0]?.paragraphs.map((item) => item.id),
+      secondBody.data.structure.docx.parts[0]?.paragraphs.map((item) => item.id)
+    );
+    assert.equal(firstBody.correlationId, "corr-analysis-docx");
+    assert.equal(first.headers["cache-control"], "no-store");
   } finally {
     await app.close();
     await fs.rm(dataDir, { recursive: true, force: true });
