@@ -129,7 +129,7 @@ curl http://127.0.0.1:8080/api/v1/knowledge/entity-types
 ```
 
 > [!TIP]
-> `npm run check` выполняет чистую сборку, unit/integration tests, проверку Markdown-ссылок и синтаксиса shell-скриптов.
+> `npm run check` выполняет чистую сборку, unit/integration tests, проверку Markdown-ссылок, shell-скриптов и синтаксиса offline UI.
 
 ## 📦 Автономная поставка
 

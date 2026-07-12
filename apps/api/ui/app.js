@@ -394,7 +394,7 @@ function openHelp() {
   $("#helpContent").innerHTML = (help[state.view] || help.overview).map(([question, answer]) => `<article class="help-question"><h3>${escapeHtml(question)}</h3><p>${escapeHtml(answer)}</p></article>`).join("");
   $("#helpDrawer").classList.add("is-open");
   $("#helpDrawer").setAttribute("aria-hidden", "false");
-  $("#helpDrawer [data-close-help]")?.focus();
+  $("#helpDrawer button[data-close-help]")?.focus();
 }
 function closeHelp() {
   $("#helpDrawer").classList.remove("is-open");

@@ -222,7 +222,7 @@ Definition of Done: AC-005—AC-010 проходят на offline test VM.
 - administrator/template-editor/operator manuals;
 - release candidate и production baseline.
 
-Definition of Done: выполнены AC-001—AC-014 и подписан пилотный протокол.
+Definition of Done: выполнены AC-001—AC-016 и UX-AC-001—UX-AC-010, подписан пилотный протокол.
 
 ## Ближайший backlog
 

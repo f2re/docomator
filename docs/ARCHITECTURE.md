@@ -68,7 +68,7 @@ Adapters: SQLite, OOXML, llama-server, LibreOffice, SMTP, filesystem
 
 ### 3.1. Interface architecture
 
-UI является локальным HTTP-адаптером модульного монолита и не принимает доменных решенийений. Он:
+UI является локальным HTTP-адаптером модульного монолита и не принимает доменных решений. Он:
 
 - отображает backend state, а не выводит его из таймеров или предположений;
 - использует единую систему design tokens и state components;
