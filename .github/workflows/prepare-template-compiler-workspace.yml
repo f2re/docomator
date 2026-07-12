@@ -1,0 +1,73 @@
+name: Подготовить рабочую область компилятора
+
+on:
+  push:
+    branches:
+      - agent/basic-template-compiler
+    paths:
+      - packages/template-compiler/**
+      - package.json
+      - .template-compiler-workspace-ready
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: agent/basic-template-compiler
+          fetch-depth: 0
+
+      - name: Настроить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Обновить lock-файл и автономный комплект
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/offline/prepare-bundle.sh')
+          text = path.read_text(encoding='utf-8')
+          old_dir = '  "$BUNDLE_DIR/payload/app/packages/document-intake" \\\n'
+          new_dir = old_dir + '  "$BUNDLE_DIR/payload/app/packages/template-compiler" \\\n'
+          if 'payload/app/packages/template-compiler' not in text:
+              if old_dir not in text:
+                  raise SystemExit('Не найден блок каталогов автономного комплекта')
+              text = text.replace(old_dir, new_dir, 1)
+
+          old_loop = 'packages/storage packages/document-intake; do'
+          new_loop = 'packages/storage packages/document-intake packages/template-compiler; do'
+          if 'packages/document-intake packages/template-compiler; do' not in text:
+              if old_loop not in text:
+                  raise SystemExit('Не найден список рабочих областей автономного комплекта')
+              text = text.replace(old_loop, new_loop, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Зафиксировать подготовку
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git add package-lock.json scripts/offline/prepare-bundle.sh
+          if git diff --cached --quiet; then
+            echo 'Изменения не требуются.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Подключить компилятор к lock-файлу и автономной поставке'
+          git push origin HEAD:agent/basic-template-compiler
