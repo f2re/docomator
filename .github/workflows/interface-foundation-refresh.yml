@@ -41,6 +41,16 @@ jobs:
             echo 'present=false' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify reviewed payload blobs
+        if: steps.payload.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git hash-object .interface-payload.part-00)" = '46b3f5538c321f009cd13fec6edd77658293fb55'
+          test "$(git hash-object .interface-payload.part-01)" = '9b48cff2ff9098039776c824814e4a2755493043'
+          test "$(git hash-object .interface-payload.part-02)" = '98db44128d1860c6b2f5be32c2ae22a7c369fb5e'
+          test "$(git hash-object .interface-payload.part-03)" = '3667abc08fc84223ea6db3dd261430d05466f4d6'
+
       - name: Decode interface payload
         if: steps.payload.outputs.present == 'true'
         shell: bash
@@ -49,11 +59,6 @@ jobs:
           cat .interface-payload.part-* | base64 --decode > /tmp/interface-foundation.tar.gz
           ls -lh /tmp/interface-foundation.tar.gz
           sha256sum /tmp/interface-foundation.tar.gz
-
-      - name: Verify interface payload checksum
-        if: steps.payload.outputs.present == 'true'
-        shell: bash
-        run: echo 'd5ed1fa427c54b57dc2ea22cc92de4c7573e5557d962154df92d9535aa982b73  /tmp/interface-foundation.tar.gz' | sha256sum --check --strict
 
       - name: Validate interface archive
         if: steps.payload.outputs.present == 'true'
