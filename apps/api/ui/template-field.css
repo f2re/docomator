@@ -1,0 +1,123 @@
+.structure-selection-mark {
+  flex: 0 0 auto;
+}
+
+.structure-selection-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.structure-field-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.structure-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.structure-field-grid label {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+
+.structure-field-grid label > span:first-child,
+.structure-field-grid label > strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.structure-field-grid input[type="text"],
+.structure-field-grid select {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+}
+
+.structure-field-grid input[type="text"]:focus,
+.structure-field-grid select:focus {
+  border-color: var(--accent);
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 1px;
+}
+
+.structure-field-grid small,
+.structure-field-actions p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.structure-required-field {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.structure-required-field input {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-top: 0.15rem;
+}
+
+.structure-required-field span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.structure-required-field strong {
+  margin: 0;
+}
+
+.structure-field-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.structure-field-actions p {
+  margin: 0;
+  max-width: 48rem;
+}
+
+.structure-field-actions p.is-loading {
+  color: var(--accent);
+}
+
+.structure-field-actions p.is-success {
+  color: var(--success);
+}
+
+.structure-field-actions p.is-error {
+  color: var(--danger);
+}
+
+@media (max-width: 760px) {
+  .structure-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .structure-field-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .structure-field-actions .primary-button {
+    width: 100%;
+  }
+}
