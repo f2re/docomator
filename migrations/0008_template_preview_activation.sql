@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS template_preview_requests (
   space_id TEXT NOT NULL REFERENCES spaces(id),
   test_version_id TEXT NOT NULL REFERENCES template_test_versions(id),
   worker_job_id TEXT NOT NULL REFERENCES worker_jobs(id),
+  request_attempt INTEGER NOT NULL DEFAULT 1 CHECK (request_attempt >= 1),
   state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'ready', 'failed')),
   preview_file_id TEXT REFERENCES files(id),
   preview_sha256 TEXT CHECK (preview_sha256 IS NULL OR length(preview_sha256) = 64),
