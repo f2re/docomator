@@ -4,19 +4,19 @@ set -Eeuo pipefail
 log() {
   local level="$1"
   shift
-  printf '[%s] %-5s %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$level" "$*" >&2
+  printf '[%s] %-6s %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$level" "$*" >&2
 }
 
-info() { log INFO "$@"; }
-warn() { log WARN "$@"; }
-die() { log ERROR "$@"; exit 1; }
+info() { log ИНФО "$@"; }
+warn() { log ВНИМ "$@"; }
+die() { log ОШИБКА "$@"; exit 1; }
 
 require_command() {
-  command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
+  command -v "$1" >/dev/null 2>&1 || die "Не найдена обязательная команда: $1"
 }
 
 require_root() {
-  [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "This command must be run as root."
+  [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "Команду необходимо выполнить с правами root."
 }
 
 absolute_path() {
@@ -38,7 +38,7 @@ download_file() {
   elif command -v wget >/dev/null 2>&1; then
     wget --tries=3 --output-document="$destination" "$url"
   else
-    die "curl or wget is required on the connected build host."
+    die "На подключённом сервере подготовки требуется curl или wget."
   fi
 }
 
