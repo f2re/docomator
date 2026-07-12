@@ -14,7 +14,7 @@ const rules: readonly MessageRule[] = [
     `Поле «${match[1]}» должно содержать текст.`],
   [/^(.+) must not exceed (\d+) characters$/i, (match) =>
     `Поле «${match[1]}» не должно быть длиннее ${match[2]} знаков.`],
-  [/^(.+) must start with a letter and contain lowercase letters, digits, dots, underscores or hyphens$/i, (match) =>
+  [/^(.+) must start with (?:a |a Latin )?letter and contain lowercase (?:Latin )?letters, digits, dots, underscores or hyphens$/i, (match) =>
     `Поле «${match[1]}» должно начинаться с латинской буквы и содержать только строчные латинские буквы, цифры, точки, подчёркивания или дефисы.`],
   [/^Invalid mutation timestamp$/i, () => "Указано недопустимое время изменения."],
   [/^(.+) is not a valid calendar date$/i, (match) =>
@@ -39,6 +39,22 @@ const rules: readonly MessageRule[] = [
     `Формат документа «${match[1]}» не поддерживается.`],
   [/^Quarantine document was not found in this space: (.+)$/i, () =>
     "Сохранённый исходник не найден в выбранном пространстве."],
+  [/^Template draft was not found in this space: (.+)$/i, () =>
+    "Черновик шаблона не найден в выбранном пространстве."],
+  [/^Structure element was not found: (.+)$/i, () =>
+    "Выбранный элемент не найден в сохранённой структуре. Постройте структуру заново и повторите выбор."],
+  [/^Template field already exists: (.+)$/i, (match) =>
+    `Поле с ключом «${match[1]}» уже существует в этом черновике.`],
+  [/^Template element already has a scalar field: (.+)$/i, () =>
+    "Выбранный элемент уже связан с другим скалярным полем."],
+  [/^Template field does not match the current draft structure$/i, () =>
+    "Поле относится к другой версии структуры. Постройте структуру заново."],
+  [/^A draft already exists for another structure version of this source$/i, () =>
+    "Для исходника уже существует черновик с другой версией структуры. Обновите черновик отдельной операцией."],
+  [/^Template draft source no longer matches the verified document$/i, () =>
+    "Исходник черновика больше не соответствует проверенному документу."],
+  [/^Stored source checksum changed before draft creation$/i, () =>
+    "Контрольная сумма сохранённого исходника изменилась. Обратитесь к администратору."],
   [/^(.+) was not found: (.+)$/i, (match) =>
     `${russianObjectName(match[1] ?? "")} «${match[2]}» не найдено.`],
   [/^(.+) already exists: (.+)$/i, (match) =>
@@ -86,7 +102,11 @@ function russianObjectName(value: string): string {
     space: "Пространство",
     group: "Группа",
     "audience group": "Группа",
-    "audience snapshot": "Снимок состава"
+    "audience snapshot": "Снимок состава",
+    "template draft": "Черновик шаблона",
+    "template field": "Поле шаблона",
+    "structure element": "Элемент структуры",
+    "quarantine document": "Сохранённый исходник"
   };
   return names[normalized] ?? "Запись";
 }
