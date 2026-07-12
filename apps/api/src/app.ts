@@ -22,12 +22,14 @@ import Fastify, {
 
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { correlationId } from "./request-context.js";
+import { registerUiRoutes } from "./ui-routes.js";
 
 const startedAt = Date.now();
 
 export interface AppDependencies {
   store?: SqliteStore;
   knowledgeRegistry?: KnowledgeRegistry;
+  uiDirectory?: string;
 }
 
 function uptimeSeconds(): number {
@@ -195,6 +197,7 @@ export function buildApp(
     }
   }));
 
+  registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, registry);
 
   return app;

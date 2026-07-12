@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ru" data-theme="system">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="Docomator — автономное формирование документов" />
+    <title>Docomator</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/ui/styles.css" />
+    <script type="module" src="/ui/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Перейти к содержимому</a>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Основная навигация">
+        <div class="brand" aria-label="Docomator">
+          <span class="brand-mark" aria-hidden="true">🧩</span>
+          <span>
+            <strong>Docomator</strong>
+            <small>Локальный контур</small>
+          </span>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item is-active" type="button" data-view-target="overview" aria-current="page">
+            <span aria-hidden="true">🏠</span><span>Обзор</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="knowledge">
+            <span aria-hidden="true">🗂️</span><span>База знаний</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="templates">
+            <span aria-hidden="true">📄</span><span>Шаблоны</span><span class="nav-badge">Скоро</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="documents">
+            <span aria-hidden="true">✨</span><span>Документы</span><span class="nav-badge">Скоро</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="automations">
+            <span aria-hidden="true">⏱️</span><span>Автоматизации</span><span class="nav-badge">Скоро</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <button class="quiet-button" id="helpButton" type="button">
+            <span aria-hidden="true">❓</span><span>Помощь</span>
+          </button>
+          <button class="quiet-button" id="themeButton" type="button" aria-label="Изменить тему">
+            <span id="themeIcon" aria-hidden="true">◐</span><span id="themeLabel">Тема: системная</span>
+          </button>
+          <div class="local-badge" id="connectionBadge">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>Проверяем сервер…</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main" id="main-content" tabindex="-1">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="viewEyebrow">Рабочее пространство</p>
+            <h1 id="viewTitle">Обзор</h1>
+            <p class="view-description" id="viewDescription">Показываем, что уже готово и какой шаг будет полезнее следующим.</p>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-button" id="refreshButton" type="button" aria-label="Обновить данные" title="Обновить данные">↻</button>
+            <button class="primary-button" id="primaryAction" type="button"><span aria-hidden="true">＋</span><span>Добавить данные</span></button>
+          </div>
+        </header>
+
+        <div class="status-ribbon" id="statusRibbon" role="status" aria-live="polite">
+          <div class="status-ribbon-icon" id="statusRibbonIcon" aria-hidden="true">⏳</div>
+          <div>
+            <strong id="statusRibbonTitle">Подключаемся к локальному серверу</strong>
+            <p id="statusRibbonDetail">Проверяем готовность базы данных. Это обычно занимает несколько секунд.</p>
+          </div>
+          <button class="quiet-button compact" id="statusRetryButton" type="button" hidden>Повторить</button>
+        </div>
+
+        <section class="view is-visible" data-view="overview" aria-labelledby="overview-heading">
+          <h2 class="visually-hidden" id="overview-heading">Обзор системы</h2>
+
+          <article class="hero-card">
+            <div class="hero-copy">
+              <span class="pill pill-accent">Рекомендуемый шаг</span>
+              <h2>Создайте структуру данных для будущих документов</h2>
+              <p>Начните с типа сущности, например «Человек» или «Организация». Затем добавьте свойства: ФИО, должность, рост, вес, реквизиты или любые другие параметры.</p>
+              <div class="hero-actions">
+                <button class="primary-button" type="button" data-create="entity-type">Создать тип сущности</button>
+                <button class="secondary-button" type="button" data-view-target="knowledge">Открыть базу знаний</button>
+              </div>
+            </div>
+            <div class="hero-visual" aria-hidden="true">
+              <div class="document-stack">
+                <span>📄</span><span>🧠</span><span>✅</span>
+              </div>
+            </div>
+          </article>
+
+          <div class="metric-grid" aria-label="Состояние данных">
+            <article class="metric-card">
+              <span class="metric-icon" aria-hidden="true">🧱</span>
+              <div><strong id="entityTypeCount">—</strong><span>типов сущностей</span></div>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon" aria-hidden="true">🏷️</span>
+              <div><strong id="propertyCount">—</strong><span>определений свойств</span></div>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon" aria-hidden="true">👥</span>
+              <div><strong id="entityCount">—</strong><span>объектов в базе</span></div>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon" aria-hidden="true">🔒</span>
+              <div><strong>Офлайн</strong><span>данные остаются локально</span></div>
+            </article>
+          </div>
+
+          <div class="two-column-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">Готовность</p><h2>Что уже работает</h2></div>
+                <span class="pill pill-success">Ядро готово</span>
+              </div>
+              <ul class="readiness-list">
+                <li><span class="readiness-icon success">✓</span><div><strong>База знаний</strong><p>Типы, свойства и сущности можно создавать прямо сейчас.</p></div></li>
+                <li><span class="readiness-icon success">✓</span><div><strong>Надёжное хранение</strong><p>SQLite, аудит, очередь, резервное копирование и восстановление.</p></div></li>
+                <li><span class="readiness-icon planned">2</span><div><strong>Шаблоны DOCX/XLSX</strong><p>Следующий этап — безопасная загрузка и анализ структуры.</p></div></li>
+                <li><span class="readiness-icon planned">3</span><div><strong>Автоматизации и доставка</strong><p>Появятся после детерминированного формирования документов.</p></div></li>
+              </ul>
+            </article>
+
+            <article class="panel help-preview">
+              <div class="panel-heading">
+                <div><p class="eyebrow">Подсказка</p><h2>С чего начать?</h2></div>
+                <span aria-hidden="true" class="large-emoji">💡</span>
+              </div>
+              <ol class="guided-steps">
+                <li><span>1</span><div><strong>Опишите объект</strong><p>Например, «Человек», «Организация» или «Статья».</p></div></li>
+                <li><span>2</span><div><strong>Добавьте свойства</strong><p>Укажите тип данных и где свойство можно использовать.</p></div></li>
+                <li><span>3</span><div><strong>Создайте записи</strong><p>Заполните базу конкретными людьми, организациями и значениями.</p></div></li>
+              </ol>
+              <button class="text-button" id="overviewHelpButton" type="button">Показать ответы на частые вопросы →</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view="knowledge" aria-labelledby="knowledge-heading">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">Универсальные данные</p>
+              <h2 id="knowledge-heading">База знаний</h2>
+              <p>Здесь хранятся не документы, а переиспользуемые сведения. Система будет подставлять их в разные шаблоны и показывать источник каждого значения.</p>
+            </div>
+            <div class="segmented-control" role="tablist" aria-label="Раздел базы знаний">
+              <button type="button" role="tab" aria-selected="true" data-knowledge-tab="types">Типы</button>
+              <button type="button" role="tab" aria-selected="false" data-knowledge-tab="properties">Свойства</button>
+              <button type="button" role="tab" aria-selected="false" data-knowledge-tab="entities">Объекты</button>
+            </div>
+          </div>
+
+          <div class="knowledge-toolbar">
+            <label class="search-field">
+              <span aria-hidden="true">⌕</span>
+              <input id="knowledgeSearch" type="search" placeholder="Найти по названию или ключу" autocomplete="off" />
+            </label>
+            <button class="primary-button" id="knowledgeCreateButton" type="button"><span aria-hidden="true">＋</span><span>Создать тип</span></button>
+          </div>
+
+          <div class="inline-hint">
+            <span aria-hidden="true">ⓘ</span>
+            <p id="knowledgeHint"><strong>Тип сущности</strong> описывает класс объектов. Например, тип «Человек» объединяет сотрудников, авторов и получателей.</p>
+          </div>
+
+          <div id="knowledgeContent" class="collection-grid" aria-live="polite" aria-busy="true">
+            <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+          </div>
+        </section>
+
+        <section class="view" data-view="templates" aria-labelledby="templates-heading">
+          <div class="planned-state">
+            <span class="planned-emoji" aria-hidden="true">📄</span>
+            <span class="pill">Этап M2–M3</span>
+            <h2 id="templates-heading">Шаблоны появятся следующим крупным этапом</h2>
+            <p>Сначала система будет безопасно проверять DOCX/XLSX, показывать совместимость и структуру, затем позволит отмечать вариативные поля. Сейчас этот раздел честно недоступен — ваши файлы не будут приниматься до готовности защитных проверок.</p>
+            <div class="planned-details">
+              <div><strong>Что будет видно</strong><span>Загрузка → проверка → найденные поля → тестовое заполнение → активация.</span></div>
+              <div><strong>Что делать сейчас</strong><span>Подготовить примеры документов и заполнить базу знаний.</span></div>
+            </div>
+            <button class="secondary-button" type="button" data-view-target="knowledge">Подготовить данные</button>
+          </div>
+        </section>
+
+        <section class="view" data-view="documents" aria-labelledby="documents-heading">
+          <div class="planned-state">
+            <span class="planned-emoji" aria-hidden="true">✨</span>
+            <span class="pill">Этап M4</span>
+            <h2 id="documents-heading">Создание документов станет пошаговым</h2>
+            <p>Сервис покажет выбранный шаблон, найденные данные, недостающие поля, предварительный результат и финальное подтверждение. Каждый длительный этап будет сопровождаться понятным статусом и безопасным вариантом продолжения.</p>
+            <div class="flow-preview" aria-label="Будущий процесс">
+              <span>1. Выбор</span><i>→</i><span>2. Данные</span><i>→</i><span>3. Проверка</span><i>→</i><span>4. Готово</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" data-view="automations" aria-labelledby="automations-heading">
+          <div class="planned-state">
+            <span class="planned-emoji" aria-hidden="true">⏱️</span>
+            <span class="pill">Этап M7</span>
+            <h2 id="automations-heading">Автоматизации будут объяснять каждый запуск</h2>
+            <p>Для расписаний и событий интерфейс покажет, что запустило правило, какие данные использованы, на каком шаге находится документ, когда будет следующая попытка и требуется ли участие оператора.</p>
+            <div class="planned-details">
+              <div><strong>Без скрытых действий</strong><span>История запусков, идемпотентность и аудит будут доступны из карточки правила.</span></div>
+              <div><strong>Без молчаливых ошибок</strong><span>Недостающие данные создадут задачу проверки, а не неполный документ.</span></div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <nav class="mobile-nav" aria-label="Навигация на мобильном устройстве">
+        <button class="is-active" type="button" data-view-target="overview" aria-current="page"><span>🏠</span><small>Обзор</small></button>
+        <button type="button" data-view-target="knowledge"><span>🗂️</span><small>Данные</small></button>
+        <button type="button" data-view-target="templates"><span>📄</span><small>Шаблоны</small></button>
+        <button type="button" id="mobileHelpButton"><span>❓</span><small>Помощь</small></button>
+      </nav>
+    </div>
+
+    <aside class="help-drawer" id="helpDrawer" aria-labelledby="helpTitle" aria-hidden="true">
+      <div class="drawer-backdrop" data-close-help></div>
+      <div class="drawer-panel" role="dialog" aria-modal="true">
+        <header>
+          <div><p class="eyebrow">Контекстная помощь</p><h2 id="helpTitle">Что здесь можно сделать?</h2></div>
+          <button class="icon-button" type="button" data-close-help aria-label="Закрыть помощь">×</button>
+        </header>
+        <div id="helpContent" class="help-content"></div>
+        <footer>
+          <p>При ошибке сохраните correlation ID — он поможет найти точную операцию в журнале.</p>
+        </footer>
+      </div>
+    </aside>
+
+    <dialog class="create-dialog" id="createDialog" aria-labelledby="dialogTitle">
+      <form method="dialog" id="createForm" novalidate>
+        <header class="dialog-header">
+          <div><p class="eyebrow" id="dialogEyebrow">Новая запись</p><h2 id="dialogTitle">Создать</h2><p id="dialogDescription"></p></div>
+          <button class="icon-button" type="button" id="dialogCloseButton" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog-body" id="dialogFields"></div>
+        <div class="form-error" id="formError" role="alert" hidden></div>
+        <footer class="dialog-footer">
+          <p class="save-explanation" id="saveExplanation">После сохранения запись сразу появится в базе знаний.</p>
+          <div><button class="secondary-button" type="button" id="dialogCancelButton">Отмена</button><button class="primary-button" type="submit" id="dialogSubmitButton">Сохранить</button></div>
+        </footer>
+      </form>
+    </dialog>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+    <div class="sr-status" id="screenReaderStatus" role="status" aria-live="polite"></div>
+
+    <noscript>
+      <div class="noscript-message">Для интерактивного интерфейса требуется JavaScript. API и данные остаются доступны локально.</div>
+    </noscript>
+  </body>
+</html>

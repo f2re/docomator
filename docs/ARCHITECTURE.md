@@ -65,6 +65,21 @@ Adapters: SQLite, OOXML, llama-server, LibreOffice, SMTP, filesystem
 - side effects происходят после явного state transition и записанного idempotency key;
 - каждый внешний вызов имеет correlation ID.
 
+
+### 3.1. Interface architecture
+
+UI является локальным HTTP-адаптером модульного монолита и не принимает доменных решений. Он:
+
+- отображает backend state, а не выводит его из таймеров или предположений;
+- использует единую систему design tokens и state components;
+- для каждого действия показывает текущий этап, причину ожидания, следующий шаг и recovery action;
+- хранит черновое значение формы до подтверждения backend-а;
+- передаёт/показывает correlation ID;
+- не использует CDN, внешние шрифты, аналитику и удалённые feature flags;
+- сохраняет keyboard/mobile/accessibility behavior как часть API-контракта функции.
+
+Полный нормативный контракт: [UX_UI_SPECIFICATION.md](UX_UI_SPECIFICATION.md).
+
 ## 4. Универсальная модель данных
 
 ### 4.1. Сущность, свойство, поле и привязка

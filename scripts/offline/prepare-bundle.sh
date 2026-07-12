@@ -178,6 +178,8 @@ for workspace in apps/api apps/worker packages/config packages/contracts package
   fi
 done
 
+cp -a "$ROOT_DIR/apps/api/ui" "$BUNDLE_DIR/payload/app/apps/api/"
+
 cp -a "$NODE_STAGE/." "$BUNDLE_DIR/payload/runtime/node/"
 cp -a "$ROOT_DIR/deploy/systemd/." "$BUNDLE_DIR/payload/deploy/systemd/"
 cp "$ROOT_DIR/config/docomator.env.example" "$BUNDLE_DIR/payload/config/"

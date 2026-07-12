@@ -15,6 +15,7 @@ Roadmap отражает статус реализации, но не замен
 |---|---:|---|
 | M0 Repository bootstrap | 🟡 | runnable API/worker, schema, docs, Codex agents, offline scripts |
 | M1 Persistence kernel | ✅ | transactions, typed values, object storage, queue, outbox, audit, Knowledge API, backup/restore |
+| M1.5 Guided UI foundation | 🟡 | offline shell, Knowledge UI, состояния, помощь, adaptive/accessibility baseline |
 | M2 Secure OOXML intake | ⬜ | upload, security checks, DOCX/XLSX Document IR |
 | M3 Template compiler | ⬜ | content controls, defined names, Safe Scalar render |
 | M4 Manual workflow/UI | ⬜ | catalog, forms, review, download, RBAC |
@@ -59,6 +60,22 @@ Roadmap отражает статус реализации, но не замен
 - [x] Atomic restore with pre-restore rollback
 - [x] Backup and restore integration tests
 
+
+## M1.5 Guided UI checklist
+
+- [x] Offline UI shell без CDN и внешних шрифтов
+- [x] Desktop sidebar и mobile bottom navigation
+- [x] Светлая, тёмная и системная темы
+- [x] Status ribbon, toast, help drawer и guided dialogs
+- [x] Loading, empty, success, warning, error, degraded и planned states
+- [x] Knowledge Registry UI для типов, свойств и сущностей
+- [x] Correlation ID и сохранение формы при ошибке
+- [x] Keyboard, visible focus, reduced motion и 320 px baseline
+- [x] Основное ТЗ и отдельное UX/UI ТЗ
+- [ ] Автоматизированная browser accessibility/visual regression проверка
+- [ ] Notification center для персистентных фоновых операций
+- [ ] User testing на сценариях Template Studio и document workflow
+
 ## Следующий приоритет
 
 M2 начинается с безопасного intake без LLM:
@@ -68,7 +85,8 @@ M2 начинается с безопасного intake без LLM:
 3. compatibility report;
 4. DOCX/XLSX Document IR;
 5. детерминированные кандидаты вариативных полей;
-6. fixtures и negative security tests.
+6. fixtures и negative security tests;
+7. guided progress: приём файла → проверка → compatibility report → следующий безопасный шаг.
 
 ## Decision gates
 

@@ -31,6 +31,7 @@ Do not silently weaken a MUST requirement. Update requirements and add an ADR wh
 ## Repository structure
 
 - `apps/api`: Fastify HTTP adapter and request lifecycle.
+- `apps/api/ui`: offline guided UI; follow `apps/api/ui/AGENTS.md` and `docs/UX_UI_SPECIFICATION.md`.
 - `apps/worker`: scheduler, queue consumers, orchestration and external side effects.
 - `packages/*`: reusable domain/application contracts and adapters.
 - `migrations`: immutable SQLite migrations.
@@ -86,6 +87,15 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Verify all returned block IDs, offsets, cells and ranges before compiling bindings.
 - Preserve untouched package parts in safe-patch mode.
 - Every renderer change needs representative DOCX/XLSX fixtures and reverse-read validation.
+
+## UI rules
+
+- A user must never have to infer whether an operation started, is waiting, failed, or completed.
+- Implement applicable loading, empty, success, warning, error, degraded, disabled, and planned states.
+- State copy explains the current step, why it is happening, what comes next, and whether data is preserved.
+- Preserve form values after server errors and expose correlation IDs.
+- Keep runtime UI offline: no CDN, remote fonts, analytics, or external assets.
+- Verify 320 px, keyboard/focus, touch targets, dark mode, and reduced motion.
 
 ## Offline-release rules
 
