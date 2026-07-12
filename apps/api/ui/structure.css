@@ -13,14 +13,14 @@
   gap: 1rem;
   justify-content: space-between;
   padding: 0.9rem 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-medium);
-  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  background: var(--surface-2);
 }
 
 .structure-actions p {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 0.9rem;
   max-width: 52rem;
 }
@@ -38,9 +38,9 @@
   align-items: flex-start;
   gap: 0.8rem;
   padding: 1rem;
-  border-radius: var(--radius-medium);
-  border: 1px solid var(--border-color);
-  background: var(--surface-soft);
+  border-radius: calc(var(--radius) - 4px);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
 .structure-empty > span,
@@ -68,28 +68,28 @@
 .structure-selection p,
 .structure-selection small {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .structure-error {
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--border-color));
-  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: var(--danger-soft);
 }
 
 .structure-warning {
   margin-top: 0.9rem;
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-color));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
 }
 
 .structure-selection {
   margin-top: 1rem;
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
-  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft);
 }
 
 .structure-report {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-large);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   background: var(--surface);
   padding: 1rem;
 }
@@ -108,7 +108,7 @@
 
 .structure-report > header p:last-child {
   margin-top: 0.35rem;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .structure-metrics {
@@ -122,8 +122,8 @@
   display: grid;
   gap: 0.2rem;
   padding: 0.8rem;
-  border-radius: var(--radius-medium);
-  background: var(--surface-soft);
+  border-radius: calc(var(--radius) - 4px);
+  background: var(--surface-2);
 }
 
 .structure-metrics strong {
@@ -131,7 +131,7 @@
 }
 
 .structure-metrics span {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 0.82rem;
 }
 
@@ -152,27 +152,27 @@
   gap: 0.75rem;
   align-items: start;
   text-align: left;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-medium);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
   background: var(--surface);
-  color: var(--text-primary);
+  color: var(--text);
   padding: 0.8rem;
   cursor: pointer;
 }
 
 .structure-element:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
-  background: var(--surface-soft);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--surface-hover);
 }
 
 .structure-element:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: 3px solid var(--accent-soft);
   outline-offset: 2px;
 }
 
 .structure-element.is-selected {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  background: var(--accent-soft);
 }
 
 .structure-element-kind {
@@ -181,7 +181,7 @@
   width: 2rem;
   height: 2rem;
   border-radius: 0.6rem;
-  background: var(--surface-soft);
+  background: var(--surface-2);
   color: var(--accent);
   font-weight: 700;
 }
@@ -200,7 +200,7 @@
 
 .structure-element-copy span,
 .structure-element-copy small {
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .structure-element-copy span {
