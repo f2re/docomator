@@ -8,6 +8,7 @@ interface UiAsset {
   readonly fileName: string;
   readonly contentType: string;
   readonly cacheControl: string;
+  readonly appendFileNames?: readonly string[];
 }
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
   },
   "/ui/styles.css": {
     fileName: "styles.css",
+    appendFileNames: ["spaces.css"],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
   },
@@ -41,7 +43,15 @@ async function sendAsset(
   uiDirectory: string,
   asset: UiAsset
 ): Promise<FastifyReply> {
-  const body = await fs.readFile(path.join(uiDirectory, asset.fileName));
+  const bodies = await Promise.all([
+    fs.readFile(path.join(uiDirectory, asset.fileName)),
+    ...(asset.appendFileNames ?? []).map((fileName) =>
+      fs.readFile(path.join(uiDirectory, fileName))
+    )
+  ]);
+  const body = bodies.length === 1 ? bodies[0] : Buffer.concat(
+    bodies.flatMap((part, index) => index === 0 ? [part] : [Buffer.from("\n\n"), part])
+  );
   return reply
     .type(asset.contentType)
     .header("cache-control", asset.cacheControl)
