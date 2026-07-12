@@ -1,0 +1,104 @@
+name: Подготовить пробное заполнение
+
+on:
+  push:
+    branches:
+      - agent/trial-scalar-render
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: agent/trial-scalar-render
+          fetch-depth: 0
+
+      - name: Исправить сужение типа и обновить файл блокировки
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('packages/template-compiler/src/scalar-render.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '''function validateBindings(
+            technical: CompiledTechnicalBinding,
+            field: ScalarFieldBinding
+          ): void {
+            if (
+              (technical.kind === "docx.sdt" && field.kind !== "docx.paragraph") ||
+              (technical.kind === "xlsx.defined-name" && field.kind !== "xlsx.cell")
+            ) {
+              throw new TemplateCompilerError(
+                "technical_binding_mismatch",
+                "Техническая привязка не соответствует сохранённой координате поля."
+              );
+            }
+            if (
+              technical.kind === "docx.sdt" &&
+              technical.part !== field.part
+            ) {
+              throw new TemplateCompilerError(
+                "technical_binding_mismatch",
+                "Техническая привязка указывает на другую часть DOCX."
+              );
+            }
+          }
+          '''
+          new = '''function validateBindings(
+            technical: CompiledTechnicalBinding,
+            field: ScalarFieldBinding
+          ): void {
+            if (technical.kind === "docx.sdt") {
+              if (field.kind !== "docx.paragraph") {
+                throw new TemplateCompilerError(
+                  "technical_binding_mismatch",
+                  "Техническая привязка не соответствует сохранённой координате поля."
+                );
+              }
+              if (technical.part !== field.part) {
+                throw new TemplateCompilerError(
+                  "technical_binding_mismatch",
+                  "Техническая привязка указывает на другую часть DOCX."
+                );
+              }
+              return;
+            }
+            if (field.kind !== "xlsx.cell") {
+              throw new TemplateCompilerError(
+                "technical_binding_mismatch",
+                "Техническая привязка не соответствует сохранённой координате поля."
+              );
+            }
+          }
+          '''
+          if old not in text:
+              raise SystemExit('Не найден ожидаемый блок validateBindings')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          git diff --check
+
+      - name: Зафиксировать подготовленные изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/template-compiler/src/scalar-render.ts package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Изменений нет.'
+            exit 0
+          fi
+          git commit -m 'Исправить строгую проверку пробного заполнения'
+          git push origin HEAD:agent/trial-scalar-render
