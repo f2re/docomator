@@ -19,6 +19,50 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          show-progress: false
+
+      - name: Normalize documentation marker
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          target = Path('scripts/ci/apply-russian-interface.py')
+          text = target.read_text(encoding='utf-8')
+          text = text.replace(
+              '    "## Цель",\n',
+              '    "`manifest.sha256` покрывает все файлы, кроме самого manifest.",\n',
+              1,
+          )
+          target.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Apply reviewed text and installation changes
+        shell: bash
+        run: python3 scripts/ci/apply-russian-interface.py
+
+      - name: Remove one-time helpers
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f scripts/ci/apply-russian-interface.py .russian-interface-ready
+          chmod 0755 scripts/offline/first-run.sh
+
+      - name: Validate browser JavaScript
+        run: node --check apps/api/ui/app.js
+
+      - name: Validate shell scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/offline/lib.sh
+          bash -n scripts/offline/first-run.sh
+          bash -n scripts/offline/prepare-bundle.sh
+          bash -n scripts/offline/install.sh
+          bash -n scripts/offline/smoke-test.sh
+
+      - name: Validate patch whitespace
+        run: git diff --check
 
       - name: Read Node.js version
         id: node
@@ -31,57 +75,19 @@ jobs:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
 
-      - name: Apply reviewed changes
-        id: apply_changes
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          {
-            python3 - <<'PY'
-            from pathlib import Path
-            target = Path('scripts/ci/apply-russian-interface.py')
-            text = target.read_text(encoding='utf-8')
-            text = text.replace(
-                '    "## Цель",\n',
-                '    "`manifest.sha256` покрывает все файлы, кроме самого manifest.",\n',
-                1,
-            )
-            target.write_text(text, encoding='utf-8')
-            PY
-            python3 scripts/ci/apply-russian-interface.py
-            rm -f scripts/ci/apply-russian-interface.py .russian-interface-ready
-            chmod 0755 scripts/offline/first-run.sh
-            node --check apps/api/ui/app.js
-            bash -n scripts/offline/lib.sh
-            bash -n scripts/offline/first-run.sh
-            bash -n scripts/offline/prepare-bundle.sh
-            bash -n scripts/offline/install.sh
-            bash -n scripts/offline/smoke-test.sh
-            git diff --check
-          } 2>&1 | tee russian-interface-apply.log
+      - name: Refresh lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
-      - name: Upload application diagnostic
-        if: steps.apply_changes.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: russian-interface-apply-diagnostic
-          path: russian-interface-apply.log
-          if-no-files-found: error
-          retention-days: 3
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Stop after failed application
-        if: steps.apply_changes.outcome == 'failure'
-        run: exit 1
+      - name: Verify repository
+        run: npm run check
 
-      - name: Refresh lockfile and verify repository
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run check
-          DOCOMATOR_DATA_DIR="$RUNNER_TEMP/docomator-russian-interface" npm run migrate
+      - name: Smoke-test migrations
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-russian-interface
+        run: npm run migrate
 
       - name: Commit applied changes
         shell: bash
