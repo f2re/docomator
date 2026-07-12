@@ -21,17 +21,37 @@ jobs:
           fetch-depth: 0
 
       - name: Apply reviewed patch
+        id: patch
+        continue-on-error: true
         shell: bash
         run: |
-          set -Eeuo pipefail
-          python3 scripts/ci/apply-spaces-docs.py
-          rm -f scripts/ci/apply-spaces-docs.py
-          node --check apps/api/ui/app.js
-          bash -n scripts/offline/first-run.sh
-          bash -n scripts/offline/prepare-bundle.sh
-          bash -n scripts/offline/install.sh
-          bash -n scripts/offline/smoke-test.sh
-          git diff --check
+          set -o pipefail
+          {
+            python3 scripts/ci/apply-spaces-docs.py
+            rm -f scripts/ci/apply-spaces-docs.py
+            node --check apps/api/ui/app.js
+            bash -n scripts/offline/first-run.sh
+            bash -n scripts/offline/prepare-bundle.sh
+            bash -n scripts/offline/install.sh
+            bash -n scripts/offline/smoke-test.sh
+            git diff --check
+          } > spaces-docs-patch.log 2>&1
+
+      - name: Upload patch diagnostic
+        if: steps.patch.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: spaces-docs-patch-diagnostic
+          path: spaces-docs-patch.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Stop after failed patch
+        if: steps.patch.outcome == 'failure'
+        shell: bash
+        run: |
+          cat spaces-docs-patch.log
+          exit 1
 
       - name: Refresh lockfile
         shell: bash
