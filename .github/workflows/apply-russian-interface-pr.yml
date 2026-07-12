@@ -48,6 +48,7 @@ jobs:
           rm -f scripts/ci/apply-russian-interface.py .russian-interface-ready
           chmod 0755 scripts/offline/first-run.sh
           sed -i 's/[[:blank:]]\+$//' docs/REQUIREMENTS.md
+          sed -i 's/correlation ID/идентификатор операции/g' apps/api/ui/index.html
 
       - name: Validate browser JavaScript
         run: node --check apps/api/ui/app.js
