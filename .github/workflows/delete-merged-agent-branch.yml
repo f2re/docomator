@@ -24,9 +24,14 @@ jobs:
       - name: Delete merged agent branch
         env:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         shell: bash
         run: |
           set -Eeuo pipefail
           [[ "$HEAD_BRANCH" == agent/* ]]
-          [[ "$HEAD_BRANCH" != "${{ github.event.repository.default_branch }}" ]]
-          git push origin --delete "$HEAD_BRANCH"
+          [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]
+          if git ls-remote --exit-code --heads origin "refs/heads/$HEAD_BRANCH" >/dev/null 2>&1; then
+            git push origin --delete "$HEAD_BRANCH"
+          else
+            echo "Branch $HEAD_BRANCH is already absent."
+          fi
