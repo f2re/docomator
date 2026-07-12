@@ -30,6 +30,23 @@ jobs:
           fi
           python3 scripts/ci/finalize-trial-render.py
           rm -f scripts/ci/finalize-trial-render.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for name in (
+              'README.md',
+              'docs/IMPLEMENTATION_PLAN.md',
+              'docs/REQUIREMENTS.md',
+              'docs/TECHNICAL_SPECIFICATION.md',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              ending = '\n' if text.endswith('\n') else ''
+              path.write_text(
+                  '\n'.join(line.rstrip() for line in text.splitlines()) + ending,
+                  encoding='utf-8',
+              )
+          PY
           git diff --check
 
       - name: Зафиксировать изменения
