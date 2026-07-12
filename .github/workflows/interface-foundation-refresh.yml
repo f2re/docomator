@@ -31,35 +31,63 @@ jobs:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
 
-      - name: Expand reviewed interface payload when present
+      - name: Detect interface payload
+        id: payload
+        shell: bash
+        run: |
+          if compgen -G '.interface-payload.part-*' >/dev/null; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decode interface payload
+        if: steps.payload.outputs.present == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
-          if ! compgen -G '.interface-payload.part-*' >/dev/null; then
-            echo 'Interface payload is already expanded.'
-            exit 0
-          fi
-
           cat .interface-payload.part-* | base64 --decode > /tmp/interface-foundation.tar.gz
-          echo 'd5ed1fa427c54b57dc2ea22cc92de4c7573e5557d962154df92d9535aa982b73  /tmp/interface-foundation.tar.gz' | sha256sum --check --strict
+          ls -lh /tmp/interface-foundation.tar.gz
+          sha256sum /tmp/interface-foundation.tar.gz
 
+      - name: Verify interface payload checksum
+        if: steps.payload.outputs.present == 'true'
+        shell: bash
+        run: echo 'd5ed1fa427c54b57dc2ea22cc92de4c7573e5557d962154df92d9535aa982b73  /tmp/interface-foundation.tar.gz' | sha256sum --check --strict
+
+      - name: Validate interface archive
+        if: steps.payload.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
           python3 - <<'PY'
           import tarfile
           from pathlib import Path
 
           archive = Path('/tmp/interface-foundation.tar.gz')
           with tarfile.open(archive, 'r:gz') as stream:
+              names = []
               for member in stream.getmembers():
                   path = Path(member.name)
                   if path.is_absolute() or '..' in path.parts:
                       raise SystemExit(f'Unsafe archive member: {member.name}')
                   if member.issym() or member.islnk():
                       raise SystemExit(f'Links are forbidden in payload: {member.name}')
-              stream.extractall('.')
+                  names.append(member.name)
+              print('\n'.join(names))
           PY
 
+      - name: Extract interface archive
+        if: steps.payload.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import tarfile
+          with tarfile.open('/tmp/interface-foundation.tar.gz', 'r:gz') as stream:
+              stream.extractall('.')
+          PY
           rm -f apply-interface-patch.py .interface-payload.part-* .interface-foundation-ready
-          echo 'Extracted payload files:'
           git status --short
 
       - name: Refresh lockfile
