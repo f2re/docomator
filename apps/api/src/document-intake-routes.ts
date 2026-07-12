@@ -7,6 +7,7 @@ import {
 } from "@docomator/document-intake";
 import {
   DocumentQuarantineRegistry,
+  SpaceRegistry,
   toJsonValue
 } from "@docomator/storage";
 
@@ -57,7 +58,8 @@ const fileNameQuerySchema = {
 
 export function registerDocumentIntakeRoutes(
   app: FastifyInstance,
-  quarantineRegistry: DocumentQuarantineRegistry
+  quarantineRegistry: DocumentQuarantineRegistry,
+  spaceRegistry: SpaceRegistry
 ): void {
   app.addContentTypeParser(
     binaryContentTypes,
@@ -106,6 +108,8 @@ export function registerDocumentIntakeRoutes(
       }
     },
     async (request, reply) => {
+      // Resolve the isolation boundary before any filesystem mutation.
+      const space = spaceRegistry.getSpace(request.params.spaceId);
       const mediaType = request.headers["content-type"];
       const report = await inspectOoxmlBuffer({
         buffer: request.body,
@@ -122,7 +126,7 @@ export function registerDocumentIntakeRoutes(
 
       const record = await quarantineRegistry.saveAcceptedDocument(
         {
-          spaceId: request.params.spaceId,
+          spaceId: space.id,
           fileName: report.fileName,
           mediaType: report.mediaType,
           format: report.format,
