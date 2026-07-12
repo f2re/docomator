@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS document_quarantine_records (
   id TEXT PRIMARY KEY,
   space_id TEXT NOT NULL REFERENCES spaces(id),
   file_id TEXT NOT NULL REFERENCES files(id),
+  original_name TEXT NOT NULL,
+  media_type TEXT NOT NULL,
   format TEXT NOT NULL CHECK (format IN ('docx', 'xlsx')),
   decision TEXT NOT NULL CHECK (decision IN ('accepted', 'accepted_with_warnings')),
   report_json TEXT NOT NULL,
