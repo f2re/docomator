@@ -22,7 +22,11 @@ import {
   SpaceNotFoundError,
   SpaceRegistry,
   SpaceValidationError,
-  SqliteStore
+  SqliteStore,
+  TemplateDraftConflictError,
+  TemplateDraftNotFoundError,
+  TemplateDraftRegistry,
+  TemplateDraftValidationError
 } from "@docomator/storage";
 import Fastify, {
   type FastifyError,
@@ -33,6 +37,7 @@ import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
+import { registerTemplateDraftRoutes } from "./template-draft-routes.js";
 import { registerUiRoutes } from "./ui-routes.js";
 import {
   internalErrorMessage,
@@ -44,9 +49,11 @@ const startedAt = Date.now();
 
 export interface AppDependencies {
   store?: SqliteStore;
+  objectStore?: ContentAddressedObjectStore;
   knowledgeRegistry?: KnowledgeRegistry;
   spaceRegistry?: SpaceRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
+  templateDraftRegistry?: TemplateDraftRegistry;
   uiDirectory?: string;
 }
 
@@ -76,7 +83,9 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "space_entity_ownership",
         "audience_groups",
         "audience_snapshots",
-        "document_quarantine_records"
+        "document_quarantine_records",
+        "template_drafts",
+        "template_draft_fields"
       ];
       const rows = database
         .prepare(`
@@ -87,7 +96,8 @@ function databaseSchemaReady(store: SqliteStore): boolean {
               'schema_migrations', 'entity_types', 'property_definitions',
               'worker_jobs', 'domain_events', 'spaces',
               'space_entity_ownership', 'audience_groups', 'audience_snapshots',
-              'document_quarantine_records'
+              'document_quarantine_records', 'template_drafts',
+              'template_draft_fields'
             )
         `)
         .all() as unknown as Array<{ name: string }>;
@@ -106,15 +116,17 @@ export function buildApp(
   const store =
     dependencies.store ??
     new SqliteStore({ databasePath: path.join(config.dataDir, "docomator.db") });
+  const objectStore =
+    dependencies.objectStore ??
+    new ContentAddressedObjectStore(path.join(config.dataDir, "objects"));
   const knowledgeRegistry =
     dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
   const spaceRegistry = dependencies.spaceRegistry ?? new SpaceRegistry(store);
   const quarantineRegistry =
     dependencies.quarantineRegistry ??
-    new DocumentQuarantineRegistry(
-      store,
-      new ContentAddressedObjectStore(path.join(config.dataDir, "objects"))
-    );
+    new DocumentQuarantineRegistry(store, objectStore);
+  const templateDraftRegistry =
+    dependencies.templateDraftRegistry ?? new TemplateDraftRegistry(store);
 
   const app = Fastify({
     logger: {
@@ -157,6 +169,18 @@ export function buildApp(
     } else if (error instanceof DocumentQuarantineNotFoundError) {
       statusCode = 404;
       code = "document_quarantine_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplateDraftValidationError) {
+      statusCode = 400;
+      code = "template_draft_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplateDraftNotFoundError) {
+      statusCode = 404;
+      code = "template_draft_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplateDraftConflictError) {
+      statusCode = 409;
+      code = "template_draft_conflict";
       message = toUserMessage(error);
     } else if (error instanceof KnowledgeValidationError) {
       statusCode = 400;
@@ -261,6 +285,12 @@ export function buildApp(
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
   registerDocumentIntakeRoutes(app, quarantineRegistry, spaceRegistry);
+  registerTemplateDraftRoutes(
+    app,
+    quarantineRegistry,
+    objectStore,
+    templateDraftRegistry
+  );
 
   return app;
 }
