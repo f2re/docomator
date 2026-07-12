@@ -28,6 +28,11 @@ import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
 import { registerUiRoutes } from "./ui-routes.js";
+import {
+  internalErrorMessage,
+  requestValidationMessage,
+  toUserMessage
+} from "./user-message.js";
 
 const startedAt = Date.now();
 
@@ -105,7 +110,7 @@ export function buildApp(
           "req.headers.cookie",
           "res.headers.set-cookie"
         ],
-        censor: "[REDACTED]"
+        censor: "[СКРЫТО]"
       }
     }
   });
@@ -124,40 +129,40 @@ export function buildApp(
     const requestCorrelationId = correlationId(request);
     let statusCode = 500;
     let code = "internal_error";
-    let message = "Internal server error";
+    let message = internalErrorMessage();
 
     if (error instanceof KnowledgeValidationError) {
       statusCode = 400;
       code = "knowledge_validation_failed";
-      message = error.message;
+      message = toUserMessage(error);
     } else if (error instanceof PropertyValueValidationError) {
       statusCode = 400;
       code = "property_value_validation_failed";
-      message = error.message;
+      message = toUserMessage(error);
     } else if (error instanceof KnowledgeNotFoundError) {
       statusCode = 404;
       code = "knowledge_not_found";
-      message = error.message;
+      message = toUserMessage(error);
     } else if (error instanceof KnowledgeConflictError) {
       statusCode = 409;
       code = "knowledge_conflict";
-      message = error.message;
+      message = toUserMessage(error);
     } else if (error instanceof SpaceValidationError) {
       statusCode = 400;
       code = "space_validation_failed";
-      message = error.message;
+      message = toUserMessage(error);
     } else if (error instanceof SpaceNotFoundError) {
       statusCode = 404;
       code = "space_not_found";
-      message = error.message;
+      message = toUserMessage(error);
     } else if (error instanceof SpaceConflictError) {
       statusCode = 409;
       code = "space_conflict";
-      message = error.message;
+      message = toUserMessage(error);
     } else if (error.validation !== undefined) {
       statusCode = 400;
       code = "request_validation_failed";
-      message = error.message;
+      message = requestValidationMessage();
     } else if (
       error.statusCode !== undefined &&
       error.statusCode >= 400 &&
@@ -165,11 +170,11 @@ export function buildApp(
     ) {
       statusCode = error.statusCode;
       code = "request_failed";
-      message = error.message;
+      message = toUserMessage(error);
     } else {
       request.log.error(
         { err: error, correlationId: requestCorrelationId },
-        "request failed"
+        "запрос завершился ошибкой"
       );
     }
 
