@@ -6,6 +6,7 @@ export * from "./knowledge.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
 export * from "./spaces.js";
+export * from "./template-drafts.js";
 
 export {
   DomainEventIdempotencyConflictError,
