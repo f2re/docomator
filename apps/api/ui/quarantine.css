@@ -1,0 +1,224 @@
+.intake-quarantine-card {
+  margin: 16px;
+  padding: 17px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.intake-quarantine-card.is-disabled {
+  opacity: .72;
+}
+
+.quarantine-heading {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 11px;
+  align-items: start;
+}
+
+.quarantine-heading > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  font-size: 1.25rem;
+  background: var(--surface);
+  border-radius: 12px;
+}
+
+.quarantine-heading strong,
+.quarantine-heading p {
+  margin: 0;
+}
+
+.quarantine-heading p {
+  margin-top: 4px;
+  color: var(--hint);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+
+.quarantine-form {
+  display: grid;
+  grid-template-columns: minmax(130px, .65fr) minmax(180px, 1.35fr) auto;
+  gap: 9px;
+  align-items: end;
+  margin-top: 15px;
+}
+
+.quarantine-form label {
+  grid-column: 1 / -1;
+  color: var(--hint);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.quarantine-form select {
+  grid-column: 1 / 3;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+}
+
+.quarantine-message {
+  margin: 11px 0 0;
+  color: var(--hint);
+  font-size: .76rem;
+  line-height: 1.45;
+}
+
+.quarantine-message.is-loading {
+  color: var(--accent);
+}
+
+.quarantine-message.is-success {
+  color: var(--success);
+}
+
+.quarantine-message.is-error {
+  color: var(--danger);
+}
+
+.quarantine-message code {
+  overflow-wrap: anywhere;
+}
+
+.quarantine-list-heading {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.quarantine-list-heading small {
+  color: var(--hint);
+  text-align: right;
+}
+
+.quarantine-source-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.quarantine-source {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+}
+
+.quarantine-source-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  background: var(--surface-2);
+  border-radius: 11px;
+}
+
+.quarantine-source strong,
+.quarantine-source p,
+.quarantine-source small {
+  display: block;
+  margin: 0;
+}
+
+.quarantine-source strong {
+  overflow-wrap: anywhere;
+}
+
+.quarantine-source p,
+.quarantine-source small {
+  margin-top: 2px;
+  color: var(--hint);
+  font-size: .7rem;
+}
+
+.quarantine-source details {
+  max-width: 210px;
+  font-size: .7rem;
+}
+
+.quarantine-source summary {
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.quarantine-source code {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.quarantine-empty,
+.quarantine-loading {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 13px;
+  color: var(--hint);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 13px;
+}
+
+.quarantine-empty strong,
+.quarantine-empty p {
+  margin: 0;
+}
+
+.quarantine-empty p {
+  margin-top: 3px;
+  font-size: .74rem;
+}
+
+.quarantine-empty.is-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+@media (max-width: 720px) {
+  .quarantine-form {
+    grid-template-columns: 1fr;
+  }
+
+  .quarantine-form label,
+  .quarantine-form select {
+    grid-column: auto;
+  }
+
+  .quarantine-form .primary-button {
+    width: 100%;
+  }
+
+  .quarantine-list-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .quarantine-list-heading small {
+    text-align: left;
+  }
+
+  .quarantine-source {
+    grid-template-columns: auto 1fr;
+  }
+
+  .quarantine-source details {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+}
