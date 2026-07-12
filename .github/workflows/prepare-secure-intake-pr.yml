@@ -1,0 +1,88 @@
+name: Подготовка ветки безопасного приёма документов
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/secure-ooxml-intake'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить интеграционные изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-secure-intake-integration.py
+          rm -f scripts/ci/apply-secure-intake-integration.py
+          node --check apps/api/ui/app.js
+          node --check apps/api/ui/document-intake.js
+          bash -n scripts/offline/prepare-bundle.sh
+          bash -n scripts/offline/smoke-test.sh
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Обновить файл зафиксированных зависимостей
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Установить зафиксированные зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить весь репозиторий
+        id: verify
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee secure-intake-check.log
+
+      - name: Сохранить диагностический журнал
+        if: steps.verify.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: secure-intake-check
+          path: secure-intake-check.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Остановиться после ошибки проверки
+        if: steps.verify.outcome == 'failure'
+        run: exit 1
+
+      - name: Проверить миграции на чистой базе
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-secure-intake
+        run: npm run migrate
+
+      - name: Зафиксировать готовый этап
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'complete secure DOCX and XLSX intake baseline'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
