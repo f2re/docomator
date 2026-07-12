@@ -40,14 +40,30 @@ jobs:
           set -o pipefail
           {
             set -Eeuo pipefail
+            rm -rf /tmp/docomator-structure-update
             mkdir -p /tmp/docomator-structure-update
             cat .structure-payload.part-* | base64 --decode > /tmp/docomator-structure-update.tar.gz
             sha256sum /tmp/docomator-structure-update.tar.gz
             tar -tzf /tmp/docomator-structure-update.tar.gz
             tar -xzf /tmp/docomator-structure-update.tar.gz -C /tmp/docomator-structure-update
+            python3 - <<'PY'
+            from pathlib import Path
+            path = Path('/tmp/docomator-structure-update/apply.py')
+            source = path.read_text(encoding='utf-8')
+            needle = '            patch_docs(repo)\n'
+            if needle not in source:
+                raise SystemExit('Не найден вызов обновления документации')
+            path.write_text(
+                source.replace(
+                    needle,
+                    '            # Документация обновляется отдельно после проверки кода.\n',
+                    1,
+                ),
+                encoding='utf-8',
+            )
+            PY
             python3 /tmp/docomator-structure-update/apply.py
-            rm -f .structure-payload.part-* .apply-document-structure
-            rm -f .github/workflows/apply-document-structure.yml
+            rm -f .structure-payload.part-* .apply-document-structure .apply-document-structure-v2
             git diff --check
           } 2>&1 | tee document-structure-apply.log
 
@@ -98,7 +114,7 @@ jobs:
           set -Eeuo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add --all
+          git add --all -- . ':(exclude).github/workflows/**'
           git diff --cached --check
           git commit -m 'add deterministic DOCX and XLSX structure analysis'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
