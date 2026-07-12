@@ -112,6 +112,23 @@ function requiredText(value: string, name: string, maximum = 500): string {
   return normalized;
 }
 
+function exactValue(value: string, name: string, maximum = 20_000): string {
+  if (typeof value !== "string") {
+    throw new TemplateTestVersionValidationError(`${name} must be a string`);
+  }
+  if (value.length > maximum) {
+    throw new TemplateTestVersionValidationError(
+      `${name} must not exceed ${maximum} characters`
+    );
+  }
+  if (/\u0000/u.test(value)) {
+    throw new TemplateTestVersionValidationError(
+      `${name} contains an invalid control character`
+    );
+  }
+  return value;
+}
+
 function normalizeFormat(value: string): TemplateTestVersionFormat {
   if (value === "docx" || value === "xlsx") return value;
   throw new TemplateTestVersionValidationError(`Unsupported template format: ${value}`);
@@ -263,8 +280,8 @@ export class TemplateTestVersionRegistry {
     const draftId = requiredText(input.draftId, "draftId", 160);
     const fieldId = requiredText(input.fieldId, "fieldId", 160);
     const format = normalizeFormat(input.format);
-    const renderedValue = requiredText(input.renderedValue, "renderedValue", 20_000);
-    const readBackValue = requiredText(input.readBackValue, "readBackValue", 20_000);
+    const renderedValue = exactValue(input.renderedValue, "renderedValue");
+    const readBackValue = exactValue(input.readBackValue, "readBackValue");
     if (renderedValue !== readBackValue) {
       throw new TemplateTestVersionValidationError(
         "Rendered value must match the read-back value"

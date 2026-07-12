@@ -235,3 +235,30 @@ test("tested versions are hidden from another space and immutable in SQLite", as
     setup.fixture.cleanup();
   }
 });
+
+
+test("tested version preserves leading and trailing spaces exactly", async () => {
+  const setup = await setupFixture();
+  try {
+    const version = await setup.versions.recordTestedVersion(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        draftId: setup.draft.id,
+        fieldId: setup.field.id,
+        format: "docx",
+        compiledBuffer: Buffer.from("compiled-spaces"),
+        trialBuffer: Buffer.from("trial-spaces"),
+        technicalBinding: { kind: "docx.sdt" },
+        sampleValue: "  Иванов  ",
+        renderedValue: "  Иванов  ",
+        readBackValue: "  Иванов  ",
+        verification: { matched: true }
+      },
+      context("corr-spaces")
+    );
+    assert.equal(version.renderedValue, "  Иванов  ");
+    assert.equal(version.readBackValue, "  Иванов  ");
+  } finally {
+    setup.fixture.cleanup();
+  }
+});
