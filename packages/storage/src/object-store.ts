@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { link, mkdir, open, stat, unlink } from "node:fs/promises";
+import { link, mkdir, open, readFile, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
 export interface StoredObject {
@@ -12,6 +12,14 @@ export interface StoredObject {
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
+}
+
+function normalizeSha256(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/u.test(normalized)) {
+    throw new TypeError("Object SHA-256 must contain 64 hexadecimal characters");
+  }
+  return normalized;
 }
 
 async function hashFile(filePath: string): Promise<{ sha256: string; sizeBytes: number }> {
@@ -86,6 +94,22 @@ export class ContentAddressedObjectStore {
     }
 
     return this.commitTemporary(temporaryPath, hash.digest("hex"), sizeBytes);
+  }
+
+  async getBuffer(sha256Value: string): Promise<Buffer> {
+    const sha256 = normalizeSha256(sha256Value);
+    const storagePath = path.join(
+      this.root,
+      sha256.slice(0, 2),
+      sha256.slice(2, 4),
+      sha256
+    );
+    const buffer = await readFile(storagePath);
+    const actualSha256 = createHash("sha256").update(buffer).digest("hex");
+    if (actualSha256 !== sha256) {
+      throw new Error(`Content-addressed object verification failed: ${storagePath}`);
+    }
+    return buffer;
   }
 
   private async ensureDirectories(): Promise<void> {
