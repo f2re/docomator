@@ -13,6 +13,10 @@ import {
   KnowledgeRegistry,
   KnowledgeValidationError,
   PropertyValueValidationError,
+  SpaceConflictError,
+  SpaceNotFoundError,
+  SpaceRegistry,
+  SpaceValidationError,
   SqliteStore
 } from "@docomator/storage";
 import Fastify, {
@@ -22,6 +26,7 @@ import Fastify, {
 
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { correlationId } from "./request-context.js";
+import { registerSpaceRoutes } from "./space-routes.js";
 import { registerUiRoutes } from "./ui-routes.js";
 
 const startedAt = Date.now();
@@ -29,6 +34,7 @@ const startedAt = Date.now();
 export interface AppDependencies {
   store?: SqliteStore;
   knowledgeRegistry?: KnowledgeRegistry;
+  spaceRegistry?: SpaceRegistry;
   uiDirectory?: string;
 }
 
@@ -53,14 +59,22 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "entity_types",
         "property_definitions",
         "worker_jobs",
-        "domain_events"
+        "domain_events",
+        "spaces",
+        "space_entity_ownership",
+        "audience_groups",
+        "audience_snapshots"
       ];
       const rows = database
         .prepare(`
           SELECT name
           FROM sqlite_master
           WHERE type = 'table'
-            AND name IN ('schema_migrations', 'entity_types', 'property_definitions', 'worker_jobs', 'domain_events')
+            AND name IN (
+              'schema_migrations', 'entity_types', 'property_definitions',
+              'worker_jobs', 'domain_events', 'spaces',
+              'space_entity_ownership', 'audience_groups', 'audience_snapshots'
+            )
         `)
         .all() as unknown as Array<{ name: string }>;
       return new Set(rows.map((row) => row.name)).size === requiredTables.length;
@@ -78,7 +92,9 @@ export function buildApp(
   const store =
     dependencies.store ??
     new SqliteStore({ databasePath: path.join(config.dataDir, "docomator.db") });
-  const registry = dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
+  const knowledgeRegistry =
+    dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
+  const spaceRegistry = dependencies.spaceRegistry ?? new SpaceRegistry(store);
 
   const app = Fastify({
     logger: {
@@ -125,6 +141,18 @@ export function buildApp(
     } else if (error instanceof KnowledgeConflictError) {
       statusCode = 409;
       code = "knowledge_conflict";
+      message = error.message;
+    } else if (error instanceof SpaceValidationError) {
+      statusCode = 400;
+      code = "space_validation_failed";
+      message = error.message;
+    } else if (error instanceof SpaceNotFoundError) {
+      statusCode = 404;
+      code = "space_not_found";
+      message = error.message;
+    } else if (error instanceof SpaceConflictError) {
+      statusCode = 409;
+      code = "space_conflict";
       message = error.message;
     } else if (error.validation !== undefined) {
       statusCode = 400;
@@ -198,7 +226,8 @@ export function buildApp(
   }));
 
   registerUiRoutes(app, dependencies.uiDirectory);
-  registerKnowledgeRoutes(app, registry);
+  registerKnowledgeRoutes(app, knowledgeRegistry);
+  registerSpaceRoutes(app, spaceRegistry);
 
   return app;
 }

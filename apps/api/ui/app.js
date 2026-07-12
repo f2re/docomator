@@ -1,73 +1,88 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
+const DEFAULT_SPACE_ID = "00000000-0000-4000-8000-000000000001";
+
 const state = {
   view: "overview",
-  tab: "types",
+  knowledgeTab: "types",
+  spaceTab: "members",
   theme: localStorage.getItem("docomator.theme") || "system",
   loading: false,
+  spaceLoading: false,
   retry: null,
   dialogKind: null,
-  data: { types: [], properties: [], entities: [] }
+  currentSpaceId: localStorage.getItem("docomator.space") || DEFAULT_SPACE_ID,
+  selectedEntityIds: new Set(),
+  lastPlan: null,
+  data: {
+    types: [],
+    properties: [],
+    spaces: [],
+    spaceEntities: [],
+    groups: [],
+    snapshots: [],
+    access: []
+  }
 };
 
 const views = {
-  overview: ["Рабочее пространство", "Обзор", "Показываем, что уже готово и какой шаг будет полезнее следующим.", "Добавить данные", "entity-type"],
-  knowledge: ["Универсальные данные", "База знаний", "Люди, организации и любые типизированные параметры для будущих документов.", "Создать тип", "entity-type"],
-  templates: ["Подготовка документов", "Шаблоны", "Безопасная загрузка и разметка DOCX/XLSX запланированы следующим этапом.", null, null],
-  documents: ["Формирование", "Документы", "Будущий пошаговый процесс: данные, проверка, рендер и скачивание.", null, null],
-  automations: ["События и расписания", "Автоматизации", "Будущие запуски с прозрачными состояниями, историей и управляемыми повторами.", null, null]
+  overview: ["Рабочее пространство", "Обзор", "Состояние данных, аудитории и следующий безопасный шаг.", "Создать пространство", "space"],
+  spaces: ["Изолированные наборы", "Пространства", "Люди, группы и точный план будущего документа.", "Создать пространство", "space"],
+  knowledge: ["Общая схема", "Типы и свойства", "Переиспользуемая структура данных для всех пространств.", "Создать тип", "entity-type"],
+  templates: ["Подготовка документов", "Шаблоны", "Повторяющиеся таблицы и списки подключаются следующим этапом.", null, null],
+  documents: ["Формирование", "Документы", "Будущий guided flow использует уже готовый снимок аудитории.", null, null],
+  automations: ["События и расписания", "Автоматизации", "Каждое правило будет ограничено одним пространством.", null, null]
 };
 
-const tabs = {
+const knowledgeTabs = {
   types: {
     label: "Создать тип",
     kind: "entity-type",
     hint: "<strong>Тип сущности</strong> описывает класс объектов. Например, «Человек», «Организация» или «Статья».",
     emoji: "🧱",
     title: "Пока нет типов сущностей",
-    text: "Создайте первый тип. После этого можно будет добавлять конкретные объекты и свойства."
+    text: "Создайте первый тип. После этого внутри пространства можно добавлять конкретных людей и организации."
   },
   properties: {
     label: "Создать свойство",
     kind: "property",
-    hint: "<strong>Свойство</strong> — переиспользуемый параметр: ФИО, рост, вес, должность, ИНН или адрес.",
+    hint: "<strong>Свойство</strong> — переиспользуемый параметр: ФИО, рост, вес, должность, ИНН или количество животных.",
     emoji: "🏷️",
     title: "Пока нет определений свойств",
-    text: "Добавьте параметр и выберите тип данных. Серые подсказки объяснят каждое поле."
-  },
-  entities: {
-    label: "Создать объект",
-    kind: "entity",
-    hint: "<strong>Объект</strong> — конкретная запись выбранного типа: человек, организация, статья или проект.",
-    emoji: "👥",
-    title: "Пока нет объектов",
-    text: "Сначала создайте тип сущности, затем добавьте конкретные записи."
+    text: "Добавьте параметр и выберите тип данных. Серые подсказки объяснят назначение каждого поля."
   }
 };
 
 const help = {
   overview: [
-    ["Что уже работает?", "База знаний, аудит, очередь, резервное копирование и восстановление. Шаблоны пока не принимаются."],
-    ["Почему разделы помечены «Скоро»?", "Сервис не изображает готовую функцию. Недоступный этап показывает причину, будущий процесс и полезное действие сейчас."],
-    ["Куда отправляются данные?", "Только на этот локальный сервер. Интерфейс не использует CDN, внешние шрифты, аналитику или облачные API."]
+    ["Зачем нужны пространства?", "Они не дают смешать людей, группы и будущие документы разных подразделений, проектов или заказчиков."],
+    ["Можно сделать один документ на всех?", "Да. Режим «Один общий документ» передаёт шаблону коллекцию audience.members для таблицы или списка."],
+    ["Можно сделать отдельный документ каждому?", "Да. Режим «По документу на каждого» создаёт отдельную единицу будущего запуска для каждого участника."],
+    ["Куда отправляются данные?", "Только на локальный сервер. Интерфейс не использует CDN, внешние шрифты, аналитику или облачные API."]
+  ],
+  spaces: [
+    ["Пространство и группа — это одно?", "Нет. Пространство является границей изоляции. Группа — сохранённый набор людей только внутри этого пространства."],
+    ["Что такое снимок аудитории?", "Неизменяемая фиксация выбранных людей, их порядка и режима результата. Позднее изменение группы не меняет уже начатый запуск."],
+    ["Что значит «отмеченные»?", "Это разовый выбор чекбоксами. Его можно сразу зафиксировать для документа или сохранить как именованную группу."],
+    ["Почему общий документ пока не скачивается?", "Backend уже строит точный план и контекст. Запись списка в DOCX/XLSX появится вместе с безопасным Template Compiler."]
   ],
   knowledge: [
-    ["Тип, свойство и объект — в чём разница?", "Тип описывает класс, свойство — параметр, объект — конкретную запись. Например: Человек → Рост → Иванов Иван."],
-    ["Что такое стабильный ключ?", "Техническое имя на латинице: person, person.height, organization.inn. Оно остаётся неизменным при переименовании подписи."],
-    ["Можно ли добавить необычный параметр?", "Да. Рост, вес, количество животных и другие сведения создаются как обычные типизированные свойства."],
-    ["Что означает чувствительность?", "Класс будущего доступа: public, internal, personal или restricted. До внедрения IAM API должен оставаться в доверенном контуре."]
+    ["Почему здесь нет списка людей?", "Конкретные люди находятся в пространствах, чтобы не показывать данные одного подразделения в другом. Здесь хранится только общая схема типов и свойств."],
+    ["Что такое стабильный ключ?", "Техническое имя на латинице: person, person.height, organization.inn. Оно остаётся неизменным при смене понятной подписи."],
+    ["Можно добавить необычный параметр?", "Да. Рост, вес, количество животных и другие сведения создаются как обычные типизированные свойства."],
+    ["Что означает чувствительность?", "Будущий класс доступа: public, internal, personal или restricted. Проверка IAM будет выполняться до LLM, рендера и доставки."]
   ],
   templates: [
-    ["Почему загрузка ещё закрыта?", "Недоверенный Office-файл нельзя принимать до проверки ZIP, XML, relationships, макросов и лимитов."],
-    ["Как подготовиться?", "Соберите пустой шаблон и 1–2 заполненных примера, удалите секреты и перечислите ожидаемые поля."]
+    ["Как таблица получит людей?", "Повторяющаяся строка будет связана с audience.members. Для каждой записи renderer подставит нужные свойства."],
+    ["Почему загрузка ещё закрыта?", "Недоверенный Office-файл нельзя принимать до проверки ZIP, XML, relationships, макросов и лимитов."]
   ],
   documents: [
-    ["Как будет выглядеть процесс?", "Шаблон → данные → понятные вопросы → проверка → рендер → скачивание или доставка."],
-    ["Можно ли работать без ИИ?", "Да. Активированный шаблон обязан заполняться обычной формой при недоступной LLM."]
+    ["Как будет выглядеть процесс?", "Пространство → аудитория → режим результата → данные → проверка → рендер → скачивание или доставка."],
+    ["Можно работать без ИИ?", "Да. Активированный шаблон обязан заполняться обычной формой при недоступной LLM."]
   ],
   automations: [
-    ["Как понять, что происходит с запуском?", "Карточка покажет триггер, этап, использованные данные, следующую попытку и требуемое действие."],
+    ["Как правило выберет людей?", "Оно будет привязано к пространству и выберет всех активных, именованную группу или вычисленную выборку."],
     ["Что будет при нехватке данных?", "Система создаст задачу оператору и не отправит неполный документ."]
   ]
 };
@@ -76,7 +91,7 @@ const dialogs = {
   "entity-type": {
     eyebrow: "Структура данных",
     title: "Новый тип сущности",
-    description: "Опишите класс объектов. Конкретные записи добавляются отдельно.",
+    description: "Опишите класс объектов. Конкретные записи добавляются внутри пространства.",
     endpoint: "/api/v1/knowledge/entity-types",
     success: "Тип сущности создан",
     submit: "Создать тип",
@@ -85,12 +100,12 @@ const dialogs = {
       ["label", "Понятное название", "text", true, "Человек", "Эту подпись увидят пользователи."],
       ["description", "Описание", "textarea", false, "Сотрудник, автор или получатель", "Необязательно. Коротко объясните назначение типа."]
     ],
-    payload: (v) => compact({ key: v.key, label: v.label, description: v.description })
+    payload: (values) => compact({ key: values.key, label: values.label, description: values.description })
   },
   property: {
     eyebrow: "Структура данных",
     title: "Новое свойство",
-    description: "Создайте параметр, который можно использовать в разных документах.",
+    description: "Создайте параметр, который можно использовать в разных пространствах и документах.",
     endpoint: "/api/v1/knowledge/property-definitions",
     success: "Свойство создано",
     submit: "Создать свойство",
@@ -103,21 +118,70 @@ const dialogs = {
       ["sensitivity", "Чувствительность", "sensitivity", true, "", "Выберите наиболее строгий подходящий класс."],
       ["description", "Описание", "textarea", false, "Рост человека в сантиметрах", "Помогает редактору шаблонов и локальной модели понять смысл поля."]
     ],
-    payload: (v) => compact({ key: v.key, label: v.label, valueType: v.valueType, unit: v.unit, appliesTo: split(v.appliesTo), sensitivity: v.sensitivity, description: v.description })
+    payload: (values) => compact({ key: values.key, label: values.label, valueType: values.valueType, unit: values.unit, appliesTo: split(values.appliesTo), sensitivity: values.sensitivity, description: values.description })
   },
-  entity: {
-    eyebrow: "Конкретные данные",
-    title: "Новый объект",
-    description: "Создайте конкретную запись выбранного типа.",
-    endpoint: "/api/v1/knowledge/entities",
-    success: "Объект создан",
-    submit: "Создать объект",
+  space: {
+    eyebrow: "Изоляция данных",
+    title: "Новое пространство",
+    description: "Создайте отдельный контур для подразделения, проекта или заказчика.",
+    endpoint: "/api/v1/spaces",
+    success: "Пространство создано",
+    submit: "Создать пространство",
     fields: [
-      ["entityTypeKey", "Тип сущности", "entity-type", true, "", "Тип определяет доступные свойства."],
-      ["displayName", "Отображаемое название", "text", true, "Иванов Иван Иванович", "Понятное имя для поиска и выбора."],
-      ["status", "Статус", "status", true, "", "Неактивные и архивные записи можно будет скрывать из обычного выбора."]
+      ["key", "Стабильный ключ", "text", true, "engineering", "Латиница без пробелов. Например: engineering, branch-north или project.alpha."],
+      ["name", "Понятное название", "text", true, "Инженерная служба", "Название показывается в переключателе пространства."],
+      ["description", "Описание", "textarea", false, "Сотрудники и документы инженерной службы", "Объясните, какие данные должны находиться только здесь."]
     ],
-    payload: (v) => ({ entityTypeKey: v.entityTypeKey, displayName: v.displayName, status: v.status })
+    payload: (values) => compact({ key: values.key, name: values.name, description: values.description })
+  },
+  "space-entity": {
+    eyebrow: "Участники пространства",
+    title: "Новый участник",
+    description: "Запись будет принадлежать только текущему пространству.",
+    endpoint: () => spaceEndpoint("/entities"),
+    success: "Участник добавлен",
+    submit: "Добавить участника",
+    fields: [
+      ["entityTypeKey", "Тип сущности", "entity-type", true, "", "Обычно это тип «Человек», но пространство может содержать и другие объекты."],
+      ["displayName", "Отображаемое имя", "text", true, "Иванов Иван Иванович", "Понятное имя для поиска, выбора и будущего документа."],
+      ["status", "Статус", "status", true, "", "В обычную аудиторию автоматически входят только активные записи."]
+    ],
+    payload: (values) => ({ entityTypeKey: values.entityTypeKey, displayName: values.displayName, status: values.status })
+  },
+  group: {
+    eyebrow: "Повторная аудитория",
+    title: "Новая группа",
+    description: "Сохраните отмеченных участников под понятным названием.",
+    endpoint: () => spaceEndpoint("/groups"),
+    success: "Группа создана",
+    submit: "Создать группу",
+    fields: [
+      ["key", "Стабильный ключ", "text", true, "monthly-report", "Латиница без пробелов. Ключ уникален внутри пространства."],
+      ["name", "Название группы", "text", true, "Ежемесячный отчёт", "Название будет показано при выборе аудитории."],
+      ["description", "Описание", "textarea", false, "Участники ежемесячного сводного отчёта", "Необязательно. Укажите назначение группы."]
+    ],
+    payload: (values) => compact({ key: values.key, name: values.name, description: values.description }),
+    afterCreate: async (created) => {
+      await api(spaceEndpoint(`/groups/${encodeURIComponent(created.id)}/members`), {
+        method: "PUT",
+        body: JSON.stringify({ entityIds: [...state.selectedEntityIds] })
+      });
+    }
+  },
+  "space-access": {
+    eyebrow: "Доступ к пространству",
+    title: "Добавить пользователя приложения",
+    description: "Укажите технический ID пользователя и его роль в текущем пространстве.",
+    endpoint: (values) => spaceEndpoint(`/access-members/${encodeURIComponent(values.actorId)}`),
+    method: "PUT",
+    success: "Доступ обновлён",
+    submit: "Сохранить доступ",
+    fields: [
+      ["actorId", "ID пользователя", "text", true, "user-42", "Идентификатор локальной учётной записи. IAM-интерфейс будет добавлен отдельным этапом."],
+      ["role", "Роль", "space-role", true, "", "Owner управляет пространством; manager — составом; editor — данными; viewer — только просмотром."],
+      ["status", "Статус доступа", "membership-status", true, "", "Неактивный доступ сохраняется в истории, но не разрешает вход."]
+    ],
+    payload: (values) => ({ role: values.role, status: values.status })
   }
 };
 
@@ -142,8 +206,17 @@ function split(value) {
   return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-function correlationId() {
+function requestCorrelationId() {
   return globalThis.crypto?.randomUUID?.() || `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function currentSpace() {
+  return state.data.spaces.find((space) => space.id === state.currentSpaceId) || null;
+}
+
+function spaceEndpoint(pathname = "") {
+  if (!state.currentSpaceId) throw new ApiError("Сначала выберите пространство.");
+  return `/api/v1/spaces/${encodeURIComponent(state.currentSpaceId)}${pathname}`;
 }
 
 async function api(url, options = {}) {
@@ -152,7 +225,7 @@ async function api(url, options = {}) {
     headers: {
       accept: "application/json",
       "content-type": "application/json",
-      "x-correlation-id": correlationId(),
+      "x-correlation-id": requestCorrelationId(),
       "x-actor-id": "local-ui",
       ...(options.headers || {})
     }
@@ -209,8 +282,8 @@ function applyTheme(theme) {
 function selectView(view) {
   if (!views[view]) return;
   state.view = view;
-  $$("[data-view]").forEach((element) => element.classList.toggle("is-visible", element.dataset.view === view));
-  $$("[data-view-target]").forEach((button) => {
+  $$('[data-view]').forEach((element) => element.classList.toggle("is-visible", element.dataset.view === view));
+  $$('[data-view-target]').forEach((button) => {
     const active = button.dataset.viewTarget === view;
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
@@ -224,87 +297,291 @@ function selectView(view) {
   primary.dataset.create = primaryKind || "";
   primary.querySelector("span:last-child").textContent = primaryLabel || "";
   if (view === "knowledge") renderKnowledge();
+  if (view === "spaces") renderSpaces();
   window.history.replaceState(null, "", `#${view}`);
 }
 
-function setTab(tab) {
-  if (!tabs[tab]) return;
-  state.tab = tab;
+function setKnowledgeTab(tab) {
+  if (!knowledgeTabs[tab]) return;
+  state.knowledgeTab = tab;
   $$('[data-knowledge-tab]').forEach((button) => button.setAttribute("aria-selected", String(button.dataset.knowledgeTab === tab)));
-  $("#knowledgeCreateButton span:last-child").textContent = tabs[tab].label;
-  $("#knowledgeCreateButton").dataset.create = tabs[tab].kind;
-  $("#knowledgeHint").innerHTML = tabs[tab].hint;
+  const meta = knowledgeTabs[tab];
+  $("#knowledgeCreateButton span:last-child").textContent = meta.label;
+  $("#knowledgeCreateButton").dataset.create = meta.kind;
+  $("#knowledgeHint").innerHTML = meta.hint;
   renderKnowledge();
 }
 
+function setSpaceTab(tab) {
+  if (!['members', 'groups', 'audience', 'access'].includes(tab)) return;
+  state.spaceTab = tab;
+  $$('[data-space-tab]').forEach((button) => button.setAttribute("aria-selected", String(button.dataset.spaceTab === tab)));
+  $$('[data-space-pane]').forEach((pane) => pane.classList.toggle("is-visible", pane.dataset.spacePane === tab));
+  if (tab === "audience") updateAudiencePreview();
+}
+
 function itemText(item) {
-  return [item.key, item.label, item.displayName, item.description, item.valueType, item.status].filter(Boolean).join(" ").toLowerCase();
+  return [item.key, item.label, item.name, item.displayName, item.description, item.valueType, item.status].filter(Boolean).join(" ").toLowerCase();
 }
 
 function emptyHtml(meta) {
-  return `<div class="empty-state"><div><span class="empty-emoji" aria-hidden="true">${meta.emoji}</span><h3>${escapeHtml(meta.title)}</h3><p>${escapeHtml(meta.text)}</p><button class="primary-button" type="button" data-create="${meta.kind}">${escapeHtml(meta.label)}</button></div></div>`;
+  return `<div class="empty-state"><div><span class="empty-emoji" aria-hidden="true">${meta.emoji}</span><h3>${escapeHtml(meta.title)}</h3><p>${escapeHtml(meta.text)}</p><button class="primary-button" type="button" data-create="${escapeHtml(meta.kind)}">${escapeHtml(meta.label)}</button></div></div>`;
 }
 
 function renderKnowledge() {
   const root = $("#knowledgeContent");
-  const meta = tabs[state.tab];
+  const meta = knowledgeTabs[state.knowledgeTab];
   const query = $("#knowledgeSearch").value.trim().toLowerCase();
-  const items = state.data[state.tab].filter((item) => !query || itemText(item).includes(query));
+  const items = state.data[state.knowledgeTab].filter((item) => !query || itemText(item).includes(query));
   root.setAttribute("aria-busy", "false");
   if (items.length === 0) {
-    root.innerHTML = query ? `<div class="empty-state"><div><span class="empty-emoji">🔎</span><h3>Ничего не найдено</h3><p>Измените запрос. Данные не удалены и фильтр можно очистить.</p><button class="secondary-button" type="button" data-clear-search>Очистить поиск</button></div></div>` : emptyHtml(meta);
-    root.querySelector("[data-clear-search]")?.addEventListener("click", () => { $("#knowledgeSearch").value = ""; renderKnowledge(); });
+    root.innerHTML = query ? `<div class="empty-state"><div><span class="empty-emoji" aria-hidden="true">🔎</span><h3>Ничего не найдено</h3><p>Измените запрос. Данные не удалены и фильтр можно очистить.</p><button class="secondary-button" type="button" data-clear-search>Очистить поиск</button></div></div>` : emptyHtml(meta);
     return;
   }
   root.innerHTML = items.map((item) => {
-    if (state.tab === "types") return `<article class="collection-card"><header><div><h3>${escapeHtml(item.label)}</h3><code>${escapeHtml(item.key)}</code></div><span class="pill">Тип</span></header><p>${escapeHtml(item.description || "Описание пока не добавлено.")}</p><div class="card-meta"><span class="pill">v${escapeHtml(item.version || 1)}</span></div></article>`;
-    if (state.tab === "properties") return `<article class="collection-card"><header><div><h3>${escapeHtml(item.label)}</h3><code>${escapeHtml(item.key)}</code></div><span class="pill">${escapeHtml(item.valueType)}</span></header><p>${escapeHtml(item.description || "Описание пока не добавлено.")}</p><div class="card-meta"><span class="pill">${escapeHtml(item.sensitivity || "internal")}</span>${item.unit ? `<span class="pill">${escapeHtml(item.unit)}</span>` : ""}</div></article>`;
-    return `<article class="collection-card"><header><div><h3>${escapeHtml(item.displayName)}</h3><code>${escapeHtml(item.entityTypeKey || item.entityTypeId || "объект")}</code></div><span class="pill">${escapeHtml(item.status || "active")}</span></header><p>Версия ${escapeHtml(item.version || 1)}. Свойства будут доступны в карточке объекта следующим инкрементом.</p></article>`;
+    if (state.knowledgeTab === "types") return `<article class="collection-card"><header><div><h3>${escapeHtml(item.label)}</h3><code>${escapeHtml(item.key)}</code></div><span class="pill">Тип</span></header><p>${escapeHtml(item.description || "Описание пока не добавлено.")}</p></article>`;
+    return `<article class="collection-card"><header><div><h3>${escapeHtml(item.label)}</h3><code>${escapeHtml(item.key)}</code></div><span class="pill">${escapeHtml(item.valueType)}</span></header><p>${escapeHtml(item.description || "Описание пока не добавлено.")}</p><div class="card-meta"><span class="pill">${escapeHtml(item.sensitivity || "internal")}</span>${item.unit ? `<span class="pill">${escapeHtml(item.unit)}</span>` : ""}</div></article>`;
   }).join("");
 }
 
-function renderSkeletons() {
-  $("#knowledgeContent").setAttribute("aria-busy", "true");
-  $("#knowledgeContent").innerHTML = '<div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>';
+function renderSpaceList() {
+  const root = $("#spaceList");
+  if (state.data.spaces.length === 0) {
+    root.innerHTML = '<div class="mini-empty"><span aria-hidden="true">🧑‍🤝‍🧑</span><p>Создайте первое пространство.</p></div>';
+    return;
+  }
+  root.innerHTML = state.data.spaces.map((space) => `<button class="workspace-list-item${space.id === state.currentSpaceId ? " is-active" : ""}" type="button" data-space-id="${escapeHtml(space.id)}"><span class="workspace-avatar" aria-hidden="true">${escapeHtml((space.name || "П").slice(0, 1).toUpperCase())}</span><span><strong>${escapeHtml(space.name)}</strong><small>${space.entityCount} участников · ${space.groupCount} групп</small></span>${space.id === state.currentSpaceId ? '<span class="current-marker" aria-label="Выбрано">✓</span>' : ""}</button>`).join("");
 }
 
-function renderLoadError(error) {
-  $("#knowledgeContent").setAttribute("aria-busy", "false");
-  $("#knowledgeContent").innerHTML = `<div class="error-state"><div><span class="empty-emoji" aria-hidden="true">⚠️</span><h3>Не удалось загрузить данные</h3><p>${escapeHtml(error.message)}</p>${error.correlationId ? `<p><code>Correlation ID: ${escapeHtml(error.correlationId)}</code></p>` : ""}<button class="primary-button" type="button" data-retry-load>Повторить загрузку</button></div></div>`;
-  $("[data-retry-load]")?.addEventListener("click", loadData);
+function renderSpaceSummary() {
+  const space = currentSpace();
+  const chip = $("#currentSpaceChip");
+  if (!space) {
+    chip.hidden = true;
+    $("#spaceName").textContent = "Пространство не выбрано";
+    $("#spaceDescription").textContent = "Создайте пространство, чтобы добавить участников.";
+    return;
+  }
+  chip.hidden = false;
+  $("#currentSpaceChipText").textContent = space.name;
+  $("#spaceName").textContent = space.name;
+  $("#spaceDescription").textContent = space.description || `Изолированный контур «${space.name}». Здесь ${state.data.spaceEntities.length} участников и ${state.data.groups.length} групп.`;
+}
+
+function renderMembers() {
+  const root = $("#spaceMembers");
+  if (!currentSpace()) {
+    root.innerHTML = '<div class="empty-state compact-empty"><div><span class="empty-emoji" aria-hidden="true">🧑‍🤝‍🧑</span><h3>Нет пространства</h3><p>Сначала создайте или выберите пространство.</p></div></div>';
+    return;
+  }
+  if (state.data.spaceEntities.length === 0) {
+    root.innerHTML = '<div class="empty-state compact-empty"><div><span class="empty-emoji" aria-hidden="true">👤</span><h3>В пространстве пока нет участников</h3><p>Добавьте первого человека. Он будет доступен только в этом пространстве.</p><button class="primary-button" type="button" data-create="space-entity">Добавить участника</button></div></div>';
+    updateSelectedCount();
+    return;
+  }
+  root.innerHTML = state.data.spaceEntities.map((entity) => `<label class="member-row${state.selectedEntityIds.has(entity.entityId) ? " is-selected" : ""}"><input type="checkbox" data-select-entity="${escapeHtml(entity.entityId)}" ${state.selectedEntityIds.has(entity.entityId) ? "checked" : ""} /><span class="member-avatar" aria-hidden="true">${escapeHtml(entity.displayName.slice(0, 1).toUpperCase())}</span><span class="member-copy"><strong>${escapeHtml(entity.displayName)}</strong><small>${escapeHtml(entity.entityTypeLabel)} · ${escapeHtml(entity.status)}</small></span><span class="member-check" aria-hidden="true">✓</span></label>`).join("");
+  updateSelectedCount();
+}
+
+function renderGroups() {
+  const root = $("#spaceGroups");
+  if (state.data.groups.length === 0) {
+    root.innerHTML = '<div class="empty-state compact-empty"><div><span class="empty-emoji" aria-hidden="true">🗃️</span><h3>Пока нет групп</h3><p>Отметьте участников на вкладке «Участники», затем сохраните выбор под понятным названием.</p><button class="secondary-button" type="button" data-space-tab-target="members">Отметить участников</button></div></div>';
+    return;
+  }
+  root.innerHTML = state.data.groups.map((group) => `<article class="collection-card group-card"><header><div><h3>${escapeHtml(group.name)}</h3><code>${escapeHtml(group.key)}</code></div><span class="pill">${group.memberCount} чел.</span></header><p>${escapeHtml(group.description || "Описание не добавлено.")}</p><div class="card-actions"><button class="text-button" type="button" data-edit-group="${escapeHtml(group.id)}">Показать состав</button><button class="secondary-button compact-button" type="button" data-use-group="${escapeHtml(group.id)}">Использовать для документа</button></div></article>`).join("");
+}
+
+function renderAccess() {
+  const root = $("#spaceAccess");
+  if (state.data.access.length === 0) {
+    root.innerHTML = '<div class="empty-state compact-empty"><div><span class="empty-emoji" aria-hidden="true">🔐</span><h3>Дополнительный доступ не настроен</h3><p>Создатель пространства уже имеет роль owner. Добавьте технический ID другого пользователя при необходимости.</p><button class="primary-button" type="button" data-create="space-access">Добавить доступ</button></div></div>';
+    return;
+  }
+  root.innerHTML = state.data.access.map((member) => `<article class="access-row"><span class="member-avatar" aria-hidden="true">🔑</span><span><strong>${escapeHtml(member.actorId)}</strong><small>Роль: ${escapeHtml(member.role)} · ${escapeHtml(member.status)}</small></span><span class="pill">v${member.version}</span></article>`).join("");
+}
+
+function sourceLabel(snapshot) {
+  if (snapshot.sourceKind === "all_space") return "Все активные";
+  if (snapshot.sourceKind === "group") return "Сохранённая группа";
+  return "Отмеченные вручную";
+}
+
+function modeLabel(mode) {
+  return mode === "aggregate" ? "Один общий документ" : "По документу на каждого";
+}
+
+function renderSnapshots() {
+  const root = $("#audienceSnapshots");
+  if (state.data.snapshots.length === 0) {
+    root.innerHTML = '<div class="mini-empty horizontal"><span aria-hidden="true">📸</span><p>Снимков пока нет. Подготовьте первый план выше.</p></div>';
+    return;
+  }
+  root.innerHTML = state.data.snapshots.map((snapshot) => `<button class="snapshot-row" type="button" data-open-snapshot="${escapeHtml(snapshot.id)}"><span class="snapshot-icon" aria-hidden="true">${snapshot.targetMode === "aggregate" ? "📋" : "📄"}</span><span><strong>${escapeHtml(modeLabel(snapshot.targetMode))}</strong><small>${escapeHtml(sourceLabel(snapshot))} · ${snapshot.memberCount} участников · ${escapeHtml(new Date(snapshot.createdAt).toLocaleString("ru-RU"))}</small></span><span aria-hidden="true">›</span></button>`).join("");
+}
+
+function renderAudienceSource() {
+  const select = $("#audienceSource");
+  const previous = select.value;
+  const selectedCount = state.selectedEntityIds.size;
+  const options = [
+    ["all_space", `Все активные участники (${state.data.spaceEntities.filter((entity) => entity.status === "active").length})`],
+    ["selected", `Только отмеченные (${selectedCount})`],
+    ...state.data.groups.filter((group) => group.status === "active").map((group) => [`group:${group.id}`, `Группа «${group.name}» (${group.memberCount})`])
+  ];
+  select.innerHTML = options.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("");
+  if (options.some(([value]) => value === previous)) select.value = previous;
+  updateAudiencePreview();
+}
+
+function estimatedAudienceCount() {
+  const source = $("#audienceSource")?.value || "all_space";
+  if (source === "selected") return state.selectedEntityIds.size;
+  if (source.startsWith("group:")) return state.data.groups.find((group) => `group:${group.id}` === source)?.memberCount || 0;
+  return state.data.spaceEntities.filter((entity) => entity.status === "active").length;
+}
+
+function updateAudiencePreview() {
+  const target = $("#audiencePreviewText");
+  if (!target) return;
+  const count = estimatedAudienceCount();
+  const mode = $('input[name="targetMode"]:checked')?.value || "aggregate";
+  if (count === 0) {
+    target.textContent = "В выбранном источнике нет активных участников. Добавьте людей или измените выбор.";
+    return;
+  }
+  target.textContent = mode === "aggregate"
+    ? `Будет подготовлен 1 документ с таблицей или списком из ${count} участников.`
+    : `Будет подготовлено ${count} отдельных документов — по одному на каждого участника.`;
+}
+
+function renderPlan(result) {
+  state.lastPlan = result;
+  const root = $("#audiencePlan");
+  const { snapshot, plan } = result;
+  const memberNames = snapshot.members.map((member) => member.displayName);
+  root.innerHTML = `<article class="panel plan-card is-success"><div class="plan-icon" aria-hidden="true">${plan.targetMode === "aggregate" ? "📋" : "📄"}</div><div><p class="eyebrow">Состав зафиксирован</p><h2>${escapeHtml(modeLabel(plan.targetMode))}</h2><p>${plan.targetMode === "aggregate" ? `Создаётся одно задание. Шаблон получит <code>${escapeHtml(plan.collectionPath)}</code> с ${snapshot.memberCount} записями.` : `Создаётся ${plan.documentCount} независимых единиц — каждая с собственным subject.`}</p><div class="member-chip-list">${memberNames.slice(0, 12).map((name) => `<span class="pill">${escapeHtml(name)}</span>`).join("")}${memberNames.length > 12 ? `<span class="pill">ещё ${memberNames.length - 12}</span>` : ""}</div><small>Snapshot ID: <code>${escapeHtml(snapshot.id)}</code>. Изменение группы не изменит этот состав.</small></div></article>`;
+  root.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
+}
+
+function renderSpaces() {
+  renderSpaceList();
+  renderSpaceSummary();
+  renderMembers();
+  renderGroups();
+  renderAccess();
+  renderAudienceSource();
+  renderSnapshots();
+  setSpaceTab(state.spaceTab);
+}
+
+function updateMetrics() {
+  $("#spaceCount").textContent = state.data.spaces.length;
+  $("#spaceEntityCount").textContent = state.data.spaceEntities.length;
+  $("#groupCount").textContent = state.data.groups.length;
+  $("#snapshotCount").textContent = state.data.snapshots.length;
+}
+
+function updateSelectedCount() {
+  const count = state.selectedEntityIds.size;
+  $("#selectedCount").textContent = `${count} отмечено`;
+  renderAudienceSource();
+}
+
+function renderLoadingStates() {
+  $("#knowledgeContent").setAttribute("aria-busy", "true");
+  $("#knowledgeContent").innerHTML = '<div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>';
+  $("#spaceList").innerHTML = '<div class="skeleton-line"></div><div class="skeleton-line"></div>';
+  $("#spaceMembers").innerHTML = '<div class="skeleton-card"></div><div class="skeleton-card"></div>';
+}
+
+async function loadCurrentSpaceData() {
+  const space = currentSpace();
+  if (!space) {
+    state.data.spaceEntities = [];
+    state.data.groups = [];
+    state.data.snapshots = [];
+    state.data.access = [];
+    renderSpaces();
+    updateMetrics();
+    return;
+  }
+  state.spaceLoading = true;
+  try {
+    const base = `/api/v1/spaces/${encodeURIComponent(space.id)}`;
+    const [entities, groups, snapshots, access] = await Promise.all([
+      api(`${base}/entities?limit=1000`),
+      api(`${base}/groups?limit=500`),
+      api(`${base}/audience-snapshots?limit=50`),
+      api(`${base}/access-members`)
+    ]);
+    state.data.spaceEntities = entities?.data || [];
+    state.data.groups = groups?.data || [];
+    state.data.snapshots = snapshots?.data || [];
+    state.data.access = access?.data || [];
+    const available = new Set(state.data.spaceEntities.map((entity) => entity.entityId));
+    state.selectedEntityIds = new Set([...state.selectedEntityIds].filter((id) => available.has(id)));
+    renderSpaces();
+    updateMetrics();
+  } finally {
+    state.spaceLoading = false;
+  }
 }
 
 async function loadData() {
   if (state.loading) return;
   state.loading = true;
   $("#refreshButton").disabled = true;
-  renderSkeletons();
-  setStatus("", "⏳", "Обновляем локальные данные", "Проверяем сервер и получаем структуру базы знаний. Следующий шаг появится автоматически.");
+  renderLoadingStates();
+  setStatus("", "⏳", "Обновляем локальные данные", "Проверяем схему, пространства и выбранную аудиторию. Следующий шаг появится автоматически.");
   try {
-    const [ready, types, properties, entities] = await Promise.all([
+    const [ready, types, properties, spaces] = await Promise.all([
       api("/readyz"),
       api("/api/v1/knowledge/entity-types?limit=500"),
       api("/api/v1/knowledge/property-definitions?limit=500"),
-      api("/api/v1/knowledge/entities?limit=500")
+      api("/api/v1/spaces?limit=500")
     ]);
     state.data.types = types?.data || [];
     state.data.properties = properties?.data || [];
-    state.data.entities = entities?.data || [];
-    $("#entityTypeCount").textContent = state.data.types.length;
-    $("#propertyCount").textContent = state.data.properties.length;
-    $("#entityCount").textContent = state.data.entities.length;
+    state.data.spaces = spaces?.data || [];
+    if (!state.data.spaces.some((space) => space.id === state.currentSpaceId)) {
+      state.currentSpaceId = state.data.spaces.find((space) => space.id === DEFAULT_SPACE_ID)?.id || state.data.spaces[0]?.id || "";
+      if (state.currentSpaceId) localStorage.setItem("docomator.space", state.currentSpaceId);
+    }
+    await loadCurrentSpaceData();
     setConnection("ok", "Локальный сервер готов");
-    const detail = state.data.types.length === 0 ? "База пока пустая. Начните с типа сущности — остальные шаги интерфейс подскажет." : `Загружено: ${state.data.types.length} типов, ${state.data.properties.length} свойств и ${state.data.entities.length} объектов.`;
+    const detail = state.data.spaces.length === 0
+      ? "Пространств пока нет. Создайте первое — интерфейс подскажет следующий шаг."
+      : `Загружено ${state.data.spaces.length} пространств. Выбрано «${currentSpace()?.name || "не выбрано"}»: ${state.data.spaceEntities.length} участников, ${state.data.groups.length} групп.`;
     setStatus(ready?.status === "ok" ? "success" : "warning", ready?.status === "ok" ? "✓" : "!", ready?.status === "ok" ? "Данные актуальны" : "Система работает с ограничениями", detail, ready?.status === "ok" ? null : loadData);
     renderKnowledge();
+    updateMetrics();
   } catch (cause) {
     const error = cause instanceof ApiError ? cause : new ApiError("Неизвестная ошибка загрузки.");
     setConnection("error", "Нет связи с локальным сервером");
     setStatus("error", "!", "Не удалось обновить данные", `${error.message}${error.correlationId ? ` Correlation ID: ${error.correlationId}.` : ""}`, loadData);
-    renderLoadError(error);
+    $("#knowledgeContent").setAttribute("aria-busy", "false");
+    $("#knowledgeContent").innerHTML = `<div class="error-state"><div><span class="empty-emoji" aria-hidden="true">⚠️</span><h3>Не удалось загрузить данные</h3><p>${escapeHtml(error.message)}</p>${error.correlationId ? `<p><code>Correlation ID: ${escapeHtml(error.correlationId)}</code></p>` : ""}<button class="primary-button" type="button" data-retry-load>Повторить загрузку</button></div></div>`;
   } finally {
     state.loading = false;
     $("#refreshButton").disabled = false;
+  }
+}
+
+async function selectSpace(spaceId) {
+  if (spaceId === state.currentSpaceId || state.spaceLoading) return;
+  state.currentSpaceId = spaceId;
+  localStorage.setItem("docomator.space", spaceId);
+  state.selectedEntityIds.clear();
+  state.lastPlan = null;
+  $("#audiencePlan").innerHTML = "";
+  setStatus("", "⏳", "Переключаем пространство", "Получаем только его участников, группы, снимки и настройки доступа.");
+  try {
+    await loadCurrentSpaceData();
+    setStatus("success", "✓", "Пространство выбрано", `Рабочий контекст: «${currentSpace()?.name || "пространство"}». Данные других пространств не показаны.`);
+  } catch (cause) {
+    const error = cause instanceof ApiError ? cause : new ApiError("Не удалось открыть пространство.");
+    setStatus("error", "!", "Пространство не открыто", `${error.message}${error.correlationId ? ` Correlation ID: ${error.correlationId}.` : ""}`, () => selectSpace(spaceId));
   }
 }
 
@@ -312,6 +589,8 @@ function optionsFor(type) {
   if (type === "value-type") return [["string", "Короткая строка"], ["text", "Длинный текст"], ["number", "Число"], ["integer", "Целое число"], ["boolean", "Да / нет"], ["date", "Дата"], ["date-time", "Дата и время"], ["enum", "Список вариантов"], ["entity-reference", "Ссылка на объект"], ["list", "Список"], ["json", "Структурированные данные"], ["file", "Файл"], ["image", "Изображение"]];
   if (type === "sensitivity") return [["internal", "Внутренние"], ["public", "Публичные"], ["personal", "Персональные"], ["restricted", "Ограниченные"]];
   if (type === "status") return [["active", "Активный"], ["inactive", "Неактивный"], ["archived", "Архивный"]];
+  if (type === "space-role") return [["viewer", "Viewer — просмотр"], ["editor", "Editor — изменение данных"], ["manager", "Manager — состав и группы"], ["owner", "Owner — полное управление"]];
+  if (type === "membership-status") return [["active", "Активный доступ"], ["inactive", "Доступ отключён"]];
   if (type === "entity-type") return state.data.types.map((item) => [item.key, item.label]);
   return null;
 }
@@ -330,9 +609,18 @@ function fieldHtml([name, label, type, required, placeholder, hint]) {
 
 function openDialog(kind) {
   if (!dialogs[kind]) return;
-  if (kind === "entity" && state.data.types.length === 0) {
-    notify("💡", "Сначала создайте тип сущности", "Без типа система не сможет определить назначение нового объекта.");
+  if ((kind === "space-entity" || kind === "group" || kind === "space-access") && !currentSpace()) {
+    notify("💡", "Сначала выберите пространство", "Эта операция должна иметь однозначную границу данных.");
+    kind = "space";
+  }
+  if (kind === "space-entity" && state.data.types.length === 0) {
+    notify("💡", "Сначала создайте тип сущности", "Например, тип «Человек». После этого добавьте участника в пространство.");
     kind = "entity-type";
+  }
+  if (kind === "group" && state.selectedEntityIds.size === 0) {
+    notify("💡", "Сначала отметьте участников", "Откройте вкладку «Участники», выберите людей и повторите создание группы.");
+    setSpaceTab("members");
+    return;
   }
   state.dialogKind = kind;
   const definition = dialogs[kind];
@@ -367,24 +655,100 @@ async function submitDialog(event) {
   button.textContent = "Сохраняем…";
   $("#formError").hidden = true;
   const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-  setStatus("", "⏳", "Сохраняем запись", "Проверяем значения и записываем изменение вместе с аудитом. Форма закроется после подтверждения сервера.");
+  setStatus("", "⏳", "Сохраняем изменение", "Проверяем границу пространства, значения и аудит. Форма закроется только после подтверждения сервера.");
   try {
-    const result = await api(definition.endpoint, { method: "POST", body: JSON.stringify(definition.payload(values)) });
+    const endpoint = typeof definition.endpoint === "function" ? definition.endpoint(values) : definition.endpoint;
+    const result = await api(endpoint, { method: definition.method || "POST", body: JSON.stringify(definition.payload(values)) });
+    if (definition.afterCreate) await definition.afterCreate(result?.data);
+    const createdSpaceId = kind === "space" ? result?.data?.id : null;
     closeDialog();
-    notify("✅", definition.success, "Запись подтверждена сервером и доступна в базе знаний.");
+    notify("✅", definition.success, "Изменение подтверждено сервером и записано в аудит.");
     setStatus("success", "✓", definition.success, `Операция завершена. Correlation ID: ${result?.correlationId || "не указан"}.`);
-    await loadData();
-    selectView("knowledge");
-    if (kind === "property") setTab("properties");
-    if (kind === "entity") setTab("entities");
+    if (kind === "entity-type" || kind === "property" || kind === "space") await loadData(); else await loadCurrentSpaceData();
+    if (createdSpaceId) await selectSpace(createdSpaceId);
+    if (kind === "entity-type" || kind === "property") selectView("knowledge"); else selectView("spaces");
+    if (kind === "property") setKnowledgeTab("properties");
+    if (kind === "group") setSpaceTab("groups");
+    if (kind === "space-access") setSpaceTab("access");
   } catch (cause) {
-    const error = cause instanceof ApiError ? cause : new ApiError("Не удалось сохранить запись.");
+    const error = cause instanceof ApiError ? cause : new ApiError("Не удалось сохранить изменение.");
     $("#formError").hidden = false;
     $("#formError").innerHTML = `${escapeHtml(error.message)}${error.correlationId ? `<code>Correlation ID: ${escapeHtml(error.correlationId)}</code>` : ""}`;
-    setStatus("error", "!", "Запись не сохранена", "Введённые данные остались в форме. Исправьте причину или повторите действие.");
+    setStatus("error", "!", "Изменение не сохранено", "Введённые данные остались в форме. Исправьте причину или повторите действие.");
   } finally {
     button.disabled = false;
     button.textContent = definition.submit;
+  }
+}
+
+async function loadGroupSelection(groupId) {
+  setStatus("", "⏳", "Получаем состав группы", "После загрузки участники будут отмечены на вкладке «Участники».");
+  try {
+    const result = await api(spaceEndpoint(`/groups/${encodeURIComponent(groupId)}/members`));
+    state.selectedEntityIds = new Set((result?.data || []).map((member) => member.entityId));
+    renderMembers();
+    setSpaceTab("members");
+    setStatus("success", "✓", "Состав группы отмечен", `Выбрано ${state.selectedEntityIds.size} участников. Можно изменить отметки или подготовить документ.`);
+  } catch (cause) {
+    const error = cause instanceof ApiError ? cause : new ApiError("Не удалось получить состав группы.");
+    setStatus("error", "!", "Группа не открыта", error.message, () => loadGroupSelection(groupId));
+  }
+}
+
+async function useGroup(groupId) {
+  setSpaceTab("audience");
+  const select = $("#audienceSource");
+  select.value = `group:${groupId}`;
+  updateAudiencePreview();
+}
+
+async function createAudienceSnapshot() {
+  if (!currentSpace()) {
+    notify("💡", "Сначала выберите пространство", "Снимок аудитории всегда принадлежит одному пространству.");
+    return;
+  }
+  const sourceValue = $("#audienceSource").value;
+  const mode = $('input[name="targetMode"]:checked')?.value || "aggregate";
+  let source;
+  if (sourceValue === "selected") source = { kind: "selected", entityIds: [...state.selectedEntityIds] };
+  else if (sourceValue.startsWith("group:")) source = { kind: "group", groupId: sourceValue.slice("group:".length) };
+  else source = { kind: "all_space" };
+  if (estimatedAudienceCount() === 0) {
+    notify("⚠️", "Аудитория пуста", "Добавьте активных участников, отметьте людей или выберите непустую группу.");
+    return;
+  }
+  const button = $("#createAudienceSnapshotButton");
+  button.disabled = true;
+  button.textContent = "Фиксируем состав…";
+  setStatus("", "⏳", "Фиксируем аудиторию", "Проверяем принадлежность каждого участника пространству и строим точное число будущих документов.");
+  try {
+    const result = await api(spaceEndpoint("/audience-snapshots"), { method: "POST", body: JSON.stringify({ source, targetMode: mode }) });
+    renderPlan(result.data);
+    notify("✅", "План документа готов", mode === "aggregate" ? "Подготовлено одно задание с коллекцией участников." : `Подготовлено ${result.data.plan.documentCount} отдельных единиц.`);
+    setStatus("success", "✓", "Состав и режим зафиксированы", `Снимок содержит ${result.data.snapshot.memberCount} участников. Изменение группы не повлияет на этот запуск.`);
+    const snapshots = await api(spaceEndpoint("/audience-snapshots?limit=50"));
+    state.data.snapshots = snapshots?.data || [];
+    renderSnapshots();
+    updateMetrics();
+  } catch (cause) {
+    const error = cause instanceof ApiError ? cause : new ApiError("Не удалось подготовить план.");
+    setStatus("error", "!", "План не создан", `${error.message}${error.correlationId ? ` Correlation ID: ${error.correlationId}.` : ""}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Зафиксировать состав и план";
+  }
+}
+
+async function openSnapshot(snapshotId) {
+  setStatus("", "⏳", "Открываем снимок", "Получаем сохранённый состав и исполнимый план без пересчёта группы.");
+  try {
+    const result = await api(spaceEndpoint(`/audience-snapshots/${encodeURIComponent(snapshotId)}`));
+    renderPlan(result.data);
+    setSpaceTab("audience");
+    setStatus("success", "✓", "Снимок открыт", `Состав зафиксирован: ${result.data.snapshot.memberCount} участников, ${result.data.plan.documentCount} будущих документов.`);
+  } catch (cause) {
+    const error = cause instanceof ApiError ? cause : new ApiError("Не удалось открыть снимок.");
+    setStatus("error", "!", "Снимок не открыт", error.message, () => openSnapshot(snapshotId));
   }
 }
 
@@ -396,6 +760,7 @@ function openHelp() {
   $("#helpDrawer").setAttribute("aria-hidden", "false");
   $("#helpDrawer button[data-close-help]")?.focus();
 }
+
 function closeHelp() {
   $("#helpDrawer").classList.remove("is-open");
   $("#helpDrawer").setAttribute("aria-hidden", "true");
@@ -408,10 +773,36 @@ function attachEvents() {
     if (view) selectView(view.dataset.viewTarget);
     const create = event.target.closest("[data-create]");
     if (create) openDialog(create.dataset.create);
+    const space = event.target.closest("[data-space-id]");
+    if (space) void selectSpace(space.dataset.spaceId);
+    const tab = event.target.closest("[data-space-tab-target]");
+    if (tab) setSpaceTab(tab.dataset.spaceTabTarget);
+    const editGroup = event.target.closest("[data-edit-group]");
+    if (editGroup) void loadGroupSelection(editGroup.dataset.editGroup);
+    const useGroupButton = event.target.closest("[data-use-group]");
+    if (useGroupButton) void useGroup(useGroupButton.dataset.useGroup);
+    const snapshot = event.target.closest("[data-open-snapshot]");
+    if (snapshot) void openSnapshot(snapshot.dataset.openSnapshot);
+    if (event.target.closest("[data-clear-search]")) { $("#knowledgeSearch").value = ""; renderKnowledge(); }
+    if (event.target.closest("[data-retry-load]")) void loadData();
     if (event.target.closest("[data-close-help]")) closeHelp();
   });
-  $$('[data-knowledge-tab]').forEach((button) => button.addEventListener("click", () => setTab(button.dataset.knowledgeTab)));
+  document.addEventListener("change", (event) => {
+    const checkbox = event.target.closest("[data-select-entity]");
+    if (checkbox) {
+      if (checkbox.checked) state.selectedEntityIds.add(checkbox.dataset.selectEntity); else state.selectedEntityIds.delete(checkbox.dataset.selectEntity);
+      checkbox.closest(".member-row")?.classList.toggle("is-selected", checkbox.checked);
+      updateSelectedCount();
+    }
+  });
+  $$('[data-knowledge-tab]').forEach((button) => button.addEventListener("click", () => setKnowledgeTab(button.dataset.knowledgeTab)));
+  $$('[data-space-tab]').forEach((button) => button.addEventListener("click", () => setSpaceTab(button.dataset.spaceTab)));
   $("#knowledgeSearch").addEventListener("input", renderKnowledge);
+  $("#audienceSource").addEventListener("change", updateAudiencePreview);
+  $$('input[name="targetMode"]').forEach((input) => input.addEventListener("change", updateAudiencePreview));
+  $("#createAudienceSnapshotButton").addEventListener("click", createAudienceSnapshot);
+  $("#selectAllButton").addEventListener("click", () => { state.selectedEntityIds = new Set(state.data.spaceEntities.filter((entity) => entity.status === "active").map((entity) => entity.entityId)); renderMembers(); });
+  $("#clearSelectionButton").addEventListener("click", () => { state.selectedEntityIds.clear(); renderMembers(); });
   $("#refreshButton").addEventListener("click", loadData);
   $("#statusRetryButton").addEventListener("click", () => state.retry?.());
   $("#themeButton").addEventListener("click", () => applyTheme({ system: "light", light: "dark", dark: "system" }[state.theme]));
@@ -426,7 +817,7 @@ function attachEvents() {
   window.addEventListener("online", loadData);
   window.addEventListener("offline", () => {
     setConnection("error", "Браузер не видит сеть");
-    setStatus("warning", "!", "Соединение прервано", "Введённые данные не удалены. После восстановления подключения нажмите «Повторить».", loadData);
+    setStatus("warning", "!", "Соединение прервано", "Введённые данные и текущий выбор не удалены. После восстановления подключения нажмите «Повторить».", loadData);
   });
 }
 
