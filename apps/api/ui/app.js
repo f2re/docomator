@@ -247,7 +247,6 @@ function emptyHtml(meta) {
 
 function renderKnowledge() {
   const root = $("#knowledgeContent");
-  if (state.loading) return;
   const meta = tabs[state.tab];
   const query = $("#knowledgeSearch").value.trim().toLowerCase();
   const items = state.data[state.tab].filter((item) => !query || itemText(item).includes(query));
