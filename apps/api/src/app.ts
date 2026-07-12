@@ -260,7 +260,7 @@ export function buildApp(
   registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
-  registerDocumentIntakeRoutes(app, quarantineRegistry);
+  registerDocumentIntakeRoutes(app, quarantineRegistry, spaceRegistry);
 
   return app;
 }
