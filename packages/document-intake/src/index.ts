@@ -15,3 +15,22 @@ export type {
   IntakePart,
   IntakeSummary
 } from "./intake.js";
+
+export { analyzeOoxmlBuffer } from "./document-ir.js";
+
+export type {
+  AnalyzeOoxmlInput,
+  DocumentAnalysisResult,
+  DocumentStructure,
+  DocumentStructureTotals,
+  DocxDocumentStructure,
+  DocxParagraphElement,
+  DocxPartKind,
+  DocxPartStructure,
+  DocxRunElement,
+  DocxTableLocation,
+  XlsxCellElement,
+  XlsxCellValueKind,
+  XlsxDocumentStructure,
+  XlsxSheetStructure
+} from "./document-ir.js";
