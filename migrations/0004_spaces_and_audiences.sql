@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS space_actor_memberships (
     CHECK (role IN ('owner', 'manager', 'editor', 'viewer')),
   status TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'inactive')),
+  version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   PRIMARY KEY(space_id, actor_id)
@@ -44,15 +45,19 @@ CREATE INDEX IF NOT EXISTS idx_space_actor_memberships_actor
 CREATE TABLE IF NOT EXISTS space_entity_ownership (
   space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE RESTRICT,
   entity_id TEXT NOT NULL UNIQUE REFERENCES entities(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
   assigned_at TEXT NOT NULL,
   assigned_by TEXT,
   PRIMARY KEY(space_id, entity_id)
 );
 
-INSERT OR IGNORE INTO space_entity_ownership(space_id, entity_id, assigned_at, assigned_by)
+INSERT OR IGNORE INTO space_entity_ownership(
+  space_id, entity_id, version, assigned_at, assigned_by
+)
 SELECT
   '00000000-0000-4000-8000-000000000001',
   id,
+  1,
   created_at,
   'migration:0004'
 FROM entities;
@@ -66,10 +71,12 @@ WHEN NOT EXISTS (
   SELECT 1 FROM space_entity_ownership WHERE entity_id = NEW.id
 )
 BEGIN
-  INSERT INTO space_entity_ownership(space_id, entity_id, assigned_at, assigned_by)
-  VALUES (
+  INSERT INTO space_entity_ownership(
+    space_id, entity_id, version, assigned_at, assigned_by
+  ) VALUES (
     '00000000-0000-4000-8000-000000000001',
     NEW.id,
+    1,
     NEW.created_at,
     'trigger:default-space'
   );
