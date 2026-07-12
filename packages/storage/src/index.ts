@@ -1,5 +1,6 @@
 export * from "./audit.js";
 export * from "./database.js";
+export * from "./document-quarantine.js";
 export * from "./json.js";
 export * from "./knowledge.js";
 export * from "./object-store.js";
