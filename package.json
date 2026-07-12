@@ -14,8 +14,8 @@
   },
   "scripts": {
     "clean": "node scripts/ci/clean.mjs",
-    "build": "npm run build -w @docomator/contracts && npm run build -w @docomator/config && npm run build -w @docomator/storage && npm run build -w @docomator/document-intake && npm run build -w @docomator/api && npm run build -w @docomator/worker",
-    "test": "npm run test -w @docomator/contracts && npm run test -w @docomator/config && npm run test -w @docomator/storage && npm run test -w @docomator/document-intake && npm run test -w @docomator/api && npm run test -w @docomator/worker && node --test scripts/runtime/*.test.mjs",
+    "build": "npm run build -w @docomator/contracts && npm run build -w @docomator/config && npm run build -w @docomator/storage && npm run build -w @docomator/document-intake && npm run build -w @docomator/template-compiler && npm run build -w @docomator/api && npm run build -w @docomator/worker",
+    "test": "npm run test -w @docomator/contracts && npm run test -w @docomator/config && npm run test -w @docomator/storage && npm run test -w @docomator/document-intake && npm run test -w @docomator/template-compiler && npm run test -w @docomator/api && npm run test -w @docomator/worker && node --test scripts/runtime/*.test.mjs",
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:shell": "bash scripts/ci/validate-shell.sh",
     "check:ui": "node --check apps/api/ui/app.js && node --check apps/api/ui/document-intake.js && node --check apps/api/ui/document-structure.js",
