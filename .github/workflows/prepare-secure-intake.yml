@@ -1,0 +1,72 @@
+name: Подготовка безопасного приёма документов
+
+on:
+  push:
+    branches:
+      - agent/secure-ooxml-intake
+    paths:
+      - .secure-intake-ready
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: agent/secure-ooxml-intake
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить интеграционные изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-secure-intake-integration.py
+          rm -f scripts/ci/apply-secure-intake-integration.py .secure-intake-ready
+          node --check apps/api/ui/app.js
+          node --check apps/api/ui/document-intake.js
+          bash -n scripts/offline/prepare-bundle.sh
+          bash -n scripts/offline/smoke-test.sh
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Обновить файл зафиксированных зависимостей
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Установить зафиксированные зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить весь репозиторий
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-secure-intake
+        run: npm run migrate
+
+      - name: Зафиксировать готовый этап
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'complete secure DOCX and XLSX intake baseline'
+          git push origin HEAD:agent/secure-ooxml-intake
