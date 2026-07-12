@@ -9,6 +9,10 @@ import type {
 } from "@docomator/contracts";
 import { DocumentIntakeError } from "@docomator/document-intake";
 import {
+  ContentAddressedObjectStore,
+  DocumentQuarantineNotFoundError,
+  DocumentQuarantineRegistry,
+  DocumentQuarantineValidationError,
   KnowledgeConflictError,
   KnowledgeNotFoundError,
   KnowledgeRegistry,
@@ -42,6 +46,7 @@ export interface AppDependencies {
   store?: SqliteStore;
   knowledgeRegistry?: KnowledgeRegistry;
   spaceRegistry?: SpaceRegistry;
+  quarantineRegistry?: DocumentQuarantineRegistry;
   uiDirectory?: string;
 }
 
@@ -70,7 +75,8 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "spaces",
         "space_entity_ownership",
         "audience_groups",
-        "audience_snapshots"
+        "audience_snapshots",
+        "document_quarantine_records"
       ];
       const rows = database
         .prepare(`
@@ -80,7 +86,8 @@ function databaseSchemaReady(store: SqliteStore): boolean {
             AND name IN (
               'schema_migrations', 'entity_types', 'property_definitions',
               'worker_jobs', 'domain_events', 'spaces',
-              'space_entity_ownership', 'audience_groups', 'audience_snapshots'
+              'space_entity_ownership', 'audience_groups', 'audience_snapshots',
+              'document_quarantine_records'
             )
         `)
         .all() as unknown as Array<{ name: string }>;
@@ -102,6 +109,12 @@ export function buildApp(
   const knowledgeRegistry =
     dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
   const spaceRegistry = dependencies.spaceRegistry ?? new SpaceRegistry(store);
+  const quarantineRegistry =
+    dependencies.quarantineRegistry ??
+    new DocumentQuarantineRegistry(
+      store,
+      new ContentAddressedObjectStore(path.join(config.dataDir, "objects"))
+    );
 
   const app = Fastify({
     logger: {
@@ -137,6 +150,14 @@ export function buildApp(
       statusCode = error.statusCode;
       code = error.code;
       message = error.userMessage;
+    } else if (error instanceof DocumentQuarantineValidationError) {
+      statusCode = 400;
+      code = "document_quarantine_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof DocumentQuarantineNotFoundError) {
+      statusCode = 404;
+      code = "document_quarantine_not_found";
+      message = toUserMessage(error);
     } else if (error instanceof KnowledgeValidationError) {
       statusCode = 400;
       code = "knowledge_validation_failed";
@@ -239,7 +260,7 @@ export function buildApp(
   registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
-  registerDocumentIntakeRoutes(app);
+  registerDocumentIntakeRoutes(app, quarantineRegistry);
 
   return app;
 }
