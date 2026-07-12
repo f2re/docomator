@@ -163,8 +163,14 @@ test("trial endpoint compiles, renders, reads back and stores immutable files", 
     });
     assert.equal(compiled.statusCode, 200, compiled.body);
     assert.equal(trial.statusCode, 200, trial.body);
-    assert.match(compiled.headers["content-disposition"] ?? "", /техническая-привязка/u);
-    assert.match(trial.headers["content-disposition"] ?? "", /пробное-заполнение/u);
+    assert.match(
+      decodeURIComponent(compiled.headers["content-disposition"] ?? ""),
+      /техническая-привязка/u
+    );
+    assert.match(
+      decodeURIComponent(trial.headers["content-disposition"] ?? ""),
+      /пробное-заполнение/u
+    );
 
     const compiledEntries = await readOoxmlPackage(compiled.rawPayload);
     const trialEntries = await readOoxmlPackage(trial.rawPayload);
