@@ -15,3 +15,21 @@ export type {
   IntakePart,
   IntakeSummary
 } from "./intake.js";
+
+export {
+  DEFAULT_STRUCTURE_LIMITS,
+  analyzeOoxmlBuffer
+} from "./structure.js";
+
+export type {
+  AnalyzeOoxmlInput,
+  DocumentStructureElement,
+  DocumentStructureLimits,
+  DocumentStructureReport,
+  DocumentStructureSummary,
+  DocxParagraphElement,
+  DocxRunElement,
+  DocxTableLocation,
+  XlsxCellElement,
+  XlsxCellValueKind
+} from "./structure.js";
