@@ -15,6 +15,9 @@ const elements = {
 
 let selectedFile = null;
 let inspecting = false;
+let saving = false;
+let lastReport = null;
+let spaces = [];
 
 function escapeHtml(value) {
   return String(value ?? "").replace(
@@ -37,6 +40,15 @@ function formatBytes(value) {
   return `${(value / 1024 / 1024).toFixed(1)} МБ`;
 }
 
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
+}
+
 function setStatus(kind, icon, title, detail) {
   elements.status.className = `intake-status is-${kind}`;
   elements.statusIcon.textContent = icon;
@@ -50,12 +62,13 @@ function resetResult() {
     <div class="intake-placeholder">
       <span aria-hidden="true">🔎</span>
       <h3>Отчёт появится после проверки</h3>
-      <p>Система покажет структуру пакета, ограничения и замечания. Файл на этом этапе не сохраняется.</p>
+      <p>Система покажет структуру пакета, ограничения и замечания. Файл не сохраняется без отдельного подтверждения.</p>
     </div>`;
 }
 
 function clearSelection() {
   selectedFile = null;
+  lastReport = null;
   elements.input.value = "";
   elements.selected.hidden = true;
   elements.inspectButton.disabled = true;
@@ -75,10 +88,11 @@ function fileExtension(file) {
 }
 
 function selectFile(file) {
-  if (inspecting) return;
+  if (inspecting || saving) return;
   const extension = fileExtension(file);
   if (extension !== "docx" && extension !== "xlsx") {
     selectedFile = null;
+    lastReport = null;
     elements.dropZone.classList.add("is-error");
     setStatus(
       "error",
@@ -94,6 +108,7 @@ function selectFile(file) {
   }
   if (file.size === 0 || file.size > MAX_FILE_BYTES) {
     selectedFile = null;
+    lastReport = null;
     elements.dropZone.classList.add("is-error");
     setStatus(
       "error",
@@ -111,6 +126,7 @@ function selectFile(file) {
   }
 
   selectedFile = file;
+  lastReport = null;
   elements.dropZone.classList.remove("is-error");
   elements.dropZone.classList.add("has-file");
   elements.selected.hidden = false;
@@ -126,7 +142,7 @@ function selectFile(file) {
     "ready",
     "2",
     "Файл готов к проверке",
-    "После нажатия файл будет передан только локальному серверу. Результат проверки не активирует шаблон автоматически."
+    "После нажатия файл будет передан только локальному серверу. Сохранение потребует отдельного подтверждения."
   );
   resetResult();
 }
@@ -143,7 +159,7 @@ function decisionPresentation(decision) {
       kind: "success",
       icon: "✓",
       title: "Структура прошла проверку",
-      detail: "Файл можно передать следующему этапу: построению структуры и разметке полей."
+      detail: "Файл можно сохранить как неизменяемый исходник и затем передать разметке полей."
     };
   }
   if (decision === "accepted_with_warnings") {
@@ -151,7 +167,7 @@ function decisionPresentation(decision) {
       kind: "warning",
       icon: "!",
       title: "Файл принят с замечаниями",
-      detail: "Продолжить можно после просмотра предупреждений и пробного формирования."
+      detail: "Исходник можно сохранить после просмотра предупреждений. Пробное формирование будет обязательным."
     };
   }
   return {
@@ -162,7 +178,163 @@ function decisionPresentation(decision) {
   };
 }
 
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: { accept: "application/json", ...(options.headers || {}) },
+    ...options
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    throw {
+      message: body?.error?.message || `Сервер вернул код ${response.status}.`,
+      operationId:
+        body?.correlationId || response.headers.get("x-correlation-id") || ""
+    };
+  }
+  return body;
+}
+
+async function loadSpaces() {
+  if (spaces.length > 0) return spaces;
+  const body = await fetchJson("/api/v1/spaces?limit=200");
+  spaces = Array.isArray(body.data) ? body.data : [];
+  return spaces;
+}
+
+function renderSavedDocuments(records) {
+  const container = document.querySelector("#documentSourceList");
+  if (!container) return;
+  if (!Array.isArray(records) || records.length === 0) {
+    container.innerHTML = `
+      <div class="quarantine-empty">
+        <span aria-hidden="true">📭</span>
+        <div><strong>В этом пространстве исходников пока нет</strong><p>После подтверждения проверенный файл появится здесь.</p></div>
+      </div>`;
+    return;
+  }
+  container.innerHTML = records
+    .map(
+      (record) => `
+        <article class="quarantine-source">
+          <span class="quarantine-source-icon" aria-hidden="true">${record.format === "docx" ? "📘" : "📗"}</span>
+          <div>
+            <strong>${escapeHtml(record.fileName)}</strong>
+            <p>${record.decision === "accepted" ? "Проверка пройдена" : "Сохранён с замечаниями"} · ${escapeHtml(formatBytes(record.sizeBytes))}</p>
+            <small>Сохранён ${escapeHtml(formatDate(record.createdAt))}</small>
+          </div>
+          <details>
+            <summary>Технические сведения</summary>
+            <code>${escapeHtml(record.sha256)}</code>
+          </details>
+        </article>`
+    )
+    .join("");
+}
+
+async function loadSavedDocuments(spaceId) {
+  const container = document.querySelector("#documentSourceList");
+  if (!container || !spaceId) return;
+  container.innerHTML = `
+    <div class="quarantine-loading" role="status">
+      <span aria-hidden="true">⏳</span><span>Получаем сохранённые исходники…</span>
+    </div>`;
+  try {
+    const body = await fetchJson(
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-sources?limit=50`
+    );
+    renderSavedDocuments(body.data);
+  } catch (error) {
+    container.innerHTML = `
+      <div class="quarantine-empty is-error">
+        <span aria-hidden="true">⚠️</span>
+        <div><strong>Список получить не удалось</strong><p>${escapeHtml(error?.message || "Повторите действие позже.")}</p></div>
+      </div>`;
+  }
+}
+
+async function saveCheckedDocument(report) {
+  if (saving || selectedFile === null || report.decision === "rejected") return;
+  const spaceSelect = document.querySelector("#documentQuarantineSpace");
+  const button = document.querySelector("#documentQuarantineButton");
+  const message = document.querySelector("#documentQuarantineMessage");
+  const spaceId = spaceSelect?.value || "";
+  if (!spaceId) {
+    message.textContent = "Выберите пространство, в котором будет храниться исходник.";
+    return;
+  }
+
+  saving = true;
+  button.disabled = true;
+  spaceSelect.disabled = true;
+  message.className = "quarantine-message is-loading";
+  message.textContent =
+    "Повторно проверяем файл и сохраняем неизменяемую копию. Страницу можно не закрывать.";
+
+  try {
+    const body = await fetchJson(
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-sources/quarantine?fileName=${encodeURIComponent(selectedFile.name)}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": selectedFile.type || "application/octet-stream"
+        },
+        body: selectedFile
+      }
+    );
+    message.className = "quarantine-message is-success";
+    message.innerHTML = `✅ Исходник сохранён. Контрольная сумма: <code>${escapeHtml(body.data.sha256)}</code>. Следующий этап — выбрать изменяемые поля.`;
+    button.textContent = "Исходник сохранён";
+    await loadSavedDocuments(spaceId);
+  } catch (error) {
+    const operationId = typeof error?.operationId === "string" ? error.operationId : "";
+    message.className = "quarantine-message is-error";
+    message.innerHTML = `${escapeHtml(error?.message || "Сохранить исходник не удалось.")}${operationId ? ` Идентификатор операции: <code>${escapeHtml(operationId)}</code>.` : ""}`;
+    button.disabled = false;
+    spaceSelect.disabled = false;
+  } finally {
+    saving = false;
+  }
+}
+
+async function initializeQuarantineControls(report) {
+  const panel = document.querySelector("#documentQuarantinePanel");
+  const spaceSelect = document.querySelector("#documentQuarantineSpace");
+  const button = document.querySelector("#documentQuarantineButton");
+  const message = document.querySelector("#documentQuarantineMessage");
+  if (!panel || !spaceSelect || !button || !message) return;
+
+  try {
+    const availableSpaces = await loadSpaces();
+    if (availableSpaces.length === 0) {
+      panel.classList.add("is-disabled");
+      spaceSelect.disabled = true;
+      button.disabled = true;
+      message.textContent =
+        "Сначала создайте пространство. Исходники всегда хранятся в изолированной области данных.";
+      return;
+    }
+    spaceSelect.innerHTML = availableSpaces
+      .map(
+        (space) =>
+          `<option value="${escapeHtml(space.id)}">${escapeHtml(space.name)}</option>`
+      )
+      .join("");
+    button.addEventListener("click", () => saveCheckedDocument(report));
+    spaceSelect.addEventListener("change", () =>
+      loadSavedDocuments(spaceSelect.value)
+    );
+    await loadSavedDocuments(spaceSelect.value);
+  } catch (error) {
+    panel.classList.add("is-disabled");
+    spaceSelect.disabled = true;
+    button.disabled = true;
+    message.textContent =
+      error?.message || "Не удалось получить пространства. Обновите страницу.";
+  }
+}
+
 function renderReport(report, operationId) {
+  lastReport = report;
   const presentation = decisionPresentation(report.decision);
   setStatus(
     presentation.kind,
@@ -171,22 +343,45 @@ function renderReport(report, operationId) {
     presentation.detail
   );
 
-  const issueHtml = report.issues.length === 0
-    ? `<div class="intake-no-issues"><span aria-hidden="true">✅</span><div><strong>Замечаний нет</strong><p>Обязательные части найдены, небезопасные возможности не обнаружены.</p></div></div>`
-    : `<div class="intake-issues">${report.issues
-        .map(
-          (issue) => `
-            <article class="intake-issue is-${escapeHtml(issue.severity)}">
-              <span class="intake-issue-mark" aria-hidden="true">${issue.severity === "blocker" ? "×" : issue.severity === "warning" ? "!" : "i"}</span>
-              <div>
-                <span class="pill">${escapeHtml(issueSeverityLabel(issue.severity))}</span>
-                <h3>${escapeHtml(issue.title)}</h3>
-                <p>${escapeHtml(issue.message)}</p>
-                ${issue.partName ? `<small>Часть пакета: <code>${escapeHtml(issue.partName)}</code></small>` : ""}
-              </div>
-            </article>`
-        )
-        .join("")}</div>`;
+  const issueHtml =
+    report.issues.length === 0
+      ? `<div class="intake-no-issues"><span aria-hidden="true">✅</span><div><strong>Замечаний нет</strong><p>Обязательные части найдены, небезопасные возможности не обнаружены.</p></div></div>`
+      : `<div class="intake-issues">${report.issues
+          .map(
+            (issue) => `
+              <article class="intake-issue is-${escapeHtml(issue.severity)}">
+                <span class="intake-issue-mark" aria-hidden="true">${issue.severity === "blocker" ? "×" : issue.severity === "warning" ? "!" : "i"}</span>
+                <div>
+                  <span class="pill">${escapeHtml(issueSeverityLabel(issue.severity))}</span>
+                  <h3>${escapeHtml(issue.title)}</h3>
+                  <p>${escapeHtml(issue.message)}</p>
+                  ${issue.partName ? `<small>Часть пакета: <code>${escapeHtml(issue.partName)}</code></small>` : ""}
+                </div>
+              </article>`
+          )
+          .join("")}</div>`;
+
+  const quarantineHtml =
+    report.decision === "rejected"
+      ? ""
+      : `
+        <section class="intake-quarantine-card" id="documentQuarantinePanel">
+          <div class="quarantine-heading">
+            <span aria-hidden="true">🔒</span>
+            <div>
+              <strong>Сохранить проверенный исходник</strong>
+              <p>Сохранение выполняется только после вашего подтверждения. Копия будет неизменяемой и доступной только в выбранном пространстве.</p>
+            </div>
+          </div>
+          <div class="quarantine-form">
+            <label for="documentQuarantineSpace">Пространство</label>
+            <select id="documentQuarantineSpace" aria-describedby="documentQuarantineMessage"><option>Получаем список…</option></select>
+            <button class="primary-button" id="documentQuarantineButton" type="button">Сохранить исходник</button>
+          </div>
+          <p class="quarantine-message" id="documentQuarantineMessage">После сохранения система покажет контрольную сумму и безопасный следующий шаг.</p>
+          <div class="quarantine-list-heading"><strong>Сохранённые исходники пространства</strong><small>Повторная загрузка того же файла не создаёт дубликат.</small></div>
+          <div id="documentSourceList" class="quarantine-source-list" aria-live="polite"></div>
+        </section>`;
 
   elements.result.innerHTML = `
     <article class="intake-report is-${escapeHtml(presentation.kind)}">
@@ -205,6 +400,7 @@ function renderReport(report, operationId) {
         <div><strong>${report.summary.externalRelationships}</strong><span>внешних связей</span></div>
       </div>
       ${issueHtml}
+      ${quarantineHtml}
       <details class="intake-technical">
         <summary>Технические сведения</summary>
         <dl>
@@ -216,11 +412,16 @@ function renderReport(report, operationId) {
         </dl>
       </details>
     </article>`;
+
+  if (report.decision !== "rejected") {
+    void initializeQuarantineControls(report);
+  }
 }
 
 async function inspectSelectedFile() {
-  if (selectedFile === null || inspecting) return;
+  if (selectedFile === null || inspecting || saving) return;
   inspecting = true;
+  lastReport = null;
   elements.inspectButton.disabled = true;
   elements.clearButton.disabled = true;
   setStatus(
@@ -236,32 +437,24 @@ async function inspectSelectedFile() {
     </div>`;
 
   try {
-    const response = await fetch(
+    const body = await fetchJson(
       `/api/v1/document-intake/inspect?fileName=${encodeURIComponent(selectedFile.name)}`,
       {
         method: "POST",
         headers: {
-          accept: "application/json",
           "content-type": selectedFile.type || "application/octet-stream"
         },
         body: selectedFile
       }
     );
-    const body = await response.json();
-    if (!response.ok) {
-      throw {
-        message: body?.error?.message || `Сервер вернул код ${response.status}.`,
-        operationId:
-          body?.correlationId || response.headers.get("x-correlation-id") || ""
-      };
-    }
     renderReport(body.data, body.correlationId);
   } catch (error) {
     const message =
       typeof error?.message === "string"
         ? error.message
         : "Не удалось проверить файл. Повторите действие.";
-    const operationId = typeof error?.operationId === "string" ? error.operationId : "";
+    const operationId =
+      typeof error?.operationId === "string" ? error.operationId : "";
     setStatus(
       "error",
       "!",
@@ -289,7 +482,7 @@ if (Object.values(elements).every((element) => element !== null)) {
   elements.clearButton.addEventListener("click", clearSelection);
   elements.dropZone.addEventListener("dragover", (event) => {
     event.preventDefault();
-    if (!inspecting) elements.dropZone.classList.add("is-dragging");
+    if (!inspecting && !saving) elements.dropZone.classList.add("is-dragging");
   });
   elements.dropZone.addEventListener("dragleave", () => {
     elements.dropZone.classList.remove("is-dragging");
