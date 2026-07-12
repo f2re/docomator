@@ -22,16 +22,33 @@ jobs:
           show-progress: false
 
       - name: Применить интеграционные изменения
+        id: apply
+        continue-on-error: true
         shell: bash
         run: |
-          set -Eeuo pipefail
-          python3 scripts/ci/apply-secure-intake-integration.py
-          rm -f scripts/ci/apply-secure-intake-integration.py
-          node --check apps/api/ui/app.js
-          node --check apps/api/ui/document-intake.js
-          bash -n scripts/offline/prepare-bundle.sh
-          bash -n scripts/offline/smoke-test.sh
-          git diff --check
+          set -o pipefail
+          {
+            python3 scripts/ci/apply-secure-intake-integration.py
+            rm -f scripts/ci/apply-secure-intake-integration.py
+            node --check apps/api/ui/app.js
+            node --check apps/api/ui/document-intake.js
+            bash -n scripts/offline/prepare-bundle.sh
+            bash -n scripts/offline/smoke-test.sh
+            git diff --check
+          } 2>&1 | tee secure-intake-apply.log
+
+      - name: Сохранить журнал интеграции
+        if: steps.apply.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: secure-intake-apply
+          path: secure-intake-apply.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Остановиться после ошибки интеграции
+        if: steps.apply.outcome == 'failure'
+        run: exit 1
 
       - name: Определить версию Node.js
         id: node
