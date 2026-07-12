@@ -16,12 +16,13 @@ Roadmap отражает статус реализации, но не замен
 | M0 Repository bootstrap | 🟡 | runnable API/worker, schema, docs, Codex agents, offline scripts |
 | M1 Persistence kernel | ✅ | transactions, typed values, object storage, queue, outbox, audit, Knowledge API, backup/restore |
 | M1.5 Guided UI foundation | 🟡 | offline shell, Knowledge UI, состояния, помощь, adaptive/accessibility baseline |
+| M1.6 Spaces and audiences | ✅ | изоляция, группы, immutable snapshots, aggregate/per-member target plans |
 | M2 Secure OOXML intake | ⬜ | upload, security checks, DOCX/XLSX Document IR |
-| M3 Template compiler | ⬜ | content controls, defined names, Safe Scalar render |
-| M4 Manual workflow/UI | ⬜ | catalog, forms, review, download, RBAC |
+| M3 Template compiler | ⬜ | content controls, defined names, Safe Scalar и aggregate repeat render |
+| M4 Manual workflow/UI | ⬜ | catalog, audience, forms, review, download, RBAC |
 | M5 Local LLM agents | ⬜ | mapping, extraction, formatting, evaluation |
 | M6 Structured/generated docs | ⬜ | repeats, rich text, letters, reviews, packages |
-| M7 Automation engine | ⬜ | schedule, events, idempotency, review queue |
+| M7 Automation engine | ⬜ | schedule, events, space-scoped audiences, idempotency, review queue |
 | M8 Delivery/operations | ⬜ | SMTP, network folders, metrics, retention |
 | M9 Pilot hardening | ⬜ | real templates, security, recovery, RC |
 
@@ -60,7 +61,6 @@ Roadmap отражает статус реализации, но не замен
 - [x] Atomic restore with pre-restore rollback
 - [x] Backup and restore integration tests
 
-
 ## M1.5 Guided UI checklist
 
 - [x] Offline UI shell без CDN и внешних шрифтов
@@ -68,7 +68,8 @@ Roadmap отражает статус реализации, но не замен
 - [x] Светлая, тёмная и системная темы
 - [x] Status ribbon, toast, help drawer и guided dialogs
 - [x] Loading, empty, success, warning, error, degraded и planned states
-- [x] Knowledge Registry UI для типов, свойств и сущностей
+- [x] Knowledge Registry UI для типов и свойств
+- [x] Пространства, участники, группы и audience planning UI
 - [x] Correlation ID и сохранение формы при ошибке
 - [x] Keyboard, visible focus, reduced motion и 320 px baseline
 - [x] Основное ТЗ и отдельное UX/UI ТЗ
@@ -76,9 +77,28 @@ Roadmap отражает статус реализации, но не замен
 - [ ] Notification center для персистентных фоновых операций
 - [ ] User testing на сценариях Template Studio и document workflow
 
+## M1.6 Spaces and audiences checklist
+
+- [x] Изолированные spaces и deterministic default space
+- [x] Actor memberships и роли `owner`, `manager`, `editor`, `viewer`
+- [x] Ровно одно пространство для конкретной сущности
+- [x] Именованные ordered groups
+- [x] Выбор всех активных, группы или отмеченных сущностей
+- [x] Immutable audience snapshots
+- [x] `one_per_member` target plan
+- [x] `aggregate` target plan с `audience.members`
+- [x] Same-space guards в API и SQLite
+- [x] Outbox, audit и correlation ID для мутаций
+- [x] Storage и API integration tests
+- [x] Guided UI с точным прогнозом количества документов
+- [x] First-run helper для автономной установки
+- [ ] DOCX/XLSX repeat renderer — M3/M6
+- [ ] Создание document jobs из target plan — M4
+- [ ] Применение actor memberships в IAM/RBAC — M4
+
 ## Следующий приоритет
 
-M2 начинается с безопасного intake без LLM:
+M2 начинается с безопасного intake без LLM и сразу учитывает уже готовую аудиторию:
 
 1. лимиты и проверка ZIP/OOXML;
 2. запрет path traversal и external relationships;
@@ -86,7 +106,8 @@ M2 начинается с безопасного intake без LLM:
 4. DOCX/XLSX Document IR;
 5. детерминированные кандидаты вариативных полей;
 6. fixtures и negative security tests;
-7. guided progress: приём файла → проверка → compatibility report → следующий безопасный шаг.
+7. guided progress: приём файла → проверка → compatibility report → следующий безопасный шаг;
+8. manifest binding повторяющейся таблицы/списка к `audience.members`.
 
 ## Decision gates
 
@@ -102,9 +123,9 @@ M2 начинается с безопасного intake без LLM:
 
 ## Release line
 
-- `0.1.x` — platform/bootstrap and deterministic kernel;
-- `0.2.x` — Template Studio and Safe Scalar rendering;
-- `0.3.x` — manual workflow and local LLM agents;
+- `0.1.x` — platform/bootstrap, deterministic kernel, spaces и audiences;
+- `0.2.x` — Template Studio и Safe Scalar/aggregate rendering;
+- `0.3.x` — manual workflow и local LLM agents;
 - `0.4.x` — structured/generated documents;
-- `0.5.x` — automation and delivery;
-- `1.0.0` — pilot acceptance and production baseline.
+- `0.5.x` — automation и delivery;
+- `1.0.0` — pilot acceptance и production baseline.
