@@ -8,6 +8,7 @@ const files = [
   "apps/api/ui/index.html",
   "apps/api/ui/app.js",
   "apps/api/ui/document-intake.js",
+  "apps/api/ui/document-structure.js",
   "apps/api/src/user-message.ts",
   "scripts/offline/first-run.sh"
 ];

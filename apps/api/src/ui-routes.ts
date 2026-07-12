@@ -22,7 +22,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
   },
   "/ui/styles.css": {
     fileName: "styles.css",
-    appendFileNames: ["spaces.css", "intake.css", "quarantine.css"],
+    appendFileNames: ["spaces.css", "intake.css", "quarantine.css", "structure.css"],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
   },
@@ -33,6 +33,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
   },
   "/ui/document-intake.js": {
     fileName: "document-intake.js",
+    appendFileNames: ["document-structure.js"],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
   },
