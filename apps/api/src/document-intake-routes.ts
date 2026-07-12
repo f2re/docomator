@@ -51,10 +51,11 @@ export function registerDocumentIntakeRoutes(app: FastifyInstance): void {
       }
     },
     async (request, reply) => {
+      const mediaType = request.headers["content-type"];
       const report = await inspectOoxmlBuffer({
         buffer: request.body,
         fileName: request.query.fileName,
-        mediaType: request.headers["content-type"]
+        ...(mediaType === undefined ? {} : { mediaType })
       });
       reply.header("cache-control", "no-store");
       return responseEnvelope(request, report);
