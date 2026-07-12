@@ -1,29 +1,51 @@
-name: Run one-time spaces documentation patch
-# Triggered once after the workflow became active on main.
+name: Finalize merged spaces and audiences increment
 
 on:
   push:
     branches:
       - main
-    paths:
-      - .github/workflows/run-spaces-docs-patch.yml
 
 permissions:
   contents: write
 
 jobs:
-  patch:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout feature branch
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: agent/spaces-audience-targeting
+          ref: main
           fetch-depth: 0
 
-      - name: Normalize and apply reviewed patch
+      - name: Detect pending spaces patch
+        id: pending
+        shell: bash
+        run: |
+          if [[ -f scripts/ci/apply-spaces-docs.py ]]; then
+            echo 'value=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'value=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Read Node.js version
+        if: steps.pending.outputs.value == 'true'
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: steps.pending.outputs.value == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Apply reviewed requirements, plan, README, and installer updates
+        if: steps.pending.outputs.value == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -42,7 +64,80 @@ jobs:
           target.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
           PY
           python3 scripts/ci/apply-spaces-docs.py
-          rm -f scripts/ci/apply-spaces-docs.py
+          rm -f scripts/ci/apply-spaces-docs.py .spaces-docs-ready
+          chmod 0755 scripts/offline/first-run.sh
+
+          rm -f \
+            .github/workflows/apply-spaces-docs-pr-v2.yml \
+            .github/workflows/run-spaces-docs-patch.yml
+
+          cat > .github/workflows/ci.yml <<'YAML'
+          name: CI
+
+          on:
+            pull_request:
+            push:
+              branches:
+                - main
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: ci-${{ github.workflow }}-${{ github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            verify:
+              name: Build, test, docs, and shell
+              runs-on: ubuntu-24.04
+              timeout-minutes: 20
+
+              steps:
+                - name: Checkout
+                  uses: actions/checkout@v4
+
+                - name: Read Node.js version
+                  id: node
+                  shell: bash
+                  run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+                - name: Set up Node.js
+                  uses: actions/setup-node@v4
+                  with:
+                    node-version: ${{ steps.node.outputs.version }}
+                    cache: npm
+
+                - name: Install locked dependencies
+                  run: npm ci --ignore-scripts --no-audit --no-fund
+
+                - name: Verify repository
+                  id: repository_check
+                  continue-on-error: true
+                  shell: bash
+                  run: |
+                    set -o pipefail
+                    npm run check 2>&1 | tee repository-check.log
+
+                - name: Upload repository-check diagnostic
+                  if: steps.repository_check.outcome == 'failure'
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: repository-check-diagnostic
+                    path: repository-check.log
+                    if-no-files-found: error
+                    retention-days: 3
+
+                - name: Stop after failed repository check
+                  if: steps.repository_check.outcome == 'failure'
+                  run: exit 1
+
+                - name: Smoke-test migration on a fresh database
+                  env:
+                    DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-data
+                  run: npm run migrate
+          YAML
+
           node --check apps/api/ui/app.js
           bash -n scripts/offline/first-run.sh
           bash -n scripts/offline/prepare-bundle.sh
@@ -50,11 +145,18 @@ jobs:
           bash -n scripts/offline/smoke-test.sh
           git diff --check
 
-      - name: Refresh lockfile
+      - name: Refresh lockfile and run the complete repository check
+        if: steps.pending.outputs.value == 'true'
         shell: bash
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+        run: |
+          set -Eeuo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          DOCOMATOR_DATA_DIR="$RUNNER_TEMP/docomator-spaces" npm run migrate
 
-      - name: Commit and push feature branch
+      - name: Commit finalized increment to main
+        if: steps.pending.outputs.value == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -62,5 +164,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
           git diff --cached --check
-          git commit -m 'document spaces audiences and first-run flow'
-          git push origin HEAD:agent/spaces-audience-targeting
+          git commit -m 'finalize spaces audiences docs and first-run helper'
+          git push origin HEAD:main
