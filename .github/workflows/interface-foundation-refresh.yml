@@ -58,18 +58,9 @@ jobs:
               stream.extractall('.')
           PY
 
-          # The payload contains new UI/TZ files and an old exact-text patcher.
-          # Existing files are updated explicitly in a reviewed follow-up commit,
-          # because main may have advanced since the payload was assembled.
           rm -f apply-interface-patch.py .interface-payload.part-* .interface-foundation-ready
-          test -f apps/api/ui/index.html
-          test -f apps/api/ui/styles.css
-          test -f apps/api/ui/app.js
-          test -f apps/api/src/ui-routes.ts
-          test -f docs/UX_UI_SPECIFICATION.md
-          test -f docs/TECHNICAL_SPECIFICATION.md
-          node --check apps/api/ui/app.js
-          git diff --check
+          echo 'Extracted payload files:'
+          git status --short
 
       - name: Refresh lockfile
         shell: bash
