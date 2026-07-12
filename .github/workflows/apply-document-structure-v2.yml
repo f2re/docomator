@@ -1,0 +1,85 @@
+name: Завершить структурное представление документов
+
+on:
+  push:
+    branches:
+      - agent/document-structure
+    paths:
+      - .apply-document-structure-v2
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: agent/document-structure
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Развернуть код структурного представления
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf /tmp/docomator-structure-update
+          mkdir -p /tmp/docomator-structure-update
+          cat .structure-payload.part-* | base64 --decode > /tmp/docomator-structure-update.tar.gz
+          tar -xzf /tmp/docomator-structure-update.tar.gz -C /tmp/docomator-structure-update
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/docomator-structure-update/apply.py')
+          source = path.read_text(encoding='utf-8')
+          needle = '            patch_docs(repo)\n'
+          if needle not in source:
+              raise SystemExit('Не найден вызов обновления документации')
+          path.write_text(
+              source.replace(
+                  needle,
+                  '            # Документация обновляется отдельно после проверки кода.\n',
+                  1,
+              ),
+              encoding='utf-8',
+          )
+          PY
+          python3 /tmp/docomator-structure-update/apply.py
+          rm -f .structure-payload.part-* .apply-document-structure .apply-document-structure-v2
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зафиксированные зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить весь репозиторий
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-document-structure
+        run: npm run migrate
+
+      - name: Зафиксировать проверенный код
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all -- . ':(exclude).github/workflows/**'
+          git diff --cached --check
+          git commit -m 'add deterministic DOCX and XLSX structure analysis'
+          git push origin HEAD:agent/document-structure
