@@ -2,7 +2,7 @@
   "name": "docomator",
   "version": "0.1.0-alpha.0",
   "private": true,
-  "description": "Offline-first AI-assisted document automation platform for DOCX and XLSX.",
+  "description": "Автономная платформа формирования и автоматизации документов DOCX и XLSX с локальной поддержкой ИИ.",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -19,7 +19,8 @@
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:shell": "bash scripts/ci/validate-shell.sh",
     "check:ui": "node --check apps/api/ui/app.js",
-    "check": "npm run clean && npm run build && npm run test && npm run check:docs && npm run check:shell && npm run check:ui",
+    "check:language": "node scripts/ci/check-user-facing-language.mjs",
+    "check": "npm run clean && npm run build && npm run test && npm run check:docs && npm run check:shell && npm run check:ui && npm run check:language",
     "start:api": "node apps/api/dist/server.js",
     "start:worker": "node apps/worker/dist/main.js",
     "migrate": "node scripts/runtime/migrate.mjs",

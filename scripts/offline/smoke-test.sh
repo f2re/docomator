@@ -57,7 +57,7 @@ COMMON_ARGS=(
   --no-systemd
 )
 
-info "Running first offline installation"
+info "Выполняем первую автономную установку"
 "$BUNDLE_ROOT/install.sh" "${COMMON_ARGS[@]}"
 
 [[ -L "$INSTALL_ROOT/current" ]] || die "current symlink was not created"
@@ -89,17 +89,28 @@ for _ in $(seq 1 30); do
 done
 ((READY == 1)) || {
   cat "$TEST_ROOT/api.log" >&2 || true
-  die "Bundled API did not become ready"
+  die "Встроенная служба API не перешла в состояние готовности"
 }
+
+curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/" \
+  | grep -F 'Пространства' >/dev/null
+curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces?limit=10" \
+  | grep -F 'Основное пространство' >/dev/null
+"$INSTALL_ROOT/current/first-run.sh" \
+  --url "http://127.0.0.1:${DOCOMATOR_PORT}" \
+  --check \
+  | grep -F 'Первый запуск' >/dev/null
 
 kill "$API_PID"
 wait "$API_PID" 2>/dev/null || true
 API_PID=""
 
-info "Running offline update path with the same immutable release"
+info "Проверяем автономное обновление той же неизменяемой версии"
 "$BUNDLE_ROOT/update.sh" "${COMMON_ARGS[@]}"
 
 BACKUP_COUNT="$(find "$DATA_DIR/backups" -mindepth 1 -maxdepth 1 -type d | wc -l)"
 ((BACKUP_COUNT >= 1)) || die "Update did not create a pre-update backup"
 
-info "Offline install/update smoke test passed"
+info "Проверка автономной установки и обновления пройдена"

@@ -101,12 +101,12 @@
 
           <div class="two-column-grid">
             <article class="panel">
-              <div class="panel-heading"><div><p class="eyebrow">Два режима результата</p><h2>Что сформирует система</h2></div><span class="pill pill-success">Контракт готов</span></div>
+              <div class="panel-heading"><div><p class="eyebrow">Два режима результата</p><h2>Что сформирует система</h2></div><span class="pill pill-success">Логика готова</span></div>
               <ul class="readiness-list">
-                <li><span class="readiness-icon success">1</span><div><strong>По документу на каждого</strong><p>Для N выбранных людей создаётся N независимых заданий с собственным `subject`.</p></div></li>
-                <li><span class="readiness-icon success">1</span><div><strong>Один сводный документ</strong><p>Создаётся одно задание, а список доступен шаблону как `audience.members` для таблицы или перечня.</p></div></li>
+                <li><span class="readiness-icon success">1</span><div><strong>По документу на каждого</strong><p>Для каждого выбранного человека создаётся отдельное задание со своим основным участником.</p></div></li>
+                <li><span class="readiness-icon success">1</span><div><strong>Один сводный документ</strong><p>Создаётся одно задание, а шаблон получает упорядоченный список участников для таблицы или перечня.</p></div></li>
                 <li><span class="readiness-icon success">✓</span><div><strong>Неизменяемый состав</strong><p>После запуска снимок участников не меняется, даже если группу отредактировали позже.</p></div></li>
-                <li><span class="readiness-icon planned">2</span><div><strong>Рендер DOCX/XLSX</strong><p>Подключение списка к повторяющейся таблице реализуется в Template Compiler.</p></div></li>
+                <li><span class="readiness-icon planned">2</span><div><strong>Формирование DOCX/XLSX</strong><p>Подключение списка к повторяющейся таблице будет реализовано в компиляторе шаблонов.</p></div></li>
               </ul>
             </article>
             <article class="panel help-preview">
@@ -129,7 +129,7 @@
 
           <div class="workspace-layout">
             <aside class="workspace-list-panel" aria-label="Список пространств">
-              <div class="list-panel-heading"><strong>Пространства</strong><small>Выберите рабочий контекст</small></div>
+              <div class="list-panel-heading"><strong>Пространства</strong><small>Выберите текущую область данных</small></div>
               <div id="spaceList" class="workspace-list" aria-live="polite"></div>
             </aside>
 
@@ -168,11 +168,11 @@
 
               <section class="space-pane" data-space-pane="audience">
                 <article class="panel audience-builder">
-                  <div class="panel-heading"><div><p class="eyebrow">Предварительный план</p><h2>Для кого формировать документ?</h2><p>Сейчас система фиксирует состав и строит исполнимый план. Сам DOCX/XLSX будет создан после подключения Template Compiler.</p></div><span class="large-emoji" aria-hidden="true">📋</span></div>
+                  <div class="panel-heading"><div><p class="eyebrow">Предварительный план</p><h2>Для кого формировать документ?</h2><p>Сейчас система фиксирует состав и строит исполнимый план. Сам DOCX/XLSX будет создан после подключения компилятора шаблонов.</p></div><span class="large-emoji" aria-hidden="true">📋</span></div>
                   <div class="audience-form-grid">
                     <div class="field"><label for="audienceSource">Источник участников</label><select id="audienceSource"></select><small>Все активные участники, сохранённая группа или отмеченные вручную.</small></div>
                     <fieldset class="mode-fieldset"><legend>Форма результата</legend>
-                      <label class="mode-card"><input type="radio" name="targetMode" value="aggregate" checked /><span aria-hidden="true">📋</span><strong>Один общий документ</strong><small>Таблица или список всех выбранных людей через <code>audience.members</code>.</small></label>
+                      <label class="mode-card"><input type="radio" name="targetMode" value="aggregate" checked /><span aria-hidden="true">📋</span><strong>Один общий документ</strong><small>Таблица или список всех выбранных людей.</small></label>
                       <label class="mode-card"><input type="radio" name="targetMode" value="one_per_member" /><span aria-hidden="true">📄</span><strong>По документу на каждого</strong><small>Отдельное задание и собственный контекст для каждого участника.</small></label>
                     </fieldset>
                   </div>
@@ -184,7 +184,7 @@
               </section>
 
               <section class="space-pane" data-space-pane="access">
-                <div class="panel-heading compact-heading"><div><h2>Доступ к пространству</h2><p>Это технические пользователи приложения. Роли будут применяться IAM-слоем до публикации сервиса в общей сети.</p></div><button class="primary-button" type="button" data-create="space-access">Добавить доступ</button></div>
+                <div class="panel-heading compact-heading"><div><h2>Доступ к пространству</h2><p>Это пользователи приложения. Права будут проверяться модулем управления доступом до публикации службы в общей сети.</p></div><button class="primary-button" type="button" data-create="space-access">Добавить доступ</button></div>
                 <div id="spaceAccess" class="access-list" aria-live="polite"></div>
               </section>
             </div>
@@ -202,15 +202,15 @@
         </section>
 
         <section class="view" data-view="templates" aria-labelledby="templates-heading">
-          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">📄</span><span class="pill">Этап M2–M3</span><h2 id="templates-heading">Шаблон сможет повторить строку для каждого участника</h2><p>Template Studio свяжет повторяющуюся таблицу или список с коллекцией <code>audience.members</code>. До готовности безопасного OOXML intake файлы не принимаются.</p><div class="planned-details"><div><strong>Сводный документ</strong><span>Одна таблица с ФИО, должностью и другими выбранными свойствами.</span></div><div><strong>Индивидуальный комплект</strong><span>Один и тот же шаблон запускается отдельно для каждого участника.</span></div></div><button class="secondary-button" type="button" data-view-target="spaces">Подготовить аудиторию</button></div>
+          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">📄</span><span class="pill">Этап M2–M3</span><h2 id="templates-heading">Шаблон сможет повторить строку для каждого участника</h2><p>Студия шаблонов свяжет повторяющуюся таблицу или список с выбранными участниками. До готовности безопасного приёма DOCX/XLSX файлы не принимаются.</p><div class="planned-details"><div><strong>Сводный документ</strong><span>Одна таблица с ФИО, должностью и другими выбранными свойствами.</span></div><div><strong>Индивидуальный комплект</strong><span>Один и тот же шаблон запускается отдельно для каждого участника.</span></div></div><button class="secondary-button" type="button" data-view-target="spaces">Подготовить аудиторию</button></div>
         </section>
 
         <section class="view" data-view="documents" aria-labelledby="documents-heading">
-          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">✨</span><span class="pill">Этап M4</span><h2 id="documents-heading">Создание документов будет начинаться с аудитории</h2><p>Пошаговый flow покажет пространство, источник участников, точный состав, режим результата, найденные данные, preview и подтверждение.</p><div class="flow-preview"><span>1. Пространство</span><i>→</i><span>2. Аудитория</span><i>→</i><span>3. Данные</span><i>→</i><span>4. Проверка</span><i>→</i><span>5. Готово</span></div></div>
+          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">✨</span><span class="pill">Этап M4</span><h2 id="documents-heading">Создание документов будет начинаться с аудитории</h2><p>Пошаговый процесс покажет пространство, источник участников, точный состав, форму результата, найденные данные, предварительный просмотр и подтверждение.</p><div class="flow-preview"><span>1. Пространство</span><i>→</i><span>2. Аудитория</span><i>→</i><span>3. Данные</span><i>→</i><span>4. Проверка</span><i>→</i><span>5. Готово</span></div></div>
         </section>
 
         <section class="view" data-view="automations" aria-labelledby="automations-heading">
-          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">⏱️</span><span class="pill">Этап M7</span><h2 id="automations-heading">Правило автоматизации будет привязано к пространству</h2><p>Запуск сможет выбрать всех активных участников, именованную группу или вычисленную выборку, затем создать один сводный документ либо документы по каждому.</p><div class="planned-details"><div><strong>Без смешивания данных</strong><span>Правило не сможет получить участника из другого пространства.</span></div><div><strong>Воспроизводимый запуск</strong><span>Перед рендером создаётся неизменяемый снимок аудитории.</span></div></div></div>
+          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">⏱️</span><span class="pill">Этап M7</span><h2 id="automations-heading">Правило автоматизации будет привязано к пространству</h2><p>Запуск сможет выбрать всех активных участников, именованную группу или вычисленную выборку, затем создать один сводный документ либо документы по каждому.</p><div class="planned-details"><div><strong>Без смешивания данных</strong><span>Правило не сможет получить участника из другого пространства.</span></div><div><strong>Воспроизводимый запуск</strong><span>Перед формированием создаётся неизменяемый снимок состава.</span></div></div></div>
         </section>
       </main>
 
@@ -222,7 +222,7 @@
       </nav>
     </div>
 
-    <aside class="help-drawer" id="helpDrawer" aria-labelledby="helpTitle" aria-hidden="true"><div class="drawer-backdrop" data-close-help></div><div class="drawer-panel" role="dialog" aria-modal="true"><header><div><p class="eyebrow">Контекстная помощь</p><h2 id="helpTitle">Что здесь можно сделать?</h2></div><button class="icon-button" type="button" data-close-help aria-label="Закрыть помощь">×</button></header><div id="helpContent" class="help-content"></div><footer><p>При ошибке сохраните correlation ID — он поможет найти точную операцию в журнале.</p></footer></div></aside>
+    <aside class="help-drawer" id="helpDrawer" aria-labelledby="helpTitle" aria-hidden="true"><div class="drawer-backdrop" data-close-help></div><div class="drawer-panel" role="dialog" aria-modal="true"><header><div><p class="eyebrow">Контекстная помощь</p><h2 id="helpTitle">Что здесь можно сделать?</h2></div><button class="icon-button" type="button" data-close-help aria-label="Закрыть помощь">×</button></header><div id="helpContent" class="help-content"></div><footer><p>При ошибке сохраните идентификатор операции — он поможет найти точную операцию в журнале.</p></footer></div></aside>
 
     <dialog class="create-dialog" id="createDialog" aria-labelledby="dialogTitle"><form method="dialog" id="createForm" novalidate><header class="dialog-header"><div><p class="eyebrow" id="dialogEyebrow">Новая запись</p><h2 id="dialogTitle">Создать</h2><p id="dialogDescription"></p></div><button class="icon-button" type="button" id="dialogCloseButton" aria-label="Закрыть">×</button></header><div class="dialog-body" id="dialogFields"></div><div class="form-error" id="formError" role="alert" hidden></div><footer class="dialog-footer"><p class="save-explanation" id="saveExplanation">Изменение появится после подтверждения локального сервера.</p><div><button class="secondary-button" type="button" id="dialogCancelButton">Отмена</button><button class="primary-button" type="submit" id="dialogSubmitButton">Сохранить</button></div></footer></form></dialog>
 

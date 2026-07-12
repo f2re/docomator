@@ -23,13 +23,13 @@ FORCE=0
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/offline/prepare-bundle.sh [options]
+Использование: scripts/offline/prepare-bundle.sh [параметры]
 
-Builds a self-contained offline release bundle on a connected reference host.
-The build host should use the same CPU architecture and a compatible glibc as
-the target Debian/Astra Linux server.
+Создаёт самодостаточный автономный комплект на подключённом эталонном сервере.
+Сервер подготовки должен иметь ту же архитектуру процессора и совместимую glibc,
+что и целевой сервер Debian/Astra Linux.
 
-Options:
+Параметры:
   --version VERSION            Release version (default: VERSION file)
   --output DIR                 Output directory
   --node-version VERSION       Official Node.js version to download
@@ -65,7 +65,7 @@ while (($# > 0)); do
     --skip-tests) SKIP_TESTS=1; shift ;;
     --force) FORCE=1; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) die "Unknown option: $1" ;;
+    *) die "Неизвестный параметр: $1" ;;
   esac
 done
 
@@ -78,14 +78,14 @@ require_command xargs
 case "$TARGET_ARCH" in
   x86_64|amd64) NODE_ARCH="x64" ;;
   aarch64|arm64) NODE_ARCH="arm64" ;;
-  *) die "Unsupported target architecture: $TARGET_ARCH" ;;
+  *) die "Неподдерживаемая целевая архитектура: $TARGET_ARCH" ;;
 esac
 
 if ((WITHOUT_LLM == 0)); then
   [[ -n "$LLAMA_SERVER" && -n "$MODEL_FILE" ]] || die \
-    "Provide both --llama-server and --model, or explicitly pass --without-llm."
-  [[ -x "$LLAMA_SERVER" || -f "$LLAMA_SERVER" ]] || die "llama-server not found: $LLAMA_SERVER"
-  [[ -f "$MODEL_FILE" ]] || die "GGUF model not found: $MODEL_FILE"
+    "Укажите одновременно --llama-server и --model либо явно используйте --without-llm."
+  [[ -x "$LLAMA_SERVER" || -f "$LLAMA_SERVER" ]] || die "Не найден llama-server: $LLAMA_SERVER"
+  [[ -f "$MODEL_FILE" ]] || die "Не найдена модель GGUF: $MODEL_FILE"
 fi
 
 OUTPUT_DIR="$(mkdir -p "$OUTPUT_DIR" && absolute_path "$OUTPUT_DIR")"
@@ -195,7 +195,7 @@ if [[ -n "$OS_PACKAGES_DIR" ]]; then
   cp -a "$OS_PACKAGES_DIR/." "$BUNDLE_DIR/payload/os-packages/"
 fi
 
-info "Installing production-only npm dependencies into the payload"
+info "Устанавливаем только рабочие зависимости npm в комплект"
 (
   cd "$BUNDLE_DIR/payload/app"
   PATH="$BUNDLE_DIR/payload/runtime/node/bin:$PATH" \
@@ -209,6 +209,7 @@ cp "$SCRIPT_DIR/lib.sh" \
   "$SCRIPT_DIR/update.sh" \
   "$SCRIPT_DIR/backup.sh" \
   "$SCRIPT_DIR/restore.sh" \
+  "$SCRIPT_DIR/first-run.sh" \
   "$SCRIPT_DIR/healthcheck.mjs" \
   "$BUNDLE_DIR/"
 chmod 0755 "$BUNDLE_DIR"/*.sh "$BUNDLE_DIR/healthcheck.mjs"
@@ -254,4 +255,4 @@ EOF_JSON
 "$BUNDLE_DIR/verify-bundle.sh" "$BUNDLE_DIR"
 
 tar -czf "$ARCHIVE_PATH" -C "$OUTPUT_DIR" "$BUNDLE_NAME"
-info "Offline bundle created: $ARCHIVE_PATH"
+info "Автономный комплект создан: $ARCHIVE_PATH"

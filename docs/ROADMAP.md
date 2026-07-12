@@ -1,131 +1,144 @@
-# Roadmap Docomator
+# План развития Docomator
 
-Roadmap отражает статус реализации, но не заменяет [требования](REQUIREMENTS.md).
+План развития отражает состояние реализации, но не заменяет [нормативные требования](REQUIREMENTS.md).
 
 ## Обозначения
 
 - ✅ завершено и проверено;
-- 🟡 выполняется или доступен ограниченный bootstrap;
+- 🟡 выполняется или доступен базовый объём;
 - ⬜ не начато;
-- ⛔ заблокировано решением/внешней зависимостью.
+- ⛔ заблокировано решением или внешней зависимостью.
 
-## Milestones
+## Этапы
 
-| Milestone | Статус | Результат |
+| Этап | Состояние | Результат |
 |---|---:|---|
-| M0 Repository bootstrap | 🟡 | runnable API/worker, schema, docs, Codex agents, offline scripts |
-| M1 Persistence kernel | ✅ | transactions, typed values, object storage, queue, outbox, audit, Knowledge API, backup/restore |
-| M1.5 Guided UI foundation | 🟡 | offline shell, Knowledge UI, состояния, помощь, adaptive/accessibility baseline |
-| M1.6 Spaces and audiences | ✅ | изоляция, группы, immutable snapshots, aggregate/per-member target plans |
-| M2 Secure OOXML intake | ⬜ | upload, security checks, DOCX/XLSX Document IR |
-| M3 Template compiler | ⬜ | content controls, defined names, Safe Scalar и aggregate repeat render |
-| M4 Manual workflow/UI | ⬜ | catalog, audience, forms, review, download, RBAC |
-| M5 Local LLM agents | ⬜ | mapping, extraction, formatting, evaluation |
-| M6 Structured/generated docs | ⬜ | repeats, rich text, letters, reviews, packages |
-| M7 Automation engine | ⬜ | schedule, events, space-scoped audiences, idempotency, review queue |
-| M8 Delivery/operations | ⬜ | SMTP, network folders, metrics, retention |
-| M9 Pilot hardening | ⬜ | real templates, security, recovery, RC |
+| M0 Основа репозитория | 🟡 | запускаемые API/обработчик, схема, документация, агенты Codex, автономные сценарии |
+| M1 Ядро хранения | ✅ | транзакции, типизированные значения, файлы, очередь, события, аудит, API данных, резервирование |
+| M1.5 Сопровождающий интерфейс | 🟡 | автономная оболочка, база знаний, состояния, помощь, адаптивность и доступность |
+| M1.6 Пространства и аудитории | ✅ | изоляция, группы, неизменяемые снимки, один общий или несколько индивидуальных планов |
+| M1.7 Русский пользовательский слой | ✅ | русский словарь, ошибки, подсказки, помощник установки и автоматическая проверка терминологии |
+| M2 Безопасный приём DOCX/XLSX | ⬜ | загрузка, защитные проверки и структурное представление документа |
+| M3 Компилятор шаблонов | ⬜ | привязки DOCX/XLSX, скалярное заполнение и повторяющиеся таблицы/списки |
+| M4 Ручной документный процесс | ⬜ | каталог, аудитория, формы, проверка, скачивание и права |
+| M5 Локальные агенты ИИ | ⬜ | сопоставление, извлечение, форматирование и оценка качества |
+| M6 Структурные и создаваемые документы | ⬜ | повторы, текстовые блоки, письма, рецензии и комплекты |
+| M7 Автоматизация | ⬜ | расписания, события, аудитории пространства, защита от повторов и очередь проверки |
+| M8 Доставка и эксплуатация | ⬜ | почта, сетевые папки, показатели и сроки хранения |
+| M9 Пилотное усиление | ⬜ | реальные шаблоны, безопасность, восстановление и кандидат на выпуск |
 
-## M0 checklist
+## M0 — основа репозитория
 
-- [x] Repository structure and npm workspaces
-- [x] Strict TypeScript baseline
-- [x] Fastify API bootstrap
-- [x] Worker lifecycle bootstrap
-- [x] SQLite migration runner
-- [x] Initial domain schema
-- [x] Requirements and architecture baseline
-- [x] Codex root instructions
-- [x] Project-scoped Codex custom agents
-- [x] Offline bundle preparation script
-- [x] Offline install/update/rollback scripts
-- [x] Network-free install/update smoke-test harness
-- [x] systemd hardened unit templates
-- [x] CI workflow definition
-- [ ] Validate full bundle under Node.js 24.18 on reference Debian/Astra image
-- [ ] Validate install/update rollback on clean systemd VM
-- [x] Merge bootstrap PR
+- [x] рабочие области npm;
+- [x] строгий TypeScript;
+- [x] базовая служба Fastify;
+- [x] жизненный цикл фонового обработчика;
+- [x] применение миграций SQLite;
+- [x] исходная схема предметной области;
+- [x] требования и архитектура;
+- [x] инструкции и специализированные агенты Codex;
+- [x] подготовка автономного комплекта;
+- [x] установка, обновление и откат;
+- [x] проверка установки без сети;
+- [x] защищённые шаблоны служб systemd;
+- [x] непрерывная проверка;
+- [ ] полный комплект на эталонной Astra/Debian с Node.js 24.18;
+- [ ] откат обновления на чистой машине с systemd.
 
-## M1 checklist
+## M1 — ядро хранения
 
-- [x] Storage transaction API and unit-of-work
-- [x] Typed property codec registry
-- [x] Content-addressed object storage
-- [x] Worker queue claim and lease renewal
-- [x] Retry/dead-letter policies
-- [x] Transactional outbox
-- [x] Correlation-aware audit service
-- [x] Entity/property REST API
-- [x] Online SQLite backup with integrity verification
-- [x] Object/config checksum manifest
-- [x] Atomic restore with pre-restore rollback
-- [x] Backup and restore integration tests
+- [x] транзакционный доступ к SQLite;
+- [x] реестр кодеков типизированных свойств;
+- [x] хранилище файлов по контрольной сумме;
+- [x] захват и продление аренды задания;
+- [x] повтор и окончательная ошибка;
+- [x] транзакционная запись событий;
+- [x] аудит с идентификатором операции;
+- [x] прикладной интерфейс типов, свойств и сущностей;
+- [x] резервная копия SQLite с проверкой целостности;
+- [x] перечень контрольных сумм файлов и настроек;
+- [x] атомарное восстановление с откатом;
+- [x] испытания резервного копирования и восстановления.
 
-## M1.5 Guided UI checklist
+## M1.5 — сопровождающий интерфейс
 
-- [x] Offline UI shell без CDN и внешних шрифтов
-- [x] Desktop sidebar и mobile bottom navigation
-- [x] Светлая, тёмная и системная темы
-- [x] Status ribbon, toast, help drawer и guided dialogs
-- [x] Loading, empty, success, warning, error, degraded и planned states
-- [x] Knowledge Registry UI для типов и свойств
-- [x] Пространства, участники, группы и audience planning UI
-- [x] Correlation ID и сохранение формы при ошибке
-- [x] Keyboard, visible focus, reduced motion и 320 px baseline
-- [x] Основное ТЗ и отдельное UX/UI ТЗ
-- [ ] Автоматизированная browser accessibility/visual regression проверка
-- [ ] Notification center для персистентных фоновых операций
-- [ ] User testing на сценариях Template Studio и document workflow
+- [x] автономная оболочка без внешних шрифтов и сетевых зависимостей;
+- [x] боковая навигация на компьютере и нижняя на телефоне;
+- [x] светлая, тёмная и системная темы;
+- [x] строка состояния, краткие уведомления, панель помощи и диалоги;
+- [x] загрузка, пустое состояние, успех, предупреждение, ошибка, ограниченная работа и запланированная функция;
+- [x] интерфейс типов и свойств;
+- [x] пространства, участники, группы и план аудитории;
+- [x] идентификатор операции и сохранение формы при ошибке;
+- [x] клавиатура, видимый фокус, уменьшение движения и ширина от 320 пикселей;
+- [x] основное ТЗ и отдельное ТЗ на интерфейс;
+- [ ] автоматическая браузерная проверка доступности и внешнего вида;
+- [ ] центр уведомлений для сохраняемых фоновых операций;
+- [ ] испытание пользователями на студии шаблонов и документном процессе.
 
-## M1.6 Spaces and audiences checklist
+## M1.6 — пространства и аудитории
 
-- [x] Изолированные spaces и deterministic default space
-- [x] Actor memberships и роли `owner`, `manager`, `editor`, `viewer`
-- [x] Ровно одно пространство для конкретной сущности
-- [x] Именованные ordered groups
-- [x] Выбор всех активных, группы или отмеченных сущностей
-- [x] Immutable audience snapshots
-- [x] `one_per_member` target plan
-- [x] `aggregate` target plan с `audience.members`
-- [x] Same-space guards в API и SQLite
-- [x] Outbox, audit и correlation ID для мутаций
-- [x] Storage и API integration tests
-- [x] Guided UI с точным прогнозом количества документов
-- [x] First-run helper для автономной установки
-- [ ] DOCX/XLSX repeat renderer — M3/M6
-- [ ] Создание document jobs из target plan — M4
-- [ ] Применение actor memberships в IAM/RBAC — M4
+- [x] изолированные пространства и основное пространство для прежних записей;
+- [x] роли владельца, руководителя, редактора и наблюдателя;
+- [x] ровно одно пространство для конкретной сущности;
+- [x] именованные группы с устойчивым порядком;
+- [x] выбор всех активных, группы или отмеченных сущностей;
+- [x] неизменяемые снимки состава;
+- [x] план «по документу на каждого»;
+- [x] план «один общий документ» с `audience.members`;
+- [x] защита от смешивания пространств в API и SQLite;
+- [x] события, аудит и идентификатор операции для изменений;
+- [x] испытания хранилища и API;
+- [x] интерфейс с точным прогнозом количества документов;
+- [x] помощник первого запуска;
+- [ ] повторяющаяся таблица/список DOCX/XLSX — M3/M6;
+- [ ] создание документных заданий из плана — M4;
+- [ ] фактическое применение ролей пространства — M4.
+
+## M1.7 — русский пользовательский слой
+
+- [x] обновлённое основное ТЗ и ТЗ на интерфейс;
+- [x] русскоязычный README со статусами;
+- [x] русские сообщения помощника первого запуска;
+- [x] серверный преобразователь ошибок в понятные русские сообщения;
+- [x] проверка терминологии пользовательского слоя;
+- [x] единый словарь отображения типов, ролей, состояний и режимов в веб-интерфейсе;
+- [x] перевод подсказок и технических подписей;
+- [x] включение помощника первого запуска в автономный комплект;
+- [x] запуск помощника после успешной установки;
+- [x] очистка временных сценариев синхронизации;
+- [x] успешная полная проверка этапа.
 
 ## Следующий приоритет
 
-M2 начинается с безопасного intake без LLM и сразу учитывает уже готовую аудиторию:
+Следующий этап — M2 без участия локальной модели:
 
-1. лимиты и проверка ZIP/OOXML;
-2. запрет path traversal и external relationships;
-3. compatibility report;
-4. DOCX/XLSX Document IR;
-5. детерминированные кандидаты вариативных полей;
-6. fixtures и negative security tests;
-7. guided progress: приём файла → проверка → compatibility report → следующий безопасный шаг;
-8. manifest binding повторяющейся таблицы/списка к `audience.members`.
+1. ограничения и проверка архивной структуры DOCX/XLSX;
+2. запрет выхода из каталога и опасных внешних связей;
+3. понятный отчёт совместимости;
+4. структурное представление DOCX/XLSX;
+5. детерминированные кандидаты изменяемых полей;
+6. эталонные и отрицательные проверки безопасности;
+7. пошаговый ход: приём → проверка → отчёт → следующий безопасный шаг;
+8. подготовка привязки повторяющейся таблицы/списка к `audience.members`.
 
-## Decision gates
+## Решения, требующие фиксации
 
-| Gate | Решение, которое требуется |
+| Код | Требуемое решение |
 |---|---|
-| G1 | Reference Astra/Debian image, CPU architecture and glibc baseline |
-| G2 | Initial GGUF model and evaluation threshold for Russian tasks |
-| G3 | Supported LibreOffice and Microsoft Office versions |
-| G4 | Authentication baseline: local only or LDAP/AD adapter in pilot |
-| G5 | SMTP relay constraints and allowed recipient domains |
-| G6 | Network share roots, mount method and sentinel convention |
-| G7 | Retention periods and restricted-data policy |
+| G1 | эталонный образ Astra/Debian, архитектура процессора и версия glibc |
+| G2 | первая модель GGUF и порог качества русскоязычных задач |
+| G3 | поддерживаемые версии LibreOffice и Microsoft Office |
+| G4 | локальные учётные записи либо подключение LDAP/AD в пилоте |
+| G5 | ограничения почтового шлюза и разрешённые домены получателей |
+| G6 | корни сетевых папок, способ подключения и правило контрольного файла |
+| G7 | сроки хранения и политика ограниченных данных |
 
-## Release line
+## Линия выпусков
 
-- `0.1.x` — platform/bootstrap, deterministic kernel, spaces и audiences;
-- `0.2.x` — Template Studio и Safe Scalar/aggregate rendering;
-- `0.3.x` — manual workflow и local LLM agents;
-- `0.4.x` — structured/generated documents;
-- `0.5.x` — automation и delivery;
-- `1.0.0` — pilot acceptance и production baseline.
+- `0.1.x` — основа, детерминированное ядро, пространства, аудитории и русский пользовательский слой;
+- `0.2.x` — студия шаблонов, скалярное заполнение и общие таблицы/списки;
+- `0.3.x` — ручной документный процесс и локальные агенты ИИ;
+- `0.4.x` — структурные и создаваемые документы;
+- `0.5.x` — автоматизация и доставка;
+- `1.0.0` — приёмка пилота и рабочая исходная версия.
