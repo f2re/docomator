@@ -1,0 +1,53 @@
+name: Apply reviewed spaces documentation patch
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/spaces-audience-targeting'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply reviewed patch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-spaces-docs.py
+          rm -f scripts/ci/apply-spaces-docs.py
+          node --check apps/api/ui/app.js
+          bash -n scripts/offline/first-run.sh
+          bash -n scripts/offline/prepare-bundle.sh
+          bash -n scripts/offline/install.sh
+          bash -n scripts/offline/smoke-test.sh
+          git diff --check
+
+      - name: Refresh lockfile
+        shell: bash
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Commit updates
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git add --all
+          if git diff --cached --quiet; then
+            echo 'Documentation and helper files are current.'
+            exit 0
+          fi
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'document spaces audiences and first-run flow'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
