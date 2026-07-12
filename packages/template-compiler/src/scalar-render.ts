@@ -216,22 +216,25 @@ function validateBindings(
   technical: CompiledTechnicalBinding,
   field: ScalarFieldBinding
 ): void {
-  if (
-    (technical.kind === "docx.sdt" && field.kind !== "docx.paragraph") ||
-    (technical.kind === "xlsx.defined-name" && field.kind !== "xlsx.cell")
-  ) {
+  if (technical.kind === "docx.sdt") {
+    if (field.kind !== "docx.paragraph") {
+      throw new TemplateCompilerError(
+        "technical_binding_mismatch",
+        "Техническая привязка не соответствует сохранённой координате поля."
+      );
+    }
+    if (technical.part !== field.part) {
+      throw new TemplateCompilerError(
+        "technical_binding_mismatch",
+        "Техническая привязка указывает на другую часть DOCX."
+      );
+    }
+    return;
+  }
+  if (field.kind !== "xlsx.cell") {
     throw new TemplateCompilerError(
       "technical_binding_mismatch",
       "Техническая привязка не соответствует сохранённой координате поля."
-    );
-  }
-  if (
-    technical.kind === "docx.sdt" &&
-    technical.part !== field.part
-  ) {
-    throw new TemplateCompilerError(
-      "technical_binding_mismatch",
-      "Техническая привязка указывает на другую часть DOCX."
     );
   }
 }
