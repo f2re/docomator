@@ -33,16 +33,36 @@ jobs:
 
       - name: Развернуть подготовленные изменения
         if: steps.payload.outputs.present == 'true'
+        id: apply
+        continue-on-error: true
         shell: bash
         run: |
-          set -Eeuo pipefail
-          mkdir -p /tmp/docomator-structure-update
-          cat .structure-payload.part-* | base64 --decode > /tmp/docomator-structure-update.tar.gz
-          tar -xzf /tmp/docomator-structure-update.tar.gz -C /tmp/docomator-structure-update
-          python3 /tmp/docomator-structure-update/apply.py
-          rm -f .structure-payload.part-* .apply-document-structure
-          rm -f .github/workflows/apply-document-structure.yml
-          git diff --check
+          set -o pipefail
+          {
+            set -Eeuo pipefail
+            mkdir -p /tmp/docomator-structure-update
+            cat .structure-payload.part-* | base64 --decode > /tmp/docomator-structure-update.tar.gz
+            sha256sum /tmp/docomator-structure-update.tar.gz
+            tar -tzf /tmp/docomator-structure-update.tar.gz
+            tar -xzf /tmp/docomator-structure-update.tar.gz -C /tmp/docomator-structure-update
+            python3 /tmp/docomator-structure-update/apply.py
+            rm -f .structure-payload.part-* .apply-document-structure
+            rm -f .github/workflows/apply-document-structure.yml
+            git diff --check
+          } 2>&1 | tee document-structure-apply.log
+
+      - name: Сохранить журнал подготовки
+        if: steps.apply.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-structure-apply
+          path: document-structure-apply.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Остановиться после ошибки подготовки
+        if: steps.apply.outcome == 'failure'
+        run: exit 1
 
       - name: Определить версию Node.js
         if: steps.payload.outputs.present == 'true'
