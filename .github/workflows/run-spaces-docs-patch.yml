@@ -1,4 +1,5 @@
 name: Run one-time spaces documentation patch
+# Triggered once after the workflow became active on main.
 
 on:
   push:
