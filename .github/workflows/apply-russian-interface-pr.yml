@@ -62,7 +62,25 @@ jobs:
           bash -n scripts/offline/smoke-test.sh
 
       - name: Validate patch whitespace
-        run: git diff --check
+        id: whitespace
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          git diff --check 2>&1 | tee whitespace-check.log
+
+      - name: Upload whitespace diagnostic
+        if: steps.whitespace.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: russian-interface-whitespace-diagnostic
+          path: whitespace-check.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Stop after whitespace failure
+        if: steps.whitespace.outcome == 'failure'
+        run: exit 1
 
       - name: Read Node.js version
         id: node
