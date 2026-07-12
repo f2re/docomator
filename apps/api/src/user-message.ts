@@ -28,9 +28,9 @@ const rules: readonly MessageRule[] = [
   [/^Unsupported (.+): (.+)$/i, (match) =>
     `Значение «${match[2]}» не поддерживается для поля «${match[1]}».`],
   [/^(.+) already exists: (.+)$/i, (match) =>
-    `${russianObjectName(match[1])} «${match[2]}» уже существует.`],
+    `${russianObjectName(match[1] ?? "")} «${match[2]}» уже существует.`],
   [/^(.+) was not found: (.+)$/i, (match) =>
-    `${russianObjectName(match[1])} «${match[2]}» не найдено.`],
+    `${russianObjectName(match[1] ?? "")} «${match[2]}» не найдено.`],
   [/^Referenced entity was not found: (.+)$/i, (match) =>
     `Связанный объект «${match[1]}» не найден.`],
   [/^Referenced file was not found: (.+)$/i, (match) =>
