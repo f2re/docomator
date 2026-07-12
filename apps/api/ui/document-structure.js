@@ -5,6 +5,7 @@ const structureElements = {
 };
 
 let structureBusy = false;
+let fieldBusy = false;
 let structureReport = null;
 let selectedStructureElement = null;
 
@@ -20,6 +21,22 @@ function structureEscape(value) {
         '"': "&quot;"
       })[character]
   );
+}
+
+async function structureFetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: { accept: "application/json", ...(options.headers || {}) },
+    ...options
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    throw {
+      message: body?.error?.message || `Сервер вернул код ${response.status}.`,
+      operationId:
+        body?.correlationId || response.headers.get("x-correlation-id") || ""
+    };
+  }
+  return body;
 }
 
 function currentStructureFile() {
@@ -53,7 +70,7 @@ function createStructurePanel() {
       </div>
       <div class="structure-actions">
         <button class="primary-button" id="documentStructureButton" type="button">Построить структуру</button>
-        <p id="documentStructureHint">После анализа можно выбрать абзац DOCX или ячейку XLSX. Сохранение поля будет следующим отдельным действием.</p>
+        <p id="documentStructureHint">После анализа выберите абзац DOCX или ячейку XLSX. Поле можно сохранить только для исходника, помещённого в выбранное пространство.</p>
       </div>
       <div id="documentStructureResult" class="structure-result" aria-live="polite">
         <div class="structure-empty"><span aria-hidden="true">🧱</span><div><strong>Структура ещё не построена</strong><p>Сначала завершите проверку документа, затем нажмите кнопку выше.</p></div></div>
@@ -116,6 +133,25 @@ function structurePreview(element) {
   return element.text || "Пустой абзац";
 }
 
+function suggestedFieldKey(element) {
+  const suffix = String(element.id).split("-").pop()?.slice(0, 10) || "value";
+  return `field.${element.kind}.${suffix}`;
+}
+
+function fieldTypeOptions() {
+  return [
+    ["string", "Короткая строка"],
+    ["text", "Длинный текст"],
+    ["number", "Число"],
+    ["integer", "Целое число"],
+    ["boolean", "Да / нет"],
+    ["date", "Дата"],
+    ["date-time", "Дата и время"]
+  ]
+    .map(([value, label]) => `<option value="${value}">${label}</option>`)
+    .join("");
+}
+
 function renderStructureSelection(element) {
   selectedStructureElement = element;
   document.querySelectorAll(".structure-element.is-selected").forEach((item) => {
@@ -129,13 +165,129 @@ function renderStructureSelection(element) {
   const detail = document.querySelector("#documentStructureSelection");
   if (!detail) return;
   detail.innerHTML = `
-    <span aria-hidden="true">📌</span>
-    <div>
+    <span class="structure-selection-mark" aria-hidden="true">📌</span>
+    <div class="structure-selection-content">
       <strong>Выбран элемент: ${structureEscape(structureLocation(element))}</strong>
       <p>${structureEscape(structurePreview(element))}</p>
-      <small>Идентификатор координаты: <code>${structureEscape(element.id)}</code>. Следующий этап сохранит имя поля, тип и эту проверяемую координату.</small>
+      <small>Идентификатор координаты: <code>${structureEscape(element.id)}</code>. Сервер проверит его по сохранённой структуре.</small>
+      <form class="structure-field-form" id="documentFieldForm" novalidate>
+        <div class="structure-field-grid">
+          <label>
+            <span>Название поля</span>
+            <input id="documentFieldLabel" name="label" type="text" maxlength="500" value="${structureEscape(structurePreview(element).slice(0, 80))}" required />
+            <small>Понятное название, которое увидит пользователь формы.</small>
+          </label>
+          <label>
+            <span>Технический ключ</span>
+            <input id="documentFieldKey" name="key" type="text" maxlength="160" value="${structureEscape(suggestedFieldKey(element))}" pattern="[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*" required />
+            <small>Строчные латинские буквы, цифры, точки, подчёркивания или дефисы.</small>
+          </label>
+          <label>
+            <span>Тип значения</span>
+            <select id="documentFieldType" name="valueType">${fieldTypeOptions()}</select>
+            <small>Тип определяет будущую проверку и форматирование значения.</small>
+          </label>
+          <label class="structure-required-field">
+            <input id="documentFieldRequired" name="required" type="checkbox" />
+            <span><strong>Обязательное поле</strong><small>Без значения документ нельзя будет завершить.</small></span>
+          </label>
+        </div>
+        <div class="structure-field-actions">
+          <button class="primary-button" id="documentFieldSave" type="submit">Сохранить поле</button>
+          <p id="documentFieldMessage">Сначала исходник должен быть сохранён в пространстве. Если он ещё не сохранён, выбор элемента останется на странице.</p>
+        </div>
+      </form>
     </div>`;
   detail.hidden = false;
+  detail.querySelector("#documentFieldForm")?.addEventListener("submit", saveSelectedField);
+}
+
+async function resolveSavedSource() {
+  if (!structureReport) {
+    throw { message: "Сначала постройте структуру документа." };
+  }
+  const spaceSelect = document.querySelector("#documentQuarantineSpace");
+  const spaceId = spaceSelect?.value || "";
+  if (!spaceId) {
+    throw { message: "Сначала выберите пространство в блоке сохранения исходника." };
+  }
+  const body = await structureFetchJson(
+    `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-sources?limit=500`
+  );
+  const source = Array.isArray(body.data)
+    ? body.data.find((record) => record.sha256 === structureReport.sourceSha256)
+    : null;
+  if (!source) {
+    throw {
+      message:
+        "Сначала нажмите «Сохранить исходник» в блоке выше. Проверка и структурный анализ сами по себе файл не сохраняют."
+    };
+  }
+  return { spaceId, source };
+}
+
+async function saveSelectedField(event) {
+  event.preventDefault();
+  if (fieldBusy || !selectedStructureElement || !structureReport) return;
+  const form = event.currentTarget;
+  const button = form.querySelector("#documentFieldSave");
+  const message = form.querySelector("#documentFieldMessage");
+  const label = form.querySelector("#documentFieldLabel")?.value?.trim() || "";
+  const key = form.querySelector("#documentFieldKey")?.value?.trim() || "";
+  const valueType = form.querySelector("#documentFieldType")?.value || "string";
+  const required = Boolean(form.querySelector("#documentFieldRequired")?.checked);
+  if (!label || !key) {
+    message.className = "is-error";
+    message.textContent = "Заполните название и технический ключ поля.";
+    return;
+  }
+
+  fieldBusy = true;
+  button.disabled = true;
+  message.className = "is-loading";
+  message.textContent =
+    "Проверяем сохранённый исходник, заново строим структуру и сверяем выбранную координату.";
+
+  try {
+    const { spaceId, source } = await resolveSavedSource();
+    const file = currentStructureFile();
+    const defaultTitle = file?.name?.replace(/\.(docx|xlsx)$/iu, "") || source.fileName;
+    const draftBody = await structureFetchJson(
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-sources/${encodeURIComponent(source.id)}/draft`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: defaultTitle })
+      }
+    );
+    const fieldBody = await structureFetchJson(
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts/${encodeURIComponent(draftBody.data.id)}/fields`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          key,
+          label,
+          valueType,
+          required,
+          elementId: selectedStructureElement.id
+        })
+      }
+    );
+    message.className = "is-success";
+    message.innerHTML = `✅ Поле «${structureEscape(fieldBody.data.field.label)}» сохранено. Координата и контрольная сумма структуры зафиксированы. Следующий шаг — техническая привязка DOCX/XLSX.`;
+    button.textContent = "Поле сохранено";
+    form.querySelectorAll("input, select").forEach((control) => {
+      control.disabled = true;
+    });
+  } catch (error) {
+    const operationId = error?.operationId || "";
+    message.className = "is-error";
+    message.innerHTML = `${structureEscape(error?.message || "Сохранить поле не удалось.")}${operationId ? ` Идентификатор операции: <code>${structureEscape(operationId)}</code>.` : ""}`;
+    button.disabled = false;
+  } finally {
+    fieldBusy = false;
+  }
 }
 
 function renderStructure(report, operationId) {
