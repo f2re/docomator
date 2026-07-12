@@ -1,0 +1,457 @@
+.intake-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, .85fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.intake-panel,
+.intake-result-panel {
+  min-height: 440px;
+}
+
+.intake-drop-zone {
+  position: relative;
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  padding: 28px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 2px dashed var(--border-strong);
+  border-radius: 20px;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.intake-drop-zone:hover,
+.intake-drop-zone.is-dragging {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.intake-drop-zone.is-dragging {
+  transform: scale(1.01);
+}
+
+.intake-drop-zone.has-file {
+  border-style: solid;
+  border-color: rgba(35, 138, 84, .34);
+}
+
+.intake-drop-zone.is-error {
+  background: var(--danger-soft);
+  border-color: rgba(199, 57, 57, .42);
+}
+
+.intake-drop-zone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+.intake-drop-zone label {
+  display: grid;
+  max-width: 460px;
+  cursor: pointer;
+  place-items: center;
+}
+
+.intake-drop-zone label > span:first-child {
+  margin-bottom: 12px;
+  font-size: 3rem;
+}
+
+.intake-drop-zone strong,
+.intake-drop-zone small {
+  display: block;
+}
+
+.intake-drop-zone small {
+  max-width: 380px;
+  margin-top: 7px;
+  line-height: 1.45;
+}
+
+.intake-selected-file {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 11px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 13px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.intake-selected-file strong,
+.intake-selected-file small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.intake-file-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  font-size: 1.4rem;
+  background: var(--surface);
+  border-radius: 12px;
+}
+
+.intake-actions {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.intake-actions .primary-button {
+  flex: 1;
+}
+
+.intake-limits {
+  display: grid;
+  gap: 7px;
+  margin: 18px 0 0;
+  padding: 0;
+  color: var(--hint);
+  font-size: .78rem;
+  list-style: none;
+}
+
+.intake-limits li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 7px;
+}
+
+.intake-status {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+}
+
+.intake-status.is-success {
+  background: var(--success-soft);
+  border-color: rgba(35, 138, 84, .26);
+}
+
+.intake-status.is-warning {
+  background: var(--warning-soft);
+  border-color: rgba(168, 103, 0, .28);
+}
+
+.intake-status.is-error {
+  background: var(--danger-soft);
+  border-color: rgba(199, 57, 57, .28);
+}
+
+.intake-status-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  font-weight: 800;
+  background: var(--surface);
+  border-radius: 12px;
+}
+
+.intake-status strong,
+.intake-status p {
+  display: block;
+  margin: 0;
+}
+
+.intake-status p {
+  margin-top: 3px;
+  font-size: .79rem;
+}
+
+.intake-placeholder,
+.intake-progress,
+.intake-error {
+  display: grid;
+  min-height: 290px;
+  place-items: center;
+  align-content: center;
+  padding: 30px;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: 18px;
+}
+
+.intake-placeholder > span {
+  margin-bottom: 9px;
+  font-size: 2.7rem;
+}
+
+.intake-placeholder h3,
+.intake-placeholder p {
+  margin-bottom: 5px;
+}
+
+.intake-progress,
+.intake-error,
+.intake-no-issues {
+  grid-template-columns: auto 1fr;
+  place-items: initial;
+  align-content: center;
+  text-align: left;
+}
+
+.intake-progress-mark,
+.intake-error > span,
+.intake-no-issues > span {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  font-size: 1.35rem;
+  background: var(--surface-2);
+  border-radius: 14px;
+}
+
+.intake-progress strong,
+.intake-progress p,
+.intake-error strong,
+.intake-error p,
+.intake-no-issues strong,
+.intake-no-issues p {
+  margin: 0;
+}
+
+.intake-progress p,
+.intake-error p,
+.intake-no-issues p {
+  margin-top: 4px;
+  font-size: .8rem;
+}
+
+.intake-report {
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.intake-report > header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.intake-report > header h2 {
+  margin-bottom: 5px;
+  overflow-wrap: anywhere;
+}
+
+.intake-report > header p:last-child {
+  margin-bottom: 0;
+  font-size: .82rem;
+}
+
+.intake-decision-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  color: var(--success);
+  font-size: 1.3rem;
+  font-weight: 900;
+  background: var(--success-soft);
+  border-radius: 14px;
+}
+
+.intake-report.is-warning .intake-decision-icon {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.intake-report.is-error .intake-decision-icon {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.intake-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.intake-metrics > div {
+  min-width: 0;
+  padding: 13px;
+  background: var(--surface-2);
+}
+
+.intake-metrics strong,
+.intake-metrics span {
+  display: block;
+}
+
+.intake-metrics strong {
+  overflow: hidden;
+  font-size: .92rem;
+  text-overflow: ellipsis;
+}
+
+.intake-metrics span {
+  margin-top: 2px;
+  color: var(--hint);
+  font-size: .68rem;
+}
+
+.intake-issues {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.intake-issue {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 11px;
+  padding: 14px;
+  background: var(--surface-2);
+  border-left: 4px solid var(--hint);
+  border-radius: 13px;
+}
+
+.intake-issue.is-warning {
+  border-left-color: var(--warning);
+}
+
+.intake-issue.is-blocker {
+  border-left-color: var(--danger);
+}
+
+.intake-issue-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  font-weight: 900;
+  background: var(--surface);
+  border-radius: 9px;
+}
+
+.intake-issue h3 {
+  margin: 8px 0 4px;
+  font-size: .95rem;
+}
+
+.intake-issue p,
+.intake-issue small {
+  margin: 0;
+  font-size: .77rem;
+}
+
+.intake-issue small {
+  display: block;
+  margin-top: 7px;
+  color: var(--hint);
+  overflow-wrap: anywhere;
+}
+
+.intake-no-issues {
+  gap: 11px;
+  margin: 16px;
+  padding: 15px;
+  background: var(--success-soft);
+  border-radius: 14px;
+}
+
+.intake-technical {
+  margin: 0 16px 16px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: 13px;
+}
+
+.intake-technical summary {
+  min-height: 32px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.intake-technical dl {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.intake-technical dl > div {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 10px;
+}
+
+.intake-technical dt {
+  color: var(--hint);
+  font-size: .75rem;
+}
+
+.intake-technical dd {
+  min-width: 0;
+  margin: 0;
+  font-size: .75rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 960px) {
+  .intake-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .intake-panel,
+  .intake-result-panel {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .intake-drop-zone {
+    min-height: 190px;
+    padding: 22px 16px;
+  }
+
+  .intake-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .intake-actions button {
+    width: 100%;
+  }
+
+  .intake-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .intake-technical dl > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intake-drop-zone {
+    transition: none;
+  }
+}
