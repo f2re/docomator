@@ -25,12 +25,24 @@ const rules: readonly MessageRule[] = [
     `Значение «${match[1]}» не может быть позже «${match[2]}».`],
   [/^(.+) must be an integer in range (.+)$/i, (match) =>
     `Поле «${match[1]}» должно быть целым числом в диапазоне ${match[2]}.`],
-  [/^Unsupported (.+): (.+)$/i, (match) =>
-    `Значение «${match[2]}» не поддерживается для поля «${match[1]}».`],
-  [/^(.+) already exists: (.+)$/i, (match) =>
-    `${russianObjectName(match[1] ?? "")} «${match[2]}» уже существует.`],
+  [/^fileName must not contain a path$/i, () =>
+    "Имя файла не должно содержать путь к каталогу."],
+  [/^Document buffer must not be empty$/i, () =>
+    "Нельзя сохранить пустой документ."],
+  [/^expectedSha256 must contain 64 hexadecimal characters$/i, () =>
+    "Контрольная сумма документа имеет недопустимый формат."],
+  [/^Document checksum changed after the safety check$/i, () =>
+    "Файл изменился после проверки безопасности. Выполните проверку ещё раз."],
+  [/^Only documents accepted by the safety check can be placed in quarantine$/i, () =>
+    "В карантин можно сохранить только документ, прошедший проверку безопасности."],
+  [/^Unsupported document format: (.+)$/i, (match) =>
+    `Формат документа «${match[1]}» не поддерживается.`],
+  [/^Quarantine document was not found in this space: (.+)$/i, () =>
+    "Сохранённый исходник не найден в выбранном пространстве."],
   [/^(.+) was not found: (.+)$/i, (match) =>
     `${russianObjectName(match[1] ?? "")} «${match[2]}» не найдено.`],
+  [/^(.+) already exists: (.+)$/i, (match) =>
+    `${russianObjectName(match[1] ?? "")} «${match[2]}» уже существует.`],
   [/^Referenced entity was not found: (.+)$/i, (match) =>
     `Связанный объект «${match[1]}» не найден.`],
   [/^Referenced file was not found: (.+)$/i, (match) =>
