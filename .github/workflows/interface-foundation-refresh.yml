@@ -57,41 +57,50 @@ jobs:
         run: |
           set -Eeuo pipefail
           cat .interface-payload.part-* | base64 --decode > /tmp/interface-foundation.tar.gz
-          ls -lh /tmp/interface-foundation.tar.gz
           sha256sum /tmp/interface-foundation.tar.gz
 
-      - name: Validate interface archive
+      - name: Verify gzip stream
+        if: steps.payload.outputs.present == 'true'
+        shell: bash
+        run: gzip --test /tmp/interface-foundation.tar.gz
+
+      - name: Verify tar member names
         if: steps.payload.outputs.present == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
+          tar --list --gzip --file /tmp/interface-foundation.tar.gz > /tmp/interface-members.txt
+          cat /tmp/interface-members.txt
           python3 - <<'PY'
-          import tarfile
           from pathlib import Path
 
-          archive = Path('/tmp/interface-foundation.tar.gz')
-          with tarfile.open(archive, 'r:gz') as stream:
-              names = []
-              for member in stream.getmembers():
-                  path = Path(member.name)
-                  if path.is_absolute() or '..' in path.parts:
-                      raise SystemExit(f'Unsafe archive member: {member.name}')
-                  if member.issym() or member.islnk():
-                      raise SystemExit(f'Links are forbidden in payload: {member.name}')
-                  names.append(member.name)
-              print('\n'.join(names))
+          for raw in Path('/tmp/interface-members.txt').read_text(encoding='utf-8').splitlines():
+              member = Path(raw)
+              if member.is_absolute() or '..' in member.parts:
+                  raise SystemExit(f'Unsafe archive member: {raw}')
           PY
 
-      - name: Extract interface archive
+      - name: Extract interface archive into staging
         if: steps.payload.outputs.present == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 - <<'PY'
-          import tarfile
-          with tarfile.open('/tmp/interface-foundation.tar.gz', 'r:gz') as stream:
-              stream.extractall('.')
-          PY
+          rm -rf /tmp/interface-stage
+          mkdir -p /tmp/interface-stage
+          tar --extract --gzip --file /tmp/interface-foundation.tar.gz \
+            --directory /tmp/interface-stage --no-same-owner --no-same-permissions
+          if find /tmp/interface-stage -type l -print -quit | grep -q .; then
+            echo 'Symbolic links are forbidden in interface payload.' >&2
+            exit 1
+          fi
+          find /tmp/interface-stage -maxdepth 5 -type f -print | sort
+
+      - name: Publish staged interface files
+        if: steps.payload.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cp -a /tmp/interface-stage/. .
           rm -f apply-interface-patch.py .interface-payload.part-* .interface-foundation-ready
           git status --short
 
