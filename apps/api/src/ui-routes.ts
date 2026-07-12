@@ -22,12 +22,17 @@ const assets: Readonly<Record<string, UiAsset>> = {
   },
   "/ui/styles.css": {
     fileName: "styles.css",
-    appendFileNames: ["spaces.css"],
+    appendFileNames: ["spaces.css", "intake.css"],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
   },
   "/ui/app.js": {
     fileName: "app.js",
+    contentType: "text/javascript; charset=utf-8",
+    cacheControl: "private, max-age=3600"
+  },
+  "/ui/document-intake.js": {
+    fileName: "document-intake.js",
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
   },
@@ -49,9 +54,14 @@ async function sendAsset(
       fs.readFile(path.join(uiDirectory, fileName))
     )
   ]);
-  const body = bodies.length === 1 ? bodies[0] : Buffer.concat(
-    bodies.flatMap((part, index) => index === 0 ? [part] : [Buffer.from("\n\n"), part])
-  );
+  const body =
+    bodies.length === 1
+      ? bodies[0]
+      : Buffer.concat(
+          bodies.flatMap((part, index) =>
+            index === 0 ? [part] : [Buffer.from("\n\n"), part]
+          )
+        );
   return reply
     .type(asset.contentType)
     .header("cache-control", asset.cacheControl)

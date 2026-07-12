@@ -7,6 +7,7 @@ import type {
   ReadinessResponse,
   SystemInfoResponse
 } from "@docomator/contracts";
+import { DocumentIntakeError } from "@docomator/document-intake";
 import {
   KnowledgeConflictError,
   KnowledgeNotFoundError,
@@ -24,6 +25,7 @@ import Fastify, {
   type FastifyInstance
 } from "fastify";
 
+import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
@@ -131,7 +133,11 @@ export function buildApp(
     let code = "internal_error";
     let message = internalErrorMessage();
 
-    if (error instanceof KnowledgeValidationError) {
+    if (error instanceof DocumentIntakeError) {
+      statusCode = error.statusCode;
+      code = error.code;
+      message = error.userMessage;
+    } else if (error instanceof KnowledgeValidationError) {
       statusCode = 400;
       code = "knowledge_validation_failed";
       message = toUserMessage(error);
@@ -233,6 +239,7 @@ export function buildApp(
   registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
+  registerDocumentIntakeRoutes(app);
 
   return app;
 }
