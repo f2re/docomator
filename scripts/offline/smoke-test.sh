@@ -105,15 +105,21 @@ curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
   | grep -F 'Читаем текст и координаты' >/dev/null
 curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
+  | grep -F 'Сохранить поле' >/dev/null
+curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
   | grep -F '.structure-element-list' >/dev/null
+curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
+  | grep -F '.structure-field-form' >/dev/null
 curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/" \
   | grep -F 'Проверить документ' >/dev/null
 "$INSTALL_ROOT/current/first-run.sh" \
   --url "http://127.0.0.1:${DOCOMATOR_PORT}" \
   --check \
-  | grep -F 'Построить структуру' >/dev/null
+  | grep -F 'сохраните поле' >/dev/null
 
 kill "$API_PID"
 wait "$API_PID" 2>/dev/null || true
