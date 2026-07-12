@@ -1,0 +1,67 @@
+name: Apply Russian interface branch
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/russian-interface-and-cleanup'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Apply reviewed changes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-russian-interface.py
+          rm -f scripts/ci/apply-russian-interface.py .russian-interface-ready
+          chmod 0755 scripts/offline/first-run.sh
+          node --check apps/api/ui/app.js
+          bash -n scripts/offline/lib.sh
+          bash -n scripts/offline/first-run.sh
+          bash -n scripts/offline/prepare-bundle.sh
+          bash -n scripts/offline/install.sh
+          bash -n scripts/offline/smoke-test.sh
+          git diff --check
+
+      - name: Refresh lockfile and verify repository
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          DOCOMATOR_DATA_DIR="$RUNNER_TEMP/docomator-russian-interface" npm run migrate
+
+      - name: Commit applied changes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'complete Russian user interface and installation guidance'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
