@@ -32,19 +32,36 @@ jobs:
           cache: npm
 
       - name: Apply reviewed changes
+        id: apply_changes
+        continue-on-error: true
         shell: bash
         run: |
-          set -Eeuo pipefail
-          python3 scripts/ci/apply-russian-interface.py
-          rm -f scripts/ci/apply-russian-interface.py .russian-interface-ready
-          chmod 0755 scripts/offline/first-run.sh
-          node --check apps/api/ui/app.js
-          bash -n scripts/offline/lib.sh
-          bash -n scripts/offline/first-run.sh
-          bash -n scripts/offline/prepare-bundle.sh
-          bash -n scripts/offline/install.sh
-          bash -n scripts/offline/smoke-test.sh
-          git diff --check
+          set -o pipefail
+          {
+            python3 scripts/ci/apply-russian-interface.py
+            rm -f scripts/ci/apply-russian-interface.py .russian-interface-ready
+            chmod 0755 scripts/offline/first-run.sh
+            node --check apps/api/ui/app.js
+            bash -n scripts/offline/lib.sh
+            bash -n scripts/offline/first-run.sh
+            bash -n scripts/offline/prepare-bundle.sh
+            bash -n scripts/offline/install.sh
+            bash -n scripts/offline/smoke-test.sh
+            git diff --check
+          } 2>&1 | tee russian-interface-apply.log
+
+      - name: Upload application diagnostic
+        if: steps.apply_changes.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: russian-interface-apply-diagnostic
+          path: russian-interface-apply.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Stop after failed application
+        if: steps.apply_changes.outcome == 'failure'
+        run: exit 1
 
       - name: Refresh lockfile and verify repository
         shell: bash
