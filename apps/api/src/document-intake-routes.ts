@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   DEFAULT_INTAKE_LIMITS,
   DocumentIntakeError,
+  analyzeOoxmlBuffer,
   inspectOoxmlBuffer
 } from "@docomator/document-intake";
 import {
@@ -18,6 +19,10 @@ import {
 
 interface InspectDocumentQuery {
   fileName: string;
+}
+
+interface AnalyzeDocumentQuery extends InspectDocumentQuery {
+  limit?: number;
 }
 
 interface SpaceParams {
@@ -84,6 +89,44 @@ export function registerDocumentIntakeRoutes(
       });
       reply.header("cache-control", "no-store");
       return responseEnvelope(request, report);
+    }
+  );
+
+  app.post<{ Querystring: AnalyzeDocumentQuery; Body: Buffer }>(
+    "/api/v1/document-intake/analyze",
+    {
+      bodyLimit: DEFAULT_INTAKE_LIMITS.maxArchiveBytes,
+      schema: {
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          required: ["fileName"],
+          properties: {
+            fileName: {
+              type: "string",
+              minLength: 1,
+              maxLength: 255
+            },
+            limit: {
+              type: "integer",
+              minimum: 10,
+              maximum: 2_000,
+              default: 300
+            }
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      const mediaType = request.headers["content-type"];
+      const structure = await analyzeOoxmlBuffer({
+        buffer: request.body,
+        fileName: request.query.fileName,
+        maxElements: request.query.limit ?? 300,
+        ...(mediaType === undefined ? {} : { mediaType })
+      });
+      reply.header("cache-control", "no-store");
+      return responseEnvelope(request, structure);
     }
   );
 
