@@ -1,0 +1,50 @@
+name: Delete merged agent branch
+
+on:
+  pull_request:
+    types: [closed]
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  delete-merged-branch:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'agent/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository with write credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+      - name: Delete merged agent branch
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$HEAD_BRANCH" == agent/* ]]
+          [[ "$HEAD_BRANCH" != "${{ github.event.repository.default_branch }}" ]]
+          git push origin --delete "$HEAD_BRANCH"
+
+  cleanup-interface-foundation:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository with write credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+      - name: Delete current merged interface branch once
+        shell: bash
+        run: git push origin --delete agent/interface-foundation || true
