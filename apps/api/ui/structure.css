@@ -1,0 +1,234 @@
+.structure-panel {
+  margin-top: 1.25rem;
+}
+
+.structure-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.structure-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-medium);
+  background: var(--surface-soft);
+}
+
+.structure-actions p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  max-width: 52rem;
+}
+
+.structure-result {
+  min-height: 8rem;
+}
+
+.structure-empty,
+.structure-loading,
+.structure-error,
+.structure-warning,
+.structure-selection {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1rem;
+  border-radius: var(--radius-medium);
+  border: 1px solid var(--border-color);
+  background: var(--surface-soft);
+}
+
+.structure-empty > span,
+.structure-loading > span,
+.structure-error > span,
+.structure-warning > span,
+.structure-selection > span {
+  font-size: 1.3rem;
+  line-height: 1.2;
+}
+
+.structure-empty strong,
+.structure-loading strong,
+.structure-error strong,
+.structure-warning strong,
+.structure-selection strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.structure-empty p,
+.structure-loading p,
+.structure-error p,
+.structure-warning p,
+.structure-selection p,
+.structure-selection small {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.structure-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+}
+
+.structure-warning {
+  margin-top: 0.9rem;
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-color));
+}
+
+.structure-selection {
+  margin-top: 1rem;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.structure-report {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-large);
+  background: var(--surface);
+  padding: 1rem;
+}
+
+.structure-report > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.structure-report > header h3,
+.structure-report > header p {
+  margin: 0;
+}
+
+.structure-report > header p:last-child {
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+}
+
+.structure-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.structure-metrics div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem;
+  border-radius: var(--radius-medium);
+  background: var(--surface-soft);
+}
+
+.structure-metrics strong {
+  font-size: 1.3rem;
+}
+
+.structure-metrics span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.structure-element-list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: 34rem;
+  overflow: auto;
+  margin-top: 1rem;
+  padding-right: 0.2rem;
+}
+
+.structure-element {
+  width: 100%;
+  min-height: 4.4rem;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-medium);
+  background: var(--surface);
+  color: var(--text-primary);
+  padding: 0.8rem;
+  cursor: pointer;
+}
+
+.structure-element:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+  background: var(--surface-soft);
+}
+
+.structure-element:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.structure-element.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.structure-element-kind {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.6rem;
+  background: var(--surface-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.structure-element-copy {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.structure-element-copy strong,
+.structure-element-copy span,
+.structure-element-copy small {
+  overflow-wrap: anywhere;
+}
+
+.structure-element-copy span,
+.structure-element-copy small {
+  color: var(--text-secondary);
+}
+
+.structure-element-copy span {
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .structure-actions,
+  .structure-report > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .structure-actions .primary-button {
+    width: 100%;
+  }
+
+  .structure-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .structure-element-list {
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .structure-element {
+    transition: none;
+  }
+}
