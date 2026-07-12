@@ -38,6 +38,17 @@ jobs:
         run: |
           set -o pipefail
           {
+            python3 - <<'PY'
+            from pathlib import Path
+            target = Path('scripts/ci/apply-russian-interface.py')
+            text = target.read_text(encoding='utf-8')
+            text = text.replace(
+                '    "## Цель",\n',
+                '    "`manifest.sha256` покрывает все файлы, кроме самого manifest.",\n',
+                1,
+            )
+            target.write_text(text, encoding='utf-8')
+            PY
             python3 scripts/ci/apply-russian-interface.py
             rm -f scripts/ci/apply-russian-interface.py .russian-interface-ready
             chmod 0755 scripts/offline/first-run.sh
