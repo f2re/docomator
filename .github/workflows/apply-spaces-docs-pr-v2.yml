@@ -27,6 +27,20 @@ jobs:
         run: |
           set -o pipefail
           {
+            python3 - <<'PY'
+            from pathlib import Path
+
+            target = Path('scripts/ci/apply-spaces-docs.py')
+            text = target.read_text(encoding='utf-8')
+            start = text.index('    smoke = clean("""')
+            end = text.index('    text = text.replace(marker', start)
+            replacement = '''    smoke = "\\n".join([
+                'curl --fail --silent --show-error "http://127.0.0.1:${DOCOMATOR_PORT}/" | grep -F \'Пространства\' >/dev/null',
+                'curl --fail --silent --show-error "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces?limit=10" | grep -F \'Основное пространство\' >/dev/null',
+            ])
+'''
+            target.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
+            PY
             python3 scripts/ci/apply-spaces-docs.py
             rm -f scripts/ci/apply-spaces-docs.py
             node --check apps/api/ui/app.js
