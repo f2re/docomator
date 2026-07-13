@@ -9,6 +9,7 @@ export * from "./property-codec.js";
 export * from "./spaces.js";
 export * from "./template-drafts.js";
 export * from "./template-preview-activation.js";
+export * from "./template-releases.js";
 export * from "./template-test-versions.js";
 
 export {
