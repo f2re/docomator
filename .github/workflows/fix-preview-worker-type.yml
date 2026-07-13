@@ -1,0 +1,76 @@
+name: Исправить тип процесса предварительного просмотра
+
+on:
+  push:
+    branches:
+      - agent/template-preview-activation
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: agent/template-preview-activation
+          fetch-depth: 0
+
+      - name: Уточнить тип дочернего процесса
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/worker/src/libreoffice-preview.ts')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";\n',
+              'import { spawn, type ChildProcessByStdio } from "node:child_process";\n',
+              1,
+          )
+          text = text.replace(
+              'import path from "node:path";\n',
+              'import path from "node:path";\nimport type { Readable } from "node:stream";\n',
+              1,
+          )
+          marker = 'const MAX_CAPTURE_BYTES = 64 * 1024;\n'
+          if 'type PreviewChild =' not in text:
+              text = text.replace(
+                  marker,
+                  'type PreviewChild = ChildProcessByStdio<null, Readable, Readable>;\n\n' + marker,
+                  1,
+              )
+          text = text.replace(
+              'function terminateProcess(child: ChildProcessWithoutNullStreams): void {',
+              'function terminateProcess(child: PreviewChild): void {',
+              1,
+          )
+          text = text.replace(
+              'let child: ChildProcessWithoutNullStreams;',
+              'let child: PreviewChild;',
+              1,
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Зафиксировать исправление
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/worker/src/libreoffice-preview.ts
+          if git diff --cached --quiet; then
+            echo 'Изменений нет.'
+            exit 0
+          fi
+          git commit -m 'Исправить тип дочернего процесса LibreOffice'
+          git push origin HEAD:agent/template-preview-activation
