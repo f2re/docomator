@@ -63,6 +63,8 @@ info "Выполняем первую автономную установку"
 [[ -L "$INSTALL_ROOT/current" ]] || die "Не создана ссылка на текущую версию"
 [[ -f "$DATA_DIR/docomator.db" ]] || die "Не создана база данных"
 [[ -f "$CONFIG_DIR/docomator.env" ]] || die "Не создан файл настроек"
+grep -F 'DOCOMATOR_PREVIEW_ENABLED=true' "$CONFIG_DIR/docomator.env" >/dev/null
+grep -F 'DOCOMATOR_LIBREOFFICE_BIN=' "$CONFIG_DIR/docomator.env" >/dev/null
 
 set -a
 # Созданный файл содержит только простые присваивания КЛЮЧ=ЗНАЧЕНИЕ.
@@ -99,6 +101,9 @@ curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces?limit=10" \
   | grep -F 'Основное пространство' >/dev/null
 curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces/00000000-0000-4000-8000-000000000001/active-templates" \
+  | grep -F '"data":[]' >/dev/null
+curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
   | grep -F 'Проверяем архивную структуру' >/dev/null
 curl --fail --silent --show-error \
@@ -112,7 +117,10 @@ curl --fail --silent --show-error \
   | grep -F 'Проверить заполнение' >/dev/null
 curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
-  | grep -F 'Записано:' >/dev/null
+  | grep -F 'Создать предварительный просмотр' >/dev/null
+curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
+  | grep -F 'Активировать версию' >/dev/null
 curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
   | grep -F '.structure-element-list' >/dev/null
@@ -123,12 +131,15 @@ curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
   | grep -F '.trial-downloads' >/dev/null
 curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
+  | grep -F '.activation-preview-frame' >/dev/null
+curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/" \
   | grep -F 'Проверить документ' >/dev/null
 "$INSTALL_ROOT/current/first-run.sh" \
   --url "http://127.0.0.1:${DOCOMATOR_PORT}" \
   --check \
-  | grep -F 'Выполните пробное заполнение' >/dev/null
+  | grep -F 'Создайте предварительный просмотр' >/dev/null
 
 kill "$API_PID"
 wait "$API_PID" 2>/dev/null || true
