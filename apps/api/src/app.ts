@@ -14,6 +14,10 @@ import {
   DocumentGenerationNotFoundError,
   DocumentGenerationRegistry,
   DocumentGenerationValidationError,
+  DocumentPreflightConflictError,
+  DocumentPreflightNotFoundError,
+  DocumentPreflightRegistry,
+  DocumentPreflightValidationError,
   DocumentQuarantineNotFoundError,
   DocumentQuarantineRegistry,
   DocumentQuarantineValidationError,
@@ -54,6 +58,7 @@ import Fastify, {
 
 import { registerDocumentGenerationRoutes } from "./document-generation-routes.js";
 import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
+import { registerDocumentPreflightRoutes } from "./document-preflight-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { registerMultiFieldTestVersionRoutes } from "./multi-field-test-version-routes.js";
 import { correlationId } from "./request-context.js";
@@ -76,6 +81,7 @@ export interface AppDependencies {
   knowledgeRegistry?: KnowledgeRegistry;
   spaceRegistry?: SpaceRegistry;
   documentGenerationRegistry?: DocumentGenerationRegistry;
+  documentPreflightRegistry?: DocumentPreflightRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
   templateTestVersionRegistry?: TemplateTestVersionRegistry;
@@ -156,6 +162,8 @@ export function buildApp(
   const documentGenerationRegistry =
     dependencies.documentGenerationRegistry ??
     new DocumentGenerationRegistry(store, objectStore);
+  const documentPreflightRegistry =
+    dependencies.documentPreflightRegistry ?? new DocumentPreflightRegistry(store);
   const quarantineRegistry =
     dependencies.quarantineRegistry ??
     new DocumentQuarantineRegistry(store, objectStore);
@@ -209,6 +217,18 @@ export function buildApp(
       statusCode = 422;
       code = error.code;
       message = error.userMessage;
+    } else if (error instanceof DocumentPreflightValidationError) {
+      statusCode = 400;
+      code = "document_preflight_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof DocumentPreflightNotFoundError) {
+      statusCode = 404;
+      code = "document_preflight_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof DocumentPreflightConflictError) {
+      statusCode = 409;
+      code = "document_preflight_conflict";
+      message = toUserMessage(error);
     } else if (error instanceof DocumentGenerationValidationError) {
       statusCode = 400;
       code = "document_generation_validation_failed";
@@ -387,6 +407,7 @@ export function buildApp(
   registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
+  registerDocumentPreflightRoutes(app, documentPreflightRegistry);
   registerDocumentGenerationRoutes(
     app,
     objectStore,
