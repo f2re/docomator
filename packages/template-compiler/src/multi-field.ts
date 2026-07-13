@@ -348,7 +348,7 @@ export async function compileScalarFields(
     }
   }
 
-  let current = source;
+  let current: Buffer<ArrayBufferLike> = source;
   const results: CompiledScalarFieldResult[] = [];
   for (const field of normalizedFields) {
     const analysis = await analyzeOoxmlBuffer({
@@ -437,7 +437,7 @@ export async function renderScalarValues(
 ): Promise<RenderScalarValuesResult> {
   const original = Buffer.from(input.compiled);
   const fields = normalizeRenderFields(input.fields);
-  let current = original;
+  let current: Buffer<ArrayBufferLike> = original;
   const rendered: RenderedScalarFieldValue[] = [];
 
   for (const field of fields) {
