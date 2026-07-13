@@ -3,6 +3,7 @@ export * from "./database.js";
 export * from "./document-quarantine.js";
 export * from "./json.js";
 export * from "./knowledge.js";
+export * from "./multi-field-test-versions.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
 export * from "./spaces.js";
