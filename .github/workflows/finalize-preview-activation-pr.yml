@@ -21,21 +21,37 @@ jobs:
           fetch-depth: 0
 
       - name: Применить синхронизацию
+        id: apply
+        continue-on-error: true
         shell: bash
         run: |
           set -Eeuo pipefail
           if [[ ! -f scripts/ci/finalize-preview-activation.py ]]; then
-            echo 'Синхронизация уже применена.'
+            echo 'Синхронизация уже применена.' | tee finalize-preview.log
             exit 0
           fi
-          python3 scripts/ci/finalize-preview-activation.py
-          rm -f scripts/ci/finalize-preview-activation.py
-          git diff --check
+          python3 scripts/ci/finalize-preview-activation.py 2>&1 | tee finalize-preview.log
+          rm -f scripts/ci/finalize-preview-activation.py .finalize-preview-ready
+          git diff --check 2>&1 | tee -a finalize-preview.log
+
+      - name: Сохранить диагностику
+        if: steps.apply.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: finalize-preview-diagnostic
+          path: finalize-preview.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Остановиться после ошибки синхронизации
+        if: steps.apply.outcome == 'failure'
+        run: exit 1
 
       - name: Зафиксировать изменения
         shell: bash
         run: |
           set -Eeuo pipefail
+          rm -f finalize-preview.log
           git add --all
           if git diff --cached --quiet; then
             echo 'Изменений нет.'
