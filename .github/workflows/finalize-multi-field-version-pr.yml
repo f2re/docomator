@@ -1,0 +1,69 @@
+name: Финализировать многополевую проверенную версию
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/multi-field-test-version' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Применить синхронизацию
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ ! -f scripts/ci/finalize-multi-field-version.py ]]; then
+            echo 'Синхронизация уже применена.'
+            exit 0
+          fi
+          python3 scripts/ci/finalize-multi-field-version.py
+          rm -f scripts/ci/finalize-multi-field-version.py .finalize-multi-field-version
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for name in (
+              'README.md',
+              'docs/NEXT_ITERATIONS.md',
+              'docs/ROADMAP.md',
+              'docs/IMPLEMENTATION_PLAN.md',
+              'docs/REQUIREMENTS.md',
+              'docs/TECHNICAL_SPECIFICATION.md',
+              'docs/MULTI_FIELD_COMPILER.md',
+              'docs/CHANGELOG.md',
+              'scripts/offline/first-run.sh',
+              'scripts/offline/smoke-test.sh',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              path.write_text(
+                  '\n'.join(line.rstrip() for line in text.splitlines()) + '\n',
+                  encoding='utf-8',
+              )
+          PY
+          git diff --check
+
+      - name: Зафиксировать изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git add --all
+          if git diff --cached --quiet; then
+            echo 'Изменений нет.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Актуализировать многополевую проверенную версию'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
