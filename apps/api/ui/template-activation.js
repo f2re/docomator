@@ -55,6 +55,35 @@ function clearActivationPolling() {
   }
 }
 
+function activationFieldCountLabel(value) {
+  const count = Number(value) || 0;
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  const noun =
+    mod100 >= 11 && mod100 <= 14
+      ? "полей"
+      : mod10 === 1
+        ? "поле"
+        : mod10 >= 2 && mod10 <= 4
+          ? "поля"
+          : "полей";
+  return `${count} ${noun}`;
+}
+
+function activationVersionKindLabel(version) {
+  return version?.versionKind === "multi"
+    ? `полный набор · ${activationFieldCountLabel(version.fieldCount)}`
+    : "одно поле";
+}
+
+function activationVersionLabel(version) {
+  const base = `Версия ${version.versionNumber} · ${String(version.format || "").toUpperCase()}`;
+  if (version.versionKind === "multi") {
+    return `${base} · ${activationFieldCountLabel(version.fieldCount)}`;
+  }
+  return `${base} · ${version.renderedValue || "проверено одно поле"}`;
+}
+
 function createActivationPanel() {
   if (!activationView || activationPanel()) return;
   const panel = document.createElement("section");
@@ -66,7 +95,7 @@ function createActivationPanel() {
         <div>
           <p class="eyebrow">Шаг 4 · предварительный просмотр и активация</p>
           <h2>Проверить внешний вид и разрешить использование</h2>
-          <p>LibreOffice создаёт PDF в фоновом задании. После просмотра пользователь отдельно подтверждает активацию версии.</p>
+          <p>LibreOffice создаёт PDF в фоновом задании. После просмотра пользователь отдельно подтверждает активацию версии с одним или несколькими полями.</p>
         </div>
         <span class="large-emoji" aria-hidden="true">👁️</span>
       </div>
@@ -77,7 +106,7 @@ function createActivationPanel() {
       <div id="templateActivationContent" class="activation-content" aria-live="polite">
         <div class="activation-state">
           <span aria-hidden="true">⏳</span>
-          <div><strong>Получаем проверенные версии</strong><p>Ищем черновики выбранного пространства, для которых уже выполнено пробное заполнение.</p></div>
+          <div><strong>Получаем проверенные версии</strong><p>Ищем одно- и многополевые версии выбранного пространства.</p></div>
         </div>
       </div>
       <section class="activation-catalog">
@@ -147,7 +176,7 @@ function renderPreviewPending(data) {
       <div>
         <strong>${activationEscape(stage.title)}</strong>
         <p>${activationEscape(stage.detail)}</p>
-        <small>Попытка ${request.requestAttempt}. Идентификатор операции: <code>${activationEscape(request.correlationId)}</code>.</small>
+        <small>${activationEscape(activationVersionKindLabel(request))}. Попытка ${request.requestAttempt}. Идентификатор операции: <code>${activationEscape(request.correlationId)}</code>.</small>
       </div>
     </div>`;
 }
@@ -162,7 +191,7 @@ function renderPreviewFailure(data, versionId) {
       <div>
         <strong>Предварительный просмотр не создан</strong>
         <p>${activationEscape(previewErrorMessage(request))}</p>
-        <small>Пробно заполненная копия сохранена и не изменена. Попытка ${request.requestAttempt}. Идентификатор операции: <code>${activationEscape(request.correlationId)}</code>.</small>
+        <small>Пробно заполненная копия сохранена и не изменена. ${activationEscape(activationVersionKindLabel(request))}. Попытка ${request.requestAttempt}. Идентификатор операции: <code>${activationEscape(request.correlationId)}</code>.</small>
         <div class="activation-inline-actions">
           <button class="primary-button" id="templatePreviewRetry" type="button">Повторить создание PDF</button>
           <button class="secondary-button" id="templatePreviewRefresh" type="button">Обновить состояние</button>
@@ -202,6 +231,7 @@ function renderPreviewReady(data) {
       <details class="activation-technical">
         <summary>Технические сведения</summary>
         <dl>
+          <div><dt>Состав версии</dt><dd>${activationEscape(activationVersionKindLabel(request))}</dd></div>
           <div><dt>Контрольная сумма PDF</dt><dd><code>${activationEscape(request.previewSha256)}</code></dd></div>
           <div><dt>Преобразователь</dt><dd>${activationEscape(request.converter?.converter || "LibreOffice")}</dd></div>
           <div><dt>Идентификатор операции</dt><dd><code>${activationEscape(request.correlationId)}</code></dd></div>
@@ -277,8 +307,12 @@ async function requestTemplatePreview(versionId = null) {
       <div><strong>Ставим задачу в очередь</strong><p>Сохраняем запрос, чтобы результат не потерялся при переходе на другую страницу.</p></div>
     </div>`;
   try {
+    const versionCollection =
+      version.versionKind === "multi"
+        ? "template-multi-test-versions"
+        : "template-test-versions";
     const body = await activationFetchJson(
-      `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-test-versions/${encodeURIComponent(version.id)}/preview`,
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/${versionCollection}/${encodeURIComponent(version.id)}/preview`,
       { method: "POST" }
     );
     await refreshPreviewState(body.data.request.id, version.id);
@@ -312,12 +346,13 @@ async function activateTemplateVersion(requestId) {
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-previews/${encodeURIComponent(requestId)}/activate`,
       { method: "POST" }
     );
+    const active = body.data.active;
     holder.innerHTML = `
       <div class="activation-state is-success">
         <span aria-hidden="true">✅</span>
         <div>
-          <strong>Версия ${body.data.active.versionNumber} активирована</strong>
-          <p>Шаблон «${activationEscape(body.data.active.title)}» появился в каталоге выбранного пространства.</p>
+          <strong>Версия ${active.versionNumber} активирована</strong>
+          <p>Шаблон «${activationEscape(active.title)}» появился в каталоге выбранного пространства: ${activationEscape(activationVersionKindLabel(active))}.</p>
           <div class="activation-inline-actions">
             <a class="secondary-button" href="${activationEscape(body.data.previewUrl)}">Скачать PDF</a>
             <a class="primary-button" href="${activationEscape(body.data.compiledUrl)}">Скачать активный шаблон</a>
@@ -360,7 +395,7 @@ async function loadActivationVersions() {
     activationDrafts = Array.isArray(draftBody.data) ? draftBody.data : [];
     if (activationDrafts.length === 0) {
       content.innerHTML = `
-        <div class="activation-state"><span aria-hidden="true">📭</span><div><strong>Нет черновиков</strong><p>Сначала сохраните исходник, поле и выполните пробное заполнение.</p></div></div>`;
+        <div class="activation-state"><span aria-hidden="true">📭</span><div><strong>Нет черновиков</strong><p>Сначала сохраните исходник, поля и выполните пробное заполнение.</p></div></div>`;
       return;
     }
     content.innerHTML = `
@@ -376,7 +411,7 @@ async function loadActivationVersions() {
           <label>
             <span>Проверенная версия</span>
             <select id="templateActivationVersion"></select>
-            <small id="templateActivationVersionHint">Получаем историю пробных заполнений.</small>
+            <small id="templateActivationVersionHint">Получаем одно- и многополевые версии.</small>
           </label>
         </div>
         <div class="activation-actions">
@@ -415,22 +450,47 @@ async function updateActivationVersionSelect() {
   if (!draft || !versionSelect || !hint || !button) return;
   versionSelect.disabled = true;
   button.disabled = true;
-  hint.textContent = "Получаем проверенные версии…";
+  hint.textContent = "Получаем одно- и многополевые проверенные версии…";
   try {
-    const body = await activationFetchJson(
-      `/api/v1/spaces/${encodeURIComponent(currentActivationSpaceId())}/template-drafts/${encodeURIComponent(draft.id)}/test-versions?limit=100`
+    const base = `/api/v1/spaces/${encodeURIComponent(currentActivationSpaceId())}/template-drafts/${encodeURIComponent(draft.id)}`;
+    const [singleBody, multiBody] = await Promise.all([
+      activationFetchJson(`${base}/test-versions?limit=100`),
+      activationFetchJson(`${base}/multi-test-versions?limit=100`)
+    ]);
+    const singleVersions = Array.isArray(singleBody.data)
+      ? singleBody.data.map((version) => ({
+          ...version,
+          versionKind: "single",
+          fieldCount: 1
+        }))
+      : [];
+    const multiVersions = Array.isArray(multiBody.data)
+      ? multiBody.data.map((version) => ({
+          ...version,
+          versionKind: "multi"
+        }))
+      : [];
+    activationVersions = [...singleVersions, ...multiVersions].sort(
+      (left, right) =>
+        Number(right.versionNumber) - Number(left.versionNumber) ||
+        String(left.versionKind).localeCompare(String(right.versionKind), "ru")
     );
-    activationVersions = Array.isArray(body.data) ? body.data : [];
     versionSelect.innerHTML = activationVersions
       .map(
-        (version) => `<option value="${activationEscape(version.id)}">Версия ${version.versionNumber} · ${activationEscape(version.renderedValue)}</option>`
+        (version) =>
+          `<option value="${activationEscape(version.id)}">${activationEscape(activationVersionLabel(version))}</option>`
       )
       .join("");
     if (activationVersions.length === 0) {
-      hint.textContent = "У этого черновика нет проверенных версий. Выполните пробное заполнение на шаге выше.";
+      hint.textContent =
+        "У этого черновика нет проверенных версий. Выполните пробное заполнение одного поля или полного набора.";
       return;
     }
-    hint.textContent = "Выберите пробно заполненную версию, внешний вид которой нужно проверить.";
+    const multiCount = multiVersions.length;
+    hint.textContent =
+      multiCount > 0
+        ? `Доступно многополевых версий: ${multiCount}. Можно также выбрать прежнюю одно-полевую проверку.`
+        : "Доступны одно-полевые версии. Для обычного документа проверьте полный набор полей на шаге выше.";
     versionSelect.disabled = false;
     button.disabled = false;
   } catch (error) {
@@ -465,7 +525,7 @@ async function loadActiveTemplateCatalog() {
             <div>
               <span class="pill pill-success">Активен</span>
               <strong>${activationEscape(template.title)}</strong>
-              <p>Версия ${template.versionNumber} · ${template.format.toUpperCase()} · активирована ${activationEscape(new Date(template.activatedAt).toLocaleString("ru-RU"))}</p>
+              <p>Версия ${template.versionNumber} · ${template.format.toUpperCase()} · ${activationEscape(activationVersionKindLabel(template))} · активирована ${activationEscape(new Date(template.activatedAt).toLocaleString("ru-RU"))}</p>
             </div>
             <div class="activation-catalog-actions">
               <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/active-templates/${encodeURIComponent(template.id)}/files/preview">PDF</a>
@@ -505,6 +565,11 @@ function activationSuccessMarker() {
   return [
     document.querySelector("#templateTrialMessage")?.classList.contains("is-success")
       ? document.querySelector("#templateTrialMessage")?.textContent?.trim() || ""
+      : "",
+    document
+      .querySelector("#templateMultiTrialMessage")
+      ?.classList.contains("is-success")
+      ? document.querySelector("#templateMultiTrialMessage")?.textContent?.trim() || ""
       : "",
     document.querySelector("#documentFieldMessage")?.classList.contains("is-success")
       ? document.querySelector("#documentFieldMessage")?.textContent?.trim() || ""

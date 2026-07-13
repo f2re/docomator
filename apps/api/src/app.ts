@@ -17,6 +17,10 @@ import {
   KnowledgeNotFoundError,
   KnowledgeRegistry,
   KnowledgeValidationError,
+  MultiFieldTestVersionConflictError,
+  MultiFieldTestVersionNotFoundError,
+  MultiFieldTestVersionRegistry,
+  MultiFieldTestVersionValidationError,
   PropertyValueValidationError,
   SpaceConflictError,
   SpaceNotFoundError,
@@ -46,6 +50,7 @@ import Fastify, {
 
 import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
+import { registerMultiFieldTestVersionRoutes } from "./multi-field-test-version-routes.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
 import { registerTemplateDraftRoutes } from "./template-draft-routes.js";
@@ -68,6 +73,7 @@ export interface AppDependencies {
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
   templateTestVersionRegistry?: TemplateTestVersionRegistry;
+  multiFieldTestVersionRegistry?: MultiFieldTestVersionRegistry;
   templatePreviewActivationRegistry?: TemplatePreviewActivationRegistry;
   uiDirectory?: string;
 }
@@ -102,6 +108,8 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "template_drafts",
         "template_draft_fields",
         "template_test_versions",
+        "template_multi_test_versions",
+        "template_multi_test_version_fields",
         "template_preview_requests",
         "template_active_versions",
         "template_active_pointers"
@@ -117,6 +125,7 @@ function databaseSchemaReady(store: SqliteStore): boolean {
               'space_entity_ownership', 'audience_groups', 'audience_snapshots',
               'document_quarantine_records', 'template_drafts',
               'template_draft_fields', 'template_test_versions',
+              'template_multi_test_versions', 'template_multi_test_version_fields',
               'template_preview_requests', 'template_active_versions',
               'template_active_pointers'
             )
@@ -151,6 +160,9 @@ export function buildApp(
   const templateTestVersionRegistry =
     dependencies.templateTestVersionRegistry ??
     new TemplateTestVersionRegistry(store, objectStore);
+  const multiFieldTestVersionRegistry =
+    dependencies.multiFieldTestVersionRegistry ??
+    new MultiFieldTestVersionRegistry(store, objectStore);
   const templatePreviewActivationRegistry =
     dependencies.templatePreviewActivationRegistry ??
     new TemplatePreviewActivationRegistry(store, objectStore);
@@ -212,6 +224,18 @@ export function buildApp(
     } else if (error instanceof TemplateDraftConflictError) {
       statusCode = 409;
       code = "template_draft_conflict";
+      message = toUserMessage(error);
+    } else if (error instanceof MultiFieldTestVersionValidationError) {
+      statusCode = 400;
+      code = "multi_field_test_version_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof MultiFieldTestVersionNotFoundError) {
+      statusCode = 404;
+      code = "multi_field_test_version_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof MultiFieldTestVersionConflictError) {
+      statusCode = 409;
+      code = "multi_field_test_version_conflict";
       message = toUserMessage(error);
     } else if (error instanceof TemplateTestVersionValidationError) {
       statusCode = 400;
@@ -359,6 +383,12 @@ export function buildApp(
     objectStore,
     templateDraftRegistry,
     templateTestVersionRegistry
+  );
+  registerMultiFieldTestVersionRoutes(
+    app,
+    objectStore,
+    templateDraftRegistry,
+    multiFieldTestVersionRegistry
   );
   registerTemplatePreviewActivationRoutes(
     app,

@@ -3,12 +3,22 @@ export * from "./database.js";
 export * from "./document-quarantine.js";
 export * from "./json.js";
 export * from "./knowledge.js";
+export * from "./multi-field-test-versions.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
 export * from "./spaces.js";
 export * from "./template-drafts.js";
 export * from "./template-preview-activation.js";
+export * from "./template-release-compatibility.js";
+export * from "./template-releases.js";
 export * from "./template-test-versions.js";
+
+export {
+  UnifiedTemplatePreviewActivationRegistry as TemplatePreviewActivationRegistry
+} from "./template-release-compatibility.js";
+export {
+  TemplatePreviewActivationRegistry as LegacyTemplatePreviewActivationRegistry
+} from "./template-preview-activation.js";
 
 export {
   DomainEventIdempotencyConflictError,

@@ -29,6 +29,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "structure.css",
       "template-field.css",
       "template-trial.css",
+      "template-multi-trial.css",
       "template-activation.css"
     ],
     contentType: "text/css; charset=utf-8",
@@ -44,6 +45,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     appendFileNames: [
       "document-structure.js",
       "template-trial.js",
+      "template-multi-trial.js",
       "template-activation.js"
     ],
     contentType: "text/javascript; charset=utf-8",

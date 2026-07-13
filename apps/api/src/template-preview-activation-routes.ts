@@ -4,7 +4,8 @@ import {
   ContentAddressedObjectStore,
   TemplateActivationValidationError,
   TemplatePreviewActivationRegistry,
-  TemplatePreviewConflictError
+  TemplatePreviewConflictError,
+  type TemplateReleaseCandidateKind
 } from "@docomator/storage";
 
 import {
@@ -12,7 +13,7 @@ import {
   mutationContextFromRequest
 } from "./request-context.js";
 
-interface TestedVersionParams {
+interface VersionParams {
   spaceId: string;
   versionId: string;
 }
@@ -49,6 +50,16 @@ function officeMediaType(format: "docx" | "xlsx"): string {
     : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 }
 
+const versionParamsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["spaceId", "versionId"],
+  properties: {
+    spaceId: { type: "string", minLength: 1, maxLength: 160 },
+    versionId: { type: "string", minLength: 1, maxLength: 160 }
+  }
+} as const;
+
 const previewParamsSchema = {
   type: "object",
   additionalProperties: false,
@@ -59,31 +70,21 @@ const previewParamsSchema = {
   }
 } as const;
 
-export function registerTemplatePreviewActivationRoutes(
+function registerPreviewRequestRoute(
   app: FastifyInstance,
-  objectStore: ContentAddressedObjectStore,
-  registry: TemplatePreviewActivationRegistry
+  registry: TemplatePreviewActivationRegistry,
+  route: string,
+  versionKind: TemplateReleaseCandidateKind
 ): void {
-  app.post<{ Params: TestedVersionParams }>(
-    "/api/v1/spaces/:spaceId/template-test-versions/:versionId/preview",
-    {
-      schema: {
-        params: {
-          type: "object",
-          additionalProperties: false,
-          required: ["spaceId", "versionId"],
-          properties: {
-            spaceId: { type: "string", minLength: 1, maxLength: 160 },
-            versionId: { type: "string", minLength: 1, maxLength: 160 }
-          }
-        }
-      }
-    },
+  app.post<{ Params: VersionParams }>(
+    route,
+    { schema: { params: versionParamsSchema } },
     async (request, reply) => {
       const result = registry.requestPreview(
         {
           spaceId: request.params.spaceId,
-          testVersionId: request.params.versionId
+          versionId: request.params.versionId,
+          versionKind
         },
         mutationContextFromRequest(request)
       );
@@ -101,6 +102,25 @@ export function registerTemplatePreviewActivationRoutes(
             : null
       });
     }
+  );
+}
+
+export function registerTemplatePreviewActivationRoutes(
+  app: FastifyInstance,
+  objectStore: ContentAddressedObjectStore,
+  registry: TemplatePreviewActivationRegistry
+): void {
+  registerPreviewRequestRoute(
+    app,
+    registry,
+    "/api/v1/spaces/:spaceId/template-test-versions/:versionId/preview",
+    "single"
+  );
+  registerPreviewRequestRoute(
+    app,
+    registry,
+    "/api/v1/spaces/:spaceId/template-multi-test-versions/:versionId/preview",
+    "multi"
   );
 
   app.get<{ Params: PreviewParams }>(

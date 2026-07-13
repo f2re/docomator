@@ -18,7 +18,7 @@
     "test": "npm run test -w @docomator/contracts && npm run test -w @docomator/config && npm run test -w @docomator/storage && npm run test -w @docomator/document-intake && npm run test -w @docomator/template-compiler && npm run test -w @docomator/api && npm run test -w @docomator/worker && node --test scripts/runtime/*.test.mjs",
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:shell": "bash scripts/ci/validate-shell.sh",
-    "check:ui": "node --check apps/api/ui/app.js && node --check apps/api/ui/document-intake.js && node --check apps/api/ui/document-structure.js && node --check apps/api/ui/template-trial.js && node --check apps/api/ui/template-activation.js",
+    "check:ui": "node --check apps/api/ui/app.js && node --check apps/api/ui/document-intake.js && node --check apps/api/ui/document-structure.js && node --check apps/api/ui/template-trial.js && node --check apps/api/ui/template-multi-trial.js && node --check apps/api/ui/template-activation.js",
     "check:language": "node scripts/ci/check-user-facing-language.mjs",
     "check": "npm run clean && npm run build && npm run test && npm run check:docs && npm run check:shell && npm run check:ui && npm run check:language",
     "start:api": "node apps/api/dist/server.js",
