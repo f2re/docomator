@@ -1,8 +1,8 @@
 import {
   ContentAddressedObjectStore,
   DocumentGenerationRegistry,
-  type DocumentGenerationField,
-  type DocumentGenerationMember,
+  documentValueMissing,
+  resolveDocumentMemberValues,
   type JsonValue
 } from "@docomator/storage";
 import {
@@ -49,78 +49,6 @@ function safeName(value: string, fallback: string): string {
     .trim()
     .slice(0, 120);
   return normalized.length === 0 ? fallback : normalized;
-}
-
-function propertyCandidates(fieldKey: string): string[] {
-  const normalized = fieldKey.trim().toLowerCase();
-  const result = [normalized];
-  for (const prefix of ["subject.", "person.", "recipient.", "user."]) {
-    if (normalized.startsWith(prefix) && normalized.length > prefix.length) {
-      result.push(normalized.slice(prefix.length));
-    }
-  }
-  return [...new Set(result)];
-}
-
-function resolveValue(
-  field: DocumentGenerationField,
-  member: DocumentGenerationMember,
-  context: { spaceName: string; spaceKey: string; audienceCount: number }
-): unknown {
-  const key = field.key.trim().toLowerCase();
-  if (key === "space.name") return context.spaceName;
-  if (key === "space.key") return context.spaceKey;
-  if (key === "audience.count") return context.audienceCount;
-  if (key === "subject.entity_id" || key === "entity_id") return member.entityId;
-  if (key === "subject.entity_type" || key === "entity_type") {
-    return member.entityTypeKey;
-  }
-  if (key === "subject.position" || key === "position") return member.position + 1;
-
-  for (const candidate of propertyCandidates(key)) {
-    if (Object.prototype.hasOwnProperty.call(member.properties, candidate)) {
-      return member.properties[candidate];
-    }
-  }
-
-  if (
-    key === "subject.display_name" ||
-    key === "display_name" ||
-    key === "full_name" ||
-    key === "fio" ||
-    key.endsWith(".full_name") ||
-    key.endsWith(".display_name")
-  ) {
-    return member.displayName;
-  }
-  return undefined;
-}
-
-function missing(value: unknown): boolean {
-  return value === undefined || value === null || value === "";
-}
-
-function renderValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((item) => String(item ?? "")).join(", ");
-  if (value !== null && typeof value === "object") return JSON.stringify(value);
-  return value;
-}
-
-function resolveMember(
-  fields: readonly DocumentGenerationField[],
-  member: DocumentGenerationMember,
-  context: { spaceName: string; spaceKey: string; audienceCount: number }
-): {
-  values: unknown[];
-  missingRequired: DocumentGenerationField[];
-} {
-  const values = fields.map((field) => renderValue(resolveValue(field, member, context)));
-  return {
-    values,
-    missingRequired: fields.filter(
-      (field, index) => field.required && missing(values[index])
-    )
-  };
 }
 
 function errorPayload(message: string, code = "document_generation_failed"): JsonValue {
@@ -171,7 +99,11 @@ export function createDocumentGenerationHandler(
         options.registry.startUnit(unit.id, context);
         const rows = work.members.map((member) => ({
           member,
-          resolved: resolveMember(work.template.fields, member, shared)
+          resolved: resolveDocumentMemberValues(
+            work.template.fields,
+            member,
+            shared
+          )
         }));
         const missingRows = rows.filter(
           (row) => row.resolved.missingRequired.length > 0
@@ -246,7 +178,11 @@ export function createDocumentGenerationHandler(
             );
             continue;
           }
-          const resolved = resolveMember(work.template.fields, member, shared);
+          const resolved = resolveDocumentMemberValues(
+            work.template.fields,
+            member,
+            shared
+          );
           if (resolved.missingRequired.length > 0) {
             options.registry.failUnit(
               unit.id,
@@ -264,7 +200,7 @@ export function createDocumentGenerationHandler(
             compiled,
             fields: work.template.fields.map((field, index) => {
               const value = resolved.values[index];
-              const emptyOptional = !field.required && missing(value);
+              const emptyOptional = !field.required && documentValueMissing(value);
               return {
                 fieldId: field.id,
                 fieldKey: field.key,
@@ -318,11 +254,7 @@ export function createDocumentGenerationHandler(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       try {
-        options.registry.failJob(
-          jobId,
-          errorPayload(message),
-          context
-        );
+        options.registry.failJob(jobId, errorPayload(message), context);
       } catch {
         // The original error is more useful to the worker queue.
       }
