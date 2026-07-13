@@ -28,6 +28,13 @@ export type {
   RenderedScalarFieldValue
 } from "./multi-field.js";
 
+export { renderAudienceAggregate } from "./audience-render.js";
+export type {
+  AudienceAggregateField,
+  AudienceAggregateMember,
+  RenderAudienceAggregateInput
+} from "./audience-render.js";
+
 export {
   readScalarValue,
   renderScalarValue
