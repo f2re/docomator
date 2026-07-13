@@ -282,7 +282,14 @@ test("multi-field compiler rejects duplicate coordinates and stale element ident
       fileName: "Письмо.docx",
       expectedSourceSha256: input.structure.sourceSha256,
       expectedStructureSha256: input.structure.structureSha256,
-      fields: [input.fields[0], { ...input.fields[1], binding: input.fields[0].binding }]
+      fields: [
+  input.fields[0],
+  {
+    ...input.fields[1],
+    elementId: input.fields[0].elementId,
+    binding: input.fields[0].binding
+  }
+]
     }),
     (error: unknown) =>
       error instanceof TemplateCompilerError &&
