@@ -10,6 +10,10 @@ import type {
 import { DocumentIntakeError } from "@docomator/document-intake";
 import {
   ContentAddressedObjectStore,
+  DocumentGenerationConflictError,
+  DocumentGenerationNotFoundError,
+  DocumentGenerationRegistry,
+  DocumentGenerationValidationError,
   DocumentQuarantineNotFoundError,
   DocumentQuarantineRegistry,
   DocumentQuarantineValidationError,
@@ -48,6 +52,7 @@ import Fastify, {
   type FastifyInstance
 } from "fastify";
 
+import { registerDocumentGenerationRoutes } from "./document-generation-routes.js";
 import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { registerMultiFieldTestVersionRoutes } from "./multi-field-test-version-routes.js";
@@ -70,6 +75,7 @@ export interface AppDependencies {
   objectStore?: ContentAddressedObjectStore;
   knowledgeRegistry?: KnowledgeRegistry;
   spaceRegistry?: SpaceRegistry;
+  documentGenerationRegistry?: DocumentGenerationRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
   templateTestVersionRegistry?: TemplateTestVersionRegistry;
@@ -110,27 +116,22 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "template_test_versions",
         "template_multi_test_versions",
         "template_multi_test_version_fields",
-        "template_preview_requests",
-        "template_active_versions",
-        "template_active_pointers"
+        "template_release_candidates",
+        "template_release_candidate_fields",
+        "template_release_previews",
+        "template_releases",
+        "template_release_pointers",
+        "document_generation_jobs",
+        "document_generation_units"
       ];
+      const placeholders = requiredTables.map(() => "?").join(", ");
       const rows = database
         .prepare(`
           SELECT name
           FROM sqlite_master
-          WHERE type = 'table'
-            AND name IN (
-              'schema_migrations', 'entity_types', 'property_definitions',
-              'worker_jobs', 'domain_events', 'spaces',
-              'space_entity_ownership', 'audience_groups', 'audience_snapshots',
-              'document_quarantine_records', 'template_drafts',
-              'template_draft_fields', 'template_test_versions',
-              'template_multi_test_versions', 'template_multi_test_version_fields',
-              'template_preview_requests', 'template_active_versions',
-              'template_active_pointers'
-            )
+          WHERE type = 'table' AND name IN (${placeholders})
         `)
-        .all() as unknown as Array<{ name: string }>;
+        .all(...requiredTables) as unknown as Array<{ name: string }>;
       return new Set(rows.map((row) => row.name)).size === requiredTables.length;
     });
   } catch {
@@ -152,6 +153,9 @@ export function buildApp(
   const knowledgeRegistry =
     dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
   const spaceRegistry = dependencies.spaceRegistry ?? new SpaceRegistry(store);
+  const documentGenerationRegistry =
+    dependencies.documentGenerationRegistry ??
+    new DocumentGenerationRegistry(store, objectStore);
   const quarantineRegistry =
     dependencies.quarantineRegistry ??
     new DocumentQuarantineRegistry(store, objectStore);
@@ -205,6 +209,18 @@ export function buildApp(
       statusCode = 422;
       code = error.code;
       message = error.userMessage;
+    } else if (error instanceof DocumentGenerationValidationError) {
+      statusCode = 400;
+      code = "document_generation_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof DocumentGenerationNotFoundError) {
+      statusCode = 404;
+      code = "document_generation_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof DocumentGenerationConflictError) {
+      statusCode = 409;
+      code = "document_generation_conflict";
+      message = toUserMessage(error);
     } else if (error instanceof DocumentQuarantineValidationError) {
       statusCode = 400;
       code = "document_quarantine_validation_failed";
@@ -371,6 +387,11 @@ export function buildApp(
   registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
+  registerDocumentGenerationRoutes(
+    app,
+    objectStore,
+    documentGenerationRegistry
+  );
   registerDocumentIntakeRoutes(app, quarantineRegistry, spaceRegistry);
   registerTemplateDraftRoutes(
     app,

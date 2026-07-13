@@ -30,7 +30,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "template-field.css",
       "template-trial.css",
       "template-multi-trial.css",
-      "template-activation.css"
+      "template-activation.css",
+      "document-generation.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -46,7 +47,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-structure.js",
       "template-trial.js",
       "template-multi-trial.js",
-      "template-activation.js"
+      "template-activation.js",
+      "document-generation.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
