@@ -31,7 +31,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "template-trial.css",
       "template-multi-trial.css",
       "template-activation.css",
-      "document-generation.css"
+      "document-generation.css",
+      "document-data-correction.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -49,7 +50,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "template-multi-trial.js",
       "template-activation.js",
       "document-generation.js",
-      "document-generation-preflight.js"
+      "document-generation-preflight.js",
+      "document-data-correction.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
