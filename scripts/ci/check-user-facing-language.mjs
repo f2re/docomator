@@ -16,6 +16,7 @@ const files = [
   "apps/api/ui/document-generation-preflight.js",
   "apps/api/ui/document-data-correction.js",
   "apps/api/ui/document-generation-retry.js",
+  "apps/api/ui/document-delivery.js",
   "apps/api/src/user-message.ts",
   "scripts/offline/first-run.sh"
 ];
