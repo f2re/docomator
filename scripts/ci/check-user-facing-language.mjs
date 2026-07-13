@@ -13,6 +13,7 @@ const files = [
   "apps/api/ui/template-multi-trial.js",
   "apps/api/ui/template-activation.js",
   "apps/api/ui/document-generation.js",
+  "apps/api/ui/document-generation-preflight.js",
   "apps/api/src/user-message.ts",
   "scripts/offline/first-run.sh"
 ];
