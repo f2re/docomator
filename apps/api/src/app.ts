@@ -57,6 +57,7 @@ import Fastify, {
 } from "fastify";
 
 import { registerDocumentGenerationRoutes } from "./document-generation-routes.js";
+import { registerDocumentGenerationRetryRoutes } from "./document-generation-retry-routes.js";
 import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
 import { registerDocumentPreflightRoutes } from "./document-preflight-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
@@ -411,6 +412,11 @@ export function buildApp(
   registerDocumentGenerationRoutes(
     app,
     objectStore,
+    documentGenerationRegistry
+  );
+  registerDocumentGenerationRetryRoutes(
+    app,
+    spaceRegistry,
     documentGenerationRegistry
   );
   registerDocumentIntakeRoutes(app, quarantineRegistry, spaceRegistry);
