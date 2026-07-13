@@ -1,20 +1,42 @@
 import path from "node:path";
 
 import { loadWorkerConfig } from "@docomator/config";
-import { SqliteStore, WorkerQueue } from "@docomator/storage";
+import {
+  ContentAddressedObjectStore,
+  SqliteStore,
+  TemplatePreviewActivationRegistry,
+  WorkerQueue
+} from "@docomator/storage";
 
 import { runWorkerLoop } from "./loop.js";
 import { JobHandlerRegistry, processNextJob } from "./processor.js";
+import { createTemplatePreviewHandler } from "./template-preview-handler.js";
 
 const config = loadWorkerConfig();
 const controller = new AbortController();
 const store = new SqliteStore({
   databasePath: path.join(config.dataDir, "docomator.db")
 });
+const objectStore = new ContentAddressedObjectStore(
+  path.join(config.dataDir, "objects")
+);
 const queue = new WorkerQueue(store);
+const previewRegistry = new TemplatePreviewActivationRegistry(
+  store,
+  objectStore,
+  { queue }
+);
 const handlers = new JobHandlerRegistry();
 
 handlers.register("system.noop", async () => undefined);
+handlers.register(
+  "template.preview",
+  createTemplatePreviewHandler({
+    registry: previewRegistry,
+    objectStore,
+    config
+  })
+);
 
 function log(
   level: "info" | "error",
@@ -46,7 +68,9 @@ try {
   log("info", "worker started", {
     pollIntervalMs: config.pollIntervalMs,
     leaseDurationMs: config.leaseDurationMs,
-    llmEnabled: config.llmEnabled
+    llmEnabled: config.llmEnabled,
+    previewEnabled: config.previewEnabled,
+    libreOfficeBinary: path.basename(config.libreOfficeBinary)
   });
 
   await runWorkerLoop({
