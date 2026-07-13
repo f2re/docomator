@@ -35,6 +35,18 @@ const rules: readonly MessageRule[] = [
     "Пробное значение не прошло обратную проверку и версия не сохранена."],
   [/^Test version format does not match the template draft$/i, () =>
     "Формат проверяемой версии не совпадает с форматом черновика."],
+  [/^LibreOffice did not produce a valid PDF preview$/i, () =>
+    "LibreOffice не создал допустимый PDF предварительного просмотра."],
+  [/^PDF preview exceeds the 128 MB limit$/i, () =>
+    "PDF предварительного просмотра превышает предел 128 МБ."],
+  [/^Template preview PDF is not ready$/i, () =>
+    "PDF предварительного просмотра ещё не готов. Дождитесь завершения операции."],
+  [/^Template preview must be ready before activation$/i, () =>
+    "Перед активацией дождитесь готового предварительного просмотра."],
+  [/^Ready preview already points to another PDF$/i, () =>
+    "Для запроса уже сохранён другой PDF. Обновите страницу и проверьте журнал операции."],
+  [/^Ready preview cannot be replaced with a failure$/i, () =>
+    "Готовый предварительный просмотр нельзя заменить ошибкой."],
   [/^expectedSha256 must contain 64 hexadecimal characters$/i, () =>
     "Контрольная сумма документа имеет недопустимый формат."],
   [/^Document checksum changed after the safety check$/i, () =>
@@ -53,6 +65,12 @@ const rules: readonly MessageRule[] = [
     "Поле шаблона не найдено в этом черновике."],
   [/^Template test version was not found in this space: (.+)$/i, () =>
     "Проверенная версия шаблона не найдена в выбранном пространстве."],
+  [/^Template preview was not found in this space: (.+)$/i, () =>
+    "Запрос предварительного просмотра не найден в выбранном пространстве."],
+  [/^Ready template preview was not found in this space: (.+)$/i, () =>
+    "Готовый предварительный просмотр не найден в выбранном пространстве."],
+  [/^Active template version was not found in this space: (.+)$/i, () =>
+    "Активная версия шаблона не найдена в выбранном пространстве."],
   [/^Structure element was not found: (.+)$/i, () =>
     "Выбранный элемент не найден в сохранённой структуре. Постройте структуру заново и повторите выбор."],
   [/^Template field already exists: (.+)$/i, (match) =>
@@ -120,6 +138,8 @@ function russianObjectName(value: string): string {
     "template draft": "Черновик шаблона",
     "template field": "Поле шаблона",
     "template test version": "Проверенная версия",
+    "template preview": "Предварительный просмотр",
+    "active template version": "Активная версия шаблона",
     "structure element": "Элемент структуры",
     "quarantine document": "Сохранённый исходник"
   };

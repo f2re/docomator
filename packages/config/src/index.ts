@@ -21,6 +21,10 @@ export interface WorkerConfig extends CommonConfig {
   leaseDurationMs: number;
   retryBaseMs: number;
   retryMaxMs: number;
+  previewEnabled: boolean;
+  libreOfficeBinary: string;
+  previewTimeoutMs: number;
+  previewMaxOutputBytes: number;
 }
 
 const LOG_LEVELS = new Set<CommonConfig["logLevel"]>([
@@ -140,6 +144,23 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
       86_400_000
     ),
     retryBaseMs,
-    retryMaxMs
+    retryMaxMs,
+    previewEnabled: parseBoolean(env.DOCOMATOR_PREVIEW_ENABLED, true),
+    libreOfficeBinary:
+      env.DOCOMATOR_LIBREOFFICE_BIN?.trim() || "/usr/bin/libreoffice",
+    previewTimeoutMs: parseInteger(
+      "DOCOMATOR_PREVIEW_TIMEOUT_MS",
+      env.DOCOMATOR_PREVIEW_TIMEOUT_MS,
+      120_000,
+      5_000,
+      900_000
+    ),
+    previewMaxOutputBytes: parseInteger(
+      "DOCOMATOR_PREVIEW_MAX_BYTES",
+      env.DOCOMATOR_PREVIEW_MAX_BYTES,
+      128 * 1024 * 1024,
+      1_024,
+      512 * 1024 * 1024
+    )
   };
 }

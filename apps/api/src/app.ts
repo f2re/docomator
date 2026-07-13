@@ -23,10 +23,16 @@ import {
   SpaceRegistry,
   SpaceValidationError,
   SqliteStore,
+  TemplateActivationNotFoundError,
+  TemplateActivationValidationError,
   TemplateDraftConflictError,
   TemplateDraftNotFoundError,
   TemplateDraftRegistry,
   TemplateDraftValidationError,
+  TemplatePreviewActivationRegistry,
+  TemplatePreviewConflictError,
+  TemplatePreviewNotFoundError,
+  TemplatePreviewValidationError,
   TemplateTestVersionConflictError,
   TemplateTestVersionNotFoundError,
   TemplateTestVersionRegistry,
@@ -43,6 +49,7 @@ import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
 import { registerTemplateDraftRoutes } from "./template-draft-routes.js";
+import { registerTemplatePreviewActivationRoutes } from "./template-preview-activation-routes.js";
 import { registerTemplateTestVersionRoutes } from "./template-test-version-routes.js";
 import { registerUiRoutes } from "./ui-routes.js";
 import {
@@ -61,6 +68,7 @@ export interface AppDependencies {
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
   templateTestVersionRegistry?: TemplateTestVersionRegistry;
+  templatePreviewActivationRegistry?: TemplatePreviewActivationRegistry;
   uiDirectory?: string;
 }
 
@@ -93,7 +101,10 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "document_quarantine_records",
         "template_drafts",
         "template_draft_fields",
-        "template_test_versions"
+        "template_test_versions",
+        "template_preview_requests",
+        "template_active_versions",
+        "template_active_pointers"
       ];
       const rows = database
         .prepare(`
@@ -105,7 +116,9 @@ function databaseSchemaReady(store: SqliteStore): boolean {
               'worker_jobs', 'domain_events', 'spaces',
               'space_entity_ownership', 'audience_groups', 'audience_snapshots',
               'document_quarantine_records', 'template_drafts',
-              'template_draft_fields', 'template_test_versions'
+              'template_draft_fields', 'template_test_versions',
+              'template_preview_requests', 'template_active_versions',
+              'template_active_pointers'
             )
         `)
         .all() as unknown as Array<{ name: string }>;
@@ -138,6 +151,9 @@ export function buildApp(
   const templateTestVersionRegistry =
     dependencies.templateTestVersionRegistry ??
     new TemplateTestVersionRegistry(store, objectStore);
+  const templatePreviewActivationRegistry =
+    dependencies.templatePreviewActivationRegistry ??
+    new TemplatePreviewActivationRegistry(store, objectStore);
 
   const app = Fastify({
     logger: {
@@ -208,6 +224,26 @@ export function buildApp(
     } else if (error instanceof TemplateTestVersionConflictError) {
       statusCode = 409;
       code = "template_test_version_conflict";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplatePreviewValidationError) {
+      statusCode = 400;
+      code = "template_preview_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplatePreviewNotFoundError) {
+      statusCode = 404;
+      code = "template_preview_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplatePreviewConflictError) {
+      statusCode = 409;
+      code = "template_preview_conflict";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplateActivationValidationError) {
+      statusCode = 400;
+      code = "template_activation_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof TemplateActivationNotFoundError) {
+      statusCode = 404;
+      code = "template_activation_not_found";
       message = toUserMessage(error);
     } else if (error instanceof KnowledgeValidationError) {
       statusCode = 400;
@@ -323,6 +359,11 @@ export function buildApp(
     objectStore,
     templateDraftRegistry,
     templateTestVersionRegistry
+  );
+  registerTemplatePreviewActivationRoutes(
+    app,
+    objectStore,
+    templatePreviewActivationRegistry
   );
 
   return app;

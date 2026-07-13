@@ -28,7 +28,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "quarantine.css",
       "structure.css",
       "template-field.css",
-      "template-trial.css"
+      "template-trial.css",
+      "template-activation.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -42,7 +43,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "document-intake.js",
     appendFileNames: [
       "document-structure.js",
-      "template-trial.js"
+      "template-trial.js",
+      "template-activation.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -88,7 +90,7 @@ export function registerUiRoutes(
     if (request.url === "/" || request.url.startsWith("/ui/")) {
       reply.header(
         "content-security-policy",
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
       );
       reply.header("referrer-policy", "no-referrer");
       reply.header("permissions-policy", "camera=(), microphone=(), geolocation=()");
