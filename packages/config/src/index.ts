@@ -12,6 +12,7 @@ export interface CommonConfig {
 export interface ApiConfig extends CommonConfig {
   host: string;
   port: number;
+  networkDeliveryRoot: string | null;
 }
 
 export interface WorkerConfig extends CommonConfig {
@@ -89,10 +90,15 @@ function common(env: NodeJS.ProcessEnv): CommonConfig {
 }
 
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
+  const networkDeliveryRoot = env.DOCOMATOR_NETWORK_DELIVERY_ROOT?.trim();
   return {
     ...common(env),
     host: env.DOCOMATOR_HOST ?? "127.0.0.1",
-    port: parseInteger("DOCOMATOR_PORT", env.DOCOMATOR_PORT, 8080, 1, 65535)
+    port: parseInteger("DOCOMATOR_PORT", env.DOCOMATOR_PORT, 8080, 1, 65535),
+    networkDeliveryRoot:
+      networkDeliveryRoot === undefined || networkDeliveryRoot.length === 0
+        ? null
+        : path.resolve(networkDeliveryRoot)
   };
 }
 
