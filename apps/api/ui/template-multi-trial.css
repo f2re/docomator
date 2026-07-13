@@ -1,0 +1,304 @@
+.template-multi-trial-panel {
+  margin-top: 1.25rem;
+}
+
+.multi-trial-card,
+.multi-trial-content,
+.multi-trial-form,
+.multi-trial-history {
+  display: grid;
+  gap: 1rem;
+}
+
+.multi-trial-guidance,
+.multi-trial-state,
+.multi-trial-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  padding: 1rem;
+  background: var(--surface-2);
+}
+
+.multi-trial-guidance p,
+.multi-trial-state p,
+.multi-trial-state small,
+.multi-trial-success p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.multi-trial-state strong,
+.multi-trial-success strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.multi-trial-state.is-pending {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--accent-soft);
+}
+
+.multi-trial-state.is-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: var(--danger-soft);
+}
+
+.multi-trial-form {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.multi-trial-draft-select,
+.multi-trial-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.multi-trial-draft-select > span,
+.multi-trial-field > span strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.multi-trial-draft-select select,
+.multi-trial-field input,
+.multi-trial-field select,
+.multi-trial-field textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+}
+
+.multi-trial-field textarea {
+  resize: vertical;
+}
+
+.multi-trial-draft-select select:focus,
+.multi-trial-field input:focus,
+.multi-trial-field select:focus,
+.multi-trial-field textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 1px;
+}
+
+.multi-trial-draft-select small,
+.multi-trial-field small,
+.multi-trial-actions p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.multi-trial-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.multi-trial-field {
+  align-content: start;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  padding: 0.85rem;
+  background: var(--surface-2);
+}
+
+.multi-trial-field > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.multi-trial-field em {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.multi-trial-actions,
+.multi-trial-downloads,
+.multi-trial-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.multi-trial-actions {
+  justify-content: space-between;
+}
+
+.multi-trial-actions p {
+  margin: 0;
+  max-width: 52rem;
+}
+
+.multi-trial-actions p.is-loading {
+  color: var(--accent);
+}
+
+.multi-trial-actions p.is-success {
+  color: var(--success);
+}
+
+.multi-trial-actions p.is-error {
+  color: var(--danger);
+}
+
+.multi-trial-success {
+  display: grid;
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--surface));
+}
+
+.multi-trial-success-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.multi-trial-success-heading > span {
+  font-size: 1.35rem;
+}
+
+.multi-trial-check-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.multi-trial-check-list > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  background: var(--surface);
+}
+
+.multi-trial-check-list span,
+.multi-trial-check-list small {
+  color: var(--muted);
+}
+
+.multi-trial-check-list strong,
+.multi-trial-check-list code {
+  overflow-wrap: anywhere;
+}
+
+.multi-trial-downloads {
+  flex-wrap: wrap;
+}
+
+.multi-trial-downloads a {
+  text-decoration: none;
+}
+
+.multi-trial-success details {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.multi-trial-success dl {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.75rem 0 0;
+}
+
+.multi-trial-success dl div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.multi-trial-success dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.multi-trial-success dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.multi-trial-history {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.multi-trial-history h3,
+.multi-trial-history p {
+  margin: 0;
+}
+
+.multi-trial-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  padding: 0.85rem;
+  background: var(--surface-2);
+}
+
+.multi-trial-history-item > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.multi-trial-history-item span {
+  color: var(--muted);
+}
+
+.multi-trial-history-actions {
+  flex-wrap: wrap;
+}
+
+.multi-trial-history-actions a {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.multi-trial-history-empty {
+  color: var(--muted);
+  padding: 0.75rem 0;
+}
+
+.multi-trial-history-empty.is-error {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .multi-trial-fields,
+  .multi-trial-check-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .multi-trial-actions,
+  .multi-trial-history-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .multi-trial-actions .primary-button,
+  .multi-trial-downloads a {
+    width: 100%;
+    text-align: center;
+  }
+}
