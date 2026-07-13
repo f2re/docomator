@@ -7,6 +7,7 @@ let activationPollTimer = null;
 let activationPollToken = 0;
 let activationBusy = false;
 let activationReloadTimer = null;
+let activationSourceMarker = "";
 
 function activationEscape(value) {
   return String(value ?? "").replace(
@@ -500,15 +501,31 @@ function bindActivationSpaceSelect() {
   void loadActiveTemplateCatalog();
 }
 
+function activationSuccessMarker() {
+  return [
+    document.querySelector("#templateTrialMessage")?.classList.contains("is-success")
+      ? document.querySelector("#templateTrialMessage")?.textContent?.trim() || ""
+      : "",
+    document.querySelector("#documentFieldMessage")?.classList.contains("is-success")
+      ? document.querySelector("#documentFieldMessage")?.textContent?.trim() || ""
+      : ""
+  ]
+    .filter(Boolean)
+    .join("|");
+}
+
 if (activationView) {
   createActivationPanel();
   bindActivationSpaceSelect();
   new MutationObserver(() => {
     bindActivationSpaceSelect();
-    if (
-      document.querySelector("#templateTrialMessage")?.classList.contains("is-success") ||
-      document.querySelector("#documentFieldMessage")?.classList.contains("is-success")
-    ) {
+    const marker = activationSuccessMarker();
+    if (marker === "") {
+      activationSourceMarker = "";
+      return;
+    }
+    if (marker !== activationSourceMarker) {
+      activationSourceMarker = marker;
       scheduleActivationReload();
     }
   }).observe(activationView, { childList: true, subtree: true, attributes: true });
