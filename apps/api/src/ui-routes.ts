@@ -51,7 +51,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "template-activation.js",
       "document-generation.js",
       "document-generation-preflight.js",
-      "document-data-correction.js"
+      "document-data-correction.js",
+      "document-generation-retry.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
