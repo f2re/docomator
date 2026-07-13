@@ -3,11 +3,13 @@ import path from "node:path";
 import { loadWorkerConfig } from "@docomator/config";
 import {
   ContentAddressedObjectStore,
+  DocumentGenerationRegistry,
   SqliteStore,
   TemplatePreviewActivationRegistry,
   WorkerQueue
 } from "@docomator/storage";
 
+import { createDocumentGenerationHandler } from "./document-generation-handler.js";
 import { runWorkerLoop } from "./loop.js";
 import { JobHandlerRegistry, processNextJob } from "./processor.js";
 import { createTemplatePreviewHandler } from "./template-preview-handler.js";
@@ -26,6 +28,11 @@ const previewRegistry = new TemplatePreviewActivationRegistry(
   objectStore,
   { queue }
 );
+const generationRegistry = new DocumentGenerationRegistry(
+  store,
+  objectStore,
+  { queue }
+);
 const handlers = new JobHandlerRegistry();
 
 handlers.register("system.noop", async () => undefined);
@@ -35,6 +42,14 @@ handlers.register(
     registry: previewRegistry,
     objectStore,
     config
+  })
+);
+handlers.register(
+  "document.generate",
+  createDocumentGenerationHandler({
+    registry: generationRegistry,
+    objectStore,
+    workerId: config.workerId
   })
 );
 
