@@ -9,8 +9,16 @@ export * from "./property-codec.js";
 export * from "./spaces.js";
 export * from "./template-drafts.js";
 export * from "./template-preview-activation.js";
+export * from "./template-release-compatibility.js";
 export * from "./template-releases.js";
 export * from "./template-test-versions.js";
+
+export {
+  UnifiedTemplatePreviewActivationRegistry as TemplatePreviewActivationRegistry
+} from "./template-release-compatibility.js";
+export {
+  TemplatePreviewActivationRegistry as LegacyTemplatePreviewActivationRegistry
+} from "./template-preview-activation.js";
 
 export {
   DomainEventIdempotencyConflictError,
