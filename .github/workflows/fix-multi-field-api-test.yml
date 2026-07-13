@@ -1,0 +1,49 @@
+name: Исправить ожидание русского сообщения многополевого API
+
+on:
+  push:
+    branches:
+      - agent/multi-field-test-version
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: agent/multi-field-test-version
+          fetch-depth: 0
+
+      - name: Уточнить регулярное выражение
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/api/src/multi-field-test-version-routes.test.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '/все поля черновика/ui'
+          new = '/все поля.*черновика/ui'
+          if old not in text:
+              raise SystemExit('Не найдено ожидаемое регулярное выражение')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Зафиксировать исправление
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/api/src/multi-field-test-version-routes.test.ts
+          git commit -m 'Исправить проверку сообщения многополевого API'
+          git push origin HEAD:agent/multi-field-test-version
