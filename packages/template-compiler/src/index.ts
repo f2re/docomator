@@ -14,6 +14,21 @@ export type {
 } from "./compiler.js";
 
 export {
+  compileScalarFields,
+  renderScalarValues
+} from "./multi-field.js";
+
+export type {
+  CompileScalarFieldsInput,
+  CompileScalarFieldsResult,
+  CompiledScalarFieldResult,
+  RenderScalarFieldValue,
+  RenderScalarValuesInput,
+  RenderScalarValuesResult,
+  RenderedScalarFieldValue
+} from "./multi-field.js";
+
+export {
   readScalarValue,
   renderScalarValue
 } from "./scalar-render.js";
