@@ -117,6 +117,9 @@ curl --fail --silent --show-error \
   | grep -F 'Проверить заполнение' >/dev/null
 curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
+  | grep -F 'Проверить все поля' >/dev/null
+curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
   | grep -F 'Создать предварительный просмотр' >/dev/null
 curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
@@ -130,6 +133,9 @@ curl --fail --silent --show-error \
 curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
   | grep -F '.trial-downloads' >/dev/null
+curl --fail --silent --show-error \
+  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
+  | grep -F '.multi-trial-check-list' >/dev/null
 curl --fail --silent --show-error \
   "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
   | grep -F '.activation-preview-frame' >/dev/null
