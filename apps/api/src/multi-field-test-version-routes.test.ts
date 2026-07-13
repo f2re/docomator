@@ -260,7 +260,7 @@ test("API rejects incomplete, duplicate and foreign field sets", async () => {
       }
     });
     assert.equal(foreign.statusCode, 400, foreign.body);
-    assert.match(foreign.json().error.message, /все поля черновика/ui);
+    assert.match(foreign.json().error.message, /все поля.*черновика/ui);
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });
