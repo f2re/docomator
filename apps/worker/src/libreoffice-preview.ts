@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
 import {
   lstat,
   mkdir,
@@ -9,6 +9,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import path from "node:path";
+import type { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 
 export type PreviewSourceFormat = "docx" | "xlsx";
@@ -47,6 +48,8 @@ export class LibreOfficePreviewError extends Error {
     super(technicalMessage);
   }
 }
+
+type PreviewChild = ChildProcessByStdio<null, Readable, Readable>;
 
 const MAX_CAPTURE_BYTES = 64 * 1024;
 const MAX_INPUT_BYTES = 64 * 1024 * 1024;
@@ -95,7 +98,7 @@ function capture(
   return currentBytes + accepted.byteLength;
 }
 
-function terminateProcess(child: ChildProcessWithoutNullStreams): void {
+function terminateProcess(child: PreviewChild): void {
   if (child.pid === undefined || child.killed) return;
   try {
     process.kill(-child.pid, "SIGTERM");
@@ -130,7 +133,7 @@ function runLibreOffice(
   signal: AbortSignal
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    let child: ChildProcessWithoutNullStreams;
+    let child: PreviewChild;
     try {
       child = spawn(binary, [...args], {
         cwd,
