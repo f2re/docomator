@@ -29,6 +29,20 @@ const rules: readonly MessageRule[] = [
     "Имя файла не должно содержать путь к каталогу."],
   [/^Document buffer must not be empty$/i, () =>
     "Нельзя сохранить пустой документ."],
+  [/^Multi-field trial requires at least two saved fields$/i, () =>
+    "Для общей проверки сохраните не менее двух полей черновика."],
+  [/^Multi-field trial supports at most 100 saved fields$/i, () =>
+    "За один проход можно проверить не более 100 полей."],
+  [/^Multi-field trial must provide exactly all draft fields;/i, () =>
+    "Для общей проверки заполните все поля текущего черновика без посторонних идентификаторов."],
+  [/^Duplicate fieldId in multi-field request:/i, () =>
+    "Одно поле передано в общую проверку несколько раз."],
+  [/^One or more template fields were not found in this draft$/i, () =>
+    "Одно или несколько полей не найдены в текущем черновике."],
+  [/^Stored template field changed before multi-field testing:/i, () =>
+    "Поле изменилось после подготовки набора. Обновите черновик и повторите проверку."],
+  [/^Multi-field test format does not match the template draft$/i, () =>
+    "Формат многополевой проверки не совпадает с форматом черновика."],
   [/^Compiled and trial documents must not be empty$/i, () =>
     "Нельзя сохранить пустую скомпилированную или пробную копию."],
   [/^Rendered value must match the read-back value$/i, () =>
@@ -138,6 +152,7 @@ function russianObjectName(value: string): string {
     "template draft": "Черновик шаблона",
     "template field": "Поле шаблона",
     "template test version": "Проверенная версия",
+    "multi-field test version": "Многополевая проверенная версия",
     "template preview": "Предварительный просмотр",
     "active template version": "Активная версия шаблона",
     "structure element": "Элемент структуры",
