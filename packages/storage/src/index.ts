@@ -1,5 +1,6 @@
 export * from "./audit.js";
 export * from "./database.js";
+export * from "./document-delivery.js";
 export * from "./document-generation.js";
 export * from "./document-preflight.js";
 export * from "./document-quarantine.js";
