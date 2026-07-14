@@ -29,6 +29,10 @@ import {
   DocumentQuarantineNotFoundError,
   DocumentQuarantineRegistry,
   DocumentQuarantineValidationError,
+  EmailRecipientConflictError,
+  EmailRecipientNotFoundError,
+  EmailRecipientRegistry,
+  EmailRecipientValidationError,
   KnowledgeConflictError,
   KnowledgeNotFoundError,
   KnowledgeRegistry,
@@ -70,6 +74,7 @@ import { registerDocumentGenerationRoutes } from "./document-generation-routes.j
 import { registerDocumentGenerationRetryRoutes } from "./document-generation-retry-routes.js";
 import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
 import { registerDocumentPreflightRoutes } from "./document-preflight-routes.js";
+import { registerEmailRecipientRoutes } from "./email-recipient-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { registerMultiFieldTestVersionRoutes } from "./multi-field-test-version-routes.js";
 import { correlationId } from "./request-context.js";
@@ -95,6 +100,7 @@ export interface AppDependencies {
   documentEmailDeliveryRegistry?: DocumentEmailDeliveryRegistry;
   documentGenerationRegistry?: DocumentGenerationRegistry;
   documentPreflightRegistry?: DocumentPreflightRegistry;
+  emailRecipientRegistry?: EmailRecipientRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
   templateTestVersionRegistry?: TemplateTestVersionRegistry;
@@ -143,7 +149,8 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "document_generation_jobs",
         "document_generation_units",
         "document_deliveries",
-        "document_email_deliveries"
+        "document_email_deliveries",
+        "space_email_recipients"
       ];
       const placeholders = requiredTables.map(() => "?").join(", ");
       const rows = database
@@ -184,6 +191,8 @@ export function buildApp(
     new DocumentGenerationRegistry(store, objectStore);
   const documentPreflightRegistry =
     dependencies.documentPreflightRegistry ?? new DocumentPreflightRegistry(store);
+  const emailRecipientRegistry =
+    dependencies.emailRecipientRegistry ?? new EmailRecipientRegistry(store);
   const quarantineRegistry =
     dependencies.quarantineRegistry ??
     new DocumentQuarantineRegistry(store, objectStore);
@@ -237,6 +246,18 @@ export function buildApp(
       statusCode = 422;
       code = error.code;
       message = error.userMessage;
+    } else if (error instanceof EmailRecipientValidationError) {
+      statusCode = 400;
+      code = "email_recipient_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof EmailRecipientNotFoundError) {
+      statusCode = 404;
+      code = "email_recipient_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof EmailRecipientConflictError) {
+      statusCode = 409;
+      code = "email_recipient_conflict";
+      message = toUserMessage(error);
     } else if (error instanceof DocumentEmailDeliveryValidationError) {
       statusCode = 400;
       code = "document_email_delivery_validation_failed";
@@ -451,6 +472,7 @@ export function buildApp(
   registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
+  registerEmailRecipientRoutes(app, config, emailRecipientRegistry);
   registerDocumentPreflightRoutes(app, documentPreflightRegistry);
   registerDocumentGenerationRoutes(
     app,
