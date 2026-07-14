@@ -7,6 +7,7 @@ export * from "./document-preflight.js";
 export * from "./document-quarantine.js";
 export * from "./document-values.js";
 export * from "./email-address.js";
+export * from "./email-recipients.js";
 export * from "./json.js";
 export * from "./knowledge.js";
 export * from "./multi-field-test-versions.js";
