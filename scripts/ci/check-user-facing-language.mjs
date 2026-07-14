@@ -18,6 +18,7 @@ const files = [
   "apps/api/ui/document-generation-retry.js",
   "apps/api/ui/document-delivery.js",
   "apps/api/ui/document-email-delivery.js",
+  "apps/api/ui/email-recipients.js",
   "apps/api/src/user-message.ts",
   "scripts/offline/first-run.sh"
 ];
