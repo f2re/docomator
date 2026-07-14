@@ -91,13 +91,38 @@ if ((RUN_CHECK == 1)); then
   DELIVERY_ROOT="$(read_value DOCOMATOR_NETWORK_DELIVERY_ROOT)"
   if [[ -n "$DELIVERY_ROOT" ]]; then
     if [[ -d "$DELIVERY_ROOT" && -w "$DELIVERY_ROOT" ]]; then
-      printf '✅ Сетевая доставка доступна: %s\n\n' "$DELIVERY_ROOT"
+      printf '✅ Сетевая доставка доступна: %s\n' "$DELIVERY_ROOT"
     else
-      printf '⚠️  Корень сетевой доставки недоступен для записи: %s\n   Проверьте подключение ресурса и права пользователя службы.\n\n' "$DELIVERY_ROOT" >&2
+      printf '⚠️  Корень сетевой доставки недоступен для записи: %s\n   Проверьте подключение ресурса и права пользователя службы.\n' "$DELIVERY_ROOT" >&2
     fi
   else
-    printf 'ℹ️  Сетевая доставка отключена: DOCOMATOR_NETWORK_DELIVERY_ROOT не задан.\n\n'
+    printf 'ℹ️  Сетевая доставка отключена: DOCOMATOR_NETWORK_DELIVERY_ROOT не задан.\n'
   fi
+
+  SMTP_ENABLED="$(read_value DOCOMATOR_SMTP_ENABLED)"
+  [[ -n "$SMTP_ENABLED" ]] || SMTP_ENABLED="false"
+  if [[ "$SMTP_ENABLED" == "true" ]]; then
+    SMTP_HOST="$(read_value DOCOMATOR_SMTP_HOST)"
+    SMTP_PORT="$(read_value DOCOMATOR_SMTP_PORT)"
+    SMTP_FROM="$(read_value DOCOMATOR_SMTP_FROM)"
+    SMTP_DOMAINS="$(read_value DOCOMATOR_SMTP_ALLOWED_DOMAINS)"
+    SMTP_SECURE="$(read_value DOCOMATOR_SMTP_SECURE)"
+    SMTP_STARTTLS="$(read_value DOCOMATOR_SMTP_STARTTLS)"
+    [[ -n "$SMTP_PORT" ]] || SMTP_PORT="25"
+    [[ -n "$SMTP_SECURE" ]] || SMTP_SECURE="false"
+    [[ -n "$SMTP_STARTTLS" ]] || SMTP_STARTTLS="true"
+    if [[ -z "$SMTP_HOST" || -z "$SMTP_FROM" || -z "$SMTP_DOMAINS" ]]; then
+      printf '⚠️  SMTP включён, но не заполнены сервер, отправитель или разрешённые домены.\n' >&2
+    elif [[ "$SMTP_SECURE" == "true" && "$SMTP_STARTTLS" == "true" ]]; then
+      printf '⚠️  Одновременно включены неявный TLS и STARTTLS. Оставьте только один режим.\n' >&2
+    else
+      printf '✅ SMTP настроен: %s:%s, отправитель %s, разрешённые домены: %s\n' \
+        "$SMTP_HOST" "$SMTP_PORT" "$SMTP_FROM" "$SMTP_DOMAINS"
+    fi
+  else
+    printf 'ℹ️  Почтовая доставка отключена: DOCOMATOR_SMTP_ENABLED=false.\n'
+  fi
+  printf '\n'
 fi
 
 cat <<EOF
@@ -146,6 +171,9 @@ cat <<EOF
   12. 📁 При настроенной сетевой папке передайте результат из карточки задания.
       Пользователь указывает только вложенный каталог внутри разрешённого корня.
 
+  13. ✉️ При настроенном SMTP отправьте документ или ZIP разрешённому получателю.
+      Отправка выполняется фоновым заданием; временная ошибка шлюза повторяется автоматически.
+
 Что уже работает:
   ✅ пространства, участники, группы и неизменяемые снимки состава;
   ✅ безопасный приём и структурный разбор DOCX/XLSX;
@@ -158,10 +186,11 @@ cat <<EOF
   ✅ частичный результат и повтор только проблемных документов;
   ✅ история заданий, отдельные файлы и общее скачивание;
   ✅ безопасная доставка в разрешённую сетевую папку;
+  ✅ фоновая SMTP-доставка с TLS, ограничением доменов и повтором 4xx;
   ✅ события, аудит, контрольные суммы и восстановление.
 
 Ближайшие продуктовые этапы:
-  ⏳ отправка результатов через SMTP;
+  ⏳ сохранённые получатели пространства;
   ⏳ запуск по расписанию и предметным событиям;
   ⏳ серверное применение ролей пространства;
   ⏳ пилотная проверка на реальных шаблонах и эталонной Astra/Debian.

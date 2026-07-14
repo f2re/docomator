@@ -1,0 +1,129 @@
+import { domainToASCII } from "node:url";
+
+export interface NormalizedEmailAddress {
+  address: string;
+  localPart: string;
+  domain: string;
+}
+
+export class EmailAddressValidationError extends Error {
+  override readonly name = "EmailAddressValidationError";
+}
+
+function requiredText(value: string, label: string, maximum: number): string {
+  if (typeof value !== "string") {
+    throw new EmailAddressValidationError(`${label} must be a string`);
+  }
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    throw new EmailAddressValidationError(`${label} must not be empty`);
+  }
+  if (normalized.length > maximum) {
+    throw new EmailAddressValidationError(
+      `${label} must not exceed ${maximum} characters`
+    );
+  }
+  if (/[\u0000-\u001f\u007f]/u.test(normalized)) {
+    throw new EmailAddressValidationError(`${label} contains control characters`);
+  }
+  return normalized;
+}
+
+export function normalizeEmailAddress(
+  value: string,
+  label = "email"
+): NormalizedEmailAddress {
+  const text = requiredText(value, label, 254);
+  if (/[\s<>(),;:"\[\]]/u.test(text)) {
+    throw new EmailAddressValidationError(`${label} has an invalid format`);
+  }
+  const at = text.lastIndexOf("@");
+  if (at <= 0 || at === text.length - 1 || text.indexOf("@") !== at) {
+    throw new EmailAddressValidationError(`${label} has an invalid format`);
+  }
+  const localPart = text.slice(0, at);
+  const sourceDomain = text.slice(at + 1).replace(/\.$/u, "");
+  if (
+    localPart.length > 64 ||
+    localPart.startsWith(".") ||
+    localPart.endsWith(".") ||
+    localPart.includes("..") ||
+    !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/u.test(localPart)
+  ) {
+    throw new EmailAddressValidationError(`${label} has an invalid local part`);
+  }
+  const domain = domainToASCII(sourceDomain).toLowerCase();
+  if (
+    domain.length === 0 ||
+    domain.length > 253 ||
+    domain.startsWith(".") ||
+    domain.endsWith(".") ||
+    domain.split(".").some(
+      (part) =>
+        part.length === 0 ||
+        part.length > 63 ||
+        part.startsWith("-") ||
+        part.endsWith("-") ||
+        !/^[a-z0-9-]+$/u.test(part)
+    )
+  ) {
+    throw new EmailAddressValidationError(`${label} has an invalid domain`);
+  }
+  return {
+    address: `${localPart}@${domain}`,
+    localPart,
+    domain
+  };
+}
+
+export function normalizeEmailDisplayName(
+  value: string | null | undefined
+): string | null {
+  if (value === undefined || value === null) return null;
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  if (normalized.length === 0) return null;
+  if (normalized.length > 200 || /[\u0000-\u001f\u007f]/u.test(normalized)) {
+    throw new EmailAddressValidationError("email display name is invalid");
+  }
+  return normalized;
+}
+
+export function normalizeAllowedEmailDomain(value: string): string {
+  const text = requiredText(value, "allowed email domain", 255).toLowerCase();
+  if (text === "*") return text;
+  const wildcard = text.startsWith("*.");
+  const source = wildcard ? text.slice(2) : text;
+  const domain = domainToASCII(source).toLowerCase();
+  if (
+    domain.length === 0 ||
+    domain.length > 253 ||
+    domain.split(".").some(
+      (part) =>
+        part.length === 0 ||
+        part.length > 63 ||
+        part.startsWith("-") ||
+        part.endsWith("-") ||
+        !/^[a-z0-9-]+$/u.test(part)
+    )
+  ) {
+    throw new EmailAddressValidationError("allowed email domain is invalid");
+  }
+  return wildcard ? `*.${domain}` : domain;
+}
+
+export function emailDomainAllowed(
+  email: NormalizedEmailAddress | string,
+  allowedDomains: readonly string[]
+): boolean {
+  const normalized =
+    typeof email === "string" ? normalizeEmailAddress(email) : email;
+  return allowedDomains.some((ruleValue) => {
+    const rule = normalizeAllowedEmailDomain(ruleValue);
+    if (rule === "*") return true;
+    if (rule.startsWith("*.")) {
+      const base = rule.slice(2);
+      return normalized.domain.endsWith(`.${base}`);
+    }
+    return normalized.domain === rule;
+  });
+}

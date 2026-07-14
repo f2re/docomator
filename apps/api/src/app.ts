@@ -14,6 +14,10 @@ import {
   DocumentDeliveryNotFoundError,
   DocumentDeliveryRegistry,
   DocumentDeliveryValidationError,
+  DocumentEmailDeliveryConflictError,
+  DocumentEmailDeliveryNotFoundError,
+  DocumentEmailDeliveryRegistry,
+  DocumentEmailDeliveryValidationError,
   DocumentGenerationConflictError,
   DocumentGenerationNotFoundError,
   DocumentGenerationRegistry,
@@ -61,6 +65,7 @@ import Fastify, {
 } from "fastify";
 
 import { registerDocumentDeliveryRoutes } from "./document-delivery-routes.js";
+import { registerDocumentEmailRoutes } from "./document-email-routes.js";
 import { registerDocumentGenerationRoutes } from "./document-generation-routes.js";
 import { registerDocumentGenerationRetryRoutes } from "./document-generation-retry-routes.js";
 import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
@@ -87,6 +92,7 @@ export interface AppDependencies {
   knowledgeRegistry?: KnowledgeRegistry;
   spaceRegistry?: SpaceRegistry;
   documentDeliveryRegistry?: DocumentDeliveryRegistry;
+  documentEmailDeliveryRegistry?: DocumentEmailDeliveryRegistry;
   documentGenerationRegistry?: DocumentGenerationRegistry;
   documentPreflightRegistry?: DocumentPreflightRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
@@ -136,7 +142,8 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "template_release_pointers",
         "document_generation_jobs",
         "document_generation_units",
-        "document_deliveries"
+        "document_deliveries",
+        "document_email_deliveries"
       ];
       const placeholders = requiredTables.map(() => "?").join(", ");
       const rows = database
@@ -169,6 +176,9 @@ export function buildApp(
   const spaceRegistry = dependencies.spaceRegistry ?? new SpaceRegistry(store);
   const documentDeliveryRegistry =
     dependencies.documentDeliveryRegistry ?? new DocumentDeliveryRegistry(store);
+  const documentEmailDeliveryRegistry =
+    dependencies.documentEmailDeliveryRegistry ??
+    new DocumentEmailDeliveryRegistry(store);
   const documentGenerationRegistry =
     dependencies.documentGenerationRegistry ??
     new DocumentGenerationRegistry(store, objectStore);
@@ -227,6 +237,18 @@ export function buildApp(
       statusCode = 422;
       code = error.code;
       message = error.userMessage;
+    } else if (error instanceof DocumentEmailDeliveryValidationError) {
+      statusCode = 400;
+      code = "document_email_delivery_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof DocumentEmailDeliveryNotFoundError) {
+      statusCode = 404;
+      code = "document_email_delivery_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof DocumentEmailDeliveryConflictError) {
+      statusCode = 409;
+      code = "document_email_delivery_conflict";
+      message = toUserMessage(error);
     } else if (error instanceof DocumentDeliveryValidationError) {
       statusCode = 400;
       code = "document_delivery_validation_failed";
@@ -446,6 +468,12 @@ export function buildApp(
     objectStore,
     documentGenerationRegistry,
     documentDeliveryRegistry
+  );
+  registerDocumentEmailRoutes(
+    app,
+    config,
+    documentGenerationRegistry,
+    documentEmailDeliveryRegistry
   );
   registerDocumentIntakeRoutes(app, quarantineRegistry, spaceRegistry);
   registerTemplateDraftRoutes(

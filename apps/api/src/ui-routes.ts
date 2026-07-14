@@ -32,7 +32,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "template-multi-trial.css",
       "template-activation.css",
       "document-generation.css",
-      "document-data-correction.css"
+      "document-data-correction.css",
+      "document-email-delivery.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -53,7 +54,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-generation-preflight.js",
       "document-data-correction.js",
       "document-generation-retry.js",
-      "document-delivery.js"
+      "document-delivery.js",
+      "document-email-delivery.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
