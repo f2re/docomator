@@ -1,0 +1,168 @@
+.document-schedules-panel {
+  margin-top: 1.25rem;
+}
+
+.schedule-card,
+.schedule-content,
+.schedule-form,
+.schedule-list-section,
+.schedule-list,
+.schedule-runs {
+  display: grid;
+  gap: 1rem;
+}
+
+.schedule-form {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.schedule-grid input,
+.schedule-grid select,
+.schedule-grid textarea {
+  width: 100%;
+  min-height: 2.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.72rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.schedule-grid textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.schedule-grid input:focus,
+.schedule-grid select:focus,
+.schedule-grid textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 1px;
+}
+
+.schedule-email-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  padding: 0.9rem;
+  background: var(--surface-2);
+}
+
+.schedule-email-fields[hidden] {
+  display: none;
+}
+
+.schedule-list-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.schedule-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  padding: 0.9rem;
+  background: var(--surface-2);
+}
+
+.schedule-item.is-inactive {
+  opacity: 0.72;
+}
+
+.schedule-item-main,
+.schedule-item-heading,
+.schedule-run > div:first-child {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.schedule-item-heading {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.schedule-item-main > span,
+.schedule-run span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.schedule-actions {
+  align-content: start;
+  justify-content: flex-end;
+}
+
+.schedule-runs {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.schedule-run {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  background: var(--surface);
+}
+
+.schedule-run.is-completed {
+  border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+}
+
+.schedule-run.is-skipped {
+  border-color: color-mix(in srgb, #c98800 32%, var(--border));
+}
+
+.schedule-run.is-failed {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+}
+
+@media (max-width: 900px) {
+  .schedule-grid,
+  .schedule-email-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .document-email-wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .schedule-item,
+  .schedule-run {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-actions {
+    justify-content: stretch;
+  }
+
+  .schedule-actions button {
+    width: 100%;
+  }
+}
