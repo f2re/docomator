@@ -33,7 +33,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "template-activation.css",
       "document-generation.css",
       "document-data-correction.css",
-      "document-email-delivery.css"
+      "document-email-delivery.css",
+      "email-recipients.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -55,7 +56,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-data-correction.js",
       "document-generation-retry.js",
       "document-delivery.js",
-      "document-email-delivery.js"
+      "document-email-delivery.js",
+      "email-recipients.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
