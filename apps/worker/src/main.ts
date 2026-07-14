@@ -5,6 +5,10 @@ import {
   ContentAddressedObjectStore,
   DocumentEmailDeliveryRegistry,
   DocumentGenerationRegistry,
+  DocumentPreflightRegistry,
+  DocumentScheduleRegistry,
+  EmailRecipientRegistry,
+  SpaceRegistry,
   SqliteStore,
   TemplatePreviewActivationRegistry,
   WorkerQueue
@@ -14,6 +18,7 @@ import { createDocumentEmailHandler } from "./document-email-handler.js";
 import { createDocumentGenerationHandler } from "./document-generation-handler.js";
 import { runWorkerLoop } from "./loop.js";
 import { JobHandlerRegistry, processNextJob } from "./processor.js";
+import { processScheduleTick } from "./schedule-processor.js";
 import { createTemplatePreviewHandler } from "./template-preview-handler.js";
 
 const config = loadWorkerConfig();
@@ -36,6 +41,10 @@ const generationRegistry = new DocumentGenerationRegistry(
   { queue }
 );
 const emailDeliveryRegistry = new DocumentEmailDeliveryRegistry(store, { queue });
+const scheduleRegistry = new DocumentScheduleRegistry(store);
+const spaceRegistry = new SpaceRegistry(store);
+const preflightRegistry = new DocumentPreflightRegistry(store);
+const recipientRegistry = new EmailRecipientRegistry(store);
 const handlers = new JobHandlerRegistry();
 
 handlers.register("system.noop", async () => undefined);
@@ -98,6 +107,7 @@ try {
     llmEnabled: config.llmEnabled,
     previewEnabled: config.previewEnabled,
     smtpEnabled: config.smtp.enabled,
+    schedulesEnabled: true,
     libreOfficeBinary: path.basename(config.libreOfficeBinary)
   });
 
@@ -106,6 +116,33 @@ try {
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     signal: controller.signal,
     onPoll: async () => {
+      try {
+        const schedules = await processScheduleTick({
+          schedules: scheduleRegistry,
+          spaces: spaceRegistry,
+          preflight: preflightRegistry,
+          generations: generationRegistry,
+          emails: emailDeliveryRegistry,
+          recipients: recipientRegistry,
+          config,
+          workerId: config.workerId,
+          maxRunsPerTick: 20
+        });
+        if (
+          schedules.dueCreated > 0 ||
+          schedules.processed > 0 ||
+          schedules.failed > 0
+        ) {
+          log(schedules.failed > 0 ? "error" : "info", "schedule tick processed", {
+            ...schedules
+          });
+        }
+      } catch (error) {
+        log("error", "schedule tick failed", {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+
       const result = await processNextJob({
         queue,
         handlers,
@@ -124,7 +161,8 @@ try {
         });
       }
     },
-    onHeartbeat: () => log("info", "worker heartbeat", { queueDepth: queue.getDepths() })
+    onHeartbeat: () =>
+      log("info", "worker heartbeat", { queueDepth: queue.getDepths() })
   });
 
   log("info", "worker stopped");
