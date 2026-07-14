@@ -3,12 +3,14 @@ import path from "node:path";
 import { loadWorkerConfig } from "@docomator/config";
 import {
   ContentAddressedObjectStore,
+  DocumentEmailDeliveryRegistry,
   DocumentGenerationRegistry,
   SqliteStore,
   TemplatePreviewActivationRegistry,
   WorkerQueue
 } from "@docomator/storage";
 
+import { createDocumentEmailHandler } from "./document-email-handler.js";
 import { createDocumentGenerationHandler } from "./document-generation-handler.js";
 import { runWorkerLoop } from "./loop.js";
 import { JobHandlerRegistry, processNextJob } from "./processor.js";
@@ -33,6 +35,7 @@ const generationRegistry = new DocumentGenerationRegistry(
   objectStore,
   { queue }
 );
+const emailDeliveryRegistry = new DocumentEmailDeliveryRegistry(store, { queue });
 const handlers = new JobHandlerRegistry();
 
 handlers.register("system.noop", async () => undefined);
@@ -49,6 +52,15 @@ handlers.register(
   createDocumentGenerationHandler({
     registry: generationRegistry,
     objectStore,
+    workerId: config.workerId
+  })
+);
+handlers.register(
+  "document.email.send",
+  createDocumentEmailHandler({
+    registry: emailDeliveryRegistry,
+    objectStore,
+    config,
     workerId: config.workerId
   })
 );
@@ -85,6 +97,7 @@ try {
     leaseDurationMs: config.leaseDurationMs,
     llmEnabled: config.llmEnabled,
     previewEnabled: config.previewEnabled,
+    smtpEnabled: config.smtp.enabled,
     libreOfficeBinary: path.basename(config.libreOfficeBinary)
   });
 
