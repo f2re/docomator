@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS document_email_deliveries (
   subject TEXT NOT NULL,
   message_text TEXT NOT NULL,
   message_id TEXT NOT NULL,
+  dedupe_key TEXT NOT NULL UNIQUE CHECK (length(dedupe_key) = 64),
   smtp_response TEXT,
   error_json TEXT,
   requested_by TEXT,
@@ -24,8 +25,7 @@ CREATE TABLE IF NOT EXISTS document_email_deliveries (
   requested_at TEXT NOT NULL,
   started_at TEXT,
   completed_at TEXT,
-  updated_at TEXT NOT NULL,
-  UNIQUE(document_job_id, source_sha256, recipient_email, subject)
+  updated_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_document_email_deliveries_space
