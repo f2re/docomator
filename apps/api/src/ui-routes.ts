@@ -61,7 +61,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-email-delivery.js",
       "email-recipients.js",
       "document-schedules.js",
-      "shared-document-results.js"
+      "shared-document-results.js",
+      "shared-document-view-labels.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
