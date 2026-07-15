@@ -206,6 +206,10 @@ rollback() {
     systemctl daemon-reload
     systemctl start docomator-llm.service 2>/dev/null || true
     systemctl start docomator-api.service docomator-worker.service 2>/dev/null || true
+    BACKUP_ENABLED="$(read_env_value "$CONFIG_FILE" DOCOMATOR_BACKUP_ENABLED)"
+    if [[ -z "$BACKUP_ENABLED" || "${BACKUP_ENABLED,,}" == "true" || "$BACKUP_ENABLED" == "1" ]]; then
+      systemctl start docomator-backup.timer 2>/dev/null || true
+    fi
   fi
 }
 
@@ -246,13 +250,18 @@ mv -Tf "$INSTALL_ROOT/.current.new.$$" "$CURRENT_LINK"
 
 if ((INSTALL_SYSTEMD == 1)); then
   require_command systemctl
-  for unit in docomator-api docomator-worker docomator-llm; do
+  for unit in docomator-api docomator-worker docomator-llm docomator-backup; do
     render_template \
       "$RELEASE_DIR/deploy/systemd/${unit}.service.in" \
       "/etc/systemd/system/${unit}.service" \
       "$INSTALL_ROOT" "$DATA_DIR" "$CONFIG_DIR" \
       "$DOCOMATOR_USER" "$DOCOMATOR_GROUP"
   done
+  render_template \
+    "$RELEASE_DIR/deploy/systemd/docomator-backup.timer.in" \
+    "/etc/systemd/system/docomator-backup.timer" \
+    "$INSTALL_ROOT" "$DATA_DIR" "$CONFIG_DIR" \
+    "$DOCOMATOR_USER" "$DOCOMATOR_GROUP"
   systemctl daemon-reload
 else
   info "Пропускаем установку служб systemd и управление ими"
@@ -272,6 +281,13 @@ if ((NO_START == 0)); then
     systemctl enable --now docomator-llm.service
   else
     systemctl disable --now docomator-llm.service 2>/dev/null || true
+  fi
+
+  BACKUP_ENABLED="$(read_env_value "$CONFIG_FILE" DOCOMATOR_BACKUP_ENABLED)"
+  if [[ -z "$BACKUP_ENABLED" || "${BACKUP_ENABLED,,}" == "true" || "$BACKUP_ENABLED" == "1" ]]; then
+    systemctl enable --now docomator-backup.timer
+  else
+    systemctl disable --now docomator-backup.timer 2>/dev/null || true
   fi
 
   if ! systemctl restart docomator-api.service docomator-worker.service; then
