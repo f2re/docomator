@@ -8,14 +8,24 @@ source "$SCRIPT_DIR/lib.sh"
 BUNDLE_ROOT="${1:-$SCRIPT_DIR}"
 BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
 
-[[ -f "$BUNDLE_ROOT/VERSION" ]] || die "VERSION is missing in $BUNDLE_ROOT"
-[[ -f "$BUNDLE_ROOT/manifest.sha256" ]] || die "manifest.sha256 is missing in $BUNDLE_ROOT"
-[[ -d "$BUNDLE_ROOT/payload/app" ]] || die "payload/app is missing"
-[[ -x "$BUNDLE_ROOT/payload/runtime/node/bin/node" ]] || die "bundled Node.js runtime is missing"
+[[ -f "$BUNDLE_ROOT/VERSION" ]] || die "В комплекте отсутствует VERSION: $BUNDLE_ROOT"
+[[ -f "$BUNDLE_ROOT/manifest.sha256" ]] || die "В комплекте отсутствует manifest.sha256"
+[[ -d "$BUNDLE_ROOT/payload/app" ]] || die "В комплекте отсутствует payload/app"
+[[ -x "$BUNDLE_ROOT/payload/runtime/node/bin/node" ]] || die "В комплекте отсутствует встроенный Node.js"
+[[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/automatic-backup.mjs" ]] || \
+  die "В комплекте отсутствует сценарий автоматического резервирования"
+[[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-readiness.mjs" ]] || \
+  die "В комплекте отсутствует сценарий пилотной приёмки"
+[[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-check.sh" ]] || \
+  die "В комплекте отсутствует штатный запуск пилотной приёмки"
+[[ -f "$BUNDLE_ROOT/payload/deploy/systemd/docomator-backup.service.in" ]] || \
+  die "В комплекте отсутствует служба автоматического резервирования"
+[[ -f "$BUNDLE_ROOT/payload/deploy/systemd/docomator-backup.timer.in" ]] || \
+  die "В комплекте отсутствует таймер автоматического резервирования"
 
-info "Verifying offline bundle checksums"
+info "Проверяем контрольные суммы автономного комплекта"
 (
   cd "$BUNDLE_ROOT"
   sha256sum --check --strict --quiet manifest.sha256
 )
-info "Offline bundle is valid: version $(<"$BUNDLE_ROOT/VERSION")"
+info "Автономный комплект корректен: версия $(<"$BUNDLE_ROOT/VERSION")"
