@@ -1,3 +1,4 @@
+import { loadApiConfig } from "@docomator/config";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
@@ -5,11 +6,14 @@ import {
   DocumentGenerationConflictError,
   DocumentGenerationRegistry,
   documentResultRegistryFromGenerationRegistry,
-  objectCleanupRegistryFromGenerationRegistry
+  objectCleanupRegistryFromGenerationRegistry,
+  runtimeStatusRegistryFromGenerationRegistry,
+  sqliteStoreFromGenerationRegistry
 } from "@docomator/storage";
 
 import { registerDocumentResultRoutes } from "./document-result-routes.js";
 import { registerObjectCleanupRoutes } from "./object-cleanup-routes.js";
+import { registerOperationsReadinessRoutes } from "./operations-readiness-routes.js";
 import { correlationId, mutationContextFromRequest } from "./request-context.js";
 
 interface SpaceParams {
@@ -89,6 +93,17 @@ export function registerDocumentGenerationRoutes(
   registerObjectCleanupRoutes(
     app,
     objectCleanupRegistryFromGenerationRegistry(registry, objectStore)
+  );
+  const operationalConfig = loadApiConfig();
+  registerOperationsReadinessRoutes(
+    app,
+    {
+      ...operationalConfig,
+      dataDir: objectStore.root.replace(/[\\/]objects$/u, "")
+    },
+    sqliteStoreFromGenerationRegistry(registry),
+    objectStore,
+    runtimeStatusRegistryFromGenerationRegistry(registry)
   );
 
   app.post<{ Params: SpaceParams; Body: CreateJobBody }>(
