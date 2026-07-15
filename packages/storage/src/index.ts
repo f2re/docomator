@@ -1,4 +1,7 @@
 export * from "./audit.js";
+export * from "./data-import-access.js";
+export * from "./data-import-validation.js";
+export * from "./data-import.js";
 export * from "./database.js";
 export * from "./document-delivery.js";
 export * from "./document-email-delivery.js";
