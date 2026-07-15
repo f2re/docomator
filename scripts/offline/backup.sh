@@ -14,19 +14,19 @@ PREFIX="backup"
 
 usage() {
   cat <<'USAGE'
-Usage: ./backup.sh [options]
+Использование: ./backup.sh [параметры]
 
-Creates a checksum-protected online backup of SQLite, immutable object storage,
-and the local configuration. No network access is used.
+Создаёт защищённую контрольными суммами копию SQLite, неизменяемого хранилища
+объектов и локальной конфигурации. Доступ к сети не требуется.
 
-Options:
-  --install-root DIR  Installation root (default: /opt/docomator)
-  --data-dir DIR      Persistent data directory (default: /var/lib/docomator)
-  --config-dir DIR    Configuration directory (default: /etc/docomator)
-  --output DIR        Exact backup directory
-  --retention COUNT   Keep newest COUNT regular backups (default: 7)
-  --prefix NAME       Backup directory prefix (default: backup)
-  -h, --help          Show help
+Параметры:
+  --install-root DIR  корень установки (по умолчанию /opt/docomator)
+  --data-dir DIR      каталог постоянных данных (по умолчанию /var/lib/docomator)
+  --config-dir DIR    каталог настроек (по умолчанию /etc/docomator)
+  --output DIR        точный каталог новой копии
+  --retention COUNT   хранить последние COUNT обычных копий (по умолчанию 7)
+  --prefix NAME       префикс каталога копии (по умолчанию backup)
+  -h, --help          показать эту справку
 USAGE
 }
 
@@ -39,26 +39,35 @@ while (($# > 0)); do
     --retention) RETENTION="$2"; shift 2 ;;
     --prefix) PREFIX="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    *) die "Unknown option: $1" ;;
+    *) die "Неизвестный параметр: $1" ;;
   esac
 done
 
 require_root
-require_command flock
 
 INSTALL_ROOT="$(absolute_path "$INSTALL_ROOT")"
 DATA_DIR="$(absolute_path "$DATA_DIR")"
 CONFIG_DIR="$(absolute_path "$CONFIG_DIR")"
 NODE="$INSTALL_ROOT/current/runtime/node/bin/node"
 BACKUP_CLI="$INSTALL_ROOT/current/app/scripts/runtime/backup.mjs"
-[[ -x "$NODE" ]] || die "Bundled Node.js runtime not found: $NODE"
-[[ -f "$BACKUP_CLI" ]] || die "Backup CLI not found: $BACKUP_CLI"
-[[ -f "$DATA_DIR/docomator.db" ]] || die "Database not found: $DATA_DIR/docomator.db"
+[[ -x "$NODE" ]] || die "Не найден встроенный Node.js: $NODE"
+[[ -f "$BACKUP_CLI" ]] || die "Не найден сценарий резервирования: $BACKUP_CLI"
+[[ -f "$DATA_DIR/docomator.db" ]] || die "Не найдена база данных: $DATA_DIR/docomator.db"
 
-LOCK_FILE="/run/lock/docomator-backup.lock"
-mkdir -p "$(dirname "$LOCK_FILE")"
-exec 9>"$LOCK_FILE"
-flock -n 9 || die "Another Docomator backup is running"
+LOCK_DIR="$DATA_DIR/.backup.lock"
+OWNER_FILE="$LOCK_DIR/owner.json"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  OWNER_PID="$(sed -n -E 's/.*"pid"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "$OWNER_FILE" 2>/dev/null | head -n 1 || true)"
+  if [[ -n "$OWNER_PID" ]] && kill -0 "$OWNER_PID" 2>/dev/null; then
+    die "Уже выполняется другое резервное копирование, процесс $OWNER_PID"
+  fi
+  rm -rf "$LOCK_DIR"
+  mkdir "$LOCK_DIR" || die "Не удалось установить блокировку резервирования"
+fi
+chmod 0700 "$LOCK_DIR"
+printf '{"pid":%s,"startedAt":"%s"}\n' "$$" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > "$OWNER_FILE"
+chmod 0600 "$OWNER_FILE"
+trap 'rm -rf "$LOCK_DIR"' EXIT
 
 ARGS=(
   --data-dir "$DATA_DIR"
@@ -71,5 +80,6 @@ if [[ -n "$OUTPUT_DIR" ]]; then
   ARGS+=(--output "$OUTPUT_DIR")
 fi
 
-info "Creating Docomator backup"
-exec "$NODE" "$BACKUP_CLI" "${ARGS[@]}"
+info "Создаём резервную копию Docomator"
+"$NODE" "$BACKUP_CLI" "${ARGS[@]}"
+info "Резервная копия создана и проверена"
