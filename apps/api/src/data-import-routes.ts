@@ -6,6 +6,7 @@ import {
   SpaceRegistry,
   SpaceValidationError,
   dataImportRegistryFromSpaceRegistry,
+  validateExistingImportIdentityProperty,
   type DataImportPropertyMapping
 } from "@docomator/storage";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -271,6 +272,14 @@ export function registerDataImportRoutes(
         );
       }
       validateIdentityMapping(request.body);
+      importOperation(() =>
+        validateExistingImportIdentityProperty({
+          spaces,
+          entityTypeKey: request.body.entityTypeKey,
+          identityPropertyKey: request.body.identityPropertyKey,
+          mappings: request.body.mappings
+        })
+      );
       const result = importOperation(() =>
         registry.execute(
           request.params.spaceId,
