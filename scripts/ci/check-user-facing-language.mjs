@@ -20,6 +20,7 @@ const files = [
   "apps/api/ui/document-email-delivery.js",
   "apps/api/ui/email-recipients.js",
   "apps/api/ui/document-schedules.js",
+  "apps/api/ui/document-schedule-network.js",
   "apps/api/ui/shared-document-results.js",
   "apps/api/ui/shared-document-view-labels.js",
   "apps/api/ui/shared-corporate-mode.js",
