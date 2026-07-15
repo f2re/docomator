@@ -37,7 +37,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "email-recipients.css",
       "document-schedules.css",
       "shared-document-results.css",
-      "storage-maintenance.css"
+      "storage-maintenance.css",
+      "bulk-data-import.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -66,7 +67,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "shared-document-results.js",
       "shared-document-view-labels.js",
       "shared-corporate-mode.js",
-      "storage-maintenance.js"
+      "storage-maintenance.js",
+      "bulk-data-import.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
