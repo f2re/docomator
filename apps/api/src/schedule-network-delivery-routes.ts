@@ -1,8 +1,11 @@
 import type { ApiConfig } from "@docomator/config";
 import {
+  DocumentScheduleNotFoundError,
   DocumentScheduleRegistry,
   DocumentScheduleValidationError,
+  ScheduleNetworkDeliveryNotFoundError,
   ScheduleNetworkDeliveryRegistry,
+  ScheduleNetworkDeliveryValidationError,
   normalizeScheduleNetworkTemplate,
   type DocumentGenerationMode,
   type DocumentScheduleRecurrence
@@ -48,6 +51,20 @@ function responseEnvelope<T>(request: FastifyRequest, data: T) {
   return { data, correlationId: correlationId(request) };
 }
 
+function networkOperation<T>(operation: () => T): T {
+  try {
+    return operation();
+  } catch (error) {
+    if (error instanceof ScheduleNetworkDeliveryValidationError) {
+      throw new DocumentScheduleValidationError(error.message);
+    }
+    if (error instanceof ScheduleNetworkDeliveryNotFoundError) {
+      throw new DocumentScheduleNotFoundError(error.message);
+    }
+    throw error;
+  }
+}
+
 function decorateSchedule(
   schedule: ReturnType<DocumentScheduleRegistry["get"]>,
   network: ReturnType<ScheduleNetworkDeliveryRegistry["get"]>
@@ -81,14 +98,16 @@ export function registerScheduleNetworkDeliveryRoutes(
     },
     async (request, reply) => {
       const items = schedules.list(request.params.spaceId);
-      const settings = network.listForSchedules(items.map((item) => item.id));
+      const settings = networkOperation(() =>
+        network.listForSchedules(items.map((item) => item.id))
+      );
       reply.header("cache-control", "no-store");
-      return responseEnvelope(
-        request,
-        items
+      return responseEnvelope(request, {
+        networkFolderEnabled: config.networkDeliveryRoot !== null,
+        items: items
           .filter((item) => settings.has(item.id))
           .map((item) => decorateSchedule(item, settings.get(item.id) ?? null))
-      );
+      });
     }
   );
 
@@ -148,8 +167,8 @@ export function registerScheduleNetworkDeliveryRoutes(
           "Сетевая доставка не настроена администратором."
         );
       }
-      const subdirectory = normalizeScheduleNetworkTemplate(
-        request.body.networkSubdirectory
+      const subdirectory = networkOperation(() =>
+        normalizeScheduleNetworkTemplate(request.body.networkSubdirectory)
       );
       const context = mutationContextFromRequest(request);
       const created = schedules.create(
@@ -174,7 +193,9 @@ export function registerScheduleNetworkDeliveryRoutes(
         },
         context
       );
-      const setting = network.set(created.id, subdirectory, context);
+      const setting = networkOperation(() =>
+        network.set(created.id, subdirectory, context)
+      );
       reply.code(201).header("cache-control", "no-store");
       return responseEnvelope(request, decorateSchedule(created, setting));
     }
