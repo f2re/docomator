@@ -72,3 +72,23 @@ BEGIN
   LEFT JOIN document_schedule_runs sr ON sr.document_job_id = NEW.id
   LIMIT 1;
 END;
+
+-- Logical deletion removes every application-level file reference. The immutable
+-- object may remain in content-addressed storage until a later garbage collection,
+-- but neither the shared route nor legacy job routes can download it.
+CREATE TRIGGER IF NOT EXISTS trg_document_result_after_delete
+AFTER UPDATE OF state ON document_result_items
+WHEN NEW.state = 'deleted' AND OLD.state <> 'deleted'
+BEGIN
+  UPDATE document_generation_units
+  SET output_file_id = NULL,
+      output_sha256 = NULL,
+      updated_at = NEW.updated_at
+  WHERE job_id = NEW.document_job_id;
+
+  UPDATE document_generation_jobs
+  SET archive_file_id = NULL,
+      archive_sha256 = NULL,
+      updated_at = NEW.updated_at
+  WHERE id = NEW.document_job_id;
+END;
