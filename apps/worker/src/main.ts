@@ -14,7 +14,8 @@ import {
   SpaceRegistry,
   SqliteStore,
   TemplatePreviewActivationRegistry,
-  WorkerQueue
+  WorkerQueue,
+  toJsonValue
 } from "@docomator/storage";
 
 import { createDocumentEmailHandler } from "./document-email-handler.js";
@@ -113,7 +114,7 @@ function publishRuntimeState(
       instanceId: config.workerId,
       version: config.version,
       state,
-      details: {
+      details: toJsonValue({
         pid: process.pid,
         queueDepth: queue.getDepths(),
         pollIntervalMs: config.pollIntervalMs,
@@ -122,7 +123,7 @@ function publishRuntimeState(
         networkDeliveryEnabled: networkDeliveryRoot !== null,
         previewEnabled: config.previewEnabled,
         ...extra
-      }
+      })
     });
   } catch (error) {
     log("error", "worker runtime heartbeat failed", {
