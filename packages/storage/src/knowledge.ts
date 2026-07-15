@@ -38,7 +38,7 @@ export interface EntityTypeRecord {
 
 export interface CreateEntityTypeInput {
   id?: string;
-  key: string;
+  key?: string;
   label: string;
   description?: string | null;
   schema?: JsonValue;
@@ -88,7 +88,7 @@ export interface PropertyDefinitionRecord {
 
 export interface CreatePropertyDefinitionInput {
   id?: string;
-  key: string;
+  key?: string;
   label: string;
   description?: string | null;
   valueType: string;
@@ -255,6 +255,14 @@ function stableKey(value: string, name: string): string {
     );
   }
   return normalized;
+}
+
+/**
+ * Creates an opaque stable key that is independent from a mutable user-facing label.
+ */
+export function generateOpaqueStableKey(prefixValue: string): string {
+  const prefix = stableKey(prefixValue, "prefix");
+  return `${prefix}.${randomUUID().replaceAll("-", "")}`;
 }
 
 function timestamp(value: Date | string | undefined): string {
@@ -508,6 +516,7 @@ export class KnowledgeRegistry {
   private readonly outbox: DomainEventOutbox;
   private readonly audit: AuditRepository;
   private readonly codecs: PropertyValueCodecRegistry;
+  private readonly keyFactory: (prefix: string) => string;
 
   constructor(
     private readonly store: SqliteStore,
@@ -515,18 +524,20 @@ export class KnowledgeRegistry {
       outbox?: DomainEventOutbox;
       audit?: AuditRepository;
       codecs?: PropertyValueCodecRegistry;
+      keyFactory?: (prefix: string) => string;
     } = {}
   ) {
     this.outbox = options.outbox ?? new DomainEventOutbox(store);
     this.audit = options.audit ?? new AuditRepository(store);
     this.codecs = options.codecs ?? new PropertyValueCodecRegistry();
+    this.keyFactory = options.keyFactory ?? generateOpaqueStableKey;
   }
 
   createEntityType(
     input: CreateEntityTypeInput,
     contextInput: MutationContext
   ): EntityTypeRecord {
-    const key = stableKey(input.key, "key");
+    const explicitKey = input.key === undefined ? null : stableKey(input.key, "key");
     const label = requiredText(input.label, "label");
     const description = optionalText(input.description, "description");
     const schema = jsonObject(input.schema, "schema");
@@ -534,6 +545,11 @@ export class KnowledgeRegistry {
     const id = input.id ?? randomUUID();
 
     return this.store.transaction((connection) => {
+      const key =
+        explicitKey ??
+        this.allocateKey(connection, "entity_type", (candidate) =>
+          entityTypeByKey(connection, candidate) !== undefined
+        );
       if (entityTypeByKey(connection, key) !== undefined) {
         throw new KnowledgeConflictError(`Entity type already exists: ${key}`);
       }
@@ -604,7 +620,7 @@ export class KnowledgeRegistry {
     input: CreatePropertyDefinitionInput,
     contextInput: MutationContext
   ): PropertyDefinitionRecord {
-    const key = stableKey(input.key, "key");
+    const explicitKey = input.key === undefined ? null : stableKey(input.key, "key");
     const label = requiredText(input.label, "label");
     const description = optionalText(input.description, "description");
     const valueType = propertyValueType(input.valueType);
@@ -621,6 +637,11 @@ export class KnowledgeRegistry {
     const id = input.id ?? randomUUID();
 
     return this.store.transaction((connection) => {
+      const key =
+        explicitKey ??
+        this.allocateKey(connection, "property", (candidate) =>
+          propertyByKey(connection, candidate) !== undefined
+        );
       if (propertyByKey(connection, key) !== undefined) {
         throw new KnowledgeConflictError(`Property definition already exists: ${key}`);
       }
@@ -1018,5 +1039,19 @@ export class KnowledgeRegistry {
         .all(entityId, propertyKey, propertyKey, limit) as unknown as PropertyValueRow[];
       return rows.map(mapPropertyValue);
     });
+  }
+
+  private allocateKey(
+    _connection: SqliteExecutor,
+    prefix: string,
+    exists: (candidate: string) => boolean
+  ): string {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const candidate = stableKey(this.keyFactory(prefix), "generatedKey");
+      if (!exists(candidate)) {
+        return candidate;
+      }
+    }
+    throw new KnowledgeConflictError(`Could not allocate a unique ${prefix} key`);
   }
 }

@@ -3,6 +3,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { DocumentQuarantineRegistry } from "./document-quarantine.js";
+import { DocumentScheduleRegistry } from "./document-schedules.js";
 import { MultiFieldTestVersionRegistry } from "./multi-field-test-versions.js";
 import { ContentAddressedObjectStore } from "./object-store.js";
 import { DEFAULT_SPACE_ID, SpaceRegistry } from "./spaces.js";
@@ -338,6 +339,80 @@ test("single and multi-field tested versions share one release catalog", async (
           .run("Изменено", multiRelease.id)
       )
     );
+  } finally {
+    setup.fixture.cleanup();
+  }
+});
+
+test("document schedules generate opaque keys when omitted and keep explicit keys", async () => {
+  const setup = await setupFixture();
+  try {
+    const request = setup.releases.requestPreview(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        versionId: setup.single.id,
+        versionKind: "single"
+      },
+      context("corr-schedule-preview", 3)
+    );
+    const ready = await setup.releases.completePreview(
+      {
+        requestId: request.request.id,
+        previewBuffer: pdf("schedule"),
+        converter: { converter: "LibreOffice", durationMs: 10 }
+      },
+      context("corr-schedule-ready", 4)
+    );
+    const release = setup.releases.activateVersion(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        previewRequestId: ready.id
+      },
+      context("corr-schedule-release", 5)
+    );
+    const spaces = new SpaceRegistry(setup.fixture.store);
+    const group = spaces.createGroup(
+      DEFAULT_SPACE_ID,
+      { key: "schedule-group", name: "Группа для расписания" },
+      context("corr-schedule-group", 6)
+    );
+    const keys = [
+      "document_schedule.collision",
+      "document_schedule.generated"
+    ];
+    const schedules = new DocumentScheduleRegistry(setup.fixture.store, {
+      keyFactory: () => keys.shift() ?? "document_schedule.unexpected"
+    });
+    const common = {
+      activeReleaseId: release.id,
+      groupId: group.id,
+      targetMode: "aggregate",
+      recurrenceKind: "once",
+      timezone: "Europe/Moscow",
+      localTime: "12:00",
+      startDate: "2026-07-16",
+      deliveryChannel: "none"
+    } as const;
+    const explicit = schedules.create(
+      DEFAULT_SPACE_ID,
+      { ...common, key: "document_schedule.collision", name: "Явное расписание" },
+      context("corr-schedule-explicit", 7)
+    );
+    assert.equal(explicit.key, "document_schedule.collision");
+
+    const generated = schedules.create(
+      DEFAULT_SPACE_ID,
+      { ...common, name: "Расписание без ключа" },
+      context("corr-schedule-generated", 8)
+    );
+    assert.equal(generated.key, "document_schedule.generated");
+
+    const legacy = schedules.create(
+      DEFAULT_SPACE_ID,
+      { ...common, key: "legacy-schedule", name: "Совместимое расписание" },
+      context("corr-schedule-legacy", 9)
+    );
+    assert.equal(legacy.key, "legacy-schedule");
   } finally {
     setup.fixture.cleanup();
   }

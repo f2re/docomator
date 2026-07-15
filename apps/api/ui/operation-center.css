@@ -1,0 +1,288 @@
+.operation-center {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.operation-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.25rem 0;
+}
+
+.operation-heading h3,
+.operation-heading p,
+.operation-row p,
+.operation-row strong,
+.operation-row small,
+.operation-empty p,
+.operation-loading p,
+.operation-error p {
+  margin: 0;
+}
+
+.operation-heading h3 {
+  font-size: 1.15rem;
+}
+
+.operation-heading #operationCenterSummary {
+  margin-top: 0.25rem;
+  font-size: 0.84rem;
+}
+
+.operation-list {
+  display: grid;
+}
+
+.operation-row {
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 8rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.operation-row:hover {
+  background: var(--surface-2);
+}
+
+.operation-rail {
+  position: relative;
+  align-self: stretch;
+  width: 1.1rem;
+}
+
+.operation-rail::after {
+  position: absolute;
+  top: 1.3rem;
+  bottom: -2.3rem;
+  left: 0.5rem;
+  width: 1px;
+  content: "";
+  background: var(--border-strong);
+}
+
+.operation-row:last-child .operation-rail::after {
+  display: none;
+}
+
+.operation-rail i {
+  position: absolute;
+  z-index: 1;
+  top: 0.35rem;
+  left: 0.17rem;
+  width: 0.72rem;
+  height: 0.72rem;
+  background: var(--hint);
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--border-strong);
+}
+
+.operation-row.is-running .operation-rail i,
+.operation-row.is-pending .operation-rail i {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.operation-row.is-completed .operation-rail i {
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+}
+
+.operation-row.is-retry .operation-rail i,
+.operation-row.is-partial .operation-rail i {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning-soft);
+}
+
+.operation-row.is-failed .operation-rail i {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.operation-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.28rem;
+}
+
+.operation-copy > strong {
+  overflow-wrap: anywhere;
+}
+
+.operation-copy > p,
+.operation-copy > small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.operation-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--hint);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.operation-state-label {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-items: center;
+  padding: 0 0.48rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-radius: 999px;
+}
+
+.operation-row.is-completed .operation-state-label {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.operation-row.is-retry .operation-state-label,
+.operation-row.is-partial .operation-state-label {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.operation-row.is-failed .operation-state-label {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.operation-progress {
+  width: min(28rem, 100%);
+  height: 0.3rem;
+  margin: 0.25rem 0;
+  overflow: hidden;
+  background: var(--surface-hover);
+  border-radius: 999px;
+}
+
+.operation-progress span {
+  display: block;
+  width: var(--operation-progress);
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+
+.operation-action {
+  min-width: 8.5rem;
+}
+
+.operation-technical-details {
+  margin-top: 0.15rem;
+}
+
+.operation-technical-details dl {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0;
+}
+
+.operation-technical-details dl div {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.operation-technical-details dt,
+.operation-technical-details dd {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.operation-technical-details code {
+  overflow-wrap: anywhere;
+}
+
+.operation-empty,
+.operation-loading,
+.operation-error {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 7.5rem;
+  padding: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.operation-empty p,
+.operation-loading p,
+.operation-error p {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+}
+
+.operation-empty-mark,
+.operation-error-mark,
+.operation-loading-mark {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  color: var(--accent-strong);
+  font-weight: 800;
+  background: var(--accent-soft);
+  border-radius: 0.8rem;
+}
+
+.operation-error-mark {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.operation-loading-mark::after {
+  width: 0.72rem;
+  height: 0.72rem;
+  content: "";
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.35rem var(--accent-soft);
+}
+
+@media (max-width: 720px) {
+  .operation-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .operation-heading .quiet-button {
+    align-self: flex-start;
+  }
+
+  .operation-row,
+  .operation-empty,
+  .operation-loading,
+  .operation-error {
+    grid-template-columns: 1.1rem minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .operation-action,
+  .operation-empty > button,
+  .operation-error > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .operation-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .operation-technical-details dl div {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

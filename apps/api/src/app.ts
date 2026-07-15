@@ -37,6 +37,7 @@ import {
   EmailRecipientNotFoundError,
   EmailRecipientRegistry,
   EmailRecipientValidationError,
+  EmployeeRegistry,
   KnowledgeConflictError,
   KnowledgeNotFoundError,
   KnowledgeRegistry,
@@ -45,6 +46,7 @@ import {
   MultiFieldTestVersionNotFoundError,
   MultiFieldTestVersionRegistry,
   MultiFieldTestVersionValidationError,
+  OperationCenterRegistry,
   PropertyValueValidationError,
   SpaceConflictError,
   SpaceNotFoundError,
@@ -80,8 +82,10 @@ import { registerDocumentIntakeRoutes } from "./document-intake-routes.js";
 import { registerDocumentPreflightRoutes } from "./document-preflight-routes.js";
 import { registerDocumentScheduleRoutes } from "./document-schedule-routes.js";
 import { registerEmailRecipientRoutes } from "./email-recipient-routes.js";
+import { registerEmployeeRoutes } from "./employee-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { registerMultiFieldTestVersionRoutes } from "./multi-field-test-version-routes.js";
+import { registerOperationCenterRoutes } from "./operation-center-routes.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
 import { registerTemplateDraftRoutes } from "./template-draft-routes.js";
@@ -107,10 +111,12 @@ export interface AppDependencies {
   documentPreflightRegistry?: DocumentPreflightRegistry;
   documentScheduleRegistry?: DocumentScheduleRegistry;
   emailRecipientRegistry?: EmailRecipientRegistry;
+  employeeRegistry?: EmployeeRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
   templateTestVersionRegistry?: TemplateTestVersionRegistry;
   multiFieldTestVersionRegistry?: MultiFieldTestVersionRegistry;
+  operationCenterRegistry?: OperationCenterRegistry;
   templatePreviewActivationRegistry?: TemplatePreviewActivationRegistry;
   uiDirectory?: string;
 }
@@ -158,7 +164,9 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "document_email_deliveries",
         "space_email_recipients",
         "document_schedules",
-        "document_schedule_runs"
+        "document_schedule_runs",
+        "employee_create_requests",
+        "employee_update_requests"
       ];
       const placeholders = requiredTables.map(() => "?").join(", ");
       const rows = database
@@ -203,6 +211,12 @@ export function buildApp(
     dependencies.documentScheduleRegistry ?? new DocumentScheduleRegistry(store);
   const emailRecipientRegistry =
     dependencies.emailRecipientRegistry ?? new EmailRecipientRegistry(store);
+  const employeeRegistry =
+    dependencies.employeeRegistry ??
+    new EmployeeRegistry(store, {
+      knowledge: knowledgeRegistry,
+      spaces: spaceRegistry
+    });
   const quarantineRegistry =
     dependencies.quarantineRegistry ??
     new DocumentQuarantineRegistry(store, objectStore);
@@ -214,6 +228,8 @@ export function buildApp(
   const multiFieldTestVersionRegistry =
     dependencies.multiFieldTestVersionRegistry ??
     new MultiFieldTestVersionRegistry(store, objectStore);
+  const operationCenterRegistry =
+    dependencies.operationCenterRegistry ?? new OperationCenterRegistry(store);
   const templatePreviewActivationRegistry =
     dependencies.templatePreviewActivationRegistry ??
     new TemplatePreviewActivationRegistry(store, objectStore);
@@ -494,6 +510,8 @@ export function buildApp(
   registerUiRoutes(app, dependencies.uiDirectory);
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
+  registerEmployeeRoutes(app, employeeRegistry);
+  registerOperationCenterRoutes(app, operationCenterRegistry);
   registerEmailRecipientRoutes(app, config, emailRecipientRegistry);
   registerDocumentScheduleRoutes(app, config, documentScheduleRegistry);
   registerDocumentPreflightRoutes(app, documentPreflightRegistry);

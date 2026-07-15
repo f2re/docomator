@@ -85,6 +85,16 @@ const rules: readonly MessageRule[] = [
     "Готовый предварительный просмотр не найден в выбранном пространстве."],
   [/^Active template version was not found in this space: (.+)$/i, () =>
     "Активная версия шаблона не найдена в выбранном пространстве."],
+  [/^Employee was not found in this space: (.+)$/i, () =>
+    "Сотрудник не найден в выбранном пространстве."],
+  [/^Employee idempotency key was reused with different input: (.+)$/i, () =>
+    "Этот запрос на создание сотрудника уже был выполнен с другими данными. Обновите список сотрудников и повторите действие."],
+  [/^Employee update idempotency key was reused with different input: (.+)$/i, () =>
+    "Этот запрос на изменение сотрудника уже был выполнен с другими данными. Обновите карточку сотрудника и повторите действие."],
+  [/^Employee property label is ambiguous: (.+)$/i, (match) =>
+    `Найдено несколько полей с названием «${match[1]}». Выберите существующее поле или переименуйте дубликаты.`],
+  [/^Employee property label already uses another value type: (.+)$/i, (match) =>
+    `Поле «${match[1]}» уже существует с другим типом данных. Выберите существующее поле или укажите другое название.`],
   [/^Structure element was not found: (.+)$/i, () =>
     "Выбранный элемент не найден в сохранённой структуре. Постройте структуру заново и повторите выбор."],
   [/^Template field already exists: (.+)$/i, (match) =>
@@ -143,6 +153,7 @@ function russianObjectName(value: string): string {
   const names: Record<string, string> = {
     "entity type": "Тип сущности",
     entity: "Объект",
+    employee: "Сотрудник",
     "property definition": "Свойство",
     property: "Свойство",
     space: "Пространство",
@@ -166,14 +177,14 @@ export function toUserMessage(error: Error): string {
   if (source.length === 0) {
     return DEFAULT_MESSAGE;
   }
-  if (RUSSIAN_TEXT.test(source)) {
-    return source;
-  }
   for (const [pattern, format] of rules) {
     const match = source.match(pattern);
     if (match !== null) {
       return format(match);
     }
+  }
+  if (RUSSIAN_TEXT.test(source)) {
+    return source;
   }
   return DEFAULT_MESSAGE;
 }

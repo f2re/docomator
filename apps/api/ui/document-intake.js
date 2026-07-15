@@ -19,6 +19,376 @@ let saving = false;
 let lastReport = null;
 let spaces = [];
 
+const templateWizardStates = new Map();
+const templateWizardCopy = {
+  1: {
+    question: "Какой документ станет шаблоном?",
+    hint: "Выберите готовый DOCX или XLSX. Система проверит его и попросит отдельно подтвердить сохранение."
+  },
+  2: {
+    question: "Какие сведения подставлять в документ?",
+    hint: "Покажите место в документе и выберите понятное поле карточки сотрудника. Техническую связь создаст система."
+  },
+  3: {
+    question: "Все ли поля заполняются без ошибок?",
+    hint: "Введите пробные значения. Система заполнит безопасную копию и сама считает результат обратно."
+  },
+  4: {
+    question: "Готов ли шаблон к работе?",
+    hint: "Просмотрите PDF и подтвердите активацию. Только после этого шаблон появится в списке для создания документов."
+  }
+};
+
+function templateWizardSpaceId() {
+  const current = String(globalThis.docomatorCurrentSpaceId || "").trim();
+  const select = document.querySelector("#documentQuarantineSpace");
+  if (current !== "") return current;
+  return String(select?.value || "").trim();
+}
+
+function templateWizardState(spaceId = templateWizardSpaceId()) {
+  const key = spaceId || "__waiting__";
+  if (!templateWizardStates.has(key)) {
+    let restored = null;
+    if (key !== "__waiting__") {
+      try {
+        const raw = sessionStorage.getItem(`docomator.templateWizard.v1:${key}`);
+        const value = raw ? JSON.parse(raw) : null;
+        if (value?.version === 1 && value.spaceId === key) {
+          restored = {
+            current:
+              Number.isInteger(value.current) && value.current >= 1 && value.current <= 4
+                ? value.current
+                : 1,
+            completed: new Set(
+              Array.isArray(value.completed)
+                ? value.completed.filter((step) => Number.isInteger(step) && step >= 1 && step <= 4)
+                : []
+            ),
+            artifacts: value.artifacts && typeof value.artifacts === "object" ? value.artifacts : {},
+            lastCompleted: 0
+          };
+        }
+      } catch {
+        restored = null;
+      }
+    }
+    templateWizardStates.set(
+      key,
+      restored || { current: 1, completed: new Set(), artifacts: {}, lastCompleted: 0 }
+    );
+  }
+  return templateWizardStates.get(key);
+}
+
+function persistTemplateWizardState(spaceId, state) {
+  if (!spaceId || spaceId === "__waiting__") return;
+  try {
+    sessionStorage.setItem(
+      `docomator.templateWizard.v1:${spaceId}`,
+      JSON.stringify({
+        version: 1,
+        spaceId,
+        current: state.current,
+        completed: [...state.completed].sort(),
+        artifacts: state.artifacts || {}
+      })
+    );
+  } catch {
+    // Серверные данные остаются источником истины; недоступное хранилище не блокирует работу.
+  }
+}
+
+async function validateTemplateWizardState(spaceId) {
+  if (!spaceId) return;
+  const state = templateWizardState(spaceId);
+  const artifacts = state.artifacts || {};
+  const loadArtifact = async (path) => {
+    try {
+      const response = await fetch(path, {
+        headers: { accept: "application/json" },
+        cache: "no-store"
+      });
+      if (response.ok) {
+        const body = await response.json();
+        return body?.data && typeof body.data === "object" ? body.data : false;
+      }
+      return response.status === 404 ? false : null;
+    } catch {
+      return null;
+    }
+  };
+  const invalidateFrom = (step) => {
+    for (const completed of [...state.completed]) {
+      if (completed >= step) state.completed.delete(completed);
+    }
+    state.current = Math.min(state.current, step);
+  };
+
+  let source = null;
+  if (state.completed.has(1)) {
+    if (typeof artifacts.sourceId !== "string") invalidateFrom(1);
+    else {
+      source = await loadArtifact(
+        `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-sources/${encodeURIComponent(artifacts.sourceId)}`
+      );
+      if (
+        source === false ||
+        (source !== null &&
+          (source.id !== artifacts.sourceId || source.spaceId !== spaceId))
+      ) invalidateFrom(1);
+    }
+  }
+  if (state.completed.has(2)) {
+    if (typeof artifacts.draftId !== "string") invalidateFrom(2);
+    else {
+      const draft = await loadArtifact(
+        `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts/${encodeURIComponent(artifacts.draftId)}`
+      );
+      if (
+        draft === false ||
+        (draft !== null &&
+          (draft.id !== artifacts.draftId ||
+            draft.spaceId !== spaceId ||
+            draft.sourceRecordId !== artifacts.sourceId ||
+            (source !== null &&
+              source !== false &&
+              draft.sourceSha256 !== source.sha256)))
+      ) invalidateFrom(2);
+    }
+  }
+  if (state.completed.has(3)) {
+    const collection = artifacts.versionKind === "multi"
+      ? "template-multi-test-versions"
+      : "template-test-versions";
+    if (typeof artifacts.versionId !== "string") invalidateFrom(3);
+    else {
+      const valid = await loadArtifact(
+        `/api/v1/spaces/${encodeURIComponent(spaceId)}/${collection}/${encodeURIComponent(artifacts.versionId)}`
+      );
+      if (valid === false) invalidateFrom(3);
+    }
+  }
+  if (state.completed.has(4)) {
+    if (typeof artifacts.activeId !== "string") invalidateFrom(4);
+    else {
+      const valid = await loadArtifact(
+        `/api/v1/spaces/${encodeURIComponent(spaceId)}/active-templates/${encodeURIComponent(artifacts.activeId)}`
+      );
+      if (valid === false) invalidateFrom(4);
+    }
+  }
+  persistTemplateWizardState(spaceId, state);
+  if (templateWizardSpaceId() === spaceId) renderTemplateWizard();
+}
+
+function templateWizardSpaceName(spaceId) {
+  const select = document.querySelector("#documentQuarantineSpace");
+  const option = [...(select?.options || [])].find((item) => item.value === spaceId);
+  const chip = document.querySelector("#currentSpaceChipText")?.textContent?.trim();
+  return option?.textContent?.trim() || chip || "Текущий раздел";
+}
+
+function templateWizardAvailableStep(state) {
+  let step = 1;
+  while (step < 4 && state.completed.has(step)) step += 1;
+  return step;
+}
+
+function normalizeTemplateWizardState(state) {
+  let firstMissing = 1;
+  while (firstMissing <= 4 && state.completed.has(firstMissing)) firstMissing += 1;
+  for (const completed of [...state.completed]) {
+    if (completed > firstMissing) state.completed.delete(completed);
+  }
+  const highestReachable = Math.min(4, firstMissing);
+  if (state.current < 1 || state.current > highestReachable) state.current = highestReachable;
+}
+
+function renderTemplateWizard() {
+  const root = document.querySelector("#templateWizard");
+  if (!root) return;
+  const spaceId = templateWizardSpaceId();
+  const state = templateWizardState(spaceId);
+  normalizeTemplateWizardState(state);
+  const available = templateWizardAvailableStep(state);
+  if (state.current > available && !state.completed.has(state.current)) {
+    state.current = available;
+  }
+  const current = state.current;
+  const copy = templateWizardCopy[current];
+  const stepLabel = root.querySelector("#templateWizardStep");
+  const question = root.querySelector("#templateWizardQuestion");
+  const hint = root.querySelector("#templateWizardHint");
+  const space = root.querySelector("#templateWizardSpace");
+  const back = root.querySelector("#templateWizardBack");
+  const status = root.querySelector("#templateWizardStatus");
+  if (stepLabel) stepLabel.textContent = `Шаг ${current} из 4`;
+  if (question) question.textContent = copy.question;
+  if (hint) hint.textContent = copy.hint;
+  if (space) space.textContent = templateWizardSpaceName(spaceId);
+  if (back) back.hidden = current === 1;
+  if (status) {
+    if (state.lastCompleted === current - 1) {
+      status.textContent = `Шаг ${state.lastCompleted} завершён. ${copy.hint}`;
+    } else if (current === 2 && state.completed.has(1) && !elements.input?.files?.[0]) {
+      status.textContent =
+        "Исходник сохранён и проверен. Можно продолжить: система построит структуру из серверной копии, повторно выбирать файл не нужно.";
+    } else if (current === 4 && state.completed.has(4)) {
+      status.textContent = "Шаблон готов и доступен для создания документов в текущем разделе.";
+    } else {
+      status.textContent =
+        current === 1
+          ? "Начните с выбора документа. Переходы между шагами не очищают формы."
+          : "Можно вернуться назад: выбранный файл и введённые значения останутся на месте.";
+    }
+  }
+
+  root.querySelectorAll("[data-template-step]").forEach((item) => {
+    const step = Number(item.getAttribute("data-template-step"));
+    const button = item.querySelector("[data-template-wizard-go]");
+    const isCurrent = step === current;
+    const isComplete = state.completed.has(step);
+    const isAvailable = step <= available || isComplete;
+    item.dataset.wizardState = isCurrent
+      ? "current"
+      : isComplete
+        ? "complete"
+        : isAvailable
+          ? "available"
+          : "locked";
+    if (button) {
+      button.disabled = !isAvailable;
+      if (isCurrent) button.setAttribute("aria-current", "step");
+      else button.removeAttribute("aria-current");
+      button.setAttribute(
+        "aria-label",
+        `${step}. ${button.querySelector("strong")?.textContent || "Шаг"}${isComplete ? ". Завершено" : isCurrent ? ". Текущий шаг" : isAvailable ? "" : ". Сначала завершите предыдущий шаг"}`
+      );
+    }
+  });
+
+  root.querySelectorAll("[data-template-wizard-panel]").forEach((panel) => {
+    panel.hidden = Number(panel.getAttribute("data-template-wizard-panel")) !== current;
+  });
+  const singleTrial = root.querySelector("#templateTrialPanel");
+  const multiTrial = root.querySelector("#templateMultiTrialPanel");
+  if (current === 3 && singleTrial && multiTrial) {
+    const useAllFields = Boolean(multiTrial.querySelector("#templateMultiTrialForm"));
+    singleTrial.hidden = useAllFields;
+    multiTrial.hidden = !useAllFields;
+  }
+}
+
+function moveTemplateWizardTo(step, focusHeading = true) {
+  const spaceId = templateWizardSpaceId();
+  const state = templateWizardState(spaceId);
+  const available = templateWizardAvailableStep(state);
+  if (!Number.isInteger(step) || step < 1 || step > 4 || step > available) return;
+  state.current = step;
+  state.lastCompleted = 0;
+  persistTemplateWizardState(spaceId, state);
+  renderTemplateWizard();
+  if (focusHeading) {
+    requestAnimationFrame(() =>
+      document.querySelector("#templateWizardQuestion")?.focus({ preventScroll: true })
+    );
+  }
+}
+
+function completeTemplateWizardStep(step, artifacts = {}) {
+  const spaceId = templateWizardSpaceId();
+  if (!spaceId || !Number.isInteger(step) || step < 1 || step > 4) return;
+  const state = templateWizardState(spaceId);
+  state.completed.add(step);
+  state.lastCompleted = step;
+  state.artifacts = { ...(state.artifacts || {}), ...artifacts };
+  if (step < 4) state.current = step + 1;
+  else state.current = 4;
+  persistTemplateWizardState(spaceId, state);
+  renderTemplateWizard();
+  document.dispatchEvent(
+    new CustomEvent("docomator:template-wizard-step-completed", {
+      detail: { spaceId, step }
+    })
+  );
+  requestAnimationFrame(() =>
+    document.querySelector("#templateWizardQuestion")?.focus({ preventScroll: true })
+  );
+}
+
+function rememberTemplateWizardArtifacts(artifacts = {}) {
+  const spaceId = templateWizardSpaceId();
+  if (!spaceId || typeof artifacts !== "object" || artifacts === null) return;
+  const state = templateWizardState(spaceId);
+  state.artifacts = { ...(state.artifacts || {}), ...artifacts };
+  persistTemplateWizardState(spaceId, state);
+}
+
+function resetTemplateWizardFrom(step = 1) {
+  const spaceId = templateWizardSpaceId();
+  const state = templateWizardState(spaceId);
+  for (const completed of [...state.completed]) {
+    if (completed >= step) state.completed.delete(completed);
+  }
+  state.lastCompleted = 0;
+  if (step <= 1) state.artifacts = {};
+  else if (step <= 2) {
+    delete state.artifacts.draftId;
+    delete state.artifacts.versionId;
+    delete state.artifacts.versionKind;
+    delete state.artifacts.activeId;
+  } else if (step <= 3) {
+    delete state.artifacts.versionId;
+    delete state.artifacts.versionKind;
+    delete state.artifacts.activeId;
+  } else {
+    delete state.artifacts.activeId;
+  }
+  state.current = Math.min(state.current, step);
+  persistTemplateWizardState(spaceId, state);
+  renderTemplateWizard();
+}
+
+function setTemplateWizardSpace(spaceId) {
+  if (!spaceId) return;
+  renderTemplateWizard();
+  void validateTemplateWizardState(spaceId);
+}
+
+function initializeTemplateWizard() {
+  const root = document.querySelector("#templateWizard");
+  if (!root) return;
+  root.querySelector("#templateWizardQuestion")?.setAttribute("tabindex", "-1");
+  root.querySelectorAll("[data-template-wizard-go]").forEach((button) => {
+    button.addEventListener("click", () =>
+      moveTemplateWizardTo(Number(button.getAttribute("data-template-wizard-go")))
+    );
+  });
+  root.querySelector("#templateWizardBack")?.addEventListener("click", () => {
+    const state = templateWizardState();
+    moveTemplateWizardTo(Math.max(1, state.current - 1));
+  });
+  const dynamicStages = root.querySelector("#templateWizardDynamicStages");
+  if (dynamicStages) {
+    new MutationObserver(renderTemplateWizard).observe(dynamicStages, {
+      childList: true,
+      subtree: true
+    });
+  }
+  renderTemplateWizard();
+}
+
+globalThis.docomatorTemplateWizard = {
+  artifacts: () => ({ ...(templateWizardState().artifacts || {}) }),
+  complete: completeTemplateWizardStep,
+  isComplete: (step) => templateWizardState().completed.has(step),
+  remember: rememberTemplateWizardArtifacts,
+  render: renderTemplateWizard,
+  resetFrom: resetTemplateWizardFrom,
+  spaceId: templateWizardSpaceId
+};
+
 function escapeHtml(value) {
   return String(value ?? "").replace(
     /[&<>'"]/g,
@@ -66,12 +436,14 @@ function resetResult() {
     </div>`;
 }
 
-function clearSelection() {
+function clearSelection({ resetWizard = true } = {}) {
+  if (resetWizard) globalThis.docomatorTemplateWizard?.resetFrom(1);
   selectedFile = null;
   lastReport = null;
   elements.input.value = "";
   elements.selected.hidden = true;
   elements.inspectButton.disabled = true;
+  elements.inspectButton.hidden = false;
   elements.clearButton.hidden = true;
   elements.dropZone.classList.remove("has-file", "is-error");
   setStatus(
@@ -89,6 +461,7 @@ function fileExtension(file) {
 
 function selectFile(file) {
   if (inspecting || saving) return;
+  globalThis.docomatorTemplateWizard?.resetFrom(1);
   const extension = fileExtension(file);
   if (extension !== "docx" && extension !== "xlsx") {
     selectedFile = null;
@@ -137,6 +510,7 @@ function selectFile(file) {
       <small>${escapeHtml(formatBytes(file.size))} · ${extension.toUpperCase()}</small>
     </span>`;
   elements.inspectButton.disabled = false;
+  elements.inspectButton.hidden = false;
   elements.clearButton.hidden = false;
   setStatus(
     "ready",
@@ -247,8 +621,11 @@ async function loadSavedDocuments(spaceId) {
     container.innerHTML = `
       <div class="quarantine-empty is-error">
         <span aria-hidden="true">⚠️</span>
-        <div><strong>Список получить не удалось</strong><p>${escapeHtml(error?.message || "Повторите действие позже.")}</p></div>
+        <div><strong>Список получить не удалось</strong><p>${escapeHtml(error?.message || "Повторите действие позже.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${escapeHtml(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="documentSourceListRetry" type="button">Повторить</button></div>
       </div>`;
+    container
+      .querySelector("#documentSourceListRetry")
+      ?.addEventListener("click", () => loadSavedDocuments(spaceId));
   }
 }
 
@@ -257,7 +634,7 @@ async function saveCheckedDocument(report) {
   const spaceSelect = document.querySelector("#documentQuarantineSpace");
   const button = document.querySelector("#documentQuarantineButton");
   const message = document.querySelector("#documentQuarantineMessage");
-  const spaceId = spaceSelect?.value || "";
+  const spaceId = globalThis.docomatorTemplateWizard?.spaceId() || "";
   if (!spaceId) {
     message.textContent = "Выберите пространство, в котором будет храниться исходник.";
     return;
@@ -271,7 +648,7 @@ async function saveCheckedDocument(report) {
     "Повторно проверяем файл и сохраняем неизменяемую копию. Страницу можно не закрывать.";
 
   try {
-    const body = await fetchJson(
+    const savedBody = await fetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-sources/quarantine?fileName=${encodeURIComponent(selectedFile.name)}`,
       {
         method: "POST",
@@ -282,9 +659,12 @@ async function saveCheckedDocument(report) {
       }
     );
     message.className = "quarantine-message is-success";
-    message.innerHTML = `✅ Исходник сохранён. Контрольная сумма: <code>${escapeHtml(body.data.sha256)}</code>. Следующий этап — выбрать изменяемые поля.`;
+    message.textContent = "Исходник сохранён в выбранном разделе. Следующий этап — выбрать изменяемые поля.";
     button.textContent = "Исходник сохранён";
     await loadSavedDocuments(spaceId);
+    globalThis.docomatorTemplateWizard?.complete(1, {
+      sourceId: savedBody.data.id
+    });
   } catch (error) {
     const operationId = typeof error?.operationId === "string" ? error.operationId : "";
     message.className = "quarantine-message is-error";
@@ -310,7 +690,7 @@ async function initializeQuarantineControls(report) {
       spaceSelect.disabled = true;
       button.disabled = true;
       message.textContent =
-        "Сначала создайте пространство. Исходники всегда хранятся в изолированной области данных.";
+        "Сначала создайте раздел данных. Исходники всегда хранятся в выбранном разделе.";
       return;
     }
     spaceSelect.innerHTML = availableSpaces
@@ -319,6 +699,11 @@ async function initializeQuarantineControls(report) {
           `<option value="${escapeHtml(space.id)}">${escapeHtml(space.name)}</option>`
       )
       .join("");
+    const currentSpaceId = globalThis.docomatorCurrentSpaceId || "";
+    if ([...spaceSelect.options].some((option) => option.value === currentSpaceId)) {
+      spaceSelect.value = currentSpaceId;
+    }
+    setTemplateWizardSpace(spaceSelect.value);
     button.addEventListener("click", () => saveCheckedDocument(report));
     spaceSelect.addEventListener("change", () =>
       loadSavedDocuments(spaceSelect.value)
@@ -342,6 +727,7 @@ function renderReport(report, operationId) {
     presentation.title,
     presentation.detail
   );
+  elements.inspectButton.hidden = true;
 
   const issueHtml =
     report.issues.length === 0
@@ -355,7 +741,7 @@ function renderReport(report, operationId) {
                   <span class="pill">${escapeHtml(issueSeverityLabel(issue.severity))}</span>
                   <h3>${escapeHtml(issue.title)}</h3>
                   <p>${escapeHtml(issue.message)}</p>
-                  ${issue.partName ? `<small>Часть пакета: <code>${escapeHtml(issue.partName)}</code></small>` : ""}
+                  ${issue.partName ? `<details class="intake-technical"><summary>Технические сведения</summary><p>Часть пакета: <code>${escapeHtml(issue.partName)}</code></p></details>` : ""}
                 </div>
               </article>`
           )
@@ -374,12 +760,12 @@ function renderReport(report, operationId) {
             </div>
           </div>
           <div class="quarantine-form">
-            <label for="documentQuarantineSpace">Пространство</label>
-            <select id="documentQuarantineSpace" aria-describedby="documentQuarantineMessage"><option>Получаем список…</option></select>
+            <label for="documentQuarantineSpace" hidden>Раздел данных</label>
+            <select id="documentQuarantineSpace" aria-describedby="documentQuarantineMessage" aria-hidden="true" tabindex="-1" hidden><option>Получаем список…</option></select>
             <button class="primary-button" id="documentQuarantineButton" type="button">Сохранить исходник</button>
           </div>
-          <p class="quarantine-message" id="documentQuarantineMessage">После сохранения система покажет контрольную сумму и безопасный следующий шаг.</p>
-          <div class="quarantine-list-heading"><strong>Сохранённые исходники пространства</strong><small>Повторная загрузка того же файла не создаёт дубликат.</small></div>
+          <p class="quarantine-message" id="documentQuarantineMessage">После сохранения система покажет следующий шаг.</p>
+          <div class="quarantine-list-heading"><strong>Сохранённые исходники раздела</strong><small>Повторная загрузка того же файла не создаёт дубликат.</small></div>
           <div id="documentSourceList" class="quarantine-source-list" aria-live="polite"></div>
         </section>`;
 
@@ -479,7 +865,7 @@ if (Object.values(elements).every((element) => element !== null)) {
     if (file) selectFile(file);
   });
   elements.inspectButton.addEventListener("click", inspectSelectedFile);
-  elements.clearButton.addEventListener("click", clearSelection);
+  elements.clearButton.addEventListener("click", () => clearSelection());
   elements.dropZone.addEventListener("dragover", (event) => {
     event.preventDefault();
     if (!inspecting && !saving) elements.dropZone.classList.add("is-dragging");
@@ -493,5 +879,20 @@ if (Object.values(elements).every((element) => element !== null)) {
     const file = event.dataTransfer?.files?.[0];
     if (file) selectFile(file);
   });
-  clearSelection();
+  clearSelection({ resetWizard: false });
 }
+
+initializeTemplateWizard();
+
+document.addEventListener("docomator:space-changed", (event) => {
+  const spaceId = event?.detail?.spaceId || "";
+  setTemplateWizardSpace(spaceId);
+  const spaceSelect = document.querySelector("#documentQuarantineSpace");
+  if (!spaceId || !spaceSelect) return;
+  if ([...spaceSelect.options].some((option) => option.value === spaceId)) {
+    const changed = spaceSelect.value !== spaceId;
+    spaceSelect.value = spaceId;
+    if (changed) spaceSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    else void loadSavedDocuments(spaceId);
+  }
+});

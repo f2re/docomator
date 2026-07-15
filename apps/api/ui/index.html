@@ -19,28 +19,31 @@
     <div class="app-shell">
       <aside class="sidebar" aria-label="Основная навигация">
         <div class="brand" aria-label="Docomator">
-          <span class="brand-mark" aria-hidden="true">🧩</span>
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3.75h7.2L18 7.55v12.7H7z"/><path d="M14 3.75v4h4M9.8 12h5.4M9.8 15.5h4.1"/></svg></span>
           <span><strong>Docomator</strong><small>Локальный контур</small></span>
         </div>
 
         <nav class="nav-list">
           <button class="nav-item is-active" type="button" data-view-target="overview" aria-current="page">
-            <span aria-hidden="true">🏠</span><span>Обзор</span>
+            <span class="nav-symbol" aria-hidden="true">⌂</span><span>Главная</span>
           </button>
-          <button class="nav-item" type="button" data-view-target="spaces">
-            <span aria-hidden="true">🧑‍🤝‍🧑</span><span>Пространства</span>
-          </button>
-          <button class="nav-item" type="button" data-view-target="knowledge">
-            <span aria-hidden="true">🗂️</span><span>Схема данных</span>
+          <button class="nav-item" type="button" data-view-target="employees">
+            <span class="nav-symbol" aria-hidden="true">◎</span><span>Сотрудники</span>
           </button>
           <button class="nav-item" type="button" data-view-target="templates">
-            <span aria-hidden="true">📄</span><span>Шаблоны</span><span class="nav-badge">Проверка</span>
+            <span class="nav-symbol" aria-hidden="true">▤</span><span>Шаблоны</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="generation">
+            <span class="nav-symbol" aria-hidden="true">＋</span><span>Создать документы</span>
           </button>
           <button class="nav-item" type="button" data-view-target="documents">
-            <span aria-hidden="true">✨</span><span>Документы</span><span class="nav-badge">Скоро</span>
+            <span class="nav-symbol" aria-hidden="true">✓</span><span>Результаты</span>
           </button>
           <button class="nav-item" type="button" data-view-target="automations">
-            <span aria-hidden="true">⏱️</span><span>Автоматизации</span><span class="nav-badge">Скоро</span>
+            <span class="nav-symbol" aria-hidden="true">◷</span><span>Расписания</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="settings">
+            <span class="nav-symbol" aria-hidden="true">⌘</span><span>Настройки</span>
           </button>
         </nav>
 
@@ -63,9 +66,9 @@
             <p class="view-description" id="viewDescription">Показываем, что уже готово и какой шаг будет полезнее следующим.</p>
           </div>
           <div class="topbar-actions">
-            <span class="context-chip" id="currentSpaceChip" hidden><span aria-hidden="true">🧑‍🤝‍🧑</span><span id="currentSpaceChipText"></span></span>
+            <span class="context-chip" id="currentSpaceChip" hidden><span class="context-dot" aria-hidden="true"></span><span id="currentSpaceChipText"></span></span>
             <button class="icon-button" id="refreshButton" type="button" aria-label="Обновить данные" title="Обновить данные">↻</button>
-            <button class="primary-button" id="primaryAction" type="button"><span aria-hidden="true">＋</span><span>Создать пространство</span></button>
+            <button class="primary-button" id="primaryAction" type="button"><span aria-hidden="true">＋</span><span>Добавить сотрудника</span></button>
           </div>
         </header>
 
@@ -80,46 +83,39 @@
 
         <section class="view is-visible" data-view="overview" aria-labelledby="overview-heading">
           <h2 class="visually-hidden" id="overview-heading">Обзор системы</h2>
-          <article class="hero-card">
+          <article class="hero-card home-hero">
             <div class="hero-copy">
-              <span class="pill pill-accent">Новый рабочий контур</span>
-              <h2>Организуйте людей по изолированным пространствам</h2>
-              <p>Пространство отделяет данные подразделения или проекта. Внутри можно отметить людей, сохранить именованную группу и заранее выбрать: один документ на каждого или один общий документ с таблицей всех участников.</p>
+              <span class="pill pill-accent">Следующий шаг</span>
+              <h2 id="homeNextTitle">Добавьте первого сотрудника</h2>
+              <p id="homeNextDescription">Сохраните ФИО и нужные сведения в одной карточке. После этого можно подключить шаблон и сформировать документы.</p>
               <div class="hero-actions">
-                <button class="primary-button" type="button" data-create="space">Создать пространство</button>
-                <button class="secondary-button" type="button" data-view-target="spaces">Открыть пространства</button>
+                <button class="primary-button" id="homeNextAction" type="button" data-view-target="employees">Добавить сотрудников</button>
               </div>
             </div>
-            <div class="hero-visual" aria-hidden="true"><div class="document-stack"><span>👥</span><span>📋</span><span>✅</span></div></div>
+            <div class="hero-visual" aria-hidden="true"><div class="live-sheet"><i></i><i></i><i></i><b></b></div></div>
           </article>
 
-          <div class="metric-grid" aria-label="Состояние системы">
-            <article class="metric-card"><span class="metric-icon" aria-hidden="true">🧑‍🤝‍🧑</span><div><strong id="spaceCount">—</strong><span>пространств</span></div></article>
-            <article class="metric-card"><span class="metric-icon" aria-hidden="true">👥</span><div><strong id="spaceEntityCount">—</strong><span>участников в выбранном</span></div></article>
-            <article class="metric-card"><span class="metric-icon" aria-hidden="true">🗃️</span><div><strong id="groupCount">—</strong><span>сохранённых групп</span></div></article>
-            <article class="metric-card"><span class="metric-icon" aria-hidden="true">📸</span><div><strong id="snapshotCount">—</strong><span>снимков аудитории</span></div></article>
+          <div class="path-grid" aria-label="Готовность к созданию документов">
+            <button class="path-card" type="button" data-view-target="employees"><span class="path-index">1</span><span><strong>Сотрудники</strong><small id="homeEmployeeStatus">Получаем список…</small></span><span aria-hidden="true">›</span></button>
+            <button class="path-card" type="button" data-view-target="templates"><span class="path-index">2</span><span><strong>Шаблон</strong><small id="homeTemplateStatus">Проверяем готовность…</small></span><span aria-hidden="true">›</span></button>
+            <button class="path-card" type="button" data-view-target="generation"><span class="path-index">3</span><span><strong>Создать документы</strong><small>Выберите шаблон и сотрудников</small></span><span aria-hidden="true">›</span></button>
           </div>
+          <div class="legacy-metrics" hidden><span id="spaceCount">0</span><span id="spaceEntityCount">0</span><span id="groupCount">0</span><span id="snapshotCount">0</span></div>
+        </section>
 
-          <div class="two-column-grid">
-            <article class="panel">
-              <div class="panel-heading"><div><p class="eyebrow">Два режима результата</p><h2>Что сформирует система</h2></div><span class="pill pill-success">Логика готова</span></div>
-              <ul class="readiness-list">
-                <li><span class="readiness-icon success">1</span><div><strong>По документу на каждого</strong><p>Для каждого выбранного человека создаётся отдельное задание со своим основным участником.</p></div></li>
-                <li><span class="readiness-icon success">1</span><div><strong>Один сводный документ</strong><p>Создаётся одно задание, а шаблон получает упорядоченный список участников для таблицы или перечня.</p></div></li>
-                <li><span class="readiness-icon success">✓</span><div><strong>Неизменяемый состав</strong><p>После запуска снимок участников не меняется, даже если группу отредактировали позже.</p></div></li>
-                <li><span class="readiness-icon planned">2</span><div><strong>Формирование DOCX/XLSX</strong><p>Подключение списка к повторяющейся таблице будет реализовано в компиляторе шаблонов.</p></div></li>
-              </ul>
-            </article>
-            <article class="panel help-preview">
-              <div class="panel-heading"><div><p class="eyebrow">Понятный порядок</p><h2>Как подготовить аудиторию</h2></div><span aria-hidden="true" class="large-emoji">💡</span></div>
-              <ol class="guided-steps">
-                <li><span>1</span><div><strong>Выберите пространство</strong><p>Данные других пространств не попадут в выбор.</p></div></li>
-                <li><span>2</span><div><strong>Добавьте или отметьте людей</strong><p>Можно выбрать всех, группу или отдельные записи.</p></div></li>
-                <li><span>3</span><div><strong>Выберите форму результата</strong><p>Отдельные документы либо один список/таблица.</p></div></li>
-              </ol>
-              <button class="text-button" id="overviewHelpButton" type="button">Показать ответы на частые вопросы →</button>
-            </article>
+        <section class="view" data-view="employees" aria-labelledby="employees-heading">
+          <div class="section-intro employee-intro">
+            <div><p class="eyebrow">Карточки людей</p><h2 id="employees-heading">Сотрудники</h2><p>ФИО и сведения, которые будут подставляться в документы.</p></div>
+            <button class="primary-button" id="employeeAddButtonHeader" type="button" data-employee-action="add"><span aria-hidden="true">＋</span><span>Добавить сотрудника</span></button>
           </div>
+          <div class="employee-toolbar">
+            <label class="search-field" for="employeeSearch"><span aria-hidden="true">⌕</span><input id="employeeSearch" type="search" placeholder="Найти сотрудника" autocomplete="off" /></label>
+            <button class="secondary-button" type="button" data-bulk-import-open>Импортировать список</button>
+          </div>
+          <div id="employeeWorkspaceStatus" class="employee-state is-loading" role="status" aria-live="polite" aria-busy="true">
+            <span class="state-mark" aria-hidden="true"></span><div><strong>Получаем сотрудников</strong><p>Список появится после ответа локального сервера.</p></div>
+          </div>
+          <div id="employeeList" class="employee-list" aria-live="polite"></div>
         </section>
 
         <section class="view" data-view="spaces" aria-labelledby="spaces-heading">
@@ -197,7 +193,7 @@
             <div><p class="eyebrow">Общая схема</p><h2 id="knowledge-heading">Типы и свойства</h2><p>Типы и определения свойств общие для системы. Конкретные люди и организации создаются внутри выбранного пространства.</p></div>
             <div class="segmented-control" role="tablist" aria-label="Раздел схемы данных"><button type="button" role="tab" aria-selected="true" data-knowledge-tab="types">Типы</button><button type="button" role="tab" aria-selected="false" data-knowledge-tab="properties">Свойства</button></div>
           </div>
-          <div class="knowledge-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="knowledgeSearch" type="search" placeholder="Найти по названию или ключу" autocomplete="off" /></label><button class="primary-button" id="knowledgeCreateButton" type="button"><span aria-hidden="true">＋</span><span>Создать тип</span></button></div>
+          <div class="knowledge-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="knowledgeSearch" type="search" placeholder="Найти по названию" autocomplete="off" /></label><button class="primary-button" id="knowledgeCreateButton" type="button"><span aria-hidden="true">＋</span><span>Создать тип</span></button></div>
           <div class="inline-hint"><span aria-hidden="true">ⓘ</span><p id="knowledgeHint"><strong>Тип сущности</strong> описывает класс объектов. Например, «Человек», «Организация» или «Статья».</p></div>
           <div id="knowledgeContent" class="collection-grid" aria-live="polite" aria-busy="true"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
         </section>
@@ -205,22 +201,40 @@
 <section class="view" data-view="templates" aria-labelledby="templates-heading">
   <div class="section-intro">
     <div>
-      <p class="eyebrow">Безопасный приём</p>
-      <h2 id="templates-heading">Проверка DOCX и XLSX</h2>
-      <p>До сохранения шаблона система проверяет архивную структуру, размеры, пути, макросы и внешние связи. Файл не запускается и на этом этапе не добавляется в каталог.</p>
+      <p class="eyebrow">Документ-основа</p>
+      <h2 id="templates-heading">Подключить шаблон</h2>
+      <p>Выберите DOCX/XLSX, укажите поля и проверьте результат.</p>
     </div>
-    <span class="pill pill-accent">Этап M2 · работает</span>
   </div>
+  <div class="template-wizard" id="templateWizard">
+    <ol class="template-step-rail" aria-label="Этапы подключения шаблона">
+      <li data-template-step="1"><button type="button" data-template-wizard-go="1" aria-current="step"><span>1</span><strong>Документ</strong></button></li>
+      <li data-template-step="2"><button type="button" data-template-wizard-go="2" disabled><span>2</span><strong>Поля</strong></button></li>
+      <li data-template-step="3"><button type="button" data-template-wizard-go="3" disabled><span>3</span><strong>Проверка</strong></button></li>
+      <li data-template-step="4"><button type="button" data-template-wizard-go="4" disabled><span>4</span><strong>Готово</strong></button></li>
+    </ol>
 
+    <header class="template-wizard-question" aria-live="polite">
+      <div>
+        <p class="eyebrow" id="templateWizardStep">Шаг 1 из 4</p>
+        <h3 id="templateWizardQuestion">Какой документ станет шаблоном?</h3>
+        <p id="templateWizardHint">Выберите готовый DOCX или XLSX. Система проверит его и попросит отдельно подтвердить сохранение.</p>
+      </div>
+      <p class="template-wizard-space"><span>Раздел данных</span><strong id="templateWizardSpace">Определяем…</strong></p>
+    </header>
+    <p class="template-safety-note">Проверка выполняется локально: файл не запускается и не отправляется во внешние службы.</p>
+
+    <div class="template-wizard-stages" id="templateWizardStages">
+      <section data-template-wizard-panel="1" aria-labelledby="templateWizardQuestion">
   <div class="intake-layout">
     <article class="panel intake-panel">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">Шаг 1 из 2</p>
-          <h2>Выберите документ</h2>
-          <p>Поддерживаются DOCX и XLSX размером до 32 МБ. Проверка выполняется только локальным сервером.</p>
+          <p class="eyebrow">Документ-основа</p>
+          <h2>Выберите файл</h2>
+          <p>Поддерживаются DOCX и XLSX размером до 32 МБ.</p>
         </div>
-        <span class="large-emoji" aria-hidden="true">🛡️</span>
+        <span class="template-file-mark" aria-hidden="true">DOC</span>
       </div>
 
       <div class="intake-drop-zone" id="documentIntakeDropZone">
@@ -230,7 +244,7 @@
           accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         />
         <label for="documentIntakeFile">
-          <span aria-hidden="true">📥</span>
+          <span aria-hidden="true">↓</span>
           <strong>Перетащите файл сюда или выберите его</strong>
           <small>Файл будет передан только локальной службе Docomator. На этом этапе он не сохраняется как шаблон.</small>
         </label>
@@ -266,28 +280,77 @@
       </div>
     </article>
   </div>
+      </section>
+      <div id="templateWizardDynamicStages"></div>
+    </div>
+
+    <footer class="template-wizard-navigation">
+      <button class="secondary-button" id="templateWizardBack" type="button" hidden>Назад</button>
+      <p id="templateWizardStatus" role="status" aria-live="polite">Начните с выбора документа. Введённые данные сохраняются при переходах между шагами.</p>
+    </footer>
+  </div>
 </section>
 
+        <section class="view" data-view="generation" aria-labelledby="generation-heading">
+          <h2 class="visually-hidden" id="generation-heading">Создать документы</h2>
+        </section>
+
         <section class="view" data-view="documents" aria-labelledby="documents-heading">
-          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">✨</span><span class="pill">Этап M4</span><h2 id="documents-heading">Создание документов будет начинаться с аудитории</h2><p>Пошаговый процесс покажет пространство, источник участников, точный состав, форму результата, найденные данные, предварительный просмотр и подтверждение.</p><div class="flow-preview"><span>1. Пространство</span><i>→</i><span>2. Аудитория</span><i>→</i><span>3. Данные</span><i>→</i><span>4. Проверка</span><i>→</i><span>5. Готово</span></div></div>
+          <h2 class="visually-hidden" id="documents-heading">Результаты</h2>
         </section>
 
         <section class="view" data-view="automations" aria-labelledby="automations-heading">
-          <div class="planned-state"><span class="planned-emoji" aria-hidden="true">⏱️</span><span class="pill">Этап M7</span><h2 id="automations-heading">Правило автоматизации будет привязано к пространству</h2><p>Запуск сможет выбрать всех активных участников, именованную группу или вычисленную выборку, затем создать один сводный документ либо документы по каждому.</p><div class="planned-details"><div><strong>Без смешивания данных</strong><span>Правило не сможет получить участника из другого пространства.</span></div><div><strong>Воспроизводимый запуск</strong><span>Перед формированием создаётся неизменяемый снимок состава.</span></div></div></div>
+          <div class="section-intro"><div><p class="eyebrow">Повторные выпуски</p><h2 id="automations-heading">Расписания</h2><p>Здесь собраны запланированные выпуски документов и их состояние.</p></div></div>
+        </section>
+
+        <section class="view" data-view="settings" aria-labelledby="settings-heading">
+          <div class="section-intro"><div><p class="eyebrow">Дополнительные возможности</p><h2 id="settings-heading">Настройки</h2><p>Организация данных и диагностика доступны здесь и не мешают ежедневной работе.</p></div></div>
+          <div class="settings-grid">
+            <button class="settings-row" type="button" data-view-target="automations"><span><strong>Расписания</strong><small>Повторные выпуски и состояние запланированных запусков</small></span><span aria-hidden="true">›</span></button>
+            <button class="settings-row" type="button" data-view-target="spaces"><span><strong>Разделы данных и группы</strong><small>Изоляция подразделений, доступ и сохранённые составы</small></span><span aria-hidden="true">›</span></button>
+            <button class="settings-row" type="button" data-view-target="knowledge"><span><strong>Дополнительные типы записей</strong><small>Расширенная настройка нестандартных данных</small></span><span aria-hidden="true">›</span></button>
+          </div>
         </section>
       </main>
 
       <nav class="mobile-nav" aria-label="Навигация на мобильном устройстве">
-        <button class="is-active" type="button" data-view-target="overview" aria-current="page"><span>🏠</span><small>Обзор</small></button>
-        <button type="button" data-view-target="spaces"><span>👥</span><small>Люди</small></button>
-        <button type="button" data-view-target="knowledge"><span>🗂️</span><small>Схема</small></button>
-        <button type="button" id="mobileHelpButton"><span>❓</span><small>Помощь</small></button>
+        <button class="is-active" type="button" data-view-target="overview" aria-current="page"><span aria-hidden="true">⌂</span><small>Главная</small></button>
+        <button type="button" data-view-target="employees"><span aria-hidden="true">◎</span><small>Сотрудники</small></button>
+        <button type="button" data-view-target="generation"><span aria-hidden="true">＋</span><small>Создать</small></button>
+        <button type="button" data-view-target="documents"><span aria-hidden="true">✓</span><small>Результаты</small></button>
+        <button type="button" data-view-target="settings"><span aria-hidden="true">⌘</span><small>Ещё</small></button>
       </nav>
     </div>
 
     <aside class="help-drawer" id="helpDrawer" aria-labelledby="helpTitle" aria-hidden="true"><div class="drawer-backdrop" data-close-help></div><div class="drawer-panel" role="dialog" aria-modal="true"><header><div><p class="eyebrow">Контекстная помощь</p><h2 id="helpTitle">Что здесь можно сделать?</h2></div><button class="icon-button" type="button" data-close-help aria-label="Закрыть помощь">×</button></header><div id="helpContent" class="help-content"></div><footer><p>При ошибке сохраните идентификатор операции — он поможет найти точную операцию в журнале.</p></footer></div></aside>
 
     <dialog class="create-dialog" id="createDialog" aria-labelledby="dialogTitle"><form method="dialog" id="createForm" novalidate><header class="dialog-header"><div><p class="eyebrow" id="dialogEyebrow">Новая запись</p><h2 id="dialogTitle">Создать</h2><p id="dialogDescription"></p></div><button class="icon-button" type="button" id="dialogCloseButton" aria-label="Закрыть">×</button></header><div class="dialog-body" id="dialogFields"></div><div class="form-error" id="formError" role="alert" hidden></div><footer class="dialog-footer"><p class="save-explanation" id="saveExplanation">Изменение появится после подтверждения локального сервера.</p><div><button class="secondary-button" type="button" id="dialogCancelButton">Отмена</button><button class="primary-button" type="submit" id="dialogSubmitButton">Сохранить</button></div></footer></form></dialog>
+
+    <dialog class="create-dialog employee-dialog" id="employeeDialog" aria-labelledby="employeeDialogTitle">
+      <form id="employeeForm" novalidate>
+        <header class="dialog-header"><div><p class="eyebrow">Карточка сотрудника</p><h2 id="employeeDialogTitle">Новый сотрудник</h2><p id="employeeDialogDescription">Укажите имя и добавьте сведения, которые понадобятся в документах.</p></div><button class="icon-button" type="button" data-employee-action="close" aria-label="Закрыть">×</button></header>
+        <div class="dialog-body employee-dialog-body">
+          <div class="field"><label for="employeeDisplayName">ФИО <span class="required-marker">*</span></label><input id="employeeDisplayName" name="displayName" type="text" autocomplete="name" maxlength="300" required placeholder="Иванов Иван Иванович" /><small>Так имя будет показано в списке и документах.</small></div>
+          <div class="field" id="employeeStatusField"><label for="employeeStatus">Статус</label><select id="employeeStatus" name="status"><option value="active">Работает</option><option value="inactive">Не работает</option><option value="archived">В архиве</option></select></div>
+          <div id="employeeFields" class="employee-fields"></div>
+          <button class="field-add-button" id="employeeAddFieldButton" type="button" data-employee-action="show-field"><span aria-hidden="true">＋</span><span>Добавить поле</span></button>
+          <section class="employee-new-field" id="employeeNewField" hidden aria-labelledby="employeeNewFieldTitle">
+            <div class="employee-subheading"><div><strong id="employeeNewFieldTitle">Новое поле карточки</strong><small>Например, «Должность» или «Подразделение».</small></div><button class="quiet-button compact" type="button" data-employee-action="cancel-field">Убрать</button></div>
+            <div class="field"><label for="employeeFieldSource">Какое поле добавить</label><select id="employeeFieldSource"></select><small>Поля показаны по названиям. Технические обозначения назначает система.</small></div>
+            <div class="field" id="employeeFieldLabelField" hidden><label for="employeeFieldLabel">Название</label><input id="employeeFieldLabel" type="text" maxlength="160" placeholder="Должность" /></div>
+            <div class="field" id="employeeFieldTypeField" hidden><label for="employeeFieldType">Тип значения</label><select id="employeeFieldType"><option value="string">Текст</option><option value="number">Число</option><option value="date">Дата</option><option value="boolean">Да или нет</option></select></div>
+            <div class="field" id="employeeFieldValueField" hidden><label for="employeeFieldValue">Значение</label><input id="employeeFieldValue" type="text" maxlength="2000" placeholder="Ведущий инженер" /></div>
+          </section>
+          <details class="technical-details" id="employeeTechnicalDetails" hidden><summary>Технические сведения</summary><dl id="employeeTechnicalContent"></dl></details>
+        </div>
+        <div class="form-error" id="employeeFormError" role="alert" hidden></div>
+        <footer class="dialog-footer"><p class="save-explanation" id="employeeSaveExplanation">Данные сохранятся на локальном сервере.</p><div><button class="secondary-button" type="button" data-employee-action="close">Отмена</button><button class="primary-button" type="submit" id="employeeSubmitButton">Сохранить сотрудника</button></div></footer>
+      </form>
+    </dialog>
+
+    <dialog class="create-dialog confirmation-dialog" id="employeeFieldConfirmDialog" aria-labelledby="employeeFieldConfirmTitle">
+      <form method="dialog"><header class="dialog-header"><div><p class="eyebrow">Общее поле</p><h2 id="employeeFieldConfirmTitle">Добавить поле всем сотрудникам?</h2><p id="employeeFieldConfirmText">Поле станет доступно в каждой карточке. Введённое значение сохранится у текущего сотрудника.</p></div></header><footer class="dialog-footer"><p class="save-explanation">Это действие создаёт общую структуру карточек.</p><div><button class="secondary-button" value="cancel">Вернуться</button><button class="primary-button" value="confirm">Добавить поле</button></div></footer></form>
+    </dialog>
 
     <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
     <div class="sr-status" id="screenReaderStatus" role="status" aria-live="polite"></div>

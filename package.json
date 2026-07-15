@@ -18,7 +18,7 @@
     "test": "npm run test -w @docomator/contracts && npm run test -w @docomator/config && npm run test -w @docomator/storage && npm run test -w @docomator/document-intake && npm run test -w @docomator/template-compiler && npm run test -w @docomator/api && npm run test -w @docomator/worker && node --test scripts/runtime/*.test.mjs",
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:shell": "bash scripts/ci/validate-shell.sh",
-    "check:ui": "node --check apps/api/ui/app.js && node --check apps/api/ui/document-intake.js && node --check apps/api/ui/document-structure.js && node --check apps/api/ui/template-trial.js && node --check apps/api/ui/template-multi-trial.js && node --check apps/api/ui/template-activation.js && node --check apps/api/ui/document-generation.js && node --check apps/api/ui/document-generation-preflight.js && node --check apps/api/ui/document-data-correction.js && node --check apps/api/ui/document-generation-retry.js && node --check apps/api/ui/document-delivery.js && node --check apps/api/ui/document-email-delivery.js && node --check apps/api/ui/email-recipients.js && node --check apps/api/ui/document-schedules.js && node --check apps/api/ui/document-schedule-network.js && node --check apps/api/ui/shared-document-results.js && node --check apps/api/ui/shared-document-view-labels.js && node --check apps/api/ui/shared-corporate-mode.js && node --check apps/api/ui/storage-maintenance.js && node --check apps/api/ui/bulk-data-import.js && node --check apps/api/ui/operations-readiness.js",
+    "check:ui": "node --check apps/api/ui/app.js && node --check apps/api/ui/document-intake.js && node --check apps/api/ui/document-structure.js && node --check apps/api/ui/template-trial.js && node --check apps/api/ui/template-multi-trial.js && node --check apps/api/ui/template-activation.js && node --check apps/api/ui/document-generation.js && node --check apps/api/ui/document-generation-preflight.js && node --check apps/api/ui/document-data-correction.js && node --check apps/api/ui/document-generation-retry.js && node --check apps/api/ui/document-delivery.js && node --check apps/api/ui/document-email-delivery.js && node --check apps/api/ui/email-recipients.js && node --check apps/api/ui/document-schedules.js && node --check apps/api/ui/document-schedule-network.js && node --check apps/api/ui/shared-document-results.js && node --check apps/api/ui/shared-document-view-labels.js && node --check apps/api/ui/shared-corporate-mode.js && node --check apps/api/ui/storage-maintenance.js && node --check apps/api/ui/bulk-data-import.js && node --check apps/api/ui/operation-center.js && node --check apps/api/ui/operations-readiness.js && node scripts/ci/check-ui-bundles.mjs",
     "check:language": "node scripts/ci/check-user-facing-language.mjs",
     "check": "npm run clean && npm run build && npm run test && npm run check:docs && npm run check:shell && npm run check:ui && npm run check:language",
     "start:api": "node apps/api/dist/server.js",
@@ -28,9 +28,13 @@
     "restore": "node scripts/runtime/restore.mjs",
     "bundle:offline": "bash scripts/offline/prepare-bundle.sh",
     "bundle:verify": "bash scripts/offline/verify-bundle.sh",
-    "bundle:smoke": "bash scripts/offline/smoke-test.sh"
+    "bundle:smoke": "bash scripts/offline/smoke-test.sh",
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.mjs",
+    "test:e2e:visual": "DOCOMATOR_VISUAL_COMPARE=1 playwright test --config tests/e2e/playwright.config.mjs visual-artifacts.spec.mjs",
+    "test:e2e:visual:update": "DOCOMATOR_VISUAL_COMPARE=1 playwright test --config tests/e2e/playwright.config.mjs visual-artifacts.spec.mjs --update-snapshots"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@types/node": "24.10.9",
     "typescript": "7.0.2"
   }

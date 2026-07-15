@@ -1,5 +1,7 @@
 .document-generation-panel {
-  margin-top: 1.25rem;
+  min-width: 0;
+  width: min(100%, 70rem);
+  margin: 0 auto;
 }
 
 .generation-card,
@@ -8,7 +10,111 @@
 .generation-history,
 .generation-status {
   display: grid;
+  min-width: 0;
   gap: 1rem;
+}
+
+.generation-card {
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.generation-heading {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.generation-heading > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.generation-heading h2,
+.generation-heading p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.generation-heading h2 {
+  margin-top: 0.2rem;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  letter-spacing: -0.035em;
+}
+
+.generation-heading > div > p:last-child {
+  max-width: 46rem;
+  margin-top: 0.55rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.generation-step-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.generation-step-rail li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.75rem;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+
+.generation-step-rail li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0.75rem;
+  left: 2.35rem;
+  bottom: 0.28rem;
+  height: 1px;
+  background: var(--border);
+}
+
+.generation-step-rail span,
+.generation-wizard-number {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.generation-step-rail .is-current {
+  color: var(--text);
+}
+
+.generation-step-rail .is-current span,
+.generation-wizard-number {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.generation-step-rail .is-complete {
+  color: var(--text);
+}
+
+.generation-step-rail .is-complete span {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
 }
 
 .generation-guidance,
@@ -16,12 +122,22 @@
 .generation-summary,
 .generation-mode-note {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: flex-start;
   gap: 0.8rem;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 4px);
   padding: 1rem;
   background: var(--surface-2);
+}
+
+.generation-guidance > *,
+.generation-state > *,
+.generation-summary > *,
+.generation-mode-note > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .generation-guidance p,
@@ -65,9 +181,26 @@
 
 .generation-form {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem;
+  border-radius: 1.15rem;
+  padding: 0;
   background: var(--surface);
+  overflow: hidden;
+  gap: 0;
+}
+
+.generation-wizard-section {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  padding: 1.15rem;
+}
+
+.generation-wizard-section + .generation-wizard-section {
+  border-top: 1px solid var(--border);
+}
+
+.generation-wizard-summary {
+  background: var(--surface-2);
 }
 
 .generation-form-grid {
@@ -103,6 +236,37 @@
 
 .generation-source-details select[multiple] {
   min-height: 11rem;
+}
+
+.generation-person-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.2rem;
+}
+
+.generation-person-picker label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.generation-person-picker label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.generation-person-picker input {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 .generation-field select:focus,
@@ -193,7 +357,7 @@
 .generation-actions {
   justify-content: space-between;
   border-top: 1px solid var(--border);
-  padding-top: 1rem;
+  padding: 1rem 1.15rem;
 }
 
 .generation-actions p {
@@ -328,6 +492,25 @@
   .generation-progress-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .generation-person-picker {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .generation-step-rail {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .generation-step-rail strong {
+    display: none;
+  }
+
+  .generation-step-rail li:not(:last-child)::after {
+    right: 0.25rem;
+    left: 2rem;
+  }
 }
 
 @media (max-width: 720px) {
@@ -349,5 +532,34 @@
 
   .generation-progress-grid {
     grid-template-columns: 1fr;
+  }
+
+  .generation-step-rail {
+    grid-template-columns: repeat(4, auto);
+    overflow-x: auto;
+  }
+
+  .generation-step-rail strong {
+    display: none;
+  }
+
+  .generation-step-rail li:not(:last-child)::after {
+    right: 0.25rem;
+    left: 2rem;
+  }
+
+  .generation-wizard-section {
+    grid-template-columns: 1fr;
+  }
+
+  .generation-wizard-number {
+    width: 1.65rem;
+    height: 1.65rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-progress-bar > span {
+    transition: none;
   }
 }

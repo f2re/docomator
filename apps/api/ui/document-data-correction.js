@@ -36,13 +36,6 @@ function generationPropertyDefinition(fieldKey) {
   );
 }
 
-function generationPropertyKey(fieldKey) {
-  const existing = generationPropertyDefinition(fieldKey);
-  if (existing) return existing.key;
-  const candidates = generationPropertyCandidates(fieldKey);
-  return candidates[candidates.length - 1] || String(fieldKey || "");
-}
-
 function generationCorrectionInput(type, identifier) {
   const escaped = generationEscape(identifier);
   if (type === "boolean") {
@@ -103,33 +96,12 @@ async function loadGenerationPropertyDefinitions() {
   return generationPropertyDefinitions;
 }
 
-async function ensureGenerationPropertyDefinition(fieldKey, label, valueType) {
+function ensureGenerationPropertyDefinition(fieldKey, label) {
   const existing = generationPropertyDefinition(fieldKey);
   if (existing) return existing;
-  const key = generationPropertyKey(fieldKey);
-  try {
-    const body = await generationFetchJson(
-      "/api/v1/knowledge/property-definitions",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          key,
-          label,
-          valueType,
-          cardinality: "single",
-          sensitivity: "personal"
-        })
-      }
-    );
-    generationPropertyDefinitions.push(body.data);
-    return body.data;
-  } catch (error) {
-    await loadGenerationPropertyDefinitions();
-    const concurrent = generationPropertyDefinition(fieldKey);
-    if (concurrent) return concurrent;
-    throw error;
-  }
+  throw new Error(
+    `Поле «${label}» не связано с карточкой сотрудника. Вернитесь в «Шаблоны» и выберите поле по названию.`
+  );
 }
 
 function generationCorrectionRows(preflight) {
@@ -160,26 +132,27 @@ async function appendGenerationCorrectionEditor(preflight, token) {
     await loadGenerationPropertyDefinitions();
     if (token !== generationCorrectionRenderToken) return;
     const rows = generationCorrectionRows(preflight);
+    const correctableRows = rows.filter((row) => generationPropertyDefinition(row.fieldKey));
+    const unlinkedRows = rows.filter((row) => !generationPropertyDefinition(row.fieldKey));
     const section = document.createElement("section");
     section.className = "generation-correction";
     section.innerHTML = `
       <div class="generation-history-heading">
         <div><p class="eyebrow">Быстрое исправление</p><h3>Заполнить недостающие значения здесь</h3></div>
-        <button class="primary-button" id="generationCorrectionSave" type="button">Сохранить заполненные</button>
+        ${correctableRows.length > 0 ? '<button class="primary-button" id="generationCorrectionSave" type="button">Сохранить заполненные</button>' : ""}
       </div>
-      <p class="generation-correction-description">Значения сохраняются в карточке участника и будут доступны для следующих документов. Новое свойство создаётся автоматически только при отсутствии подходящего определения.</p>
+      <p class="generation-correction-description">Значения сохраняются в карточке сотрудника и будут доступны для следующих документов.</p>
+      ${unlinkedRows.length > 0 ? `<div class="generation-state is-warning"><div><strong>Некоторые поля шаблона нужно связать заново</strong><p>Откройте «Шаблоны» и выберите понятное поле карточки для: ${generationEscape([...new Set(unlinkedRows.map((row) => row.fieldLabel))].join(", "))}.</p><button class="secondary-button" type="button" data-view-target="templates">Открыть шаблоны</button></div></div>` : ""}
       <div class="generation-correction-list">
-        ${rows
+        ${correctableRows
           .slice(0, 100)
           .map((row, index) => {
-            const definition = generationPropertyDefinition(row.fieldKey);
-            const propertyKey = definition?.key || generationPropertyKey(row.fieldKey);
             const identifier = `generationCorrection_${index}`;
             return `
               <article class="generation-correction-item" data-correction-row data-entity-id="${generationEscape(row.entityId)}" data-field-key="${generationEscape(row.fieldKey)}" data-field-label="${generationEscape(row.fieldLabel)}" data-value-type="${generationEscape(row.valueType)}">
                 <div class="generation-correction-person">
                   <strong>${row.position + 1}. ${generationEscape(row.memberName)}</strong>
-                  <span>${generationEscape(row.fieldLabel)} · свойство <code>${generationEscape(propertyKey)}</code>${definition ? "" : " · будет создано"}</span>
+                  <span>${generationEscape(row.fieldLabel)}</span>
                 </div>
                 <label class="generation-correction-control" for="${generationEscape(identifier)}">
                   <span>Значение</span>
@@ -189,7 +162,7 @@ async function appendGenerationCorrectionEditor(preflight, token) {
               </article>`;
           })
           .join("")}
-        ${rows.length > 100 ? `<div class="generation-history-empty">Показаны первые 100 пропусков из ${rows.length}. Сохраните их и повторите проверку, чтобы перейти к следующим.</div>` : ""}
+        ${correctableRows.length > 100 ? `<div class="generation-history-empty">Показаны первые 100 пропусков из ${correctableRows.length}. Сохраните их и повторите проверку, чтобы перейти к следующим.</div>` : ""}
       </div>`;
     holder.append(section);
     section
@@ -211,16 +184,11 @@ async function saveGenerationCorrectionRow(row) {
   if (String(control.value).trim() === "") return { saved: false, skipped: true };
   const fieldKey = row.dataset.fieldKey || "";
   const fieldLabel = row.dataset.fieldLabel || fieldKey;
-  const valueType = row.dataset.valueType || "string";
   const entityId = row.dataset.entityId || "";
   result.className = "generation-correction-result is-pending";
   result.textContent = "Сохраняем…";
   try {
-    const definition = await ensureGenerationPropertyDefinition(
-      fieldKey,
-      fieldLabel,
-      valueType
-    );
+    const definition = ensureGenerationPropertyDefinition(fieldKey, fieldLabel);
     const value = generationCorrectionValue(control, definition.valueType, fieldLabel);
     await generationFetchJson(
       `/api/v1/knowledge/entities/${encodeURIComponent(entityId)}/properties/${encodeURIComponent(definition.key)}`,

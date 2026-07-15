@@ -1,4 +1,4 @@
-const scheduleView = document.querySelector('[data-view="templates"]');
+const scheduleView = document.querySelector('[data-view="automations"]');
 let schedulePanelCreated = false;
 let scheduleBusy = false;
 let scheduleSpaceSelect = null;
@@ -160,7 +160,6 @@ function renderScheduleWorkspace() {
       <form id="scheduleForm" class="schedule-form" novalidate>
         <div class="schedule-grid">
           <label class="generation-field"><span>Название расписания</span><input id="scheduleName" type="text" maxlength="300" placeholder="Например: ежемесячная ведомость" required /></label>
-          <label class="generation-field"><span>Устойчивый ключ</span><input id="scheduleKey" type="text" maxlength="160" placeholder="monthly-report" required /><small>Ключ используется для защиты периодов от повторного запуска.</small></label>
           <label class="generation-field"><span>Активный шаблон</span><select id="scheduleTemplate">${scheduleTemplates.map((template) => `<option value="${generationEscape(template.id)}">${generationEscape(template.title)} · ${String(template.format).toUpperCase()}</option>`).join("")}</select></label>
           <label class="generation-field"><span>Сохранённая группа</span><select id="scheduleGroup">${activeGroups.map((group) => `<option value="${generationEscape(group.id)}">${generationEscape(group.name)} · ${group.memberCount} участников</option>`).join("")}</select></label>
           <label class="generation-field"><span>Форма результата</span><select id="scheduleTargetMode"><option value="one_per_member">Документ на каждого участника</option><option value="aggregate">Один сводный документ</option></select></label>
@@ -202,7 +201,6 @@ function scheduleRequestBody() {
   const recurrenceKind = scheduleSelectedRecurrence();
   const deliveryChannel = scheduleSelectedDelivery();
   return {
-    key: document.querySelector("#scheduleKey")?.value.trim() || "",
     name: document.querySelector("#scheduleName")?.value.trim() || "",
     ...(document.querySelector("#scheduleDescription")?.value.trim() ? { description: document.querySelector("#scheduleDescription").value.trim() } : {}),
     activeReleaseId: document.querySelector("#scheduleTemplate")?.value || "",

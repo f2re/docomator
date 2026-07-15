@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import { AuditRepository } from "./audit.js";
 import { type SqliteExecutor, SqliteStore } from "./database.js";
 import { stringifyJson, toJsonValue, type JsonValue } from "./json.js";
-import type { MutationContext } from "./knowledge.js";
+import {
+  generateOpaqueStableKey,
+  type MutationContext
+} from "./knowledge.js";
 import { DomainEventOutbox } from "./outbox.js";
 
 export const DEFAULT_SPACE_ID = "00000000-0000-4000-8000-000000000001";
@@ -29,7 +32,7 @@ export interface SpaceRecord {
 
 export interface CreateSpaceInput {
   id?: string;
-  key: string;
+  key?: string;
   name: string;
   description?: string | null;
 }
@@ -97,7 +100,7 @@ export interface AudienceGroupRecord {
 
 export interface CreateAudienceGroupInput {
   id?: string;
-  key: string;
+  key?: string;
   name: string;
   description?: string | null;
 }
@@ -652,23 +655,34 @@ function buildTargetPlan(
 export class SpaceRegistry {
   private readonly outbox: DomainEventOutbox;
   private readonly audit: AuditRepository;
+  private readonly keyFactory: (prefix: string) => string;
 
   constructor(
     private readonly store: SqliteStore,
-    options: { outbox?: DomainEventOutbox; audit?: AuditRepository } = {}
+    options: {
+      outbox?: DomainEventOutbox;
+      audit?: AuditRepository;
+      keyFactory?: (prefix: string) => string;
+    } = {}
   ) {
     this.outbox = options.outbox ?? new DomainEventOutbox(store);
     this.audit = options.audit ?? new AuditRepository(store);
+    this.keyFactory = options.keyFactory ?? generateOpaqueStableKey;
   }
 
   createSpace(input: CreateSpaceInput, contextInput: MutationContext): SpaceRecord {
     const id = input.id ?? randomUUID();
-    const key = stableKey(input.key, "key");
+    const explicitKey = input.key === undefined ? null : stableKey(input.key, "key");
     const name = requiredText(input.name, "name");
     const description = optionalText(input.description, "description");
     const context = normalizeContext(contextInput);
 
     return this.store.transaction((connection) => {
+      const key =
+        explicitKey ??
+        this.allocateKey("space", (candidate) =>
+          spaceRowByIdentity(connection, candidate) !== undefined
+        );
       if (spaceRowByIdentity(connection, id) !== undefined || spaceRowByIdentity(connection, key) !== undefined) {
         throw new SpaceConflictError(`Space already exists: ${key}`);
       }
@@ -1034,13 +1048,22 @@ export class SpaceRegistry {
     contextInput: MutationContext
   ): AudienceGroupRecord {
     const id = input.id ?? randomUUID();
-    const key = stableKey(input.key, "key");
+    const explicitKey = input.key === undefined ? null : stableKey(input.key, "key");
     const name = requiredText(input.name, "name");
     const description = optionalText(input.description, "description");
     const context = normalizeContext(contextInput);
 
     return this.store.transaction((connection) => {
       const space = requireSpace(connection, spaceIdentity);
+      const key =
+        explicitKey ??
+        this.allocateKey(
+          "audience_group",
+          (candidate) =>
+            connection
+              .prepare("SELECT 1 FROM audience_groups WHERE space_id = ? AND key = ?")
+              .get(space.id, candidate) !== undefined
+        );
       if (
         connection
           .prepare("SELECT 1 FROM audience_groups WHERE space_id = ? AND key = ?")
@@ -1403,6 +1426,16 @@ export class SpaceRegistry {
         .all(space.id, limit) as unknown as AudienceSnapshotRow[];
       return rows.map(mapSnapshotSummary);
     });
+  }
+
+  private allocateKey(prefix: string, exists: (candidate: string) => boolean): string {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const candidate = stableKey(this.keyFactory(prefix), "generatedKey");
+      if (!exists(candidate)) {
+        return candidate;
+      }
+    }
+    throw new SpaceConflictError(`Could not allocate a unique ${prefix} key`);
   }
 
   private listGroupMembersWithConnection(

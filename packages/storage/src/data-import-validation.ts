@@ -40,6 +40,7 @@ export function validateExistingImportIdentityProperty(input: {
     if (!(error instanceof KnowledgeNotFoundError)) throw error;
     const mapping = input.mappings.find(
       (candidate) =>
+        candidate.propertyKey !== undefined &&
         candidate.propertyKey.trim().toLowerCase() ===
         input.identityPropertyKey.trim().toLowerCase()
     );

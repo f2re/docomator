@@ -23,7 +23,7 @@ interface RecipientListQuery {
 }
 
 interface CreateRecipientBody {
-  key: string;
+  key?: string;
   name: string;
   email: string;
   description?: string;
@@ -115,7 +115,7 @@ export function registerEmailRecipientRoutes(
         body: {
           type: "object",
           additionalProperties: false,
-          required: ["key", "name", "email"],
+          required: ["name", "email"],
           properties: {
             key: stableKeySchema,
             name: { type: "string", minLength: 1, maxLength: 200 },

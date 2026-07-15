@@ -37,14 +37,14 @@ interface EntityPropertyParams extends EntityParams {
 }
 
 interface CreateEntityTypeBody {
-  key: string;
+  key?: string;
   label: string;
   description?: string;
   schema?: { [key: string]: JsonValue };
 }
 
 interface CreatePropertyDefinitionBody {
-  key: string;
+  key?: string;
   label: string;
   description?: string;
   valueType: string;
@@ -98,7 +98,7 @@ export function registerKnowledgeRoutes(
         body: {
           type: "object",
           additionalProperties: false,
-          required: ["key", "label"],
+          required: ["label"],
           properties: {
             key: stableKeySchema,
             label: { type: "string", minLength: 1, maxLength: 500 },
@@ -155,7 +155,7 @@ export function registerKnowledgeRoutes(
         body: {
           type: "object",
           additionalProperties: false,
-          required: ["key", "label", "valueType"],
+          required: ["label", "valueType"],
           properties: {
             key: stableKeySchema,
             label: { type: "string", minLength: 1, maxLength: 500 },

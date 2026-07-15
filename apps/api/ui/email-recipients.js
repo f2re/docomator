@@ -2,16 +2,6 @@ let emailRecipientsCache = [];
 let emailRecipientsBusy = false;
 let emailRecipientsRenderToken = 0;
 
-function recipientKeySuggestion(emailValue) {
-  const local = String(emailValue || "")
-    .split("@")[0]
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-  return `recipient-${local || Date.now()}`;
-}
-
 async function loadEmailRecipients(spaceId, includeInactive = true) {
   const query = includeInactive ? "?includeInactive=true" : "";
   const body = await generationFetchJson(
@@ -32,11 +22,9 @@ function fillEmailRecipient(panel, recipientId) {
   if (!recipient) return;
   const email = panel.querySelector("#documentEmailRecipient");
   const name = panel.querySelector("#documentEmailRecipientName");
-  const key = panel.querySelector("#emailRecipientKey");
   const description = panel.querySelector("#emailRecipientDescription");
   if (email) email.value = recipient.email;
   if (name) name.value = recipient.name;
-  if (key) key.value = recipient.key;
   if (description) description.value = recipient.description || "";
 }
 
@@ -72,7 +60,7 @@ function renderEmailRecipientList(panel) {
           <div>
             <span class="generation-state-code">${recipient.status === "active" ? "Активен" : "Отключён"}</span>
             <strong>${generationEscape(recipient.name)}</strong>
-            <span>${generationEscape(recipient.email)} · <code>${generationEscape(recipient.key)}</code></span>
+            <span>${generationEscape(recipient.email)}</span>
             ${recipient.description ? `<span>${generationEscape(recipient.description)}</span>` : ""}
           </div>
           <div class="generation-history-actions">
@@ -139,11 +127,10 @@ async function saveEmailRecipient(panel) {
   if (emailRecipientsBusy) return;
   const email = panel.querySelector("#documentEmailRecipient");
   const name = panel.querySelector("#documentEmailRecipientName");
-  const key = panel.querySelector("#emailRecipientKey");
   const description = panel.querySelector("#emailRecipientDescription");
   const button = panel.querySelector("#emailRecipientSave");
   const message = panel.querySelector("#emailRecipientMessage");
-  if (!email || !name || !key || !description || !button || !message) return;
+  if (!email || !name || !description || !button || !message) return;
   const recipientEmail = email.value.trim();
   const recipientName = name.value.trim();
   if (!recipientEmail || !recipientName) {
@@ -151,7 +138,6 @@ async function saveEmailRecipient(panel) {
     message.textContent = "Для сохранения заполните имя и электронную почту.";
     return;
   }
-  if (!key.value.trim()) key.value = recipientKeySuggestion(recipientEmail);
   emailRecipientsBusy = true;
   button.disabled = true;
   message.className = "is-loading";
@@ -163,7 +149,6 @@ async function saveEmailRecipient(panel) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          key: key.value.trim(),
           name: recipientName,
           email: recipientEmail,
           ...(description.value.trim()
@@ -207,11 +192,6 @@ async function enhanceEmailRecipientPanel(job) {
           <select id="savedEmailRecipient"><option value="">Ввести адрес вручную</option></select>
           <small>Получатели изолированы внутри текущего пространства.</small>
         </label>
-        <label class="generation-field">
-          <span>Ключ получателя</span>
-          <input id="emailRecipientKey" type="text" maxlength="160" placeholder="Например: accounting" />
-          <small>Устойчивый ключ потребуется расписаниям и автоматизации.</small>
-        </label>
         <label class="generation-field document-email-wide">
           <span>Описание получателя</span>
           <input id="emailRecipientDescription" type="text" maxlength="2000" placeholder="Например: бухгалтерия головного офиса" />
@@ -236,14 +216,6 @@ async function enhanceEmailRecipientPanel(job) {
     manager
       .querySelector("#emailRecipientSave")
       ?.addEventListener("click", () => saveEmailRecipient(panel));
-    panel
-      .querySelector("#documentEmailRecipient")
-      ?.addEventListener("input", (event) => {
-        const key = panel.querySelector("#emailRecipientKey");
-        if (key && !key.value.trim()) {
-          key.placeholder = recipientKeySuggestion(event.target.value);
-        }
-      });
   } catch (error) {
     panel.insertAdjacentHTML(
       "beforeend",

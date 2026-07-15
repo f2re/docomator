@@ -44,7 +44,7 @@ function activationPanel() {
 }
 
 function currentActivationSpaceId() {
-  return activationSpaceSelect?.value || "";
+  return globalThis.docomatorTemplateWizard?.spaceId() || "";
 }
 
 function clearActivationPolling() {
@@ -52,6 +52,13 @@ function clearActivationPolling() {
   if (activationPollTimer !== null) {
     clearTimeout(activationPollTimer);
     activationPollTimer = null;
+  }
+}
+
+function clearActivationReload() {
+  if (activationReloadTimer !== null) {
+    clearTimeout(activationReloadTimer);
+    activationReloadTimer = null;
   }
 }
 
@@ -89,15 +96,16 @@ function createActivationPanel() {
   const panel = document.createElement("section");
   panel.id = "templateActivationPanel";
   panel.className = "template-activation-panel";
+  panel.dataset.templateWizardPanel = "4";
   panel.innerHTML = `
     <article class="panel activation-card">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">Шаг 4 · предварительный просмотр и активация</p>
-          <h2>Проверить внешний вид и разрешить использование</h2>
-          <p>LibreOffice создаёт PDF в фоновом задании. После просмотра пользователь отдельно подтверждает активацию версии с одним или несколькими полями.</p>
+          <p class="eyebrow">Готовность шаблона</p>
+          <h2>Просмотрите документ и включите шаблон</h2>
+          <p>Система создаст PDF в фоне. После просмотра отдельно подтвердите, что шаблон можно использовать.</p>
         </div>
-        <span class="large-emoji" aria-hidden="true">👁️</span>
+        <span class="template-file-mark" aria-hidden="true">PDF</span>
       </div>
       <div class="activation-guidance">
         <span aria-hidden="true">ⓘ</span>
@@ -119,7 +127,7 @@ function createActivationPanel() {
         </div>
       </section>
     </article>`;
-  activationView.append(panel);
+  (document.querySelector("#templateWizardDynamicStages") || activationView).append(panel);
   panel
     .querySelector("#activeTemplateRefresh")
     ?.addEventListener("click", loadActiveTemplateCatalog);
@@ -210,6 +218,8 @@ function renderPreviewReady(data) {
   const holder = document.querySelector("#templateActivationStatus");
   if (!holder) return;
   const request = data.request;
+  const form = document.querySelector("#templateActivationForm");
+  if (form) form.hidden = true;
   holder.innerHTML = `
     <article class="activation-ready">
       <div class="activation-ready-heading">
@@ -278,7 +288,7 @@ async function refreshPreviewState(requestId, versionId, token = null) {
       holder.innerHTML = `
         <div class="activation-state is-error">
           <span aria-hidden="true">⚠️</span>
-          <div><strong>Состояние получить не удалось</strong><p>${activationEscape(error?.message || "Повторите действие.")}</p><button class="secondary-button" id="templatePreviewRefresh" type="button">Повторить</button></div>
+          <div><strong>Состояние получить не удалось</strong><p>${activationEscape(error?.message || "Повторите действие.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templatePreviewRefresh" type="button">Повторить</button></div>
         </div>`;
       holder
         .querySelector("#templatePreviewRefresh")
@@ -299,6 +309,7 @@ async function requestTemplatePreview(versionId = null) {
   if (!version || !spaceId || !holder) return;
 
   clearActivationPolling();
+  clearActivationReload();
   activationBusy = true;
   if (button) button.disabled = true;
   holder.innerHTML = `
@@ -322,6 +333,7 @@ async function requestTemplatePreview(versionId = null) {
         <span aria-hidden="true">⚠️</span>
         <div><strong>Задачу создать не удалось</strong><p>${activationEscape(error?.message || "Повторите действие.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.</small>` : ""}</div>
       </div>`;
+    if (button) button.textContent = "Повторить создание PDF";
   } finally {
     activationBusy = false;
     if (button) button.disabled = false;
@@ -334,6 +346,7 @@ async function activateTemplateVersion(requestId) {
   const holder = document.querySelector("#templateActivationStatus");
   const button = document.querySelector("#templateActivateButton");
   if (!spaceId || !holder) return;
+  clearActivationReload();
   activationBusy = true;
   if (button) button.disabled = true;
   const existing = holder.innerHTML;
@@ -360,6 +373,9 @@ async function activateTemplateVersion(requestId) {
           <small>Идентификатор операции: <code>${activationEscape(body.correlationId)}</code>.</small>
         </div>
       </div>`;
+    globalThis.docomatorTemplateWizard?.complete(4, {
+      activeId: active.id
+    });
     await loadActiveTemplateCatalog();
   } catch (error) {
     holder.innerHTML = existing;
@@ -386,8 +402,17 @@ async function loadActivationVersions() {
       <div class="activation-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Предварительный просмотр и активный каталог изолированы по пространствам.</p></div></div>`;
     return;
   }
-  content.innerHTML = `
-    <div class="activation-state" role="status"><span aria-hidden="true">⏳</span><div><strong>Получаем проверенные версии</strong><p>Можно продолжать работу в других разделах.</p></div></div>`;
+  const existingForm = content.querySelector("#templateActivationForm");
+  if (existingForm) {
+    content.querySelector("#templateActivationReloadState")?.remove();
+    content.insertAdjacentHTML(
+      "afterbegin",
+      `<div class="activation-state" id="templateActivationReloadState" role="status"><span aria-hidden="true">⏳</span><div><strong>Обновляем проверенные версии</strong><p>Текущий выбор сохранится, если сервер не ответит.</p></div></div>`
+    );
+  } else {
+    content.innerHTML = `
+      <div class="activation-state" role="status"><span aria-hidden="true">⏳</span><div><strong>Получаем проверенные версии</strong><p>Можно продолжать работу в других разделах.</p></div></div>`;
+  }
   try {
     const draftBody = await activationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts?limit=100`
@@ -433,8 +458,12 @@ async function loadActivationVersions() {
       });
     await updateActivationVersionSelect();
   } catch (error) {
-    content.innerHTML = `
-      <div class="activation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Проверенные версии получить не удалось</strong><p>${activationEscape(error?.message || "Повторите действие.")}</p><button class="secondary-button" id="templateActivationReload" type="button">Повторить</button></div></div>`;
+    content.querySelector("#templateActivationReloadState")?.remove();
+    const errorHtml = `<div class="activation-state is-error" id="templateActivationLoadError"><span aria-hidden="true">⚠️</span><div><strong>Проверенные версии получить не удалось</strong><p>${activationEscape(error?.message || "Повторите действие.")} Текущий выбор сохранён.</p>${error?.operationId ? `<small>Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateActivationReload" type="button">Повторить</button></div></div>`;
+    if (existingForm) {
+      content.querySelector("#templateActivationLoadError")?.remove();
+      content.insertAdjacentHTML("afterbegin", errorHtml);
+    } else content.innerHTML = errorHtml;
     content
       .querySelector("#templateActivationReload")
       ?.addEventListener("click", loadActivationVersions);
@@ -496,7 +525,10 @@ async function updateActivationVersionSelect() {
   } catch (error) {
     activationVersions = [];
     versionSelect.innerHTML = "";
-    hint.textContent = error?.message || "Историю получить не удалось.";
+    hint.innerHTML = `${activationEscape(error?.message || "Историю получить не удалось.")}${error?.operationId ? ` Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.` : ""} <button class="quiet-button compact" id="templateActivationVersionRetry" type="button">Повторить</button>`;
+    hint
+      .querySelector("#templateActivationVersionRetry")
+      ?.addEventListener("click", updateActivationVersionSelect);
   }
 }
 
@@ -535,15 +567,24 @@ async function loadActiveTemplateCatalog() {
       )
       .join("");
   } catch (error) {
-    holder.innerHTML = `<div class="activation-catalog-empty is-error">${activationEscape(error?.message || "Каталог получить не удалось.")}</div>`;
+    holder.innerHTML = `<div class="activation-catalog-empty is-error"><p>${activationEscape(error?.message || "Каталог получить не удалось.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="activeTemplateCatalogRetry" type="button">Повторить</button></div>`;
+    holder
+      .querySelector("#activeTemplateCatalogRetry")
+      ?.addEventListener("click", loadActiveTemplateCatalog);
   }
 }
 
 function scheduleActivationReload() {
-  if (activationReloadTimer !== null) clearTimeout(activationReloadTimer);
+  clearActivationReload();
   activationReloadTimer = setTimeout(() => {
     activationReloadTimer = null;
-    void loadActivationVersions();
+    if (activationBusy) {
+      scheduleActivationReload();
+      return;
+    }
+    if (!globalThis.docomatorTemplateWizard?.isComplete(4)) {
+      void loadActivationVersions();
+    }
     void loadActiveTemplateCatalog();
   }, 500);
 }
@@ -594,5 +635,8 @@ if (activationView) {
       scheduleActivationReload();
     }
   }).observe(activationView, { childList: true, subtree: true, attributes: true });
-  window.addEventListener("beforeunload", clearActivationPolling);
+  window.addEventListener("beforeunload", () => {
+    clearActivationPolling();
+    clearActivationReload();
+  });
 }

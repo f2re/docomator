@@ -22,7 +22,7 @@ interface ScheduleParams extends SpaceParams {
 }
 
 interface CreateScheduleBody {
-  key: string;
+  key?: string;
   name: string;
   description?: string;
   activeReleaseId: string;
@@ -115,7 +115,6 @@ export function registerDocumentScheduleRoutes(
           type: "object",
           additionalProperties: false,
           required: [
-            "key",
             "name",
             "activeReleaseId",
             "groupId",

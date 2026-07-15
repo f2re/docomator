@@ -4,7 +4,7 @@ import { AuditRepository } from "./audit.js";
 import { type SqliteExecutor, SqliteStore } from "./database.js";
 import type { DocumentGenerationMode } from "./document-generation.js";
 import { parseJson, stringifyJson, toJsonValue, type JsonValue } from "./json.js";
-import type { MutationContext } from "./knowledge.js";
+import { generateOpaqueStableKey, type MutationContext } from "./knowledge.js";
 import { DomainEventOutbox } from "./outbox.js";
 import {
   followingScheduleRunAt,
@@ -28,7 +28,7 @@ export type DocumentScheduleRunState =
 
 export interface CreateDocumentScheduleInput {
   id?: string;
-  key: string;
+  key?: string;
   name: string;
   description?: string | null;
   activeReleaseId: string;
@@ -382,13 +382,20 @@ function isUniqueError(error: unknown): boolean {
 export class DocumentScheduleRegistry {
   private readonly outbox: DomainEventOutbox;
   private readonly audit: AuditRepository;
+  private readonly keyFactory: () => string;
 
   constructor(
     private readonly store: SqliteStore,
-    options: { outbox?: DomainEventOutbox; audit?: AuditRepository } = {}
+    options: {
+      outbox?: DomainEventOutbox;
+      audit?: AuditRepository;
+      keyFactory?: () => string;
+    } = {}
   ) {
     this.outbox = options.outbox ?? new DomainEventOutbox(store);
     this.audit = options.audit ?? new AuditRepository(store);
+    this.keyFactory =
+      options.keyFactory ?? (() => generateOpaqueStableKey("document_schedule"));
   }
 
   create(
@@ -398,7 +405,7 @@ export class DocumentScheduleRegistry {
   ): DocumentScheduleRecord {
     const identity = requiredText(spaceIdentityValue, "spaceId", 160);
     const id = input.id ?? randomUUID();
-    const key = stableKey(input.key);
+    const explicitKey = input.key === undefined ? null : stableKey(input.key);
     const name = requiredText(input.name, "name", 300);
     const description = optionalText(input.description, "description", 2_000);
     const activeReleaseId = requiredText(
@@ -449,6 +456,7 @@ export class DocumentScheduleRegistry {
 
     return this.store.transaction((connection) => {
       const space = requireSpace(connection, identity);
+      const key = explicitKey ?? this.allocateKey(connection, space.id);
       const release = connection
         .prepare("SELECT id FROM template_releases WHERE id = ? AND space_id = ?")
         .get(activeReleaseId, space.id);
@@ -570,6 +578,21 @@ export class DocumentScheduleRegistry {
       }
       return mapSchedule(row);
     });
+  }
+
+  private allocateKey(connection: SqliteExecutor, spaceId: string): string {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const key = stableKey(this.keyFactory());
+      const existing = connection
+        .prepare("SELECT 1 FROM document_schedules WHERE space_id = ? AND key = ?")
+        .get(spaceId, key);
+      if (existing === undefined) {
+        return key;
+      }
+    }
+    throw new DocumentScheduleConflictError(
+      "Не удалось создать внутренний ключ расписания. Повторите действие."
+    );
   }
 
   list(spaceIdentityValue: string): DocumentScheduleRecord[] {

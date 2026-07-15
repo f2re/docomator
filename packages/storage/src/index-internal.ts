@@ -1,4 +1,5 @@
 export {
+  generateOpaqueStableKey,
   KnowledgeConflictError,
   KnowledgeRegistry
 } from "./knowledge.js";

@@ -41,7 +41,7 @@ function multiTrialPanel() {
 }
 
 function currentMultiTrialSpaceId() {
-  return multiTrialSpaceSelect?.value || "";
+  return globalThis.docomatorTemplateWizard?.spaceId() || "";
 }
 
 function createMultiTrialPanel() {
@@ -49,15 +49,16 @@ function createMultiTrialPanel() {
   const panel = document.createElement("section");
   panel.id = "templateMultiTrialPanel";
   panel.className = "template-multi-trial-panel";
+  panel.dataset.templateWizardPanel = "3";
   panel.innerHTML = `
     <article class="panel multi-trial-card">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">Шаг 3.1 · полный набор полей</p>
-          <h2>Проверить все поля одной копией</h2>
-          <p>Система создаст все технические привязки в устойчивом порядке, заполнит каждое поле и повторно считает значения уже из окончательного файла.</p>
+          <p class="eyebrow">Пробное заполнение</p>
+          <h2>Введите примеры для всех полей</h2>
+          <p>Система заполнит одну безопасную копию и сама проверит каждое значение в готовом документе.</p>
         </div>
-        <span class="large-emoji" aria-hidden="true">🧩</span>
+        <span class="template-file-mark" aria-hidden="true">✓</span>
       </div>
       <div class="multi-trial-guidance">
         <span aria-hidden="true">ⓘ</span>
@@ -67,10 +68,10 @@ function createMultiTrialPanel() {
         <div class="multi-trial-state"><span aria-hidden="true">⏳</span><div><strong>Получаем черновики</strong><p>Ищем в выбранном пространстве документы с несколькими сохранёнными полями.</p></div></div>
       </div>
     </article>`;
-  multiTrialView.append(panel);
+  (document.querySelector("#templateWizardDynamicStages") || multiTrialView).append(panel);
 }
 
-function fieldTypeLabel(type) {
+function multiTrialFieldTypeLabel(type) {
   return (
     {
       string: "Короткая строка",
@@ -152,7 +153,7 @@ function renderMultiTrialFields() {
         <label class="multi-trial-field">
           <span><strong>${index + 1}. ${multiTrialEscape(field.label)}</strong>${field.required ? '<em>Обязательно</em>' : '<em>Необязательно</em>'}</span>
           ${fieldInput(field)}
-          <small>${multiTrialEscape(fieldTypeLabel(field.valueType))} · ключ <code>${multiTrialEscape(field.key)}</code></small>
+          <small>${multiTrialEscape(multiTrialFieldTypeLabel(field.valueType))}</small>
         </label>`
     )
     .join("");
@@ -173,7 +174,7 @@ function renderMultiTrialHistory(versions) {
         <article class="multi-trial-history-item">
           <div><strong>Версия ${version.versionNumber}</strong><span>${version.fieldCount} полей · ${multiTrialEscape(version.format.toUpperCase())}</span></div>
           <div class="multi-trial-history-actions">
-            <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/template-multi-test-versions/${encodeURIComponent(version.id)}/files/compiled">Техническая копия</a>
+            <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/template-multi-test-versions/${encodeURIComponent(version.id)}/files/compiled">Копия для настройки</a>
             <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/template-multi-test-versions/${encodeURIComponent(version.id)}/files/trial">Проверенная копия</a>
           </div>
         </article>`
@@ -192,7 +193,10 @@ async function loadMultiTrialHistory() {
   } catch (error) {
     const holder = document.querySelector("#templateMultiTrialHistory");
     if (holder) {
-      holder.innerHTML = `<div class="multi-trial-history-empty is-error">${multiTrialEscape(error?.message || "Историю получить не удалось.")}</div>`;
+      holder.innerHTML = `<div class="multi-trial-history-empty is-error"><p>${multiTrialEscape(error?.message || "Историю получить не удалось.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${multiTrialEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateMultiTrialHistoryRetry" type="button">Повторить</button></div>`;
+      holder
+        .querySelector("#templateMultiTrialHistoryRetry")
+        ?.addEventListener("click", loadMultiTrialHistory);
     }
   }
 }
@@ -247,7 +251,13 @@ async function loadMultiTrialDrafts() {
     content.innerHTML = `<div class="multi-trial-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Черновики и проверенные версии изолированы по пространствам.</p></div></div>`;
     return;
   }
-  content.innerHTML = `<div class="multi-trial-state" role="status"><span aria-hidden="true">⏳</span><div><strong>Получаем черновики</strong><p>Можно продолжать работу в других разделах.</p></div></div>`;
+  const existingForm = content.querySelector("#templateMultiTrialForm");
+  if (existingForm) {
+    content.querySelector("#templateMultiTrialReloadState")?.remove();
+    content.insertAdjacentHTML("afterbegin", `<div class="multi-trial-state" id="templateMultiTrialReloadState" role="status"><span aria-hidden="true">⏳</span><div><strong>Обновляем поля</strong><p>Введённые значения останутся в форме, если сервер не ответит.</p></div></div>`);
+  } else {
+    content.innerHTML = `<div class="multi-trial-state" role="status"><span aria-hidden="true">⏳</span><div><strong>Получаем черновики</strong><p>Можно продолжать работу в других разделах.</p></div></div>`;
+  }
   try {
     const body = await multiTrialFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts?limit=100`
@@ -255,8 +265,12 @@ async function loadMultiTrialDrafts() {
     multiTrialDrafts = Array.isArray(body.data) ? body.data : [];
     renderMultiTrialWorkspace();
   } catch (error) {
-    content.innerHTML = `
-      <div class="multi-trial-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Черновики получить не удалось</strong><p>${multiTrialEscape(error?.message || "Повторите действие.")}</p><button class="secondary-button" id="templateMultiTrialRetry" type="button">Повторить</button></div></div>`;
+    content.querySelector("#templateMultiTrialReloadState")?.remove();
+    const errorHtml = `<div class="multi-trial-state is-error" id="templateMultiTrialLoadError"><span aria-hidden="true">⚠️</span><div><strong>Черновики получить не удалось</strong><p>${multiTrialEscape(error?.message || "Повторите действие.")} Введённые значения сохранены.</p>${error?.operationId ? `<small>Идентификатор операции: <code>${multiTrialEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateMultiTrialRetry" type="button">Повторить</button></div></div>`;
+    if (existingForm) {
+      content.querySelector("#templateMultiTrialLoadError")?.remove();
+      content.insertAdjacentHTML("afterbegin", errorHtml);
+    } else content.innerHTML = errorHtml;
     content
       .querySelector("#templateMultiTrialRetry")
       ?.addEventListener("click", loadMultiTrialDrafts);
@@ -310,11 +324,11 @@ async function submitMultiTrial(event) {
         <div class="multi-trial-success-heading"><span aria-hidden="true">✅</span><div><strong>Многополевая версия ${data.version.versionNumber} готова</strong><p>Итоговое обратное чтение не обнаружило расхождений.</p></div></div>
         <div class="multi-trial-check-list">${data.version.fields
           .map(
-            (field) => `<div><span>${multiTrialEscape(field.fieldLabel)}</span><strong>${multiTrialEscape(field.readBackValue)}</strong><small><code>${multiTrialEscape(field.fieldKey)}</code></small></div>`
+            (field) => `<div><span>${multiTrialEscape(field.fieldLabel)}</span><strong>${multiTrialEscape(field.readBackValue)}</strong></div>`
           )
           .join("")}</div>
         <div class="multi-trial-downloads">
-          <a class="secondary-button" href="${multiTrialEscape(data.downloads.compiled)}">Скачать техническую копию</a>
+          <a class="secondary-button" href="${multiTrialEscape(data.downloads.compiled)}">Скачать копию для настройки</a>
           <a class="primary-button" href="${multiTrialEscape(data.downloads.trial)}">Скачать проверенную копию</a>
         </div>
         <details><summary>Технические сведения</summary><dl>
@@ -323,6 +337,11 @@ async function submitMultiTrial(event) {
           <div><dt>Идентификатор операции</dt><dd><code>${multiTrialEscape(body.correlationId || "не указан")}</code></dd></div>
         </dl></details>
       </article>`;
+    globalThis.docomatorTemplateWizard?.complete(3, {
+      draftId: draft.id,
+      versionId: data.version.id,
+      versionKind: "multi"
+    });
     await loadMultiTrialHistory();
   } catch (error) {
     message.className = "is-error";

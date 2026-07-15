@@ -173,8 +173,8 @@ function initializeSharedDocumentsView() {
     <div class="section-intro shared-result-intro">
       <div>
         <p class="eyebrow">Общее корпоративное хранилище</p>
-        <h2 id="documents-heading">Готовые документы</h2>
-        <p>Все ручные и автоматические результаты сохраняются здесь. Скачивание отмечает документ как забранный; удалить его можно отдельной кнопкой.</p>
+        <h2 id="documents-heading">Результаты и операции</h2>
+        <p>Следите за формированием и доставкой, затем скачивайте готовые ручные и автоматические документы.</p>
       </div>
       <div class="shared-result-heading-actions">
         <button class="secondary-button" id="sharedDocumentMarkAll" type="button">Отметить новые просмотренными</button>

@@ -62,3 +62,72 @@ jobs:
         env:
           DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-data
         run: npm run migrate
+
+  browser-e2e:
+    name: Chromium user flows
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install locked Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build application
+        run: npm run build
+
+      - name: Prepare browser database
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
+        run: npm run migrate
+
+      - name: Start local application
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
+          DOCOMATOR_PORT: 18080
+        shell: bash
+        run: |
+          npm run start:api > "$RUNNER_TEMP/docomator-browser-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/docomator-browser-api.pid"
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-browser-api.log"
+          exit 1
+
+      - name: Run Chromium user flows
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        run: npm run test:e2e
+
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-diagnostic
+          path: |
+            tests/e2e/.tmp/playwright-report
+            tests/e2e/.tmp/playwright-results
+            ${{ runner.temp }}/docomator-browser-api.log
+          if-no-files-found: warn
+          retention-days: 3

@@ -47,12 +47,11 @@ const headers = {
 
 async function createPersonType(app: ReturnType<typeof buildApp>): Promise<void> {
   const response = await app.inject({
-    method: "POST",
-    url: "/api/v1/knowledge/entity-types",
-    headers,
-    payload: { key: "person", label: "Человек" }
+    method: "GET",
+    url: "/api/v1/knowledge/entity-types/person",
+    headers
   });
-  assert.equal(response.statusCode, 201, response.body);
+  assert.equal(response.statusCode, 200, response.body);
 }
 
 test("spaces API isolates entities and creates aggregate target plan", async () => {
@@ -73,13 +72,14 @@ test("spaces API isolates entities and creates aggregate target plan", async () 
       url: "/api/v1/spaces",
       headers,
       payload: {
-        key: "engineering",
         name: "Инженерная служба",
         description: "Изолированные данные инженерной службы"
       }
     });
     assert.equal(spaceResponse.statusCode, 201, spaceResponse.body);
-    const spaceId = (spaceResponse.json() as { data: { id: string } }).data.id;
+    const spaceData = (spaceResponse.json() as { data: { id: string; key: string } }).data;
+    const spaceId = spaceData.id;
+    assert.match(spaceData.key, /^space\.[a-f0-9]{32}$/u);
 
     const people = [];
     for (const displayName of ["Иванов Иван", "Петров Пётр", "Сидорова Анна"]) {
@@ -97,10 +97,14 @@ test("spaces API isolates entities and creates aggregate target plan", async () 
       method: "POST",
       url: `/api/v1/spaces/${spaceId}/groups`,
       headers,
-      payload: { key: "selected-reviewers", name: "Выбранные рецензенты" }
+      payload: { name: "Выбранные рецензенты" }
     });
     assert.equal(groupResponse.statusCode, 201, groupResponse.body);
-    const groupId = (groupResponse.json() as { data: { id: string } }).data.id;
+    const groupData = (
+      groupResponse.json() as { data: { id: string; key: string } }
+    ).data;
+    const groupId = groupData.id;
+    assert.match(groupData.key, /^audience_group\.[a-f0-9]{32}$/u);
 
     const membersResponse = await app.inject({
       method: "PUT",

@@ -44,15 +44,16 @@ function createTrialPanel() {
   const panel = document.createElement("section");
   panel.id = "templateTrialPanel";
   panel.className = "template-trial-panel";
+  panel.dataset.templateWizardPanel = "3";
   panel.innerHTML = `
     <article class="panel trial-card">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">Шаг 3 · пробное заполнение</p>
-          <h2>Проверить поле на безопасной копии</h2>
-          <p>Система создаст техническую привязку, запишет пробное значение, считает его обратно и сохранит обе неизменяемые копии.</p>
+          <p class="eyebrow">Пробное заполнение</p>
+          <h2>Введите пример значения</h2>
+          <p>Система заполнит безопасную копию, сама считает результат обратно и сообщит о расхождениях.</p>
         </div>
-        <span class="large-emoji" aria-hidden="true">🧪</span>
+        <span class="template-file-mark" aria-hidden="true">✓</span>
       </div>
       <div class="trial-guidance">
         <span aria-hidden="true">ⓘ</span>
@@ -65,11 +66,11 @@ function createTrialPanel() {
         </div>
       </div>
     </article>`;
-  trialView.append(panel);
+  (document.querySelector("#templateWizardDynamicStages") || trialView).append(panel);
 }
 
 function currentTrialSpaceId() {
-  return trialSpaceSelect?.value || "";
+  return globalThis.docomatorTemplateWizard?.spaceId() || "";
 }
 
 function fieldTypeLabel(valueType) {
@@ -156,7 +157,7 @@ function renderTrialFieldControl() {
       ${sampleControl(field)}
       <small>Тип: ${trialEscape(fieldTypeLabel(field.valueType))}. Значение записывается только в проверяемую копию.</small>
     </label>`;
-  detail.innerHTML = `<strong>${trialEscape(field.label)}</strong><span>Ключ: <code>${trialEscape(field.key)}</code> · ${trialEscape(fieldTypeLabel(field.valueType))}</span>`;
+  detail.innerHTML = `<strong>${trialEscape(field.label)}</strong><span>${trialEscape(fieldTypeLabel(field.valueType))}</span>`;
 }
 
 function renderTrialVersions(versions) {
@@ -173,8 +174,8 @@ function renderTrialVersions(versions) {
         <article class="trial-history-item">
           <div><strong>Проверенная версия ${version.versionNumber}</strong><span>${trialEscape(version.renderedValue)}</span></div>
           <div class="trial-history-actions">
-            <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/template-test-versions/${encodeURIComponent(version.id)}/files/compiled">Техническая привязка</a>
-            <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/template-test-versions/${encodeURIComponent(version.id)}/files/trial">Пробная копия</a>
+            <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/template-test-versions/${encodeURIComponent(version.id)}/files/compiled">Копия для настройки</a>
+            <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/template-test-versions/${encodeURIComponent(version.id)}/files/trial">Проверенная копия</a>
           </div>
         </article>`
     )
@@ -192,7 +193,10 @@ async function loadTrialVersions() {
   } catch (error) {
     const holder = document.querySelector("#templateTrialVersions");
     if (holder) {
-      holder.innerHTML = `<div class="trial-history-empty is-error">${trialEscape(error?.message || "Историю получить не удалось.")}</div>`;
+      holder.innerHTML = `<div class="trial-history-empty is-error"><p>${trialEscape(error?.message || "Историю получить не удалось.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${trialEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateTrialHistoryRetry" type="button">Повторить</button></div>`;
+      holder
+        .querySelector("#templateTrialHistoryRetry")
+        ?.addEventListener("click", loadTrialVersions);
     }
   }
 }
@@ -274,8 +278,17 @@ async function loadTrialDrafts() {
       <div class="trial-empty"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Проверенные версии не могут смешивать данные и черновики разных пространств.</p></div></div>`;
     return;
   }
-  content.innerHTML = `
-    <div class="trial-loading" role="status"><span aria-hidden="true">⏳</span><div><strong>Получаем черновики и поля</strong><p>Проверяем выбранное пространство. Можно продолжать работу в других разделах.</p></div></div>`;
+  const existingForm = content.querySelector("#templateTrialForm");
+  if (existingForm) {
+    content.querySelector("#templateTrialReloadState")?.remove();
+    content.insertAdjacentHTML(
+      "afterbegin",
+      `<div class="trial-loading" id="templateTrialReloadState" role="status"><span aria-hidden="true">⏳</span><div><strong>Обновляем поля</strong><p>Введённые значения останутся в форме, если сервер не ответит.</p></div></div>`
+    );
+  } else {
+    content.innerHTML = `
+      <div class="trial-loading" role="status"><span aria-hidden="true">⏳</span><div><strong>Получаем черновики и поля</strong><p>Проверяем выбранное пространство. Можно продолжать работу в других разделах.</p></div></div>`;
+  }
   try {
     const body = await trialFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts?limit=100`
@@ -284,8 +297,12 @@ async function loadTrialDrafts() {
     renderTrialWorkspace();
   } catch (error) {
     const operationId = error?.operationId || "";
-    content.innerHTML = `
-      <div class="trial-empty is-error"><span aria-hidden="true">⚠️</span><div><strong>Черновики получить не удалось</strong><p>${trialEscape(error?.message || "Повторите действие позже.")}</p>${operationId ? `<small>Идентификатор операции: <code>${trialEscape(operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateTrialRetry" type="button">Повторить</button></div></div>`;
+    content.querySelector("#templateTrialReloadState")?.remove();
+    const errorHtml = `<div class="trial-empty is-error" id="templateTrialLoadError"><span aria-hidden="true">⚠️</span><div><strong>Черновики получить не удалось</strong><p>${trialEscape(error?.message || "Повторите действие позже.")} Введённые значения сохранены.</p>${operationId ? `<small>Идентификатор операции: <code>${trialEscape(operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateTrialRetry" type="button">Повторить</button></div></div>`;
+    if (existingForm) {
+      content.querySelector("#templateTrialLoadError")?.remove();
+      content.insertAdjacentHTML("afterbegin", errorHtml);
+    } else content.innerHTML = errorHtml;
     content.querySelector("#templateTrialRetry")?.addEventListener("click", loadTrialDrafts);
   }
 }
@@ -339,7 +356,7 @@ async function submitTrialVersion(event) {
           <strong>Проверенная версия ${data.version.versionNumber} готова</strong>
           <p>Записано: «${trialEscape(data.verification.renderedValue)}». Считано обратно: «${trialEscape(data.verification.readBackValue)}».</p>
           <div class="trial-downloads">
-            <a class="secondary-button" href="${trialEscape(data.downloads.compiled)}">Скачать копию с технической привязкой</a>
+            <a class="secondary-button" href="${trialEscape(data.downloads.compiled)}">Скачать копию для настройки</a>
             <a class="primary-button" href="${trialEscape(data.downloads.trial)}">Скачать пробно заполненную копию</a>
           </div>
           <details><summary>Технические сведения</summary><dl>
@@ -349,6 +366,11 @@ async function submitTrialVersion(event) {
           </dl></details>
         </div>
       </article>`;
+    globalThis.docomatorTemplateWizard?.complete(3, {
+      draftId: draft.id,
+      versionId: data.version.id,
+      versionKind: "single"
+    });
     await loadTrialVersions();
   } catch (error) {
     const operationId = error?.operationId || "";

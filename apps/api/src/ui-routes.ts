@@ -39,6 +39,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "shared-document-results.css",
       "storage-maintenance.css",
       "bulk-data-import.css",
+      "operation-center.css",
       "operations-readiness.css"
     ],
     contentType: "text/css; charset=utf-8",
@@ -70,6 +71,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "shared-corporate-mode.js",
       "storage-maintenance.js",
       "bulk-data-import.js",
+      "operation-center.js",
       "operations-readiness.js"
     ],
     contentType: "text/javascript; charset=utf-8",

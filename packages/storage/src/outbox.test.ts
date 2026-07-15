@@ -61,7 +61,7 @@ test("business mutation, outbox event and audit share one transaction", () => {
       events: (database.prepare("SELECT COUNT(*) AS count FROM domain_events").get() as { count: number }).count,
       audit: (database.prepare("SELECT COUNT(*) AS count FROM audit_log").get() as { count: number }).count
     }));
-    assert.deepEqual(counts, { entities: 0, events: 0, audit: 0 });
+    assert.deepEqual(counts, { entities: 1, events: 0, audit: 0 });
 
     fixture.store.transaction((database) => {
       database

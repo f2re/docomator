@@ -29,7 +29,7 @@ interface PreviewQuery {
 }
 
 interface ImportGroupBody {
-  key: string;
+  key?: string;
   name: string;
   description?: string;
 }
@@ -39,10 +39,10 @@ interface ExecuteImportBody {
   fileFormat: "csv" | "xlsx";
   sourceSha256: string;
   previewToken: string;
-  entityTypeKey: string;
+  entityTypeKey?: string;
   identityColumn: string;
   displayNameColumn: string;
-  identityPropertyKey: string;
+  identityPropertyKey?: string;
   headers: string[];
   rows: Array<Record<string, string>>;
   mappings: DataImportPropertyMapping[];
@@ -85,9 +85,12 @@ function normalizeKey(value: string): string {
 }
 
 function validateIdentityMapping(body: ExecuteImportBody): void {
+  if (body.identityPropertyKey === undefined) return;
   const identityPropertyKey = normalizeKey(body.identityPropertyKey);
   const mappings = body.mappings.filter(
-    (mapping) => normalizeKey(mapping.propertyKey) === identityPropertyKey
+    (mapping) =>
+      mapping.propertyKey !== undefined &&
+      normalizeKey(mapping.propertyKey) === identityPropertyKey
   );
   if (mappings.length > 1) {
     throw new SpaceValidationError(
@@ -110,6 +113,161 @@ function validateIdentityMapping(body: ExecuteImportBody): void {
     );
   }
 }
+
+function validatePreviewToken(body: ExecuteImportBody): void {
+  const expectedToken = createImportPreviewToken({
+    sourceSha256: body.sourceSha256.toLowerCase(),
+    headers: body.headers,
+    rows: body.rows
+  });
+  if (expectedToken !== body.previewToken.toLowerCase()) {
+    throw new SpaceConflictError(
+      "Данные предварительного просмотра изменились. Загрузите файл заново."
+    );
+  }
+}
+
+function registryInput(body: ExecuteImportBody) {
+  return {
+    fileName: body.fileName,
+    fileFormat: body.fileFormat,
+    sourceSha256: body.sourceSha256,
+    identityColumn: body.identityColumn,
+    displayNameColumn: body.displayNameColumn,
+    headers: body.headers,
+    rows: body.rows,
+    mappings: body.mappings,
+    ...(body.entityTypeKey === undefined
+      ? {}
+      : { entityTypeKey: body.entityTypeKey }),
+    ...(body.identityPropertyKey === undefined
+      ? {}
+      : { identityPropertyKey: body.identityPropertyKey }),
+    ...(body.group === undefined ? {} : { group: body.group })
+  };
+}
+
+function validateLegacyIdentity(
+  spaces: SpaceRegistry,
+  body: ExecuteImportBody
+): void {
+  validateIdentityMapping(body);
+  if (body.identityPropertyKey === undefined) return;
+  importOperation(() =>
+    validateExistingImportIdentityProperty({
+      spaces,
+      entityTypeKey: body.entityTypeKey ?? "person",
+      identityPropertyKey: body.identityPropertyKey ?? "",
+      mappings: body.mappings
+    })
+  );
+}
+
+function importResultForClient<T extends {
+  id: string;
+  spaceId: string;
+  entityTypeKey: string;
+  sourceSha256: string;
+  identityPropertyKey: string;
+  groupId: string | null;
+}>(result: T, includeTechnicalDetails: boolean) {
+  if (includeTechnicalDetails) return result;
+  const {
+    id: _id,
+    spaceId: _spaceId,
+    entityTypeKey: _entityTypeKey,
+    sourceSha256: _sourceSha256,
+    identityPropertyKey: _identityPropertyKey,
+    groupId: _groupId,
+    ...publicResult
+  } = result;
+  return publicResult;
+}
+
+const executeImportBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "fileName",
+    "fileFormat",
+    "sourceSha256",
+    "previewToken",
+    "identityColumn",
+    "displayNameColumn",
+    "headers",
+    "rows",
+    "mappings"
+  ],
+  properties: {
+    fileName: { type: "string", minLength: 1, maxLength: 255 },
+    fileFormat: { type: "string", enum: ["csv", "xlsx"] },
+    sourceSha256: { type: "string", pattern: "^[a-fA-F0-9]{64}$" },
+    previewToken: { type: "string", pattern: "^[a-fA-F0-9]{64}$" },
+    entityTypeKey: { type: "string", minLength: 1, maxLength: 160 },
+    identityColumn: { type: "string", minLength: 1, maxLength: 300 },
+    displayNameColumn: { type: "string", minLength: 1, maxLength: 300 },
+    identityPropertyKey: { type: "string", minLength: 1, maxLength: 160 },
+    headers: {
+      type: "array",
+      minItems: 1,
+      maxItems: 100,
+      items: { type: "string", minLength: 1, maxLength: 300 }
+    },
+    rows: {
+      type: "array",
+      minItems: 1,
+      maxItems: 1_000,
+      items: {
+        type: "object",
+        additionalProperties: { type: "string", maxLength: 20_000 }
+      }
+    },
+    mappings: {
+      type: "array",
+      minItems: 0,
+      maxItems: 100,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["column"],
+        properties: {
+          column: { type: "string", minLength: 1, maxLength: 300 },
+          propertyKey: { type: "string", minLength: 1, maxLength: 160 },
+          createIfMissing: { type: "boolean" },
+          label: { type: "string", maxLength: 300 },
+          valueType: {
+            type: "string",
+            enum: [
+              "string",
+              "text",
+              "number",
+              "integer",
+              "boolean",
+              "date",
+              "date-time",
+              "enum"
+            ]
+          }
+        }
+      }
+    },
+    group: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["name"],
+          properties: {
+            key: { type: "string", minLength: 1, maxLength: 160 },
+            name: { type: "string", minLength: 1, maxLength: 300 },
+            description: { type: "string", maxLength: 2_000 }
+          }
+        }
+      ]
+    }
+  }
+} as const;
 
 export function registerDataImportRoutes(
   app: FastifyInstance,
@@ -157,152 +315,56 @@ export function registerDataImportRoutes(
   );
 
   app.post<{ Params: SpaceParams; Body: ExecuteImportBody }>(
+    "/api/v1/spaces/:spaceId/data-import/plan",
+    {
+      bodyLimit: 16 * 1024 * 1024,
+      schema: {
+        params: spaceParamsSchema,
+        body: executeImportBodySchema
+      }
+    },
+    async (request, reply) => {
+      validatePreviewToken(request.body);
+      validateLegacyIdentity(spaces, request.body);
+      const plan = importOperation(() =>
+        registry.plan(
+          request.params.spaceId,
+          registryInput(request.body),
+          mutationContextFromRequest(request)
+        )
+      );
+      reply.header("cache-control", "no-store");
+      return responseEnvelope(request, plan);
+    }
+  );
+
+  app.post<{ Params: SpaceParams; Body: ExecuteImportBody }>(
     "/api/v1/spaces/:spaceId/data-import/execute",
     {
       bodyLimit: 16 * 1024 * 1024,
       schema: {
         params: spaceParamsSchema,
-        body: {
-          type: "object",
-          additionalProperties: false,
-          required: [
-            "fileName",
-            "fileFormat",
-            "sourceSha256",
-            "previewToken",
-            "entityTypeKey",
-            "identityColumn",
-            "displayNameColumn",
-            "identityPropertyKey",
-            "headers",
-            "rows",
-            "mappings"
-          ],
-          properties: {
-            fileName: { type: "string", minLength: 1, maxLength: 255 },
-            fileFormat: { type: "string", enum: ["csv", "xlsx"] },
-            sourceSha256: {
-              type: "string",
-              pattern: "^[a-fA-F0-9]{64}$"
-            },
-            previewToken: {
-              type: "string",
-              pattern: "^[a-fA-F0-9]{64}$"
-            },
-            entityTypeKey: { type: "string", minLength: 1, maxLength: 160 },
-            identityColumn: { type: "string", minLength: 1, maxLength: 300 },
-            displayNameColumn: { type: "string", minLength: 1, maxLength: 300 },
-            identityPropertyKey: {
-              type: "string",
-              minLength: 1,
-              maxLength: 160
-            },
-            headers: {
-              type: "array",
-              minItems: 1,
-              maxItems: 100,
-              items: { type: "string", minLength: 1, maxLength: 300 }
-            },
-            rows: {
-              type: "array",
-              minItems: 1,
-              maxItems: 1_000,
-              items: {
-                type: "object",
-                additionalProperties: { type: "string", maxLength: 20_000 }
-              }
-            },
-            mappings: {
-              type: "array",
-              minItems: 1,
-              maxItems: 100,
-              items: {
-                type: "object",
-                additionalProperties: false,
-                required: ["column", "propertyKey"],
-                properties: {
-                  column: { type: "string", minLength: 1, maxLength: 300 },
-                  propertyKey: { type: "string", minLength: 1, maxLength: 160 },
-                  createIfMissing: { type: "boolean" },
-                  label: { type: "string", maxLength: 300 },
-                  valueType: {
-                    type: "string",
-                    enum: [
-                      "string",
-                      "text",
-                      "number",
-                      "integer",
-                      "boolean",
-                      "date",
-                      "date-time",
-                      "enum"
-                    ]
-                  }
-                }
-              }
-            },
-            group: {
-              anyOf: [
-                { type: "null" },
-                {
-                  type: "object",
-                  additionalProperties: false,
-                  required: ["key", "name"],
-                  properties: {
-                    key: { type: "string", minLength: 1, maxLength: 160 },
-                    name: { type: "string", minLength: 1, maxLength: 300 },
-                    description: { type: "string", maxLength: 2_000 }
-                  }
-                }
-              ]
-            }
-          }
-        }
+        body: executeImportBodySchema
       }
     },
     async (request, reply) => {
-      const expectedToken = createImportPreviewToken({
-        sourceSha256: request.body.sourceSha256.toLowerCase(),
-        headers: request.body.headers,
-        rows: request.body.rows
-      });
-      if (expectedToken !== request.body.previewToken.toLowerCase()) {
-        throw new SpaceConflictError(
-          "Данные предварительного просмотра изменились. Загрузите файл заново."
-        );
-      }
-      validateIdentityMapping(request.body);
-      importOperation(() =>
-        validateExistingImportIdentityProperty({
-          spaces,
-          entityTypeKey: request.body.entityTypeKey,
-          identityPropertyKey: request.body.identityPropertyKey,
-          mappings: request.body.mappings
-        })
-      );
+      validatePreviewToken(request.body);
+      validateLegacyIdentity(spaces, request.body);
       const result = importOperation(() =>
         registry.execute(
           request.params.spaceId,
-          {
-            fileName: request.body.fileName,
-            fileFormat: request.body.fileFormat,
-            sourceSha256: request.body.sourceSha256,
-            entityTypeKey: request.body.entityTypeKey,
-            identityColumn: request.body.identityColumn,
-            displayNameColumn: request.body.displayNameColumn,
-            identityPropertyKey: request.body.identityPropertyKey,
-            headers: request.body.headers,
-            rows: request.body.rows,
-            mappings: request.body.mappings,
-            ...(request.body.group === undefined
-              ? {}
-              : { group: request.body.group })
-          },
+          registryInput(request.body),
           mutationContextFromRequest(request)
         )
       );
       reply.code(201).header("cache-control", "no-store");
-      return responseEnvelope(request, result);
+      return responseEnvelope(
+        request,
+        importResultForClient(
+          result,
+          request.body.identityPropertyKey !== undefined
+        )
+      );
     }
   );
 

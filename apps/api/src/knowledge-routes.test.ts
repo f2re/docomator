@@ -67,12 +67,11 @@ test("knowledge API creates typed data with outbox and audit", async () => {
     assert.equal(ready.statusCode, 200);
 
     const typeResponse = await app.inject({
-      method: "POST",
-      url: "/api/v1/knowledge/entity-types",
+      method: "GET",
+      url: "/api/v1/knowledge/entity-types/person",
       headers,
-      payload: { key: "person", label: "Человек" }
     });
-    assert.equal(typeResponse.statusCode, 201, typeResponse.body);
+    assert.equal(typeResponse.statusCode, 200, typeResponse.body);
     assert.equal(typeResponse.headers["x-correlation-id"], headers["x-correlation-id"]);
 
     const propertyResponse = await app.inject({
@@ -80,7 +79,6 @@ test("knowledge API creates typed data with outbox and audit", async () => {
       url: "/api/v1/knowledge/property-definitions",
       headers,
       payload: {
-        key: "person.height",
         label: "Рост",
         valueType: "number",
         unit: "cm",
@@ -89,6 +87,10 @@ test("knowledge API creates typed data with outbox and audit", async () => {
       }
     });
     assert.equal(propertyResponse.statusCode, 201, propertyResponse.body);
+    const propertyKey = (
+      propertyResponse.json() as { data: { key: string } }
+    ).data.key;
+    assert.match(propertyKey, /^property\.[a-f0-9]{32}$/u);
 
     const entityResponse = await app.inject({
       method: "POST",
@@ -104,7 +106,7 @@ test("knowledge API creates typed data with outbox and audit", async () => {
 
     const valueResponse = await app.inject({
       method: "PUT",
-      url: `/api/v1/knowledge/entities/${entityId}/properties/person.height`,
+      url: `/api/v1/knowledge/entities/${entityId}/properties/${propertyKey}`,
       headers,
       payload: {
         value: 181.5,
@@ -120,7 +122,7 @@ test("knowledge API creates typed data with outbox and audit", async () => {
 
     const historyResponse = await app.inject({
       method: "GET",
-      url: `/api/v1/knowledge/entities/${entityId}/property-values?propertyKey=person.height`
+      url: `/api/v1/knowledge/entities/${entityId}/property-values?propertyKey=${propertyKey}`
     });
     assert.equal(historyResponse.statusCode, 200, historyResponse.body);
     const history = historyResponse.json() as {
@@ -147,7 +149,7 @@ test("knowledge API creates typed data with outbox and audit", async () => {
         }).count
       )
     }));
-    assert.deepEqual(counts, { events: 4, audit: 4 });
+    assert.deepEqual(counts, { events: 3, audit: 3 });
   } finally {
     fixture.cleanup();
   }
@@ -168,14 +170,14 @@ test("knowledge API returns stable validation and conflict errors", async () => 
       method: "POST",
       url: "/api/v1/knowledge/entity-types",
       headers,
-      payload: { key: "person", label: "Человек" }
+      payload: { key: "organization", label: "Организация" }
     });
     assert.equal(first.statusCode, 201);
     const duplicate = await app.inject({
       method: "POST",
       url: "/api/v1/knowledge/entity-types",
       headers,
-      payload: { key: "person", label: "Дубликат" }
+      payload: { key: "organization", label: "Дубликат" }
     });
     assert.equal(duplicate.statusCode, 409);
     assert.equal(

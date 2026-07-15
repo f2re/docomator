@@ -47,7 +47,7 @@ interface SpaceEntityListQuery extends PaginationQuery {
 }
 
 interface CreateSpaceBody {
-  key: string;
+  key?: string;
   name: string;
   description?: string;
 }
@@ -64,7 +64,7 @@ interface CreateSpaceEntityBody {
 }
 
 interface CreateGroupBody {
-  key: string;
+  key?: string;
   name: string;
   description?: string;
 }
@@ -136,7 +136,7 @@ export function registerSpaceRoutes(
         body: {
           type: "object",
           additionalProperties: false,
-          required: ["key", "name"],
+          required: ["name"],
           properties: {
             key: stableKeySchema,
             name: { type: "string", minLength: 1, maxLength: 500 },
@@ -347,7 +347,7 @@ export function registerSpaceRoutes(
         body: {
           type: "object",
           additionalProperties: false,
-          required: ["key", "name"],
+          required: ["name"],
           properties: {
             key: stableKeySchema,
             name: { type: "string", minLength: 1, maxLength: 500 },

@@ -6,14 +6,14 @@ import {
   normalizeEmailAddress,
   normalizeEmailDisplayName
 } from "./email-address.js";
-import type { MutationContext } from "./knowledge.js";
+import { generateOpaqueStableKey, type MutationContext } from "./knowledge.js";
 import { DomainEventOutbox } from "./outbox.js";
 
 export type EmailRecipientStatus = "active" | "inactive";
 
 export interface CreateEmailRecipientInput {
   id?: string;
-  key: string;
+  key?: string;
   name: string;
   email: string;
   description?: string | null;
@@ -195,13 +195,20 @@ function isSqliteUniqueError(error: unknown): boolean {
 export class EmailRecipientRegistry {
   private readonly outbox: DomainEventOutbox;
   private readonly audit: AuditRepository;
+  private readonly keyFactory: () => string;
 
   constructor(
     private readonly store: SqliteStore,
-    options: { outbox?: DomainEventOutbox; audit?: AuditRepository } = {}
+    options: {
+      outbox?: DomainEventOutbox;
+      audit?: AuditRepository;
+      keyFactory?: () => string;
+    } = {}
   ) {
     this.outbox = options.outbox ?? new DomainEventOutbox(store);
     this.audit = options.audit ?? new AuditRepository(store);
+    this.keyFactory =
+      options.keyFactory ?? (() => generateOpaqueStableKey("email_recipient"));
   }
 
   create(
@@ -211,7 +218,7 @@ export class EmailRecipientRegistry {
   ): EmailRecipientRecord {
     const identity = requiredText(spaceIdentityValue, "spaceId", 160);
     const id = input.id ?? randomUUID();
-    const key = stableKey(input.key);
+    const explicitKey = input.key === undefined ? null : stableKey(input.key);
     const name = normalizeEmailDisplayName(input.name);
     if (name === null) {
       throw new EmailRecipientValidationError("name must not be empty");
@@ -222,6 +229,7 @@ export class EmailRecipientRegistry {
 
     return this.store.transaction((connection) => {
       const space = requireSpace(connection, identity);
+      const key = explicitKey ?? this.allocateKey(connection, space.id);
       try {
         connection
           .prepare(`
@@ -283,6 +291,23 @@ export class EmailRecipientRegistry {
       }
       return mapRecipient(row);
     });
+  }
+
+  private allocateKey(connection: SqliteExecutor, spaceId: string): string {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const key = stableKey(this.keyFactory());
+      const existing = connection
+        .prepare(
+          "SELECT 1 FROM space_email_recipients WHERE space_id = ? AND key = ?"
+        )
+        .get(spaceId, key);
+      if (existing === undefined) {
+        return key;
+      }
+    }
+    throw new EmailRecipientConflictError(
+      "Не удалось создать внутренний ключ получателя. Повторите действие."
+    );
   }
 
   list(

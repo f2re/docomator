@@ -26,10 +26,6 @@ test("spaces isolate entities and preserve default ownership", () => {
   try {
     const knowledge = new KnowledgeRegistry(fixture.store);
     const spaces = new SpaceRegistry(fixture.store);
-    knowledge.createEntityType(
-      { key: "person", label: "Человек" },
-      context("corr-person-type")
-    );
 
     const legacyPerson = knowledge.createEntity(
       { entityTypeKey: "person", displayName: "Системный пользователь" },
@@ -79,10 +75,6 @@ test("audience snapshots build one-per-member and aggregate document plans", () 
   try {
     const knowledge = new KnowledgeRegistry(fixture.store);
     const spaces = new SpaceRegistry(fixture.store);
-    knowledge.createEntityType(
-      { key: "person", label: "Человек" },
-      context("corr-person-type")
-    );
     const space = spaces.createSpace(
       { key: "north", name: "Северное подразделение" },
       context("corr-space")
@@ -173,10 +165,6 @@ test("cross-space members are rejected before group or snapshot mutation", () =>
   try {
     const knowledge = new KnowledgeRegistry(fixture.store);
     const spaces = new SpaceRegistry(fixture.store);
-    knowledge.createEntityType(
-      { key: "person", label: "Человек" },
-      context("corr-person-type")
-    );
     const alpha = spaces.createSpace(
       { key: "alpha", name: "Альфа" },
       context("corr-alpha")

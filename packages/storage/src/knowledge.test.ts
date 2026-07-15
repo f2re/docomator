@@ -23,10 +23,7 @@ test("knowledge mutations append outbox and audit records atomically", () => {
   const fixture = createMigratedTestStore();
   try {
     const registry = new KnowledgeRegistry(fixture.store);
-    const personType = registry.createEntityType(
-      { key: "person", label: "Человек" },
-      context("corr-person-type")
-    );
+    const personType = registry.getEntityType("person");
     registry.createEntityType(
       { key: "organization", label: "Организация" },
       context("corr-organization-type")
@@ -115,7 +112,7 @@ test("knowledge mutations append outbox and audit records atomically", () => {
         ).count
       )
     }));
-    assert.deepEqual(counts, { events: 6, audit: 6 });
+    assert.deepEqual(counts, { events: 5, audit: 5 });
   } finally {
     fixture.cleanup();
   }
@@ -125,10 +122,6 @@ test("property scope and enum validation are enforced before mutation", () => {
   const fixture = createMigratedTestStore();
   try {
     const registry = new KnowledgeRegistry(fixture.store);
-    registry.createEntityType(
-      { key: "person", label: "Человек" },
-      context("corr-type-person")
-    );
     registry.createEntityType(
       { key: "organization", label: "Организация" },
       context("corr-type-organization")
@@ -193,10 +186,7 @@ test("stable keys are unique and invalid keys are rejected", () => {
   const fixture = createMigratedTestStore();
   try {
     const registry = new KnowledgeRegistry(fixture.store);
-    registry.createEntityType(
-      { key: "person", label: "Человек" },
-      context("corr-first")
-    );
+    assert.equal(registry.getEntityType("person").key, "person");
     assert.throws(
       () =>
         registry.createEntityType(
@@ -217,6 +207,40 @@ test("stable keys are unique and invalid keys are rejected", () => {
         ),
       KnowledgeValidationError
     );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ordinary knowledge creates allocate opaque keys and retry collisions", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const generated = [
+      "entity_type.generated",
+      "property.collision",
+      "property.generated"
+    ];
+    const registry = new KnowledgeRegistry(fixture.store, {
+      keyFactory: () => generated.shift() ?? "property.unexpected"
+    });
+    const entityType = registry.createEntityType(
+      { label: "Проект" },
+      context("generated-type")
+    );
+    assert.equal(entityType.key, "entity_type.generated");
+    registry.createPropertyDefinition(
+      {
+        key: "property.collision",
+        label: "Существующее свойство",
+        valueType: "string"
+      },
+      context("collision-property")
+    );
+    const property = registry.createPropertyDefinition(
+      { label: "Новое свойство", valueType: "string" },
+      context("generated-property")
+    );
+    assert.equal(property.key, "property.generated");
   } finally {
     fixture.cleanup();
   }

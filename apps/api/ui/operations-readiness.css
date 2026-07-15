@@ -2,10 +2,25 @@
   display: grid;
   gap: 1rem;
   margin-top: 1rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.operations-readiness-panel > *,
+.operations-heading > div {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .operations-heading {
   align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+}
+
+.operations-heading h2,
+.operations-heading p {
+  overflow-wrap: anywhere;
 }
 
 .operations-readiness-summary {
@@ -49,6 +64,11 @@
 .operations-readiness-summary p,
 .operations-readiness-summary small {
   margin: 0;
+}
+
+.operations-readiness-summary > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .operations-readiness-summary p,
@@ -200,7 +220,7 @@
 
   .operations-readiness-summary,
   .operations-check {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .operations-check-title {

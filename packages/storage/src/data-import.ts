@@ -10,20 +10,21 @@ import {
   type MutationContext,
   type PropertyDefinitionRecord
 } from "./index-internal.js";
+import { generateOpaqueStableKey } from "./knowledge.js";
 import { SpaceRegistry, type AudienceGroupRecord } from "./spaces.js";
 
 export type DataImportFormat = "csv" | "xlsx";
 
 export interface DataImportPropertyMapping {
   column: string;
-  propertyKey: string;
+  propertyKey?: string;
   createIfMissing?: boolean;
   label?: string;
   valueType?: string;
 }
 
 export interface DataImportGroupInput {
-  key: string;
+  key?: string;
   name: string;
   description?: string | null;
 }
@@ -32,14 +33,26 @@ export interface ExecuteDataImportInput {
   fileName: string;
   fileFormat: DataImportFormat;
   sourceSha256: string;
-  entityTypeKey: string;
+  entityTypeKey?: string;
   identityColumn: string;
   displayNameColumn: string;
-  identityPropertyKey: string;
+  identityPropertyKey?: string;
   headers: readonly string[];
   rows: readonly Record<string, string>[];
   mappings: readonly DataImportPropertyMapping[];
   group?: DataImportGroupInput | null;
+}
+
+export interface DataImportPlanRecord {
+  rowCount: number;
+  createdCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  propertyValueCount: number;
+  state: "completed" | "partial" | "failed";
+  errors: DataImportRowError[];
 }
 
 export interface DataImportRowError {
@@ -82,6 +95,13 @@ interface PreparedRow {
   values: Array<{ property: PropertyDefinitionRecord; value: unknown }>;
 }
 
+interface PreparedImportGroup {
+  existing: AudienceGroupRecord | null;
+  key: string;
+  name: string;
+  description: string | null;
+}
+
 interface ImportKeyRow {
   entity_id: string;
 }
@@ -120,9 +140,19 @@ export class DataImportConflictError extends Error {
   override readonly name = "DataImportConflictError";
 }
 
+class DataImportPlanRollback extends Error {
+  override readonly name = "DataImportPlanRollback";
+
+  constructor(readonly result: DataImportRunRecord) {
+    super("data import plan rollback");
+  }
+}
+
+const INTERNAL_IDENTITY_PROPERTY_KEY = "system.entity_import_key";
+
 function requiredText(value: string, name: string, maximum = 500): string {
   if (typeof value !== "string") {
-    throw new DataImportValidationError(`${name} must be a string`);
+    throw new DataImportValidationError(`Поле «${name}» должно быть строкой.`);
   }
   const normalized = value.normalize("NFKC").trim();
   if (
@@ -130,7 +160,7 @@ function requiredText(value: string, name: string, maximum = 500): string {
     normalized.length > maximum ||
     /[\u0000-\u001f\u007f]/u.test(normalized)
   ) {
-    throw new DataImportValidationError(`${name} is invalid`);
+    throw new DataImportValidationError(`Поле «${name}» заполнено некорректно.`);
   }
   return normalized;
 }
@@ -139,7 +169,7 @@ function stableKey(value: string, name: string): string {
   const normalized = requiredText(value, name, 160).toLowerCase();
   if (!/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u.test(normalized)) {
     throw new DataImportValidationError(
-      `${name} must start with a letter and contain letters, digits, dots, dashes or underscores`
+      `Техническое поле «${name}» содержит недопустимый ключ.`
     );
   }
   return normalized;
@@ -149,7 +179,7 @@ function sha256(value: string): string {
   const normalized = requiredText(value, "sourceSha256", 64).toLowerCase();
   if (!/^[a-f0-9]{64}$/u.test(normalized)) {
     throw new DataImportValidationError(
-      "sourceSha256 must contain 64 hexadecimal characters"
+      "Контрольная сумма исходного файла заполнена некорректно."
     );
   }
   return normalized;
@@ -159,7 +189,7 @@ function timestamp(value: Date | string | undefined): string {
   const date =
     value === undefined ? new Date() : value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new DataImportValidationError("Invalid mutation timestamp");
+    throw new DataImportValidationError("Время операции заполнено некорректно.");
   }
   return date.toISOString();
 }
@@ -197,7 +227,7 @@ function normalizeRows(
   }
   return values.map((row, rowIndex) => {
     if (row === null || typeof row !== "object" || Array.isArray(row)) {
-      throw new DataImportValidationError(`rows[${rowIndex}] is invalid`);
+      throw new DataImportValidationError(`Строка ${rowIndex + 2} имеет неверный формат.`);
     }
     const result: Record<string, string> = {};
     for (const header of headers) {
@@ -289,6 +319,16 @@ function convertValue(property: PropertyDefinitionRecord, raw: string): unknown 
   }
 }
 
+function rowMutationErrorMessage(error: unknown): string {
+  if (
+    error instanceof DataImportValidationError ||
+    error instanceof DataImportConflictError
+  ) {
+    return error.message;
+  }
+  return "Строка не сохранена: одно из значений не соответствует правилам поля.";
+}
+
 function currentPropertyValue(
   store: SqliteStore,
   entityId: string,
@@ -358,7 +398,7 @@ export class DataImportRegistry {
 
   list(spaceIdentity: string, limitValue = 50): DataImportRunRecord[] {
     if (!Number.isInteger(limitValue) || limitValue < 1 || limitValue > 200) {
-      throw new DataImportValidationError("limit must be in range 1..200");
+      throw new DataImportValidationError("Количество записей истории должно быть от 1 до 200.");
     }
     const space = this.spaces.getSpace(spaceIdentity);
     return this.store.execute((connection) => {
@@ -377,7 +417,48 @@ export class DataImportRegistry {
     });
   }
 
+  plan(
+    spaceIdentity: string,
+    input: ExecuteDataImportInput,
+    contextInput: MutationContext
+  ): DataImportPlanRecord {
+    try {
+      this.store.transaction(() => {
+        throw new DataImportPlanRollback(
+          this.execute(spaceIdentity, input, contextInput)
+        );
+      });
+    } catch (error) {
+      if (error instanceof DataImportPlanRollback) {
+        const result = error.result;
+        return {
+          rowCount: result.rowCount,
+          createdCount: result.createdCount,
+          updatedCount: result.updatedCount,
+          unchangedCount: result.unchangedCount,
+          skippedCount: result.skippedCount,
+          failedCount: result.failedCount,
+          propertyValueCount: result.propertyValueCount,
+          state: result.state,
+          errors: result.errors
+        };
+      }
+      throw error;
+    }
+    throw new Error("Предварительный расчёт импорта не завершён.");
+  }
+
   execute(
+    spaceIdentity: string,
+    input: ExecuteDataImportInput,
+    contextInput: MutationContext
+  ): DataImportRunRecord {
+    return this.store.transaction(() =>
+      this.executeTransactional(spaceIdentity, input, contextInput)
+    );
+  }
+
+  private executeTransactional(
     spaceIdentity: string,
     input: ExecuteDataImportInput,
     contextInput: MutationContext
@@ -386,11 +467,13 @@ export class DataImportRegistry {
     const fileName = requiredText(input.fileName, "fileName", 255);
     const fileFormat = normalizedFormat(input.fileFormat);
     const sourceSha256 = sha256(input.sourceSha256);
-    const entityTypeKey = stableKey(input.entityTypeKey, "entityTypeKey");
-    const identityPropertyKey = stableKey(
-      input.identityPropertyKey,
-      "identityPropertyKey"
-    );
+    const entityTypeKey = stableKey(input.entityTypeKey ?? "person", "entityTypeKey");
+    const explicitIdentityPropertyKey = input.identityPropertyKey;
+    const hasExplicitIdentityProperty = explicitIdentityPropertyKey !== undefined;
+    const identityPropertyKey =
+      explicitIdentityPropertyKey === undefined
+        ? INTERNAL_IDENTITY_PROPERTY_KEY
+        : stableKey(explicitIdentityPropertyKey, "identityPropertyKey");
     const headers = normalizeHeaders(input.headers);
     const rows = normalizeRows(input.rows, headers);
     const identityColumn = requiredText(input.identityColumn, "identityColumn", 300);
@@ -401,7 +484,7 @@ export class DataImportRegistry {
     );
     if (!headers.includes(identityColumn) || !headers.includes(displayNameColumn)) {
       throw new DataImportValidationError(
-        "Колонки устойчивого ключа и отображаемого имени должны присутствовать в файле."
+        "Выбранные колонки для поиска сотрудника и его ФИО должны присутствовать в файле."
       );
     }
     const entityType = this.knowledge.getEntityType(entityTypeKey);
@@ -418,9 +501,11 @@ export class DataImportRegistry {
         .listPropertyDefinitions(500)
         .map((property) => [property.key, property])
     );
-    if (!definitions.has(identityPropertyKey)) {
+    if (hasExplicitIdentityProperty && !definitions.has(identityPropertyKey)) {
       const identityMapping = input.mappings.find(
-        (mapping) => stableKey(mapping.propertyKey, "propertyKey") === identityPropertyKey
+        (mapping) =>
+          mapping.propertyKey !== undefined &&
+          stableKey(mapping.propertyKey, "propertyKey") === identityPropertyKey
       );
       if (!identityMapping?.createIfMissing) {
         throw new DataImportValidationError(
@@ -432,7 +517,7 @@ export class DataImportRegistry {
           key: identityPropertyKey,
           label: identityMapping.label ?? "Устойчивый ключ импорта",
           valueType: "string",
-          sensitivity: "internal",
+          sensitivity: entityTypeKey === "person" ? "personal" : "internal",
           appliesTo: [entityTypeKey]
         },
         context
@@ -449,14 +534,49 @@ export class DataImportRegistry {
           `Колонка «${column}» отсутствует в файле.`
         );
       }
-      const propertyKey = stableKey(mappingInput.propertyKey, "mapping.propertyKey");
+      const requestedLabel = mappingInput.label ?? column;
+      const requestedValueType = mappingInput.valueType ?? "string";
+      let propertyKey: string;
+      let property: PropertyDefinitionRecord | undefined;
+      if (mappingInput.propertyKey === undefined) {
+        if (mappingInput.createIfMissing !== true) {
+          throw new DataImportValidationError(
+            `Для колонки «${column}» выберите существующее поле или явно создайте новое.`
+          );
+        }
+        const normalizedLabel = requiredText(
+          requestedLabel,
+          "mapping.label",
+          300
+        ).toLocaleLowerCase("ru-RU");
+        const matchingProperties = [...definitions.values()].filter(
+          (candidate) =>
+            candidate.label.toLocaleLowerCase("ru-RU") === normalizedLabel &&
+            (candidate.appliesTo.length === 0 ||
+              candidate.appliesTo.includes(entityTypeKey))
+        );
+        if (matchingProperties.length > 1) {
+          throw new DataImportValidationError(
+            `Для колонки «${column}» найдено несколько полей с названием «${requestedLabel}». Выберите нужное поле.`
+          );
+        }
+        property = matchingProperties[0];
+        if (property !== undefined && property.valueType !== requestedValueType) {
+          throw new DataImportValidationError(
+            `Поле «${property.label}» уже существует с другим типом данных.`
+          );
+        }
+        propertyKey = property?.key ?? generateOpaqueStableKey("employee_field");
+      } else {
+        propertyKey = stableKey(mappingInput.propertyKey, "mapping.propertyKey");
+      }
       if (mappingKeys.has(propertyKey)) {
         throw new DataImportValidationError(
           `Свойство «${propertyKey}» сопоставлено более одного раза.`
         );
       }
       mappingKeys.add(propertyKey);
-      let property = definitions.get(propertyKey);
+      property ??= definitions.get(propertyKey);
       if (property === undefined) {
         if (!mappingInput.createIfMissing) {
           throw new DataImportValidationError(
@@ -467,9 +587,9 @@ export class DataImportRegistry {
           property = this.knowledge.createPropertyDefinition(
             {
               key: propertyKey,
-              label: mappingInput.label ?? column,
-              valueType: mappingInput.valueType ?? "string",
-              sensitivity: "internal",
+              label: requestedLabel,
+              valueType: requestedValueType,
+              sensitivity: entityTypeKey === "person" ? "personal" : "internal",
               appliesTo: [entityTypeKey]
             },
             context
@@ -491,13 +611,18 @@ export class DataImportRegistry {
       preparedMappings.push({ column, property });
     }
 
-    const identityProperty = definitions.get(identityPropertyKey);
-    if (identityProperty === undefined) {
+    const identityProperty = hasExplicitIdentityProperty
+      ? definitions.get(identityPropertyKey)
+      : undefined;
+    if (hasExplicitIdentityProperty && identityProperty === undefined) {
       throw new DataImportValidationError(
         "Свойство устойчивого ключа не подготовлено."
       );
     }
-    if (!preparedMappings.some((mapping) => mapping.property.key === identityPropertyKey)) {
+    if (
+      identityProperty !== undefined &&
+      !preparedMappings.some((mapping) => mapping.property.key === identityPropertyKey)
+    ) {
       preparedMappings.unshift({
         column: identityColumn,
         property: identityProperty
@@ -522,8 +647,8 @@ export class DataImportRegistry {
           externalKey: externalKey || null,
           message:
             externalKey.length === 0
-              ? "Не заполнен устойчивый ключ."
-              : "Не заполнено отображаемое имя."
+              ? `Не заполнена колонка «${identityColumn}», выбранная для поиска сотрудника.`
+              : `Не заполнена колонка «${displayNameColumn}» с ФИО сотрудника.`
         });
         return;
       }
@@ -531,7 +656,7 @@ export class DataImportRegistry {
         errors.push({
           rowNumber,
           externalKey,
-          message: "Устойчивый ключ повторяется внутри файла."
+          message: `Значение «${externalKey}» в колонке «${identityColumn}» повторяется внутри файла.`
         });
         return;
       }
@@ -552,6 +677,39 @@ export class DataImportRegistry {
       }
     });
 
+    const groupInput = input.group;
+    const preparedGroup: PreparedImportGroup | null = (() => {
+      if (groupInput === undefined || groupInput === null) return null;
+      const groupName = requiredText(groupInput.name, "group.name", 300);
+      const groups = this.spaces.listGroups(space.id, 500);
+      const description = groupInput.description ?? "Создано массовым импортом";
+      if (groupInput.key !== undefined) {
+        const groupKey = stableKey(groupInput.key, "group.key");
+        return {
+          existing: groups.find((candidate) => candidate.key === groupKey) ?? null,
+          key: groupKey,
+          name: groupName,
+          description
+        };
+      }
+      const nameMatches = groups.filter(
+        (candidate) =>
+          candidate.name.toLocaleLowerCase("ru-RU") ===
+          groupName.toLocaleLowerCase("ru-RU")
+      );
+      if (nameMatches.length > 1) {
+        throw new DataImportConflictError(
+          `Найдено несколько групп с названием «${groupName}». Переименуйте одну из них.`
+        );
+      }
+      return {
+        existing: nameMatches[0] ?? null,
+        key: nameMatches[0]?.key ?? generateOpaqueStableKey("employee_group"),
+        name: groupName,
+        description
+      };
+    })();
+
     let createdCount = 0;
     let updatedCount = 0;
     let unchangedCount = 0;
@@ -560,179 +718,186 @@ export class DataImportRegistry {
 
     for (const row of preparedRows) {
       try {
-        let entityId = this.store.execute((connection) => {
-          const keyRow = connection
-            .prepare(`
-              SELECT entity_id
-              FROM entity_import_keys
-              WHERE space_id = ? AND entity_type_id = ? AND external_key = ?
-            `)
-            .get(space.id, entityType.id, row.externalKey) as
-            | ImportKeyRow
-            | undefined;
-          if (keyRow !== undefined) return keyRow.entity_id;
-
-          const matches = connection
-            .prepare(`
-              SELECT DISTINCT e.id AS entity_id
-              FROM entities e
-              JOIN space_entity_ownership seo ON seo.entity_id = e.id
-              JOIN entity_property_values v ON v.entity_id = e.id
-              JOIN property_definitions p ON p.id = v.property_definition_id
-              JOIN (
-                SELECT entity_id, property_definition_id, MAX(version) AS max_version
-                FROM entity_property_values
-                GROUP BY entity_id, property_definition_id
-              ) latest
-                ON latest.entity_id = v.entity_id
-               AND latest.property_definition_id = v.property_definition_id
-               AND latest.max_version = v.version
-              WHERE seo.space_id = ?
-                AND e.entity_type_id = ?
-                AND p.key = ?
-                AND v.value_text = ?
-              LIMIT 2
-            `)
-            .all(
-              space.id,
-              entityType.id,
-              identityPropertyKey,
-              row.externalKey
-            ) as unknown as ImportKeyRow[];
-          if (matches.length > 1) {
-            throw new DataImportConflictError(
-              "В системе найдено несколько участников с одинаковым устойчивым ключом."
-            );
-          }
-          return matches[0]?.entity_id ?? null;
-        });
-
-        let created = false;
-        let changed = false;
-        if (entityId === null) {
-          const entity = this.spaces.createEntity(
-            space.id,
-            {
-              entityTypeKey,
-              displayName: row.displayName,
-              status: "active"
-            },
-            context
-          );
-          entityId = entity.entityId;
-          created = true;
-          createdCount += 1;
-        } else {
-          changed = this.store.transaction((connection) => {
-            const current = connection
-              .prepare("SELECT display_name, status FROM entities WHERE id = ?")
-              .get(entityId) as
-              | { display_name: string; status: string }
+        const outcome = this.store.transaction(() => {
+          let entityId = this.store.execute((connection) => {
+            const keyRow = connection
+              .prepare(`
+                SELECT entity_id
+                FROM entity_import_keys
+                WHERE space_id = ? AND entity_type_id = ? AND external_key = ?
+              `)
+              .get(space.id, entityType.id, row.externalKey) as
+              | ImportKeyRow
               | undefined;
-            if (current === undefined) {
+            if (keyRow !== undefined) return keyRow.entity_id;
+            if (!hasExplicitIdentityProperty) return null;
+
+            const matches = connection
+              .prepare(`
+                SELECT DISTINCT e.id AS entity_id
+                FROM entities e
+                JOIN space_entity_ownership seo ON seo.entity_id = e.id
+                JOIN entity_property_values v ON v.entity_id = e.id
+                JOIN property_definitions p ON p.id = v.property_definition_id
+                JOIN (
+                  SELECT entity_id, property_definition_id, MAX(version) AS max_version
+                  FROM entity_property_values
+                  GROUP BY entity_id, property_definition_id
+                ) latest
+                  ON latest.entity_id = v.entity_id
+                 AND latest.property_definition_id = v.property_definition_id
+                 AND latest.max_version = v.version
+                WHERE seo.space_id = ?
+                  AND e.entity_type_id = ?
+                  AND p.key = ?
+                  AND v.value_text = ?
+                LIMIT 2
+              `)
+              .all(
+                space.id,
+                entityType.id,
+                identityPropertyKey,
+                row.externalKey
+              ) as unknown as ImportKeyRow[];
+            if (matches.length > 1) {
               throw new DataImportConflictError(
-                "Участник устойчивого ключа больше не существует."
+                "Найдено несколько сотрудников с одинаковым значением выбранной колонки."
               );
             }
-            if (
-              current.display_name === row.displayName &&
-              current.status === "active"
-            ) {
-              return false;
-            }
+            return matches[0]?.entity_id ?? null;
+          });
+
+          let created = false;
+          let changed = false;
+          let appendedPropertyValues = 0;
+          if (entityId === null) {
+            const entity = this.spaces.createEntity(
+              space.id,
+              {
+                entityTypeKey,
+                displayName: row.displayName,
+                status: "active"
+              },
+              context
+            );
+            entityId = entity.entityId;
+            created = true;
+          } else {
+            changed = this.store.execute((connection) => {
+              const current = connection
+                .prepare("SELECT display_name, status FROM entities WHERE id = ?")
+                .get(entityId) as
+                | { display_name: string; status: string }
+                | undefined;
+              if (current === undefined) {
+                throw new DataImportConflictError(
+                  "Сотрудник, найденный по выбранной колонке, больше не существует."
+                );
+              }
+              if (
+                current.display_name === row.displayName &&
+                current.status === "active"
+              ) {
+                return false;
+              }
+              connection
+                .prepare(`
+                  UPDATE entities
+                  SET display_name = ?, status = 'active',
+                      version = version + 1, updated_at = ?
+                  WHERE id = ?
+                `)
+                .run(row.displayName, context.now, entityId);
+              return true;
+            });
+          }
+
+          this.store.execute((connection) => {
             connection
               .prepare(`
-                UPDATE entities
-                SET display_name = ?, status = 'active',
-                    version = version + 1, updated_at = ?
-                WHERE id = ?
+                INSERT INTO entity_import_keys(
+                  space_id, entity_type_id, external_key, entity_id,
+                  created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(space_id, entity_type_id, external_key) DO UPDATE SET
+                  entity_id = excluded.entity_id,
+                  updated_at = excluded.updated_at
               `)
-              .run(row.displayName, context.now, entityId);
-            return true;
+              .run(
+                space.id,
+                entityType.id,
+                row.externalKey,
+                entityId,
+                context.now,
+                context.now
+              );
           });
-        }
 
-        this.store.transaction((connection) => {
-          connection
-            .prepare(`
-              INSERT INTO entity_import_keys(
-                space_id, entity_type_id, external_key, entity_id,
-                created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?)
-              ON CONFLICT(space_id, entity_type_id, external_key) DO UPDATE SET
-                entity_id = excluded.entity_id,
-                updated_at = excluded.updated_at
-            `)
-            .run(
-              space.id,
-              entityType.id,
-              row.externalKey,
-              entityId,
-              context.now,
-              context.now
+          for (const item of row.values) {
+            const encodedJson = stringifyJson(toJsonValue(item.value));
+            if (
+              currentPropertyValue(this.store, entityId, item.property.id) ===
+              encodedJson
+            ) {
+              continue;
+            }
+            this.knowledge.appendPropertyValue(
+              {
+                entityId,
+                propertyKey: item.property.key,
+                value: item.value,
+                sourceType: "bulk_import",
+                sourceId: runId,
+                confidence: 1
+              },
+              context
             );
+            appendedPropertyValues += 1;
+            changed = true;
+          }
+
+          return { entityId, created, changed, appendedPropertyValues };
         });
 
-        for (const item of row.values) {
-          const encodedJson = stringifyJson(toJsonValue(item.value));
-          if (currentPropertyValue(this.store, entityId, item.property.id) === encodedJson) {
-            continue;
-          }
-          this.knowledge.appendPropertyValue(
-            {
-              entityId,
-              propertyKey: item.property.key,
-              value: item.value,
-              sourceType: "bulk_import",
-              sourceId: runId,
-              confidence: 1
-            },
-            context
-          );
-          propertyValueCount += 1;
-          changed = true;
-        }
-
-        if (!created) {
-          if (changed) updatedCount += 1;
-          else unchangedCount += 1;
-        }
-        importedEntityIds.push(entityId);
+        propertyValueCount += outcome.appendedPropertyValues;
+        if (outcome.created) createdCount += 1;
+        else if (outcome.changed) updatedCount += 1;
+        else unchangedCount += 1;
+        importedEntityIds.push(outcome.entityId);
       } catch (error) {
         errors.push({
           rowNumber: row.rowNumber,
           externalKey: row.externalKey,
-          message: error instanceof Error ? error.message : String(error)
+          message: rowMutationErrorMessage(error)
         });
       }
     }
 
     let group: AudienceGroupRecord | null = null;
-    if (input.group !== undefined && input.group !== null && importedEntityIds.length > 0) {
-      const groupKey = stableKey(input.group.key, "group.key");
-      group = this.spaces
-        .listGroups(space.id, 500)
-        .find((candidate) => candidate.key === groupKey) ?? null;
-      if (group === null) {
-        group = this.spaces.createGroup(
+    if (preparedGroup !== null && importedEntityIds.length > 0) {
+      group = this.store.transaction(() => {
+        const selectedGroup =
+          preparedGroup.existing ??
+          this.spaces.createGroup(
+            space.id,
+            {
+              key: preparedGroup.key,
+              name: preparedGroup.name,
+              description: preparedGroup.description
+            },
+            context
+          );
+        const existing = this.spaces
+          .listGroupMembers(space.id, selectedGroup.id)
+          .map((member) => member.entityId);
+        this.spaces.replaceGroupMembers(
           space.id,
-          {
-            key: groupKey,
-            name: requiredText(input.group.name, "group.name", 300),
-            description: input.group.description ?? "Создано массовым импортом"
-          },
+          selectedGroup.id,
+          [...new Set([...existing, ...importedEntityIds])],
           context
         );
-      }
-      const existing = this.spaces
-        .listGroupMembers(space.id, group.id)
-        .map((member) => member.entityId);
-      this.spaces.replaceGroupMembers(
-        space.id,
-        group.id,
-        [...new Set([...existing, ...importedEntityIds])],
-        context
-      );
+        return selectedGroup;
+      });
     }
 
     const failedCount = errors.length;

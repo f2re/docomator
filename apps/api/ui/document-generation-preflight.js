@@ -11,23 +11,23 @@ function generationPreflightMemberMessage(member) {
 function renderGenerationPreflight(preflight) {
   const holder = document.querySelector("#documentGenerationStatus");
   if (!holder) return;
+  setGenerationStep(3);
   const missingMembers = preflight.members.filter((member) => !member.ready);
   const readyText =
     preflight.targetMode === "one_per_member"
       ? `Можно сформировать индивидуальных документов: ${preflight.readyMemberCount}.`
       : preflight.missingMemberCount === 0
         ? "Сводный документ готов к запуску."
-        : "Сводный документ нельзя сформировать, пока обязательные значения заполнены не у всех участников.";
+        : "Сводный документ нельзя сформировать, пока обязательные значения заполнены не у всех сотрудников.";
   holder.innerHTML = `
     <article class="generation-summary ${preflight.missingMemberCount === 0 ? "is-success" : "is-warning"}">
-      <span aria-hidden="true">${preflight.missingMemberCount === 0 ? "✅" : "⚠️"}</span>
       <div>
         <strong>${preflight.missingMemberCount === 0 ? "Данные готовы" : "Найдены незаполненные обязательные поля"}</strong>
         <p>${generationEscape(readyText)}</p>
       </div>
     </article>
     <div class="generation-progress-grid">
-      <div class="generation-progress-item"><span>Участников</span><strong>${preflight.memberCount}</strong></div>
+      <div class="generation-progress-item"><span>Сотрудников</span><strong>${preflight.memberCount}</strong></div>
       <div class="generation-progress-item"><span>Полностью готовы</span><strong>${preflight.readyMemberCount}</strong></div>
       <div class="generation-progress-item"><span>Требуют данных</span><strong>${preflight.missingMemberCount}</strong></div>
       <div class="generation-progress-item"><span>Пропущенных значений</span><strong>${preflight.missingValueCount}</strong></div>
@@ -47,14 +47,14 @@ function renderGenerationPreflight(preflight) {
               </article>`
           )
           .join("")}
-        ${missingMembers.length > 100 ? `<div class="generation-history-empty">Показаны первые 100 участников. Всего требуют данных: ${missingMembers.length}.</div>` : ""}
+        ${missingMembers.length > 100 ? `<div class="generation-history-empty">Показаны первые 100 сотрудников. Всего требуют данных: ${missingMembers.length}.</div>` : ""}
       </section>` : ""}
     <div class="generation-downloads">
       ${preflight.canStart && preflight.targetMode === "one_per_member" ? `<button class="primary-button" id="generationStartPrepared" type="button">Сформировать готовые документы (${preflight.readyMemberCount})</button>` : ""}
       ${preflight.canStart && preflight.missingMemberCount === 0 ? `<button class="primary-button" id="generationStartPrepared" type="button">Начать формирование</button>` : ""}
       <button class="secondary-button" id="generationPreflightRefresh" type="button">Проверить данные ещё раз</button>
     </div>
-    ${preflight.targetMode === "one_per_member" && preflight.missingMemberCount > 0 ? `<div class="generation-state is-warning"><span aria-hidden="true">ⓘ</span><div><strong>Частичный выпуск разрешён</strong><p>Готовые индивидуальные документы будут сформированы. Участники без обязательных данных останутся в задании со статусом ошибки и не потеряются.</p></div></div>` : ""}`;
+    ${preflight.targetMode === "one_per_member" && preflight.missingMemberCount > 0 ? `<div class="generation-state is-warning"><div><strong>Можно выпустить готовые карточки</strong><p>Документы для заполненных карточек будут созданы. Сотрудники с пропусками останутся в списке для исправления.</p></div></div>` : ""}`;
   holder
     .querySelector("#generationStartPrepared")
     ?.addEventListener("click", startPreparedGeneration);
@@ -87,7 +87,7 @@ async function refreshPreparedGenerationPreflight() {
   generationBusy = true;
   holder.insertAdjacentHTML(
     "afterbegin",
-    `<div class="generation-state is-pending" id="generationPreflightProgress" role="status"><span aria-hidden="true">⏳</span><div><strong>Проверяем актуальные значения</strong><p>Используем тот же зафиксированный состав, но перечитываем текущие свойства участников.</p></div></div>`
+    `<div class="generation-state is-pending" id="generationPreflightProgress" role="status"><div><strong>Проверяем актуальные значения</strong><p>Используем тот же список сотрудников и перечитываем значения их карточек.</p></div></div>`
   );
   try {
     const preflight = await inspectPreparedGeneration();
@@ -108,13 +108,14 @@ async function startPreparedGeneration() {
   const button = document.querySelector("#generationSubmit");
   const message = document.querySelector("#generationFormMessage");
   if (!holder) return;
+  setGenerationStep(3);
   generationBusy = true;
   if (button) button.disabled = true;
   if (message) {
     message.className = "is-loading";
     message.textContent = "Создаём сохраняемое задание формирования.";
   }
-  holder.innerHTML = `<div class="generation-state is-pending" role="status"><span aria-hidden="true">⏳</span><div><strong>Ставим формирование в очередь</strong><p>Состав и версия шаблона уже зафиксированы.</p></div></div>`;
+  holder.innerHTML = `<div class="generation-state is-pending" role="status"><div><strong>Начинаем формирование</strong><p>Шаблон и список сотрудников уже сохранены для этого выпуска.</p></div></div>`;
   try {
     const body = await generationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(generationPreparedRun.spaceId)}/document-jobs`,
@@ -157,12 +158,13 @@ async function prepareGenerationWithPreflight(event) {
   const button = document.querySelector("#generationSubmit");
   const message = document.querySelector("#generationFormMessage");
   if (!template || !spaceId || !status || !button || !message) return;
+  setGenerationStep(3);
 
   let source;
   try {
     source = generationSourcePayload();
   } catch (error) {
-    message.textContent = error?.message || "Проверьте состав участников.";
+    message.textContent = error?.message || "Проверьте список сотрудников.";
     message.className = "is-error";
     return;
   }
@@ -170,8 +172,8 @@ async function prepareGenerationWithPreflight(event) {
   generationBusy = true;
   button.disabled = true;
   message.className = "is-loading";
-  message.textContent = "Фиксируем состав и проверяем обязательные данные до запуска.";
-  status.innerHTML = `<div class="generation-state is-pending" role="status"><span aria-hidden="true">⏳</span><div><strong>Подготавливаем выпуск</strong><p>Сначала система покажет, для каких участников данных недостаточно.</p></div></div>`;
+  message.textContent = "Сохраняем выбранный список и проверяем обязательные данные.";
+  status.innerHTML = `<div class="generation-state is-pending" role="status"><div><strong>Проверяем карточки сотрудников</strong><p>Система покажет, каких сведений не хватает до запуска.</p></div></div>`;
   try {
     const snapshotBody = await generationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/audience-snapshots`,
@@ -198,7 +200,7 @@ async function prepareGenerationWithPreflight(event) {
       return;
     }
     message.className = "is-warning";
-    message.textContent = `Проверка завершена: готовы ${preflight.readyMemberCount} из ${preflight.memberCount} участников.`;
+    message.textContent = `Проверка завершена: готовы ${preflight.readyMemberCount} из ${preflight.memberCount} сотрудников.`;
   } catch (error) {
     generationPreparedRun = null;
     message.className = "is-error";
