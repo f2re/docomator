@@ -3,9 +3,11 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   ContentAddressedObjectStore,
   DocumentGenerationConflictError,
-  DocumentGenerationRegistry
+  DocumentGenerationRegistry,
+  documentResultRegistryFromGenerationRegistry
 } from "@docomator/storage";
 
+import { registerDocumentResultRoutes } from "./document-result-routes.js";
 import { correlationId, mutationContextFromRequest } from "./request-context.js";
 
 interface SpaceParams {
@@ -77,6 +79,12 @@ export function registerDocumentGenerationRoutes(
   objectStore: ContentAddressedObjectStore,
   registry: DocumentGenerationRegistry
 ): void {
+  registerDocumentResultRoutes(
+    app,
+    objectStore,
+    documentResultRegistryFromGenerationRegistry(registry)
+  );
+
   app.post<{ Params: SpaceParams; Body: CreateJobBody }>(
     "/api/v1/spaces/:spaceId/document-jobs",
     {
