@@ -79,6 +79,37 @@ function importOperation<T>(operation: () => T): T {
   }
 }
 
+function normalizeKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function validateIdentityMapping(body: ExecuteImportBody): void {
+  const identityPropertyKey = normalizeKey(body.identityPropertyKey);
+  const mappings = body.mappings.filter(
+    (mapping) => normalizeKey(mapping.propertyKey) === identityPropertyKey
+  );
+  if (mappings.length > 1) {
+    throw new SpaceValidationError(
+      "Свойство устойчивого ключа сопоставлено более одного раза."
+    );
+  }
+  const mapping = mappings[0];
+  if (mapping !== undefined && mapping.column !== body.identityColumn) {
+    throw new SpaceValidationError(
+      "Свойство устойчивого ключа должно быть сопоставлено с выбранной колонкой устойчивого ключа."
+    );
+  }
+  if (
+    mapping?.createIfMissing === true &&
+    mapping.valueType !== undefined &&
+    mapping.valueType !== "string"
+  ) {
+    throw new SpaceValidationError(
+      "Новое свойство устойчивого ключа должно иметь тип «Короткая строка»."
+    );
+  }
+}
+
 export function registerDataImportRoutes(
   app: FastifyInstance,
   spaces: SpaceRegistry,
@@ -110,9 +141,11 @@ export function registerDataImportRoutes(
         reply.header("cache-control", "no-store");
         return responseEnvelope(request, preview);
       } catch (error) {
-        if (error instanceof DataImportParseError || error instanceof Error) {
+        if (error instanceof Error) {
           throw new DocumentIntakeError(
-            "data_import_parse_failed",
+            error instanceof DataImportParseError
+              ? "data_import_parse_failed"
+              : "data_import_read_failed",
             422,
             error.message
           );
@@ -237,6 +270,7 @@ export function registerDataImportRoutes(
           "Данные предварительного просмотра изменились. Загрузите файл заново."
         );
       }
+      validateIdentityMapping(request.body);
       const result = importOperation(() =>
         registry.execute(
           request.params.spaceId,
