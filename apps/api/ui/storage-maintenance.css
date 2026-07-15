@@ -1,0 +1,114 @@
+.storage-maintenance-panel {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.storage-maintenance-controls {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) auto;
+  align-items: end;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface-2);
+}
+
+.storage-maintenance-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.storage-usage-content,
+.storage-cleanup-plan,
+.storage-cleanup-confirmation {
+  display: grid;
+  gap: 1rem;
+}
+
+.storage-usage-grid .generation-progress-item small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.storage-candidate-list {
+  display: grid;
+  gap: 0.45rem;
+  max-height: 20rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.7rem;
+  background: var(--surface-2);
+}
+
+.storage-candidate-row {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(5rem, auto) minmax(10rem, auto);
+  align-items: center;
+  gap: 0.8rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 0.4rem;
+  font-size: 0.82rem;
+}
+
+.storage-candidate-row:last-child {
+  border-bottom: 0;
+}
+
+.storage-candidate-row code {
+  overflow-wrap: anywhere;
+}
+
+.storage-candidate-row span {
+  color: var(--muted);
+}
+
+.storage-cleanup-warning {
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border));
+  border-radius: var(--radius);
+  padding: 0.9rem;
+  background: var(--danger-soft);
+}
+
+.storage-cleanup-warning strong,
+.storage-cleanup-warning p {
+  margin: 0;
+}
+
+.storage-cleanup-warning p {
+  margin-top: 0.3rem;
+  color: var(--muted);
+}
+
+.danger-button {
+  justify-self: start;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+@media (max-width: 820px) {
+  .storage-maintenance-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .storage-maintenance-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .storage-maintenance-actions > *,
+  .danger-button {
+    width: 100%;
+    text-align: center;
+  }
+
+  .storage-candidate-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}
