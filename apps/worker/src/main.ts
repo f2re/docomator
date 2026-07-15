@@ -9,6 +9,7 @@ import {
   DocumentPreflightRegistry,
   DocumentScheduleRegistry,
   EmailRecipientRegistry,
+  RuntimeStatusRegistry,
   ScheduleNetworkDeliveryRegistry,
   SpaceRegistry,
   SqliteStore,
@@ -37,6 +38,7 @@ const networkDeliveryRoot =
     ? null
     : path.resolve(networkDeliveryRootValue);
 const queue = new WorkerQueue(store);
+const runtimeStatus = new RuntimeStatusRegistry(store);
 const previewRegistry = new TemplatePreviewActivationRegistry(
   store,
   objectStore,
@@ -101,7 +103,36 @@ function log(
   );
 }
 
+function publishRuntimeState(
+  state: "starting" | "running" | "stopping" | "failed",
+  extra: Record<string, unknown> = {}
+): void {
+  try {
+    runtimeStatus.heartbeat({
+      serviceType: "worker",
+      instanceId: config.workerId,
+      version: config.version,
+      state,
+      details: {
+        pid: process.pid,
+        queueDepth: queue.getDepths(),
+        pollIntervalMs: config.pollIntervalMs,
+        heartbeatIntervalMs: config.heartbeatIntervalMs,
+        smtpEnabled: config.smtp.enabled,
+        networkDeliveryEnabled: networkDeliveryRoot !== null,
+        previewEnabled: config.previewEnabled,
+        ...extra
+      }
+    });
+  } catch (error) {
+    log("error", "worker runtime heartbeat failed", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
 function stop(signal: NodeJS.Signals): void {
+  publishRuntimeState("stopping", { signal });
   log("info", "shutdown requested", { signal });
   controller.abort();
 }
@@ -110,6 +141,7 @@ process.once("SIGTERM", () => stop("SIGTERM"));
 process.once("SIGINT", () => stop("SIGINT"));
 
 try {
+  publishRuntimeState("starting");
   log("info", "worker started", {
     pollIntervalMs: config.pollIntervalMs,
     leaseDurationMs: config.leaseDurationMs,
@@ -175,12 +207,18 @@ try {
         });
       }
     },
-    onHeartbeat: () =>
-      log("info", "worker heartbeat", { queueDepth: queue.getDepths() })
+    onHeartbeat: () => {
+      publishRuntimeState("running");
+      log("info", "worker heartbeat", { queueDepth: queue.getDepths() });
+    }
   });
 
+  publishRuntimeState("stopping");
   log("info", "worker stopped");
 } catch (error) {
+  publishRuntimeState("failed", {
+    error: error instanceof Error ? error.message : String(error)
+  });
   log("error", "worker failed", {
     error: error instanceof Error ? error.message : String(error)
   });
