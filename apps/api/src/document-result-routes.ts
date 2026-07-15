@@ -2,8 +2,13 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
   ContentAddressedObjectStore,
+  DocumentGenerationConflictError,
+  DocumentGenerationNotFoundError,
+  DocumentGenerationValidationError,
   DocumentResultConflictError,
+  DocumentResultNotFoundError,
   DocumentResultRegistry,
+  DocumentResultValidationError,
   type DocumentResultOrigin
 } from "@docomator/storage";
 
@@ -36,6 +41,23 @@ function responseEnvelope<T>(request: FastifyRequest, data: T) {
   return { data, correlationId: correlationId(request) };
 }
 
+function resultOperation<T>(operation: () => T): T {
+  try {
+    return operation();
+  } catch (error) {
+    if (error instanceof DocumentResultValidationError) {
+      throw new DocumentGenerationValidationError(error.message);
+    }
+    if (error instanceof DocumentResultNotFoundError) {
+      throw new DocumentGenerationNotFoundError(error.message);
+    }
+    if (error instanceof DocumentResultConflictError) {
+      throw new DocumentGenerationConflictError(error.message);
+    }
+    throw error;
+  }
+}
+
 function attachment(fileName: string): string {
   return `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`;
 }
@@ -64,7 +86,7 @@ export function registerDocumentResultRoutes(
 ): void {
   app.get("/api/v1/document-results/summary", async (request, reply) => {
     reply.header("cache-control", "no-store");
-    return responseEnvelope(request, registry.summary());
+    return responseEnvelope(request, resultOperation(() => registry.summary()));
   });
 
   app.get<{ Querystring: ResultQuery }>(
@@ -87,8 +109,7 @@ export function registerDocumentResultRoutes(
     },
     async (request, reply) => {
       reply.header("cache-control", "no-store");
-      return responseEnvelope(
-        request,
+      const items = resultOperation(() =>
         registry.list({
           ...(request.query.state === undefined
             ? {}
@@ -101,6 +122,7 @@ export function registerDocumentResultRoutes(
             : { limit: request.query.limit })
         })
       );
+      return responseEnvelope(request, items);
     }
   );
 
@@ -109,7 +131,10 @@ export function registerDocumentResultRoutes(
     { schema: { params: resultParamsSchema } },
     async (request, reply) => {
       reply.header("cache-control", "no-store");
-      return responseEnvelope(request, registry.get(request.params.resultId));
+      return responseEnvelope(
+        request,
+        resultOperation(() => registry.get(request.params.resultId))
+      );
     }
   );
 
@@ -120,9 +145,11 @@ export function registerDocumentResultRoutes(
       reply.header("cache-control", "no-store");
       return responseEnvelope(
         request,
-        registry.markViewed(
-          request.params.resultId,
-          mutationContextFromRequest(request)
+        resultOperation(() =>
+          registry.markViewed(
+            request.params.resultId,
+            mutationContextFromRequest(request)
+          )
         )
       );
     }
@@ -131,7 +158,9 @@ export function registerDocumentResultRoutes(
   app.post(
     "/api/v1/document-results/view-all",
     async (request, reply) => {
-      const changed = registry.markAllViewed(mutationContextFromRequest(request));
+      const changed = resultOperation(() =>
+        registry.markAllViewed(mutationContextFromRequest(request))
+      );
       reply.header("cache-control", "no-store");
       return responseEnvelope(request, { changed });
     }
@@ -141,17 +170,19 @@ export function registerDocumentResultRoutes(
     "/api/v1/document-results/:resultId/download",
     { schema: { params: resultParamsSchema } },
     async (request, reply) => {
-      const result = registry.get(request.params.resultId);
+      const result = resultOperation(() => registry.get(request.params.resultId));
       const sha256 = result.archiveSha256 ?? result.singleOutputSha256;
       if (sha256 === null) {
-        throw new DocumentResultConflictError(
+        throw new DocumentGenerationConflictError(
           "Document result no longer contains a downloadable file"
         );
       }
       const content = await objectStore.getBuffer(sha256);
-      registry.markCollected(
-        request.params.resultId,
-        mutationContextFromRequest(request)
+      resultOperation(() =>
+        registry.markCollected(
+          request.params.resultId,
+          mutationContextFromRequest(request)
+        )
       );
       const isArchive = result.archiveSha256 !== null;
       const fileName = isArchive
@@ -171,9 +202,11 @@ export function registerDocumentResultRoutes(
     "/api/v1/document-results/:resultId",
     { schema: { params: resultParamsSchema } },
     async (request, reply) => {
-      const result = registry.delete(
-        request.params.resultId,
-        mutationContextFromRequest(request)
+      const result = resultOperation(() =>
+        registry.delete(
+          request.params.resultId,
+          mutationContextFromRequest(request)
+        )
       );
       reply.header("cache-control", "no-store");
       return responseEnvelope(request, {
