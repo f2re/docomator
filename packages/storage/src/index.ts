@@ -17,6 +17,7 @@ export * from "./multi-field-test-versions.js";
 export * from "./network-folder-files.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
+export * from "./schedule-network-access.js";
 export * from "./schedule-network-delivery.js";
 export * from "./schedule-time.js";
 export * from "./spaces.js";
