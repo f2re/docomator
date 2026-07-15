@@ -1,0 +1,210 @@
+.operations-readiness-panel {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.operations-heading {
+  align-items: flex-start;
+}
+
+.operations-readiness-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface-2);
+}
+
+.operations-readiness-summary.is-ready {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--surface));
+}
+
+.operations-readiness-summary.is-attention {
+  border-color: color-mix(in srgb, #c98800 40%, var(--border));
+  background: color-mix(in srgb, #c98800 8%, var(--surface));
+}
+
+.operations-readiness-summary.is-blocked {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: var(--danger-soft);
+}
+
+.operations-summary-icon {
+  display: grid;
+  place-items: center;
+  width: 3.3rem;
+  height: 3.3rem;
+  border-radius: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 1.55rem;
+}
+
+.operations-readiness-summary strong,
+.operations-readiness-summary p,
+.operations-readiness-summary small {
+  margin: 0;
+}
+
+.operations-readiness-summary p,
+.operations-readiness-summary small {
+  color: var(--muted);
+}
+
+.operations-readiness-summary p {
+  margin-top: 0.25rem;
+  line-height: 1.5;
+}
+
+.operations-readiness-summary small {
+  display: block;
+  margin-top: 0.55rem;
+}
+
+.operations-summary-counts {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-top: 0.65rem;
+}
+
+.operations-summary-counts span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  background: var(--surface);
+  font-size: 0.78rem;
+}
+
+.operations-check-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.operations-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem;
+  background: var(--surface);
+}
+
+.operations-check.is-ok {
+  border-left: 4px solid var(--success);
+}
+
+.operations-check.is-warning {
+  border-left: 4px solid #c98800;
+}
+
+.operations-check.is-error {
+  border-left: 4px solid var(--danger);
+}
+
+.operations-check.is-disabled {
+  opacity: 0.78;
+  border-left: 4px solid var(--muted);
+}
+
+.operations-check-icon {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0.75rem;
+  background: var(--surface-2);
+  font-size: 1.05rem;
+}
+
+.operations-check-copy {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+}
+
+.operations-check-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.operations-check-title h3,
+.operations-check-copy strong,
+.operations-check-copy p {
+  margin: 0;
+}
+
+.operations-check-title h3 {
+  font-size: 0.95rem;
+}
+
+.operations-check-title span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.operations-check-copy > strong {
+  font-size: 0.86rem;
+}
+
+.operations-check-copy > p {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.operations-remediation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+  border-radius: 0.7rem;
+  padding: 0.55rem;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.operations-remediation p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .operations-check-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .operations-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .operations-heading > button {
+    width: 100%;
+  }
+
+  .operations-readiness-summary,
+  .operations-check {
+    grid-template-columns: 1fr;
+  }
+
+  .operations-check-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
