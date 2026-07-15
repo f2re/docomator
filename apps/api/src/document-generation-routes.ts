@@ -4,10 +4,12 @@ import {
   ContentAddressedObjectStore,
   DocumentGenerationConflictError,
   DocumentGenerationRegistry,
-  documentResultRegistryFromGenerationRegistry
+  documentResultRegistryFromGenerationRegistry,
+  objectCleanupRegistryFromGenerationRegistry
 } from "@docomator/storage";
 
 import { registerDocumentResultRoutes } from "./document-result-routes.js";
+import { registerObjectCleanupRoutes } from "./object-cleanup-routes.js";
 import { correlationId, mutationContextFromRequest } from "./request-context.js";
 
 interface SpaceParams {
@@ -83,6 +85,10 @@ export function registerDocumentGenerationRoutes(
     app,
     objectStore,
     documentResultRegistryFromGenerationRegistry(registry)
+  );
+  registerObjectCleanupRoutes(
+    app,
+    objectCleanupRegistryFromGenerationRegistry(registry, objectStore)
   );
 
   app.post<{ Params: SpaceParams; Body: CreateJobBody }>(
