@@ -61,6 +61,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-email-delivery.js",
       "email-recipients.js",
       "document-schedules.js",
+      "document-schedule-network.js",
       "shared-document-results.js",
       "shared-document-view-labels.js",
       "shared-corporate-mode.js"
