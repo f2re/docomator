@@ -5,6 +5,7 @@ export * from "./document-email-delivery.js";
 export * from "./document-generation.js";
 export * from "./document-preflight.js";
 export * from "./document-quarantine.js";
+export * from "./document-result-access.js";
 export * from "./document-results.js";
 export * from "./document-schedules.js";
 export * from "./document-values.js";
