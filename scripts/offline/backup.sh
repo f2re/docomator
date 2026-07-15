@@ -44,6 +44,7 @@ while (($# > 0)); do
 done
 
 require_root
+require_command stat
 
 INSTALL_ROOT="$(absolute_path "$INSTALL_ROOT")"
 DATA_DIR="$(absolute_path "$DATA_DIR")"
@@ -67,6 +68,8 @@ fi
 chmod 0700 "$LOCK_DIR"
 printf '{"pid":%s,"startedAt":"%s"}\n' "$$" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > "$OWNER_FILE"
 chmod 0600 "$OWNER_FILE"
+DATA_OWNER="$(stat -c '%u:%g' "$DATA_DIR")"
+chown "$DATA_OWNER" "$LOCK_DIR" "$OWNER_FILE"
 trap 'rm -rf "$LOCK_DIR"' EXIT
 
 ARGS=(
