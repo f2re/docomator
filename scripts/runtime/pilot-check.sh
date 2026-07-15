@@ -5,10 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 NODE="$CURRENT_ROOT/runtime/node/bin/node"
 PILOT_SCRIPT="$SCRIPT_DIR/pilot-readiness.mjs"
+CONFIG_FILE="/etc/docomator/docomator.env"
+RUN_BACKUP=0
 
 usage() {
   cat <<'USAGE'
-Использование: sudo pilot-check.sh [параметры]
+Использование: sudo bash pilot-check.sh [параметры]
 
 Проводит фактическую пилотную проверку установленного Docomator и создаёт
 машинно-читаемый JSON и акт приёмки Markdown.
@@ -30,11 +32,24 @@ usage() {
 USAGE
 }
 
-for argument in "$@"; do
+arguments=("$@")
+for ((index = 0; index < ${#arguments[@]}; index += 1)); do
+  argument="${arguments[$index]}"
   case "$argument" in
     -h|--help)
       usage
       exit 0
+      ;;
+    --config)
+      index=$((index + 1))
+      [[ $index -lt ${#arguments[@]} ]] || {
+        printf 'После --config необходимо указать файл.\n' >&2
+        exit 2
+      }
+      CONFIG_FILE="${arguments[$index]}"
+      ;;
+    --run-backup)
+      RUN_BACKUP=1
       ;;
   esac
 done
@@ -42,6 +57,15 @@ done
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
   printf 'Пилотную проверку необходимо запустить через sudo: она читает systemd, проверяет резервную копию и записывает акт в каталог данных.\n' >&2
   exit 2
+fi
+
+if [[ $RUN_BACKUP -eq 1 && -f "$CONFIG_FILE" ]]; then
+  BACKUP_ENABLED="$(grep -E '^[[:space:]]*DOCOMATOR_BACKUP_ENABLED=' "$CONFIG_FILE" | tail -n 1 | cut -d= -f2- || true)"
+  BACKUP_ENABLED="${BACKUP_ENABLED,,}"
+  if [[ "$BACKUP_ENABLED" == "false" || "$BACKUP_ENABLED" == "0" || "$BACKUP_ENABLED" == "no" || "$BACKUP_ENABLED" == "off" ]]; then
+    printf 'Нельзя выполнить --run-backup: DOCOMATOR_BACKUP_ENABLED=false. Включите резервирование и активируйте таймер.\n' >&2
+    exit 2
+  fi
 fi
 
 if [[ ! -x "$NODE" ]]; then
