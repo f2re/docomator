@@ -3,11 +3,13 @@ import path from "node:path";
 import { loadWorkerConfig } from "@docomator/config";
 import {
   ContentAddressedObjectStore,
+  DocumentDeliveryRegistry,
   DocumentEmailDeliveryRegistry,
   DocumentGenerationRegistry,
   DocumentPreflightRegistry,
   DocumentScheduleRegistry,
   EmailRecipientRegistry,
+  ScheduleNetworkDeliveryRegistry,
   SpaceRegistry,
   SqliteStore,
   TemplatePreviewActivationRegistry,
@@ -29,6 +31,11 @@ const store = new SqliteStore({
 const objectStore = new ContentAddressedObjectStore(
   path.join(config.dataDir, "objects")
 );
+const networkDeliveryRootValue = process.env.DOCOMATOR_NETWORK_DELIVERY_ROOT?.trim();
+const networkDeliveryRoot =
+  networkDeliveryRootValue === undefined || networkDeliveryRootValue.length === 0
+    ? null
+    : path.resolve(networkDeliveryRootValue);
 const queue = new WorkerQueue(store);
 const previewRegistry = new TemplatePreviewActivationRegistry(
   store,
@@ -41,7 +48,9 @@ const generationRegistry = new DocumentGenerationRegistry(
   { queue }
 );
 const emailDeliveryRegistry = new DocumentEmailDeliveryRegistry(store, { queue });
+const networkDeliveryRegistry = new DocumentDeliveryRegistry(store);
 const scheduleRegistry = new DocumentScheduleRegistry(store);
+const scheduleNetworkRegistry = new ScheduleNetworkDeliveryRegistry(store);
 const spaceRegistry = new SpaceRegistry(store);
 const preflightRegistry = new DocumentPreflightRegistry(store);
 const recipientRegistry = new EmailRecipientRegistry(store);
@@ -107,6 +116,7 @@ try {
     llmEnabled: config.llmEnabled,
     previewEnabled: config.previewEnabled,
     smtpEnabled: config.smtp.enabled,
+    networkDeliveryEnabled: networkDeliveryRoot !== null,
     schedulesEnabled: true,
     libreOfficeBinary: path.basename(config.libreOfficeBinary)
   });
@@ -124,6 +134,10 @@ try {
           generations: generationRegistry,
           emails: emailDeliveryRegistry,
           recipients: recipientRegistry,
+          networkSettings: scheduleNetworkRegistry,
+          deliveries: networkDeliveryRegistry,
+          objectStore,
+          networkDeliveryRoot,
           config,
           workerId: config.workerId,
           maxRunsPerTick: 20
