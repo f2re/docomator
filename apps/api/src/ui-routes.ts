@@ -35,7 +35,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-data-correction.css",
       "document-email-delivery.css",
       "email-recipients.css",
-      "document-schedules.css"
+      "document-schedules.css",
+      "shared-document-results.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "private, max-age=3600"
@@ -59,7 +60,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-delivery.js",
       "document-email-delivery.js",
       "email-recipients.js",
-      "document-schedules.js"
+      "document-schedules.js",
+      "shared-document-results.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
