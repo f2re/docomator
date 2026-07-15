@@ -1,16 +1,21 @@
 import type { WorkerConfig } from "@docomator/config";
 import {
+  ContentAddressedObjectStore,
+  DocumentDeliveryRegistry,
   DocumentEmailDeliveryRegistry,
   DocumentGenerationRegistry,
   DocumentPreflightRegistry,
   DocumentScheduleRegistry,
   EmailRecipientRegistry,
+  ScheduleNetworkDeliveryRegistry,
   SpaceRegistry,
   type DocumentGenerationJobRecord,
   type DocumentScheduleRecord,
   type DocumentScheduleRunRecord,
   type JsonValue
 } from "@docomator/storage";
+
+import { processScheduleNetworkDelivery } from "./schedule-network-delivery.js";
 
 export interface ScheduleProcessorOptions {
   schedules: DocumentScheduleRegistry;
@@ -19,6 +24,10 @@ export interface ScheduleProcessorOptions {
   generations: DocumentGenerationRegistry;
   emails: DocumentEmailDeliveryRegistry;
   recipients: EmailRecipientRegistry;
+  networkSettings: ScheduleNetworkDeliveryRegistry;
+  deliveries: DocumentDeliveryRegistry;
+  objectStore: ContentAddressedObjectStore;
+  networkDeliveryRoot: string | null;
   config: WorkerConfig;
   workerId: string;
   now?: () => Date;
@@ -58,7 +67,8 @@ function deliverySource(job: DocumentGenerationJobRecord): {
   return {
     sha256: unit.outputSha256,
     fileName:
-      unit.outputName ?? `${safeFileName(job.templateTitle, "документ")}.${job.format}`
+      unit.outputName ??
+      `${safeFileName(job.templateTitle, "документ")}.${job.format}`
   };
 }
 
@@ -179,12 +189,12 @@ async function processPending(
   );
 }
 
-function processGenerated(
+async function processGenerated(
   options: ScheduleProcessorOptions,
   schedule: DocumentScheduleRecord,
   run: DocumentScheduleRunRecord,
   now: Date
-): void {
+): Promise<void> {
   const mutation = context(options.workerId, run.id, now);
   if (run.documentJobId === null) {
     throw new Error("Запуск расписания не содержит идентификатор задания документов.");
@@ -202,6 +212,20 @@ function processGenerated(
     );
     return;
   }
+
+  const networkHandled = await processScheduleNetworkDelivery({
+    settings: options.networkSettings,
+    deliveries: options.deliveries,
+    schedules: options.schedules,
+    objectStore: options.objectStore,
+    networkDeliveryRoot: options.networkDeliveryRoot,
+    schedule,
+    run,
+    job,
+    context: mutation
+  });
+  if (networkHandled) return;
+
   if (schedule.deliveryChannel === "none") {
     options.schedules.complete(
       run.id,
@@ -318,7 +342,7 @@ async function processRun(
     return;
   }
   if (work.run.state === "generation_requested") {
-    processGenerated(options, work.schedule, work.run, now);
+    await processGenerated(options, work.schedule, work.run, now);
     return;
   }
   if (work.run.state === "delivery_requested") {
