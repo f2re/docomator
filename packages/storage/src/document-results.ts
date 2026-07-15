@@ -1,6 +1,9 @@
 import { AuditRepository } from "./audit.js";
 import { type SqliteExecutor, SqliteStore } from "./database.js";
-import type { DocumentGenerationFormat, DocumentGenerationMode } from "./document-generation.js";
+import type {
+  DocumentGenerationFormat,
+  DocumentGenerationMode
+} from "./document-generation.js";
 import type { MutationContext } from "./knowledge.js";
 import { DomainEventOutbox } from "./outbox.js";
 
@@ -79,11 +82,9 @@ interface ResultRow {
 export class DocumentResultValidationError extends Error {
   override readonly name = "DocumentResultValidationError";
 }
-
 export class DocumentResultNotFoundError extends Error {
   override readonly name = "DocumentResultNotFoundError";
 }
-
 export class DocumentResultConflictError extends Error {
   override readonly name = "DocumentResultConflictError";
 }
@@ -108,12 +109,7 @@ function timestamp(value: Date | string | undefined): string {
   return date.toISOString();
 }
 
-function contextValue(context: MutationContext): {
-  correlationId: string;
-  actorType: string;
-  actorId: string | null;
-  now: string;
-} {
+function contextValue(context: MutationContext) {
   return {
     correlationId: requiredText(context.correlationId, "correlationId"),
     actorType: requiredText(context.actorType, "actorType", 80),
@@ -125,19 +121,14 @@ function contextValue(context: MutationContext): {
   };
 }
 
-function resultState(value: string): DocumentResultState {
-  if (
-    value === "new" ||
-    value === "viewed" ||
-    value === "collected" ||
-    value === "deleted"
-  ) {
-    return value;
+function stateValue(value: string): DocumentResultState {
+  if (["new", "viewed", "collected", "deleted"].includes(value)) {
+    return value as DocumentResultState;
   }
   throw new Error(`Stored document result state is invalid: ${value}`);
 }
 
-function resultOrigin(value: string): DocumentResultOrigin {
+function originValue(value: string): DocumentResultOrigin {
   if (value === "manual" || value === "schedule") return value;
   throw new Error(`Stored document result origin is invalid: ${value}`);
 }
@@ -150,35 +141,6 @@ function formatValue(value: string): DocumentGenerationFormat {
 function modeValue(value: string): DocumentGenerationMode {
   if (value === "one_per_member" || value === "aggregate") return value;
   throw new Error(`Stored document result mode is invalid: ${value}`);
-}
-
-function mapResult(row: ResultRow): DocumentResultRecord {
-  return {
-    id: row.id,
-    documentJobId: row.document_job_id,
-    state: resultState(row.result_state),
-    origin: resultOrigin(row.origin),
-    scheduleRunId: row.schedule_run_id,
-    scheduleId: row.schedule_id,
-    scheduleName: row.schedule_name,
-    schedulePeriodKey: row.period_key,
-    spaceId: row.space_id,
-    spaceName: row.space_name,
-    templateTitle: row.template_title,
-    format: formatValue(row.format),
-    targetMode: modeValue(row.target_mode),
-    memberCount: Number(row.member_count),
-    generatedCount: Number(row.generated_count),
-    failedCount: Number(row.failed_count),
-    archiveSha256: row.archive_sha256,
-    singleOutputName: row.single_output_name,
-    singleOutputSha256: row.single_output_sha256,
-    availableAt: row.available_at,
-    viewedAt: row.viewed_at,
-    collectedAt: row.collected_at,
-    deletedAt: row.deleted_at,
-    updatedAt: row.updated_at
-  };
 }
 
 function selectResults(): string {
@@ -204,15 +166,19 @@ function selectResults(): string {
       (
         SELECT u.output_name
         FROM document_generation_units u
-        WHERE u.job_id = j.id AND u.state = 'completed' AND u.output_sha256 IS NOT NULL
-        ORDER BY u.position ASC, u.id ASC
+        WHERE u.job_id = j.id
+          AND u.state = 'completed'
+          AND u.output_sha256 IS NOT NULL
+        ORDER BY u.position, u.id
         LIMIT 1
       ) AS single_output_name,
       (
         SELECT u.output_sha256
         FROM document_generation_units u
-        WHERE u.job_id = j.id AND u.state = 'completed' AND u.output_sha256 IS NOT NULL
-        ORDER BY u.position ASC, u.id ASC
+        WHERE u.job_id = j.id
+          AND u.state = 'completed'
+          AND u.output_sha256 IS NOT NULL
+        ORDER BY u.position, u.id
         LIMIT 1
       ) AS single_output_sha256,
       ri.available_at,
@@ -228,6 +194,35 @@ function selectResults(): string {
     LEFT JOIN document_schedule_runs sr ON sr.id = ri.schedule_run_id
     LEFT JOIN document_schedules ds ON ds.id = sr.schedule_id
   `;
+}
+
+function mapResult(row: ResultRow): DocumentResultRecord {
+  return {
+    id: row.id,
+    documentJobId: row.document_job_id,
+    state: stateValue(row.result_state),
+    origin: originValue(row.origin),
+    scheduleRunId: row.schedule_run_id,
+    scheduleId: row.schedule_id,
+    scheduleName: row.schedule_name,
+    schedulePeriodKey: row.period_key,
+    spaceId: row.space_id,
+    spaceName: row.space_name,
+    templateTitle: row.template_title,
+    format: formatValue(row.format),
+    targetMode: modeValue(row.target_mode),
+    memberCount: Number(row.member_count),
+    generatedCount: Number(row.generated_count),
+    failedCount: Number(row.failed_count),
+    archiveSha256: row.archive_sha256,
+    singleOutputName: row.single_output_name,
+    singleOutputSha256: row.single_output_sha256,
+    availableAt: row.available_at,
+    viewedAt: row.viewed_at,
+    collectedAt: row.collected_at,
+    deletedAt: row.deleted_at,
+    updatedAt: row.updated_at
+  };
 }
 
 function resultRow(
@@ -250,15 +245,12 @@ function normalizedLimit(value: number | undefined): number {
   return limit;
 }
 
-function stateFilter(value: ListDocumentResultsOptions["state"]): string {
-  if (value === undefined || value === "available") return "available";
-  if (
-    value === "new" ||
-    value === "viewed" ||
-    value === "collected" ||
-    value === "all"
-  ) {
-    return value;
+function normalizedFilter(
+  value: ListDocumentResultsOptions["state"]
+): NonNullable<ListDocumentResultsOptions["state"]> {
+  const filter = value ?? "available";
+  if (["new", "viewed", "collected", "available", "all"].includes(filter)) {
+    return filter;
   }
   throw new DocumentResultValidationError("Unsupported document result state filter");
 }
@@ -285,7 +277,7 @@ export class DocumentResultRegistry {
             SUM(CASE WHEN state = 'collected' THEN 1 ELSE 0 END) AS collected_count,
             SUM(CASE WHEN state <> 'deleted' THEN 1 ELSE 0 END) AS available_count,
             SUM(CASE WHEN state = 'new' AND origin = 'schedule' THEN 1 ELSE 0 END) AS automatic_new_count,
-            MAX(CASE WHEN state <> 'deleted' THEN available_at ELSE NULL END) AS latest_available_at
+            MAX(CASE WHEN state <> 'deleted' THEN available_at END) AS latest_available_at
           FROM document_result_items
         `)
         .get() as {
@@ -308,18 +300,17 @@ export class DocumentResultRegistry {
   }
 
   list(options: ListDocumentResultsOptions = {}): DocumentResultRecord[] {
-    const state = stateFilter(options.state);
-    const origin =
-      options.origin === undefined ? null : resultOrigin(options.origin);
+    const filter = normalizedFilter(options.state);
+    const origin = options.origin === undefined ? null : originValue(options.origin);
     const limit = normalizedLimit(options.limit);
     const stateClause =
-      state === "all"
+      filter === "all"
         ? "ri.state <> 'deleted'"
-        : state === "available"
+        : filter === "available"
           ? "ri.state IN ('new', 'viewed')"
           : "ri.state = ?";
-    const parameters: unknown[] = [];
-    if (state !== "all" && state !== "available") parameters.push(state);
+    const parameters: Array<string | number | null> = [];
+    if (filter !== "all" && filter !== "available") parameters.push(filter);
     parameters.push(origin, origin, limit);
     return this.store.execute((connection) => {
       const rows = connection
@@ -342,26 +333,19 @@ export class DocumentResultRegistry {
     return this.store.execute((connection) => {
       const row = resultRow(connection, resultId);
       if (row === undefined) {
-        throw new DocumentResultNotFoundError(
-          `Document result was not found: ${resultId}`
-        );
+        throw new DocumentResultNotFoundError(`Document result was not found: ${resultId}`);
       }
       return mapResult(row);
     });
   }
 
-  markViewed(
-    resultIdValue: string,
-    contextInput: MutationContext
-  ): DocumentResultRecord {
+  markViewed(resultIdValue: string, contextInput: MutationContext): DocumentResultRecord {
     const resultId = requiredText(resultIdValue, "resultId");
     const context = contextValue(contextInput);
     return this.store.transaction((connection) => {
       const current = resultRow(connection, resultId);
       if (current === undefined) {
-        throw new DocumentResultNotFoundError(
-          `Document result was not found: ${resultId}`
-        );
+        throw new DocumentResultNotFoundError(`Document result was not found: ${resultId}`);
       }
       if (current.result_state === "new") {
         connection
@@ -417,9 +401,7 @@ export class DocumentResultRegistry {
     return this.store.transaction((connection) => {
       const current = resultRow(connection, resultId);
       if (current === undefined) {
-        throw new DocumentResultNotFoundError(
-          `Document result was not found: ${resultId}`
-        );
+        throw new DocumentResultNotFoundError(`Document result was not found: ${resultId}`);
       }
       if (current.archive_sha256 === null && current.single_output_sha256 === null) {
         throw new DocumentResultConflictError(
@@ -454,18 +436,13 @@ export class DocumentResultRegistry {
     });
   }
 
-  delete(
-    resultIdValue: string,
-    contextInput: MutationContext
-  ): DocumentResultRecord {
+  delete(resultIdValue: string, contextInput: MutationContext): DocumentResultRecord {
     const resultId = requiredText(resultIdValue, "resultId");
     const context = contextValue(contextInput);
     return this.store.transaction((connection) => {
       const current = resultRow(connection, resultId);
       if (current === undefined) {
-        throw new DocumentResultNotFoundError(
-          `Document result was not found: ${resultId}`
-        );
+        throw new DocumentResultNotFoundError(`Document result was not found: ${resultId}`);
       }
       connection
         .prepare(`
