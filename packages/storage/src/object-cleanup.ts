@@ -5,6 +5,8 @@ import { type SqliteExecutor, SqliteStore } from "./database.js";
 import type { MutationContext } from "./knowledge.js";
 import { ContentAddressedObjectStore } from "./object-store.js";
 
+const CLEANUP_BATCH_LIMIT = 200;
+
 export interface ObjectCleanupCandidate {
   fileId: string;
   sha256: string;
@@ -17,6 +19,8 @@ export interface ObjectCleanupPlan {
   cutoff: string;
   candidateCount: number;
   candidateBytes: number;
+  remainingCandidateCount: number;
+  remainingCandidateBytes: number;
   confirmationToken: string;
   candidates: ObjectCleanupCandidate[];
 }
@@ -38,6 +42,8 @@ export interface ObjectCleanupResult {
   deletedBytes: number;
   missingCount: number;
   failedCount: number;
+  remainingCandidateCount: number;
+  remainingCandidateBytes: number;
   failures: Array<{ sha256: string; message: string }>;
 }
 
@@ -192,7 +198,9 @@ function candidatesForCutoff(
     .all(cutoff) as unknown as FileRow[];
   return rows
     .filter(
-      (row) => !live.fileIds.has(row.id) && !live.sha256.has(row.sha256.toLowerCase())
+      (row) =>
+        !live.fileIds.has(row.id) &&
+        !live.sha256.has(row.sha256.toLowerCase())
     )
     .map((row) => ({
       fileId: row.id,
@@ -201,6 +209,10 @@ function candidatesForCutoff(
       storagePath: row.storage_path,
       createdAt: row.created_at
     }));
+}
+
+function totalBytes(candidates: readonly ObjectCleanupCandidate[]): number {
+  return candidates.reduce((total, candidate) => total + candidate.sizeBytes, 0);
 }
 
 function planToken(cutoff: string, candidates: readonly ObjectCleanupCandidate[]): string {
@@ -222,16 +234,17 @@ function createPlan(
   cutoffValue: string | Date
 ): ObjectCleanupPlan {
   const cutoff = normalizeCutoff(cutoffValue);
-  const candidates = candidatesForCutoff(connection, cutoff);
+  const allCandidates = candidatesForCutoff(connection, cutoff);
+  const candidates = allCandidates.slice(0, CLEANUP_BATCH_LIMIT);
+  const remaining = allCandidates.slice(CLEANUP_BATCH_LIMIT);
   return {
     cutoff,
     candidateCount: candidates.length,
-    candidateBytes: candidates.reduce(
-      (total, candidate) => total + candidate.sizeBytes,
-      0
-    ),
+    candidateBytes: totalBytes(candidates),
+    remainingCandidateCount: remaining.length,
+    remainingCandidateBytes: totalBytes(remaining),
     confirmationToken: planToken(cutoff, candidates),
-    candidates: candidates.slice(0, 200)
+    candidates
   };
 }
 
@@ -256,14 +269,15 @@ export class ObjectCleanupRegistry {
           FROM files
         `)
         .get() as { object_count: number; object_bytes: number };
-      const plan = createPlan(connection, cutoff);
+      const candidates = candidatesForCutoff(connection, cutoff);
+      const candidateBytes = totalBytes(candidates);
       return {
         objectCount: Number(totals.object_count),
         objectBytes: Number(totals.object_bytes),
-        referencedCount: Number(totals.object_count) - plan.candidateCount,
-        referencedBytes: Number(totals.object_bytes) - plan.candidateBytes,
-        cleanupCandidateCount: plan.candidateCount,
-        cleanupCandidateBytes: plan.candidateBytes,
+        referencedCount: Number(totals.object_count) - candidates.length,
+        referencedBytes: Number(totals.object_bytes) - candidateBytes,
+        cleanupCandidateCount: candidates.length,
+        cleanupCandidateBytes: candidateBytes,
         cutoff
       };
     });
@@ -319,6 +333,7 @@ export class ObjectCleanupRegistry {
       }
     }
 
+    const refreshed = this.preview(cutoff);
     const result: ObjectCleanupResult = {
       cutoff,
       plannedCount: plan.candidateCount,
@@ -326,6 +341,10 @@ export class ObjectCleanupRegistry {
       deletedBytes,
       missingCount,
       failedCount: failures.length,
+      remainingCandidateCount:
+        refreshed.candidateCount + refreshed.remainingCandidateCount,
+      remainingCandidateBytes:
+        refreshed.candidateBytes + refreshed.remainingCandidateBytes,
       failures: failures.slice(0, 50)
     };
 
@@ -348,7 +367,9 @@ export class ObjectCleanupRegistry {
             deletedCount,
             deletedBytes,
             missingCount,
-            failedCount: failures.length
+            failedCount: failures.length,
+            remainingCandidateCount: result.remainingCandidateCount,
+            remainingCandidateBytes: result.remainingCandidateBytes
           }
         },
         connection
