@@ -2,6 +2,7 @@ import type { ApiConfig } from "@docomator/config";
 import {
   DocumentScheduleRegistry,
   DocumentScheduleValidationError,
+  scheduleNetworkRegistryFromScheduleRegistry,
   type DocumentGenerationMode,
   type DocumentScheduleDelivery,
   type DocumentScheduleRecurrence,
@@ -10,6 +11,7 @@ import {
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { correlationId, mutationContextFromRequest } from "./request-context.js";
+import { registerScheduleNetworkDeliveryRoutes } from "./schedule-network-delivery-routes.js";
 
 interface SpaceParams {
   spaceId: string;
@@ -74,6 +76,13 @@ export function registerDocumentScheduleRoutes(
   config: ApiConfig,
   registry: DocumentScheduleRegistry
 ): void {
+  registerScheduleNetworkDeliveryRoutes(
+    app,
+    config,
+    registry,
+    scheduleNetworkRegistryFromScheduleRegistry(registry)
+  );
+
   app.get<{ Params: SpaceParams }>(
     "/api/v1/spaces/:spaceId/document-schedules",
     {
@@ -132,14 +141,8 @@ export function registerDocumentScheduleRoutes(
               enum: ["once", "daily", "monthly"]
             },
             timezone: { type: "string", minLength: 1, maxLength: 100 },
-            localTime: {
-              type: "string",
-              pattern: "^\\d{2}:\\d{2}$"
-            },
-            startDate: {
-              type: "string",
-              pattern: "^\\d{4}-\\d{2}-\\d{2}$"
-            },
+            localTime: { type: "string", pattern: "^\\d{2}:\\d{2}$" },
+            startDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
             dayOfMonth: { type: "integer", minimum: 1, maximum: 28 },
             deliveryChannel: { type: "string", enum: ["none", "email"] },
             emailRecipientId: idSchema,
