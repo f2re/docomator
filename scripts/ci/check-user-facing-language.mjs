@@ -24,6 +24,7 @@ const files = [
   "apps/api/ui/shared-document-results.js",
   "apps/api/ui/shared-document-view-labels.js",
   "apps/api/ui/shared-corporate-mode.js",
+  "apps/api/ui/storage-maintenance.js",
   "apps/api/src/user-message.ts",
   "scripts/offline/first-run.sh"
 ];
