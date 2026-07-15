@@ -52,36 +52,35 @@ function processAlive(pid) {
 }
 
 async function acquireLock(dataDirectory) {
-  const lockPath = path.join(dataDirectory, ".automatic-backup.lock");
+  const lockDirectory = path.join(dataDirectory, ".backup.lock");
+  const ownerPath = path.join(lockDirectory, "owner.json");
   await fs.mkdir(dataDirectory, { recursive: true, mode: 0o750 });
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const handle = await fs.open(lockPath, "wx", 0o600);
-      await handle.writeFile(
+      await fs.mkdir(lockDirectory, { mode: 0o700 });
+      await fs.writeFile(
+        ownerPath,
         `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`,
-        "utf8"
+        { encoding: "utf8", mode: 0o600 }
       );
       return {
         async release() {
-          await handle.close();
-          await fs.rm(lockPath, { force: true });
+          await fs.rm(lockDirectory, { recursive: true, force: true });
         }
       };
     } catch (error) {
       if (!(error && typeof error === "object" && error.code === "EEXIST")) {
         throw error;
       }
-      const current = await fs.readFile(lockPath, "utf8").catch(() => "");
+      const current = await fs.readFile(ownerPath, "utf8").catch(() => "");
       let ownerPid = 0;
       try {
         ownerPid = Number(JSON.parse(current).pid);
       } catch {
         ownerPid = 0;
       }
-      if (processAlive(ownerPid)) {
-        return null;
-      }
-      await fs.rm(lockPath, { force: true });
+      if (processAlive(ownerPid)) return null;
+      await fs.rm(lockDirectory, { recursive: true, force: true });
     }
   }
   return null;
