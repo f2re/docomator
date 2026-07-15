@@ -14,6 +14,10 @@ BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
 [[ -x "$BUNDLE_ROOT/payload/runtime/node/bin/node" ]] || die "В комплекте отсутствует встроенный Node.js"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/automatic-backup.mjs" ]] || \
   die "В комплекте отсутствует сценарий автоматического резервирования"
+[[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-readiness.mjs" ]] || \
+  die "В комплекте отсутствует сценарий пилотной приёмки"
+[[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-check.sh" ]] || \
+  die "В комплекте отсутствует штатный запуск пилотной приёмки"
 [[ -f "$BUNDLE_ROOT/payload/deploy/systemd/docomator-backup.service.in" ]] || \
   die "В комплекте отсутствует служба автоматического резервирования"
 [[ -f "$BUNDLE_ROOT/payload/deploy/systemd/docomator-backup.timer.in" ]] || \
