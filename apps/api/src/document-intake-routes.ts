@@ -12,6 +12,7 @@ import {
   toJsonValue
 } from "@docomator/storage";
 
+import { registerDataImportRoutes } from "./data-import-routes.js";
 import {
   correlationId,
   mutationContextFromRequest
@@ -73,6 +74,8 @@ export function registerDocumentIntakeRoutes(
       done(null, body);
     }
   );
+
+  registerDataImportRoutes(app, spaceRegistry);
 
   app.post<{ Querystring: InspectDocumentQuery; Body: Buffer }>(
     "/api/v1/document-intake/inspect",
@@ -151,7 +154,6 @@ export function registerDocumentIntakeRoutes(
       }
     },
     async (request, reply) => {
-      // Resolve the isolation boundary before any filesystem mutation.
       const space = spaceRegistry.getSpace(request.params.spaceId);
       const mediaType = request.headers["content-type"];
       const report = await inspectOoxmlBuffer({
