@@ -56,14 +56,18 @@ function check(input: OperationsCheck): OperationsCheck {
 async function databaseCheck(store: SqliteStore): Promise<OperationsCheck> {
   try {
     const result = store.execute((connection) => {
-      const quick = connection.prepare("PRAGMA quick_check(1)").all() as unknown as Array<Record<string, unknown>>;
-      const foreignKeys = connection.prepare("PRAGMA foreign_key_check").all() as unknown[];
+      const quick = connection
+        .prepare("PRAGMA quick_check(1)")
+        .all() as unknown as Array<Record<string, unknown>>;
+      const foreignKeys = connection
+        .prepare("PRAGMA foreign_key_check")
+        .all() as unknown[];
       const tables = connection
         .prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table'")
         .get() as { count: number };
-      const value = Object.values(quick[0] ?? {})[0];
+      const quickCheck = String(Object.values(quick[0] ?? {})[0] ?? "");
       return {
-        quickCheck: value,
+        quickCheck,
         foreignKeyErrors: foreignKeys.length,
         tableCount: Number(tables.count)
       };
@@ -79,7 +83,7 @@ async function databaseCheck(store: SqliteStore): Promise<OperationsCheck> {
         : "Проверка целостности выявила ошибки",
       detail: valid
         ? `Таблиц: ${result.tableCount}.`
-        : `quick_check: ${String(result.quickCheck)}; ошибок внешних ключей: ${result.foreignKeyErrors}.`,
+        : `quick_check: ${result.quickCheck}; ошибок внешних ключей: ${result.foreignKeyErrors}.`,
       remediation: valid
         ? null
         : "Остановите службы, создайте резервную копию текущего состояния и восстановите последнюю проверенную копию.",
@@ -93,7 +97,8 @@ async function databaseCheck(store: SqliteStore): Promise<OperationsCheck> {
       required: true,
       summary: "База данных недоступна для диагностического чтения",
       detail: error instanceof Error ? error.message : String(error),
-      remediation: "Проверьте путь DOCOMATOR_DATA_DIR, права службы и журнал docomator-api.",
+      remediation:
+        "Проверьте путь DOCOMATOR_DATA_DIR, права службы и журнал docomator-api.",
       data: {}
     });
   }
@@ -137,7 +142,8 @@ async function objectStoreCheck(
       required: true,
       summary: "Не удалось выполнить контрольную запись",
       detail: error instanceof Error ? error.message : String(error),
-      remediation: "Проверьте наличие каталога objects, свободное место и права пользователя службы.",
+      remediation:
+        "Проверьте наличие каталога objects, свободное место и права пользователя службы.",
       data: { root: objectStore.root }
     });
   }
@@ -203,12 +209,15 @@ function workerCheck(runtime: RuntimeStatusRegistry): OperationsCheck {
       required: true,
       summary: "Worker ещё не публиковал состояние",
       detail: null,
-      remediation: "Запустите и включите службу docomator-worker, затем обновите диагностику через минуту.",
+      remediation:
+        "Запустите и включите службу docomator-worker, затем обновите диагностику через минуту.",
       data: {}
     });
   }
   const details =
-    typeof latest.details === "object" && latest.details !== null && !Array.isArray(latest.details)
+    typeof latest.details === "object" &&
+    latest.details !== null &&
+    !Array.isArray(latest.details)
       ? latest.details
       : {};
   const configuredInterval =
@@ -218,7 +227,9 @@ function workerCheck(runtime: RuntimeStatusRegistry): OperationsCheck {
   const maximumAgeMs = Math.max(120_000, configuredInterval * 3);
   const ageMs = Date.now() - Date.parse(latest.updatedAt);
   const fresh =
-    latest.state === "running" && Number.isFinite(ageMs) && ageMs <= maximumAgeMs;
+    latest.state === "running" &&
+    Number.isFinite(ageMs) &&
+    ageMs <= maximumAgeMs;
   return check({
     id: "worker",
     title: "Фоновый обработчик",
@@ -257,7 +268,8 @@ async function libreOfficeCheck(): Promise<OperationsCheck> {
       required: false,
       summary: "PDF-предпросмотр отключён",
       detail: null,
-      remediation: "Включите DOCOMATOR_PREVIEW_ENABLED=true для обязательного просмотра перед активацией.",
+      remediation:
+        "Включите DOCOMATOR_PREVIEW_ENABLED=true для обязательного просмотра перед активацией.",
       data: { binary }
     });
   }
@@ -267,7 +279,9 @@ async function libreOfficeCheck(): Promise<OperationsCheck> {
       timeout: 5_000,
       maxBuffer: 64 * 1024
     });
-    const version = `${result.stdout}${result.stderr}`.trim().split(/\r?\n/u)[0] ?? "";
+    const version = `${result.stdout}${result.stderr}`
+      .trim()
+      .split(/\r?\n/u)[0] ?? "";
     return check({
       id: "libreoffice",
       title: "LibreOffice и PDF",
@@ -286,7 +300,8 @@ async function libreOfficeCheck(): Promise<OperationsCheck> {
       required: true,
       summary: "LibreOffice недоступен или не запускается",
       detail: error instanceof Error ? error.message : String(error),
-      remediation: "Установите LibreOffice из автономного комплекта или исправьте DOCOMATOR_LIBREOFFICE_BIN.",
+      remediation:
+        "Установите LibreOffice из автономного комплекта или исправьте DOCOMATOR_LIBREOFFICE_BIN.",
       data: { binary }
     });
   }
@@ -301,7 +316,8 @@ async function networkFolderCheck(config: ApiConfig): Promise<OperationsCheck> {
       required: false,
       summary: "Сетевая доставка не настроена",
       detail: null,
-      remediation: "Подключите корпоративный ресурс и задайте DOCOMATOR_NETWORK_DELIVERY_ROOT, если этот канал нужен.",
+      remediation:
+        "Подключите корпоративный ресурс и задайте DOCOMATOR_NETWORK_DELIVERY_ROOT, если этот канал нужен.",
       data: {}
     });
   }
@@ -310,7 +326,10 @@ async function networkFolderCheck(config: ApiConfig): Promise<OperationsCheck> {
     if (!info.isDirectory() || info.isSymbolicLink()) {
       throw new Error("Корень не является обычным каталогом");
     }
-    await fs.access(config.networkDeliveryRoot, fsConstants.R_OK | fsConstants.W_OK);
+    await fs.access(
+      config.networkDeliveryRoot,
+      fsConstants.R_OK | fsConstants.W_OK
+    );
     return check({
       id: "network_folder",
       title: "Сетевая папка",
@@ -329,7 +348,8 @@ async function networkFolderCheck(config: ApiConfig): Promise<OperationsCheck> {
       required: false,
       summary: "Настроенный сетевой каталог недоступен",
       detail: error instanceof Error ? error.message : String(error),
-      remediation: "Проверьте монтирование ресурса и права пользователя службы docomator.",
+      remediation:
+        "Проверьте монтирование ресурса и права пользователя службы docomator.",
       data: { root: config.networkDeliveryRoot }
     });
   }
@@ -384,16 +404,23 @@ async function backupCheck(dataDir: string): Promise<OperationsCheck> {
   const backupRoot = path.join(dataDir, "backups");
   try {
     const entries = await fs.readdir(backupRoot, { withFileTypes: true });
-    const candidates: Array<{ directory: string; createdAt: string; manifest: string }> = [];
+    const candidates: Array<{
+      directory: string;
+      createdAt: string;
+      manifest: string;
+    }> = [];
     for (const entry of entries) {
       if (!entry.isDirectory() || !entry.name.startsWith("backup-")) continue;
       const manifestPath = path.join(backupRoot, entry.name, "manifest.json");
       try {
-        const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
-          createdAt?: string;
-        };
+        const manifest = JSON.parse(
+          await fs.readFile(manifestPath, "utf8")
+        ) as { createdAt?: string };
         const createdAt = manifest.createdAt;
-        if (typeof createdAt === "string" && Number.isFinite(Date.parse(createdAt))) {
+        if (
+          typeof createdAt === "string" &&
+          Number.isFinite(Date.parse(createdAt))
+        ) {
           candidates.push({
             directory: path.join(backupRoot, entry.name),
             createdAt,
@@ -404,7 +431,9 @@ async function backupCheck(dataDir: string): Promise<OperationsCheck> {
         // Invalid directories are ignored and surfaced if no valid backup remains.
       }
     }
-    candidates.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    candidates.sort((left, right) =>
+      right.createdAt.localeCompare(left.createdAt)
+    );
     const latest = candidates[0];
     if (latest === undefined) {
       throw new Error("Проверенная резервная копия не найдена");
