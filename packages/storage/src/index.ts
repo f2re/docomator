@@ -22,6 +22,8 @@ export * from "./object-cleanup-access.js";
 export * from "./object-cleanup.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
+export * from "./runtime-status-access.js";
+export * from "./runtime-status.js";
 export * from "./schedule-network-access.js";
 export * from "./schedule-network-delivery.js";
 export * from "./schedule-time.js";
