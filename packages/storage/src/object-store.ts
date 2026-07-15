@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { link, mkdir, open, readFile, stat, unlink } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  open,
+  readFile,
+  rmdir,
+  stat,
+  unlink
+} from "node:fs/promises";
 import path from "node:path";
 
 export interface StoredObject {
@@ -97,19 +105,60 @@ export class ContentAddressedObjectStore {
   }
 
   async getBuffer(sha256Value: string): Promise<Buffer> {
-    const sha256 = normalizeSha256(sha256Value);
-    const storagePath = path.join(
-      this.root,
-      sha256.slice(0, 2),
-      sha256.slice(2, 4),
-      sha256
-    );
+    const { sha256, storagePath } = this.objectLocation(sha256Value);
     const buffer = await readFile(storagePath);
     const actualSha256 = createHash("sha256").update(buffer).digest("hex");
     if (actualSha256 !== sha256) {
       throw new Error(`Content-addressed object verification failed: ${storagePath}`);
     }
     return buffer;
+  }
+
+  async deleteObject(sha256Value: string): Promise<boolean> {
+    const { storagePath, secondDirectory, firstDirectory } = this.objectLocation(
+      sha256Value
+    );
+    try {
+      await unlink(storagePath);
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") return false;
+      throw error;
+    }
+    await syncDirectory(secondDirectory).catch(() => undefined);
+    await rmdir(secondDirectory).catch((error: unknown) => {
+      if (
+        !isNodeError(error) ||
+        !["ENOTEMPTY", "EEXIST", "ENOENT"].includes(error.code ?? "")
+      ) {
+        throw error;
+      }
+    });
+    await rmdir(firstDirectory).catch((error: unknown) => {
+      if (
+        !isNodeError(error) ||
+        !["ENOTEMPTY", "EEXIST", "ENOENT"].includes(error.code ?? "")
+      ) {
+        throw error;
+      }
+    });
+    return true;
+  }
+
+  private objectLocation(sha256Value: string): {
+    sha256: string;
+    firstDirectory: string;
+    secondDirectory: string;
+    storagePath: string;
+  } {
+    const sha256 = normalizeSha256(sha256Value);
+    const firstDirectory = path.join(this.root, sha256.slice(0, 2));
+    const secondDirectory = path.join(firstDirectory, sha256.slice(2, 4));
+    return {
+      sha256,
+      firstDirectory,
+      secondDirectory,
+      storagePath: path.join(secondDirectory, sha256)
+    };
   }
 
   private async ensureDirectories(): Promise<void> {
