@@ -1,4 +1,5 @@
 let scheduleNetworkSettings = [];
+let scheduleNetworkEnabled = false;
 
 const baseScheduleDeliveryLabel = scheduleDeliveryLabel;
 scheduleDeliveryLabel = function scheduleDeliveryLabelWithNetwork(schedule) {
@@ -23,7 +24,10 @@ renderScheduleWorkspace = function renderScheduleWorkspaceWithNetwork() {
   if (!select.querySelector('option[value="network_folder"]')) {
     const option = document.createElement("option");
     option.value = "network_folder";
-    option.textContent = "Сохранить в сетевую папку";
+    option.textContent = scheduleNetworkEnabled
+      ? "Сохранить в сетевую папку"
+      : "Сетевая папка не настроена";
+    option.disabled = !scheduleNetworkEnabled;
     select.append(option);
   }
   const emailFields = document.querySelector("#scheduleEmailFields");
@@ -102,11 +106,13 @@ loadScheduleWorkspace = async function loadScheduleWorkspaceWithNetwork() {
     const body = await generationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-schedule-network-settings`
     );
-    scheduleNetworkSettings = Array.isArray(body.data) ? body.data : [];
+    scheduleNetworkEnabled = body.data?.networkFolderEnabled === true;
+    scheduleNetworkSettings = Array.isArray(body.data?.items) ? body.data.items : [];
     const byId = new Map(scheduleNetworkSettings.map((item) => [item.id, item]));
     scheduleItems = scheduleItems.map((item) => byId.get(item.id) || item);
     renderScheduleWorkspace();
   } catch {
-    // Base schedules remain usable when the optional channel is unavailable.
+    scheduleNetworkEnabled = false;
+    scheduleNetworkSettings = [];
   }
 };
