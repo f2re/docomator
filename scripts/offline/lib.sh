@@ -63,7 +63,7 @@ replace_env_value() {
   local key="$2"
   local value="$3"
   local escaped
-  escaped="$(printf '%s' "$value" | sed -e 's/[\\&|]/\\&/g')"
+  escaped="$(printf '%s' "$value" | sed -e 's/[\&|]/\\&/g')"
   if grep -q -E "^[[:space:]]*${key}=" "$file"; then
     sed -i -E "s|^[[:space:]]*${key}=.*$|${key}=${escaped}|" "$file"
   else
@@ -97,5 +97,7 @@ stop_docomator_services() {
   if ! command -v systemctl >/dev/null 2>&1; then
     return 0
   fi
-  systemctl stop docomator-worker.service docomator-api.service docomator-llm.service 2>/dev/null || true
+  systemctl stop docomator-backup.timer docomator-backup.service \
+    docomator-worker.service docomator-api.service docomator-llm.service \
+    2>/dev/null || true
 }

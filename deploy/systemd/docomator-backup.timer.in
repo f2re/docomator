@@ -1,0 +1,12 @@
+[Unit]
+Description=Docomator daily automatic backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=30m
+Persistent=true
+AccuracySec=1m
+Unit=docomator-backup.service
+
+[Install]
+WantedBy=timers.target

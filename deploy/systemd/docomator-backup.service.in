@@ -1,0 +1,27 @@
+[Unit]
+Description=Docomator automatic backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=@DOCOMATOR_USER@
+Group=@DOCOMATOR_GROUP@
+EnvironmentFile=@DOCOMATOR_CONFIG_DIR@/docomator.env
+Environment=DOCOMATOR_CONFIG_FILE=@DOCOMATOR_CONFIG_DIR@/docomator.env
+WorkingDirectory=@DOCOMATOR_INSTALL_ROOT@/current/app
+ExecStart=@DOCOMATOR_INSTALL_ROOT@/current/runtime/node/bin/node @DOCOMATOR_INSTALL_ROOT@/current/app/scripts/runtime/automatic-backup.mjs
+TimeoutStartSec=6h
+UMask=0027
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+ReadWritePaths=@DOCOMATOR_DATA_DIR@
