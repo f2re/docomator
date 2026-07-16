@@ -13,9 +13,12 @@
 - ровно одна видимая панель мастера, не более одной основной кнопки на шаге и touch target не меньше 44 × 44 px;
 - выпуск трёх личных карточек, загрузка ZIP-комплекта и переход в общее хранилище результатов;
 - светлая и тёмная темы, клавиатурный фокус и `prefers-reduced-motion`;
+- машинно-выявляемые нарушения WCAG на пяти ключевых экранах и в раскрытой форме сотрудника: 320 px в светлой теме и 1440 px в тёмной, без исключённых axe-правил;
 - явные PNG-вложения светлой и тёмной темы на каждой из трёх ширин экрана.
 
 Автоматическая fixture-проверка завершает любой сценарий ошибкой, если UI отправил HTTP(S)-запрос на origin, отличный от настроенного `DOCOMATOR_E2E_BASE_URL`.
+
+Axe-аудит не доказывает полное соответствие WCAG 2.2 AA и не заменяет ручную проверку экранным диктором, полного клавиатурного маршрута, порядка и возврата фокуса и пользовательскую приёмку.
 
 ## Предварительные условия
 
@@ -33,6 +36,12 @@ DOCOMATOR_E2E_BASE_URL=http://127.0.0.1:18080 \
 
 ```bash
 npm run test:e2e -- --project chromium-320
+```
+
+Только машинный аудит доступности:
+
+```bash
+npm run test:e2e:a11y
 ```
 
 Отчёт и диагностические материалы пишутся только в `.tmp/playwright-report` и `.tmp/playwright-results`. Трассировка и диагностический снимок сохраняются при падении сценария; визуальный сценарий дополнительно прикладывает успешные PNG для обеих тем и всех размеров экрана.
@@ -64,6 +73,7 @@ node --check tests/e2e/playwright.config.mjs
 node --check tests/e2e/fixtures/test.mjs
 node --check tests/e2e/fixtures/docomator-api.mjs
 node --check tests/e2e/pages/docomator-page.mjs
+node --check tests/e2e/accessibility-audit.spec.mjs
 node --check tests/e2e/navigation-and-accessibility.spec.mjs
 node --check tests/e2e/bulk-import.spec.mjs
 node --check tests/e2e/employee-card.spec.mjs

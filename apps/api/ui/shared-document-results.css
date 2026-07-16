@@ -116,7 +116,7 @@
 
 .generation-state-code.is-new,
 .nav-badge.is-alert {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: white;
   border-color: transparent;
 }

@@ -266,6 +266,16 @@ export async function installDocomatorApiMock(page, options = {}) {
           }
         ]
       };
+    } else if (path === "/api/v1/storage/usage" && method === "GET") {
+      data = {
+        objectCount: 8,
+        objectBytes: 1_048_576,
+        referencedCount: 8,
+        referencedBytes: 1_048_576,
+        cleanupCandidateCount: 0,
+        cleanupCandidateBytes: 0,
+        cutoff: "2026-07-09T09:00:00.000Z"
+      };
     } else if (path === "/api/v1/knowledge/entity-types") {
       data = [{ key: "person", label: "Человек", description: "Сотрудник" }];
     } else if (
