@@ -17,6 +17,10 @@ import {
 
 import { PermanentJobError, type JobHandler } from "./processor.js";
 
+class DocumentGenerationInterruptedError extends Error {
+  override readonly name = "DocumentGenerationInterruptedError";
+}
+
 export interface DocumentGenerationHandlerOptions {
   registry: DocumentGenerationRegistry;
   objectStore: ContentAddressedObjectStore;
@@ -55,6 +59,12 @@ function errorPayload(message: string, code = "document_generation_failed"): Jso
   return { code, message };
 }
 
+function throwIfInterrupted(signal: AbortSignal, message: string): void {
+  if (signal.aborted) {
+    throw new DocumentGenerationInterruptedError(message);
+  }
+}
+
 function unitFileName(
   position: number,
   displayName: string,
@@ -87,9 +97,7 @@ export function createDocumentGenerationHandler(
         audienceCount: work.members.length
       };
 
-      if (signal.aborted) {
-        throw new Error("Формирование отменено до начала обработки.");
-      }
+      throwIfInterrupted(signal, "Формирование отменено до начала обработки.");
 
       if (work.job.targetMode === "aggregate") {
         const unit = work.job.units[0];
@@ -158,9 +166,7 @@ export function createDocumentGenerationHandler(
           work.members.map((member) => [member.entityId, member])
         );
         for (const unit of work.job.units) {
-          if (signal.aborted) {
-            throw new Error("Формирование документов отменено.");
-          }
+          throwIfInterrupted(signal, "Формирование документов отменено.");
           if (unit.state === "completed") continue;
           options.registry.startUnit(unit.id, context);
           const member =
@@ -252,6 +258,9 @@ export function createDocumentGenerationHandler(
       }
       await options.registry.finishJob(jobId, archive, context);
     } catch (error) {
+      if (error instanceof DocumentGenerationInterruptedError) {
+        throw error;
+      }
       const message = error instanceof Error ? error.message : String(error);
       try {
         options.registry.failJob(jobId, errorPayload(message), context);

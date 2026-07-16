@@ -8,6 +8,8 @@ import { ContentAddressedObjectStore, type StoredObject } from "./object-store.j
 import { DomainEventOutbox } from "./outbox.js";
 import { WorkerQueue, type WorkerJobState } from "./queue.js";
 
+const DOCUMENT_GENERATION_MAX_ATTEMPTS = 5;
+
 export type DocumentGenerationMode = "one_per_member" | "aggregate";
 export type DocumentGenerationState =
   | "pending"
@@ -580,7 +582,7 @@ export class DocumentGenerationRegistry {
           jobType: "document.generate",
           payload: toJsonValue({ documentJobId: id, spaceId: space.id }),
           priority: 60,
-          maxAttempts: 1,
+          maxAttempts: DOCUMENT_GENERATION_MAX_ATTEMPTS,
           idempotencyKey: `document.generate:${id}`,
           now: context.now
         },
