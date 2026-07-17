@@ -33,6 +33,22 @@ function docxFixture(): Buffer {
   );
 }
 
+function docxTextRangeFixture(
+  runs =
+    '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Должность: __</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>__</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve"> / штатная</w:t></w:r>'
+): Buffer {
+  return buildZipFixture(
+    minimalDocxEntries().map((entry) =>
+      entry.name === "word/document.xml"
+        ? {
+            ...entry,
+            content: `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tr><w:tc><w:p>${runs}</w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:t>Неизменяемый текст</w:t></w:r></w:p></w:body></w:document>`
+          }
+        : entry
+    )
+  );
+}
+
 function xlsxFixture(sheetName = "Отдел 'А'"): Buffer {
   const entries: ZipFixtureEntry[] = [
     {
@@ -129,6 +145,45 @@ async function xlsxInput(sheetName = "Отдел 'А'") {
   } as const;
 }
 
+async function docxTextRangeInput(runs?: string) {
+  const source = docxTextRangeFixture(runs);
+  const structure = await analyzeOoxmlBuffer({
+    buffer: source,
+    fileName: "Кадровая карточка.docx",
+    maxElements: 2_000
+  });
+  const element = structure.elements.find(
+    (candidate): candidate is DocxParagraphElement =>
+      candidate.kind === "paragraph" && candidate.text.includes("Должность:")
+  );
+  assert.ok(element);
+  const selectedText = "____";
+  const startOffset = element.text.indexOf(selectedText);
+  assert.notEqual(startOffset, -1);
+  return {
+    source,
+    structure,
+    element,
+    field: {
+      id: "field-position",
+      key: "person.position",
+      label: "Должность",
+      elementId: element.id,
+      binding: {
+        version: 1,
+        kind: "docx.text-range",
+        elementId: element.id,
+        part: element.part,
+        index: element.index,
+        startOffset,
+        endOffset: startOffset + selectedText.length,
+        selectedText,
+        tableLocation: element.tableLocation
+      }
+    }
+  } as const;
+}
+
 test("DOCX compiler creates w:sdt, preserves content and is deterministic", async () => {
   const input = await docxInput();
   const sourceSnapshot = Buffer.from(input.source);
@@ -167,6 +222,103 @@ test("DOCX compiler creates w:sdt, preserves content and is deterministic", asyn
   assert.match(documentXml, /w:alias w:val="ФИО получателя"/u);
   assert.match(documentXml, /<w:t>ФИО получателя<\/w:t>/u);
   assert.match(documentXml, /<w:t>Неизменяемый текст<\/w:t>/u);
+});
+
+test("DOCX text-range compiler wraps only selected adjacent runs", async () => {
+  const input = await docxTextRangeInput();
+  const first = await compileScalarField({
+    source: input.source,
+    fileName: "Кадровая карточка.docx",
+    expectedSourceSha256: input.structure.sourceSha256,
+    expectedStructureSha256: input.structure.structureSha256,
+    field: input.field
+  });
+  const second = await compileScalarField({
+    source: input.source,
+    fileName: "Кадровая карточка.docx",
+    expectedSourceSha256: input.structure.sourceSha256,
+    expectedStructureSha256: input.structure.structureSha256,
+    field: input.field
+  });
+
+  assert.deepEqual(first.output, second.output);
+  assert.equal(first.technicalBinding.target, "абзац 1, знаки 12–15");
+  const entries = await readOoxmlPackage(first.output);
+  const xml = packageEntry(entries, "word/document.xml").content.toString("utf8");
+  assert.match(xml, /<w:tbl><w:tr><w:tc><w:p>/u);
+  assert.match(xml, /<w:t xml:space="preserve">Должность: <\/w:t>/u);
+  assert.match(xml, /<w:sdt>.*aifield:field-position.*<w:sdtContent><w:r><w:rPr><w:b\/><\/w:rPr><w:t xml:space="preserve">__<\/w:t><\/w:r><w:r><w:rPr><w:b\/><\/w:rPr><w:t xml:space="preserve">__<\/w:t><\/w:r><\/w:sdtContent><\/w:sdt>/u);
+  assert.match(xml, /<w:t xml:space="preserve"> \/ штатная<\/w:t>/u);
+  assert.match(xml, /<w:t>Неизменяемый текст<\/w:t>/u);
+
+  const singleRun = await docxTextRangeInput(
+    '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Должность: ____ / штатная</w:t></w:r>'
+  );
+  const singleRunResult = await compileScalarField({
+    source: singleRun.source,
+    fileName: "Кадровая карточка.docx",
+    expectedSourceSha256: singleRun.structure.sourceSha256,
+    expectedStructureSha256: singleRun.structure.structureSha256,
+    field: singleRun.field
+  });
+  const singleRunXml = packageEntry(
+    await readOoxmlPackage(singleRunResult.output),
+    "word/document.xml"
+  ).content.toString("utf8");
+  assert.match(singleRunXml, /Должность: /u);
+  assert.match(singleRunXml, / \/ штатная/u);
+  assert.equal((singleRunXml.match(/<w:sdt>/gu) ?? []).length, 1);
+});
+
+test("DOCX text-range compiler rejects stale, mixed and complex selections", async () => {
+  const input = await docxTextRangeInput();
+  await assert.rejects(
+    compileScalarField({
+      source: input.source,
+      fileName: "Кадровая карточка.docx",
+      expectedSourceSha256: input.structure.sourceSha256,
+      expectedStructureSha256: input.structure.structureSha256,
+      field: {
+        ...input.field,
+        binding: { ...input.field.binding, selectedText: "----" }
+      }
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError && error.code === "text_range_mismatch"
+  );
+
+  const mixed = await docxTextRangeInput(
+    '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Должность: __</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>__</w:t></w:r>'
+  );
+  await assert.rejects(
+    compileScalarField({
+      source: mixed.source,
+      fileName: "Кадровая карточка.docx",
+      expectedSourceSha256: mixed.structure.sourceSha256,
+      expectedStructureSha256: mixed.structure.structureSha256,
+      field: mixed.field
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError &&
+      error.code === "mixed_text_range_formatting"
+  );
+
+  const complex = await docxTextRangeInput(
+    '<w:r><w:t xml:space="preserve">Должность: </w:t></w:r><w:hyperlink w:anchor="target"><w:r><w:t>____</w:t></w:r></w:hyperlink>'
+  );
+  await assert.rejects(
+    compileScalarField({
+      source: complex.source,
+      fileName: "Кадровая карточка.docx",
+      expectedSourceSha256: complex.structure.sourceSha256,
+      expectedStructureSha256: complex.structure.structureSha256,
+      field: complex.field
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError &&
+      error.code === "unsupported_text_range" &&
+      /сложный объект/u.test(error.userMessage)
+  );
 });
 
 test("XLSX compiler creates a defined name and preserves worksheet bytes", async () => {

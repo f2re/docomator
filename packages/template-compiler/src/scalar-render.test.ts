@@ -102,6 +102,57 @@ async function compiledDocx() {
   return { source, structure, element, fieldBinding, compiled };
 }
 
+async function compiledDocxTextRange() {
+  const source = buildZipFixture(
+    minimalDocxEntries().map((entry) =>
+      entry.name === "word/document.xml"
+        ? {
+            ...entry,
+            content:
+              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Должность: </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>____</w:t></w:r><w:r><w:t xml:space="preserve"> / штатная</w:t></w:r></w:p></w:body></w:document>'
+          }
+        : entry
+    )
+  );
+  const structure = await analyzeOoxmlBuffer({
+    buffer: source,
+    fileName: "Карточка.docx",
+    maxElements: 2_000
+  });
+  const element = structure.elements.find(
+    (candidate): candidate is DocxParagraphElement =>
+      candidate.kind === "paragraph" && candidate.text.includes("Должность:")
+  );
+  assert.ok(element);
+  const selectedText = "____";
+  const startOffset = element.text.indexOf(selectedText);
+  const fieldBinding = {
+    version: 1 as const,
+    kind: "docx.text-range" as const,
+    elementId: element.id,
+    part: element.part,
+    index: element.index,
+    startOffset,
+    endOffset: startOffset + selectedText.length,
+    selectedText,
+    tableLocation: element.tableLocation
+  };
+  const compiled = await compileScalarField({
+    source,
+    fileName: "Карточка.docx",
+    expectedSourceSha256: structure.sourceSha256,
+    expectedStructureSha256: structure.structureSha256,
+    field: {
+      id: "field-position",
+      key: "person.position",
+      label: "Должность",
+      elementId: element.id,
+      binding: fieldBinding
+    }
+  });
+  return { source, structure, element, fieldBinding, compiled };
+}
+
 async function compiledXlsx(formula = false) {
   const source = xlsxFixture(formula);
   const structure = await analyzeOoxmlBuffer({
@@ -169,6 +220,33 @@ test("DOCX trial render writes and reads back text while preserving other conten
     valueType: "string"
   });
   assert.equal(readBack.value, "Иванов Иван Иванович");
+});
+
+test("DOCX text-range render preserves the label and suffix", async () => {
+  const input = await compiledDocxTextRange();
+  const result = await renderScalarValue({
+    compiled: input.compiled.output,
+    technicalBinding: input.compiled.technicalBinding,
+    fieldBinding: input.fieldBinding,
+    valueType: "string",
+    value: "Ведущий инженер"
+  });
+
+  assert.equal(result.readBackValue, "Ведущий инженер");
+  const entries = await readOoxmlPackage(result.output);
+  const xml = packageEntry(entries, "word/document.xml").content.toString("utf8");
+  assert.match(xml, /Должность: /u);
+  assert.match(xml, /<w:sdt>.*<w:r><w:rPr><w:b\/><\/w:rPr><w:t xml:space="preserve">Ведущий инженер<\/w:t><\/w:r>.*<\/w:sdt>/u);
+  assert.match(xml, / \/ штатная/u);
+  assert.doesNotMatch(xml, /____/u);
+
+  const readBack = await readScalarValue({
+    document: result.output,
+    technicalBinding: input.compiled.technicalBinding,
+    fieldBinding: input.fieldBinding,
+    valueType: "string"
+  });
+  assert.equal(readBack.value, "Ведущий инженер");
 });
 
 test("XLSX trial render supports text, numbers and booleans and preserves cell style", async () => {

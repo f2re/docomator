@@ -44,6 +44,10 @@ interface CreateFieldBody {
     | "date-time";
   required?: boolean;
   elementId: string;
+  textRange?: {
+    startOffset: number;
+    endOffset: number;
+  };
 }
 
 interface ListQuery {
@@ -109,7 +113,10 @@ function findElement(
   );
 }
 
-function bindingForElement(element: { [key: string]: JsonValue }): {
+function bindingForElement(
+  element: { [key: string]: JsonValue },
+  textRange?: { startOffset: number; endOffset: number }
+): {
   kind: "paragraph" | "cell";
   binding: JsonValue;
   preview: string;
@@ -120,20 +127,61 @@ function bindingForElement(element: { [key: string]: JsonValue }): {
     const part = requiredString(element, "part");
     const index = requiredInteger(element, "index");
     const text = typeof element.text === "string" ? element.text : "";
+    if (textRange === undefined) {
+      return {
+        kind,
+        binding: toJsonValue({
+          version: 1,
+          kind: "docx.paragraph",
+          elementId,
+          part,
+          index,
+          tableLocation: element.tableLocation ?? null
+        }),
+        preview: text
+      };
+    }
+    if (element.runsTruncated === true) {
+      throw new TemplateDraftValidationError(
+        "Абзац содержит слишком много текстовых фрагментов для безопасного выделения. Выберите другой абзац."
+      );
+    }
+    const { startOffset, endOffset } = textRange;
+    if (
+      !Number.isInteger(startOffset) ||
+      !Number.isInteger(endOffset) ||
+      startOffset < 0 ||
+      endOffset <= startOffset ||
+      endOffset > text.length ||
+      endOffset > 20_000
+    ) {
+      throw new TemplateDraftValidationError(
+        "Границы выбранного текста не совпадают с сохранённым абзацем. Выделите фрагмент заново."
+      );
+    }
+    const selectedText = text.slice(startOffset, endOffset);
     return {
       kind,
       binding: toJsonValue({
         version: 1,
-        kind: "docx.paragraph",
+        kind: "docx.text-range",
         elementId,
         part,
         index,
+        startOffset,
+        endOffset,
+        selectedText,
         tableLocation: element.tableLocation ?? null
       }),
-      preview: text
+      preview: selectedText
     };
   }
   if (kind === "cell") {
+    if (textRange !== undefined) {
+      throw new TemplateDraftValidationError(
+        "Для XLSX выберите целую ячейку без текстового диапазона."
+      );
+    }
     const sheetName = requiredString(element, "sheetName");
     const sheetPath = requiredString(element, "sheetPath");
     const address = requiredString(element, "address");
@@ -308,7 +356,24 @@ export function registerTemplateDraftRoutes(
               ]
             },
             required: { type: "boolean", default: false },
-            elementId: { type: "string", minLength: 1, maxLength: 160 }
+            elementId: { type: "string", minLength: 1, maxLength: 160 },
+            textRange: {
+              type: "object",
+              additionalProperties: false,
+              required: ["startOffset", "endOffset"],
+              properties: {
+                startOffset: {
+                  type: "integer",
+                  minimum: 0,
+                  maximum: 19_999
+                },
+                endOffset: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 20_000
+                }
+              }
+            }
           }
         }
       }
@@ -319,7 +384,7 @@ export function registerTemplateDraftRoutes(
         request.params.draftId
       );
       const element = findElement(draft.structure, request.body.elementId);
-      const binding = bindingForElement(element);
+      const binding = bindingForElement(element, request.body.textRange);
       const field = draftRegistry.createField(
         request.params.spaceId,
         draft.id,

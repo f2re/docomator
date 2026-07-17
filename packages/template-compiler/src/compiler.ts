@@ -22,6 +22,18 @@ export interface DocxParagraphBinding {
   tableLocation?: unknown;
 }
 
+export interface DocxTextRangeBinding {
+  version: 1;
+  kind: "docx.text-range";
+  elementId: string;
+  part: string;
+  index: number;
+  startOffset: number;
+  endOffset: number;
+  selectedText: string;
+  tableLocation?: unknown;
+}
+
 export interface XlsxCellBinding {
   version: 1;
   kind: "xlsx.cell";
@@ -31,7 +43,10 @@ export interface XlsxCellBinding {
   address: string;
 }
 
-export type ScalarFieldBinding = DocxParagraphBinding | XlsxCellBinding;
+export type ScalarFieldBinding =
+  | DocxParagraphBinding
+  | DocxTextRangeBinding
+  | XlsxCellBinding;
 
 export interface CompileScalarFieldDefinition {
   id: string;
@@ -140,6 +155,22 @@ function requiredText(value: unknown, label: string, maximum = 500): string {
   return normalized;
 }
 
+function exactText(value: unknown, label: string, maximum = 20_000): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new TemplateCompilerError(
+      "invalid_binding",
+      `Не заполнено обязательное значение «${label}».`
+    );
+  }
+  if (value.length > maximum || /\u0000/u.test(value)) {
+    throw new TemplateCompilerError(
+      "invalid_binding",
+      `Значение «${label}» имеет недопустимый размер или содержит запрещённый знак.`
+    );
+  }
+  return value;
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -175,6 +206,29 @@ function parseBinding(value: unknown): ScalarFieldBinding {
         : { tableLocation: value.tableLocation })
     };
   }
+  if (kind === "docx.text-range") {
+    const startOffset = integerValue(value.startOffset, "начало текста");
+    const endOffset = integerValue(value.endOffset, "конец текста");
+    if (endOffset <= startOffset || endOffset > 20_000) {
+      throw new TemplateCompilerError(
+        "invalid_binding",
+        "Сохранённые границы текста DOCX имеют недопустимое значение."
+      );
+    }
+    return {
+      version: 1,
+      kind,
+      elementId,
+      part: requiredText(value.part, "часть DOCX", 500),
+      index: integerValue(value.index, "номер абзаца"),
+      startOffset,
+      endOffset,
+      selectedText: exactText(value.selectedText, "выбранный текст"),
+      ...(value.tableLocation === undefined
+        ? {}
+        : { tableLocation: value.tableLocation })
+    };
+  }
   if (kind === "xlsx.cell") {
     const address = requiredText(value.address, "адрес ячейки", 32).toUpperCase();
     if (!/^[A-Z]{1,4}[1-9][0-9]{0,6}$/u.test(address)) {
@@ -194,7 +248,7 @@ function parseBinding(value: unknown): ScalarFieldBinding {
   }
   throw new TemplateCompilerError(
     "unsupported_binding",
-    "Базовый компилятор поддерживает только целый абзац DOCX или одну ячейку XLSX."
+    "Компилятор поддерживает целый абзац или выбранный текст DOCX и одну ячейку XLSX."
   );
 }
 
@@ -472,7 +526,176 @@ function replacePackageEntry(
   return result;
 }
 
-function compileDocx(
+interface DocxTextRun {
+  start: number;
+  end: number;
+  name: string;
+  opening: string;
+  closing: string;
+  properties: string;
+  text: string;
+  textStart: number;
+  textEnd: number;
+  safe: boolean;
+}
+
+function matchingCloseIndex(tags: readonly XmlTag[], openingIndex: number): number {
+  const opening = tags[openingIndex];
+  if (opening === undefined || opening.closing) throwInvalidXml();
+  if (opening.selfClosing) return openingIndex;
+  let depth = 1;
+  for (let index = openingIndex + 1; index < tags.length; index += 1) {
+    const tag = tags[index];
+    if (tag === undefined || tag.name !== opening.name) continue;
+    if (!tag.closing && !tag.selfClosing) depth += 1;
+    else if (tag.closing) depth -= 1;
+    if (depth === 0) return index;
+  }
+  throwInvalidXml();
+}
+
+function decodeXmlText(value: string): string {
+  return value.replace(
+    /&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos);/giu,
+    (_source, entity: string) => {
+      if (entity === "amp") return "&";
+      if (entity === "lt") return "<";
+      if (entity === "gt") return ">";
+      if (entity === "quot") return '"';
+      if (entity === "apos") return "'";
+      const hexadecimal = entity.toLowerCase().startsWith("#x");
+      const digits = entity.slice(hexadecimal ? 2 : 1);
+      const codePoint = Number.parseInt(digits, hexadecimal ? 16 : 10);
+      if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
+        throw new TemplateCompilerError(
+          "invalid_xml_entity",
+          "В документе обнаружена недопустимая XML-сущность."
+        );
+      }
+      return String.fromCodePoint(codePoint);
+    }
+  );
+}
+
+function collectDocxTextRuns(xml: string): DocxTextRun[] {
+  const tags = scanXmlTags(xml);
+  const ranges = new Map<number, number>();
+  for (let index = 0; index < tags.length; index += 1) {
+    const tag = tags[index];
+    if (tag !== undefined && !tag.closing) {
+      ranges.set(index, matchingCloseIndex(tags, index));
+    }
+  }
+  const hasParentBetween = (
+    outerOpen: number,
+    outerClose: number,
+    childOpen: number,
+    childClose: number
+  ): boolean =>
+    [...ranges].some(
+      ([open, close]) =>
+        open > outerOpen &&
+        close < outerClose &&
+        open < childOpen &&
+        close > childClose
+    );
+  const runs: DocxTextRun[] = [];
+  let textOffset = 0;
+  for (let index = 0; index < tags.length; index += 1) {
+    const run = tags[index];
+    if (
+      run === undefined ||
+      run.closing ||
+      run.selfClosing ||
+      run.localName !== "r"
+    ) {
+      continue;
+    }
+    const closeIndex = ranges.get(index);
+    const close = closeIndex === undefined ? undefined : tags[closeIndex];
+    if (closeIndex === undefined || close === undefined) throwInvalidXml();
+    const directRun = ![...ranges].some(
+      ([open, rangeClose]) => open < index && rangeClose > closeIndex
+    );
+    const directChildren: Array<{ open: number; close: number; tag: XmlTag }> = [];
+    for (let childIndex = index + 1; childIndex < closeIndex; childIndex += 1) {
+      const child = tags[childIndex];
+      const childClose = ranges.get(childIndex);
+      if (
+        child === undefined ||
+        child.closing ||
+        childClose === undefined ||
+        hasParentBetween(index, closeIndex, childIndex, childClose)
+      ) {
+        continue;
+      }
+      directChildren.push({ open: childIndex, close: childClose, tag: child });
+    }
+    const properties = directChildren.filter(
+      ({ tag }) => tag.localName === "rPr"
+    );
+    const texts = directChildren.filter(({ tag }) => tag.localName === "t");
+    const allowedDirectChildren = directChildren.every(
+      ({ tag }) => tag.localName === "rPr" || tag.localName === "t"
+    );
+    const text = texts
+      .map(({ tag, close: textCloseIndex }) => {
+        const textClose = tags[textCloseIndex];
+        if (tag.selfClosing) return "";
+        if (textClose === undefined) throwInvalidXml();
+        return decodeXmlText(xml.slice(tag.end, textClose.start));
+      })
+      .join("");
+    const property = properties[0];
+    const propertyClose = property === undefined ? undefined : tags[property.close];
+    const propertyXml =
+      property === undefined
+        ? ""
+        : property.tag.selfClosing
+          ? xml.slice(property.tag.start, property.tag.end)
+          : propertyClose === undefined
+            ? throwInvalidXml()
+            : xml.slice(property.tag.start, propertyClose.end);
+    runs.push({
+      start: run.start,
+      end: close.end,
+      name: run.name,
+      opening: xml.slice(run.start, run.end),
+      closing: xml.slice(close.start, close.end),
+      properties: propertyXml,
+      text,
+      textStart: textOffset,
+      textEnd: textOffset + text.length,
+      safe:
+        directRun &&
+        properties.length <= 1 &&
+        texts.length > 0 &&
+        allowedDirectChildren
+    });
+    textOffset += text.length;
+  }
+  return runs;
+}
+
+function isUtf16Boundary(text: string, offset: number): boolean {
+  if (offset <= 0 || offset >= text.length) return true;
+  const previous = text.charCodeAt(offset - 1);
+  const current = text.charCodeAt(offset);
+  return !(
+    previous >= 0xd800 &&
+    previous <= 0xdbff &&
+    current >= 0xdc00 &&
+    current <= 0xdfff
+  );
+}
+
+function textRunXml(run: DocxTextRun, text: string): string {
+  if (text.length === 0) return "";
+  const prefix = tagPrefix(run.name);
+  return `${run.opening}${run.properties}<${prefix}t xml:space="preserve">${xmlText(text)}</${prefix}t>${run.closing}`;
+}
+
+function compileDocxParagraph(
   entries: readonly OoxmlPackageEntry[],
   binding: DocxParagraphBinding,
   field: CompileScalarFieldDefinition
@@ -514,6 +737,129 @@ function compileDocx(
       identifier: tagValue,
       part: binding.part,
       target: `абзац ${binding.index + 1}`
+    }
+  };
+}
+
+function compileDocxTextRange(
+  entries: readonly OoxmlPackageEntry[],
+  binding: DocxTextRangeBinding,
+  field: CompileScalarFieldDefinition
+): {
+  entries: OoxmlPackageEntry[];
+  technicalBinding: CompiledTechnicalBinding;
+} {
+  const target = packageEntry(entries, binding.part);
+  const decoded = decodeXml(target.content);
+  const tagValue = technicalTag(field.id);
+  if (decoded.text.includes(xmlAttribute(tagValue))) {
+    throw new TemplateCompilerError(
+      "binding_already_exists",
+      "Техническая привязка этого поля уже существует в документе."
+    );
+  }
+  const paragraph = findElementRange(decoded.text, "p", binding.index);
+  if (paragraph.selfClosing) {
+    throw new TemplateCompilerError(
+      "text_range_not_found",
+      "Выбранный текст не найден в пустом абзаце DOCX."
+    );
+  }
+  const paragraphContent = decoded.text.slice(
+    paragraph.openEnd,
+    paragraph.closeStart
+  );
+  const runs = collectDocxTextRuns(paragraphContent);
+  const fullText = runs.map((run) => run.text).join("");
+  if (
+    binding.endOffset > fullText.length ||
+    !isUtf16Boundary(fullText, binding.startOffset) ||
+    !isUtf16Boundary(fullText, binding.endOffset) ||
+    fullText.slice(binding.startOffset, binding.endOffset) !== binding.selectedText
+  ) {
+    throw new TemplateCompilerError(
+      "text_range_mismatch",
+      "Выбранный текст изменился или его границы не совпадают с сохранённым абзацем. Повторите разметку."
+    );
+  }
+  const selectedRuns = runs.filter(
+    (run) =>
+      binding.startOffset < run.textEnd && binding.endOffset > run.textStart
+  );
+  if (selectedRuns.length === 0) {
+    throw new TemplateCompilerError(
+      "text_range_not_found",
+      "Выбранный фрагмент текста DOCX не найден."
+    );
+  }
+  if (selectedRuns.some((run) => !run.safe)) {
+    throw new TemplateCompilerError(
+      "unsupported_text_range",
+      "Выбранный текст пересекает гиперссылку, поле, рисунок, разрыв или другой сложный объект DOCX. Выберите обычный текстовый фрагмент."
+    );
+  }
+  const runProperties = selectedRuns[0]?.properties ?? "";
+  if (selectedRuns.some((run) => run.properties !== runProperties)) {
+    throw new TemplateCompilerError(
+      "mixed_text_range_formatting",
+      "Выбранный текст использует разное оформление. Выберите фрагмент с единым оформлением."
+    );
+  }
+  for (let index = 1; index < selectedRuns.length; index += 1) {
+    const previous = selectedRuns[index - 1];
+    const current = selectedRuns[index];
+    if (
+      previous === undefined ||
+      current === undefined ||
+      !/^\s*$/u.test(paragraphContent.slice(previous.end, current.start))
+    ) {
+      throw new TemplateCompilerError(
+        "unsupported_text_range",
+        "Между выбранными текстовыми фрагментами находится сложный объект DOCX. Выберите непрерывный обычный текст."
+      );
+    }
+  }
+  const first = selectedRuns[0];
+  const last = selectedRuns.at(-1);
+  if (first === undefined || last === undefined) throwInvalidXml();
+  const selectedXml = selectedRuns
+    .map((run) => {
+      const start = Math.max(binding.startOffset, run.textStart) - run.textStart;
+      const end = Math.min(binding.endOffset, run.textEnd) - run.textStart;
+      return textRunXml(run, run.text.slice(start, end));
+    })
+    .join("");
+  const prefixText = first.text.slice(
+    0,
+    Math.max(0, binding.startOffset - first.textStart)
+  );
+  const suffixText = last.text.slice(
+    Math.min(last.text.length, binding.endOffset - last.textStart)
+  );
+  const prefix = tagPrefix(paragraph.name) || "w:";
+  const namespace =
+    tagPrefix(paragraph.name).length === 0
+      ? ' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+      : "";
+  const wrapper = `<${prefix}sdt${namespace}><${prefix}sdtPr><${prefix}alias ${prefix}val="${xmlAttribute(field.label)}"/><${prefix}tag ${prefix}val="${xmlAttribute(tagValue)}"/><${prefix}id ${prefix}val="${deterministicWordId(field.id)}"/></${prefix}sdtPr><${prefix}sdtContent>${selectedXml}</${prefix}sdtContent></${prefix}sdt>`;
+  const replacement = `${textRunXml(first, prefixText)}${wrapper}${textRunXml(last, suffixText)}`;
+  const replaceStart = paragraph.openEnd + first.start;
+  const replaceEnd = paragraph.openEnd + last.end;
+  const updated =
+    decoded.text.slice(0, replaceStart) +
+    replacement +
+    decoded.text.slice(replaceEnd);
+  return {
+    entries: replacePackageEntry(
+      entries,
+      binding.part,
+      encodeXml(decoded, updated)
+    ),
+    technicalBinding: {
+      kind: "docx.sdt",
+      identifier: tagValue,
+      part: binding.part,
+      target: `абзац ${binding.index + 1}, знаки ${binding.startOffset + 1}–${binding.endOffset}`
     }
   };
 }
@@ -626,23 +972,78 @@ function compileXlsx(
 
 async function verifyTechnicalBinding(
   output: Buffer,
-  binding: CompiledTechnicalBinding
+  binding: CompiledTechnicalBinding,
+  sourceBinding: ScalarFieldBinding
 ): Promise<void> {
   const entries = await readOoxmlPackage(output);
   const target = packageEntry(entries, binding.part);
   const text = decodeXml(target.content).text;
   if (binding.kind === "docx.sdt") {
-    const found = scanXmlTags(text).some(
-      (tag) =>
-        !tag.closing &&
-        tag.localName === "tag" &&
-        (attributeValue(tag.raw, "w:val") ??
-          attributeValue(tag.raw, "val")) === binding.identifier
-    );
-    if (!found) {
+    const tags = scanXmlTags(text);
+    let readBack: string | null = null;
+    for (let index = 0; index < tags.length; index += 1) {
+      const sdt = tags[index];
+      if (
+        sdt === undefined ||
+        sdt.closing ||
+        sdt.selfClosing ||
+        sdt.localName !== "sdt"
+      ) {
+        continue;
+      }
+      const sdtCloseIndex = matchingCloseIndex(tags, index);
+      const sdtClose = tags[sdtCloseIndex];
+      if (sdtClose === undefined) throwInvalidXml();
+      const inside = tags
+        .map((tag, tagIndex) => ({ tag, tagIndex }))
+        .filter(
+          ({ tag }) => tag.start >= sdt.end && tag.end <= sdtClose.start
+        );
+      const identifierFound = inside.some(
+        ({ tag }) =>
+          !tag.closing &&
+          tag.localName === "tag" &&
+          (attributeValue(tag.raw, "w:val") ??
+            attributeValue(tag.raw, "val")) === binding.identifier
+      );
+      if (!identifierFound) continue;
+      const content = inside.find(
+        ({ tag }) => !tag.closing && tag.localName === "sdtContent"
+      );
+      if (content === undefined) break;
+      const contentCloseIndex = matchingCloseIndex(tags, content.tagIndex);
+      const contentClose = tags[contentCloseIndex];
+      if (contentClose === undefined) throwInvalidXml();
+      readBack = inside
+        .filter(
+          ({ tag }) =>
+            !tag.closing &&
+            tag.localName === "t" &&
+            tag.start >= content.tag.end &&
+            tag.end <= contentClose.start
+        )
+        .map(({ tag, tagIndex }) => {
+          if (tag.selfClosing) return "";
+          const close = tags[matchingCloseIndex(tags, tagIndex)];
+          if (close === undefined) throwInvalidXml();
+          return decodeXmlText(text.slice(tag.end, close.start));
+        })
+        .join("");
+      break;
+    }
+    if (readBack === null) {
       throw new TemplateCompilerError(
         "compiled_binding_not_found",
         "После сборки не удалось повторно найти техническую привязку DOCX."
+      );
+    }
+    if (
+      sourceBinding.kind === "docx.text-range" &&
+      readBack !== sourceBinding.selectedText
+    ) {
+      throw new TemplateCompilerError(
+        "compiled_text_range_mismatch",
+        "После сборки выбранный текст DOCX не совпал с сохранённым фрагментом."
       );
     }
     return;
@@ -701,7 +1102,7 @@ export async function compileScalarField(
   }
   const element = ensureStructureElement(analysis.elements, field.elementId);
   if (
-    binding.kind === "docx.paragraph" &&
+    (binding.kind === "docx.paragraph" || binding.kind === "docx.text-range") &&
     (analysis.format !== "docx" ||
       element.kind !== "paragraph" ||
       element.part !== binding.part ||
@@ -737,10 +1138,12 @@ export async function compileScalarField(
   }
   const compiled =
     binding.kind === "docx.paragraph"
-      ? compileDocx(entries, binding, field)
-      : compileXlsx(entries, binding, field);
+      ? compileDocxParagraph(entries, binding, field)
+      : binding.kind === "docx.text-range"
+        ? compileDocxTextRange(entries, binding, field)
+        : compileXlsx(entries, binding, field);
   const output = writeOoxmlPackage(compiled.entries);
-  await verifyTechnicalBinding(output, compiled.technicalBinding);
+  await verifyTechnicalBinding(output, compiled.technicalBinding, binding);
 
   return {
     output,

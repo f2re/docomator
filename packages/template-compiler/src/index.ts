@@ -9,6 +9,7 @@ export type {
   CompileScalarFieldResult,
   CompiledTechnicalBinding,
   DocxParagraphBinding,
+  DocxTextRangeBinding,
   ScalarFieldBinding,
   XlsxCellBinding
 } from "./compiler.js";

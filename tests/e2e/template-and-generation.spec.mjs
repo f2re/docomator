@@ -81,6 +81,17 @@ async function bindEmployeeField(page, { structureReady = false } = {}) {
     await expect(page.locator(".structure-element").first()).toBeVisible();
   }
   await page.locator(".structure-element").first().click();
+  const textRange = page.locator("#documentFieldTextRange");
+  if (await textRange.count()) {
+    await expect(page.locator("#documentFieldSave")).toBeDisabled();
+    await textRange.evaluate((control) => {
+      const start = control.value.indexOf("______");
+      control.focus();
+      control.setSelectionRange(start, start + 6);
+      control.dispatchEvent(new Event("select", { bubbles: true }));
+    });
+    await expect(page.locator("#documentFieldSave")).toBeEnabled();
+  }
   await page.locator("#documentFieldProperty").selectOption("__new__");
   await page.locator("#documentFieldLabel").fill("ФИО");
   await page.locator("#documentFieldType").selectOption("string");

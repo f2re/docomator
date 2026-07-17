@@ -217,7 +217,7 @@ function validateBindings(
   field: ScalarFieldBinding
 ): void {
   if (technical.kind === "docx.sdt") {
-    if (field.kind !== "docx.paragraph") {
+    if (field.kind !== "docx.paragraph" && field.kind !== "docx.text-range") {
       throw new TemplateCompilerError(
         "technical_binding_mismatch",
         "Техническая привязка не соответствует сохранённой координате поля."
@@ -495,8 +495,6 @@ function docxContentTarget(
   sdtCloseIndex: number;
   contentOpenIndex: number;
   contentCloseIndex: number;
-  paragraphOpenIndex: number;
-  paragraphCloseIndex: number;
 } {
   const tags = scanXmlTags(xml);
   for (let sdtIndex = 0; sdtIndex < tags.length; sdtIndex += 1) {
@@ -533,23 +531,12 @@ function docxContentTarget(
     const contentCloseIndex = matchingCloseIndex(tags, content.index);
     const contentClose = tags[contentCloseIndex];
     if (contentClose === undefined) throwInvalidXml();
-    const paragraph = tagsInside(tags, content.tag.end, contentClose.start).find(
-      ({ tag }) => !tag.closing && tag.localName === "p"
-    );
-    if (paragraph === undefined) {
-      throw new TemplateCompilerError(
-        "sdt_paragraph_not_found",
-        "В технической привязке DOCX отсутствует абзац."
-      );
-    }
     return {
       tags,
       sdtOpenIndex: sdtIndex,
       sdtCloseIndex,
       contentOpenIndex: content.index,
-      contentCloseIndex,
-      paragraphOpenIndex: paragraph.index,
-      paragraphCloseIndex: matchingCloseIndex(tags, paragraph.index)
+      contentCloseIndex
     };
   }
   throw new TemplateCompilerError(
@@ -586,39 +573,89 @@ function tagPrefix(qualifiedName: string): string {
 function renderDocx(
   entries: readonly OoxmlPackageEntry[],
   technical: CompiledTechnicalBinding,
+  binding: ScalarFieldBinding,
   value: NormalizedScalarValue
 ): OoxmlPackageEntry[] {
   const entry = packageEntry(entries, technical.part);
   const decoded = decodeXml(entry.content);
   const target = docxContentTarget(decoded.text, technical.identifier);
-  const paragraph = target.tags[target.paragraphOpenIndex];
-  const paragraphClose = target.tags[target.paragraphCloseIndex];
-  if (paragraph === undefined || paragraphClose === undefined) throwInvalidXml();
-  const paragraphProperties = firstChildXml(
-    decoded.text,
-    target.tags,
-    target.paragraphOpenIndex,
-    target.paragraphCloseIndex,
-    "pPr"
-  );
-  const runProperties = firstChildXml(
-    decoded.text,
-    target.tags,
-    target.paragraphOpenIndex,
-    target.paragraphCloseIndex,
-    "rPr"
-  );
-  const prefix = tagPrefix(paragraph.name) || "w:";
-  const run = `<${prefix}r>${runProperties}<${prefix}t xml:space="preserve">${xmlText(value.display)}</${prefix}t></${prefix}r>`;
-  const opening = decoded.text.slice(paragraph.start, paragraph.end);
-  const closing = paragraph.selfClosing
-    ? `</${paragraph.name}>`
-    : decoded.text.slice(paragraphClose.start, paragraphClose.end);
-  const replacement = `${opening.replace(/\/>$/u, ">")}${paragraphProperties}${run}${closing}`;
-  const updated =
-    decoded.text.slice(0, paragraph.start) +
-    replacement +
-    decoded.text.slice(paragraphClose.end);
+  const content = target.tags[target.contentOpenIndex];
+  const contentClose = target.tags[target.contentCloseIndex];
+  if (content === undefined || contentClose === undefined) throwInvalidXml();
+  let updated: string;
+  if (binding.kind === "docx.paragraph") {
+    const paragraph = tagsInside(
+      target.tags,
+      content.end,
+      contentClose.start
+    ).find(({ tag }) => !tag.closing && tag.localName === "p");
+    if (paragraph === undefined) {
+      throw new TemplateCompilerError(
+        "sdt_paragraph_not_found",
+        "В технической привязке DOCX отсутствует абзац."
+      );
+    }
+    const paragraphCloseIndex = matchingCloseIndex(
+      target.tags,
+      paragraph.index
+    );
+    const paragraphClose = target.tags[paragraphCloseIndex];
+    if (paragraphClose === undefined) throwInvalidXml();
+    const paragraphProperties = firstChildXml(
+      decoded.text,
+      target.tags,
+      paragraph.index,
+      paragraphCloseIndex,
+      "pPr"
+    );
+    const runProperties = firstChildXml(
+      decoded.text,
+      target.tags,
+      paragraph.index,
+      paragraphCloseIndex,
+      "rPr"
+    );
+    const prefix = tagPrefix(paragraph.tag.name) || "w:";
+    const run = `<${prefix}r>${runProperties}<${prefix}t xml:space="preserve">${xmlText(value.display)}</${prefix}t></${prefix}r>`;
+    const opening = decoded.text.slice(paragraph.tag.start, paragraph.tag.end);
+    const closing = paragraph.tag.selfClosing
+      ? `</${paragraph.tag.name}>`
+      : decoded.text.slice(paragraphClose.start, paragraphClose.end);
+    const replacement = `${opening.replace(/\/>$/u, ">")}${paragraphProperties}${run}${closing}`;
+    updated =
+      decoded.text.slice(0, paragraph.tag.start) +
+      replacement +
+      decoded.text.slice(paragraphClose.end);
+  } else if (binding.kind === "docx.text-range") {
+    const run = tagsInside(target.tags, content.end, contentClose.start).find(
+      ({ tag }) => !tag.closing && tag.localName === "r"
+    );
+    if (run === undefined) {
+      throw new TemplateCompilerError(
+        "sdt_run_not_found",
+        "В технической привязке выбранного текста DOCX отсутствует текстовый фрагмент."
+      );
+    }
+    const runCloseIndex = matchingCloseIndex(target.tags, run.index);
+    const runProperties = firstChildXml(
+      decoded.text,
+      target.tags,
+      run.index,
+      runCloseIndex,
+      "rPr"
+    );
+    const prefix = tagPrefix(run.tag.name) || "w:";
+    const replacement = `<${prefix}r>${runProperties}<${prefix}t xml:space="preserve">${xmlText(value.display)}</${prefix}t></${prefix}r>`;
+    updated =
+      decoded.text.slice(0, content.end) +
+      replacement +
+      decoded.text.slice(contentClose.start);
+  } else {
+    throw new TemplateCompilerError(
+      "technical_binding_mismatch",
+      "Для DOCX требуется координата абзаца или выбранного текста."
+    );
+  }
   return replacePackageEntry(
     entries,
     technical.part,
@@ -806,7 +843,12 @@ export async function renderScalarValue(
   const entries = await readOoxmlPackage(compiled);
   const updatedEntries =
     input.technicalBinding.kind === "docx.sdt"
-      ? renderDocx(entries, input.technicalBinding, normalized)
+      ? renderDocx(
+          entries,
+          input.technicalBinding,
+          input.fieldBinding,
+          normalized
+        )
       : renderXlsx(entries, input.fieldBinding, normalized);
   const output = writeOoxmlPackage(updatedEntries);
   const readBack = await readScalarValue({

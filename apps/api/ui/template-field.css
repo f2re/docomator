@@ -34,7 +34,8 @@
 }
 
 .structure-field-grid input[type="text"],
-.structure-field-grid select {
+.structure-field-grid select,
+.structure-field-grid textarea {
   width: 100%;
   min-height: 2.75rem;
   border: 1px solid var(--border);
@@ -45,8 +46,19 @@
   font: inherit;
 }
 
+.structure-field-grid textarea {
+  min-height: 7rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.structure-text-range-field {
+  grid-column: 1 / -1;
+}
+
 .structure-field-grid input[type="text"]:focus,
-.structure-field-grid select:focus {
+.structure-field-grid select:focus,
+.structure-field-grid textarea:focus {
   border-color: var(--accent);
   outline: 3px solid var(--accent-soft);
   outline-offset: 1px;

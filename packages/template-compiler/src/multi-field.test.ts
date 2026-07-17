@@ -112,6 +112,57 @@ async function docxDefinitions() {
   return { source, structure, fields };
 }
 
+async function docxTextRangeDefinitions() {
+  const source = buildZipFixture(
+    minimalDocxEntries().map((entry) =>
+      entry.name === "word/document.xml"
+        ? {
+            ...entry,
+            content:
+              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t xml:space="preserve">ФИО: ____</w:t></w:r></w:p><w:p><w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">Должность: ____</w:t></w:r></w:p></w:body></w:document>'
+          }
+        : entry
+    )
+  );
+  const structure = await analyzeOoxmlBuffer({
+    buffer: source,
+    fileName: "Карточка.docx",
+    maxElements: 2_000
+  });
+  const paragraphs = structure.elements.filter(
+    (element): element is DocxParagraphElement => element.kind === "paragraph"
+  );
+  assert.equal(paragraphs.length, 2);
+  const definitions = [
+    [paragraphs[0], "field-name", "person.full_name", "ФИО"],
+    [paragraphs[1], "field-position", "person.position", "Должность"]
+  ] as const;
+  const fields = definitions.map(([element, id, key, label]) => {
+    assert.ok(element);
+    const selectedText = "____";
+    const startOffset = element.text.indexOf(selectedText);
+    assert.notEqual(startOffset, -1);
+    return {
+      id,
+      key,
+      label,
+      elementId: element.id,
+      binding: {
+        version: 1 as const,
+        kind: "docx.text-range" as const,
+        elementId: element.id,
+        part: element.part,
+        index: element.index,
+        startOffset,
+        endOffset: startOffset + selectedText.length,
+        selectedText,
+        tableLocation: element.tableLocation
+      }
+    };
+  });
+  return { source, structure, fields };
+}
+
 async function xlsxDefinitions() {
   const source = xlsxFixture();
   const structure = await analyzeOoxmlBuffer({
@@ -233,6 +284,45 @@ test("DOCX renders and finally reads back every field", async () => {
   assert.match(xml, /Иванов Иван Иванович/u);
   assert.match(xml, /Ведущий инженер/u);
   assert.match(xml, /Неизменяемый текст/u);
+});
+
+test("DOCX compiles and renders multiple text ranges without changing labels", async () => {
+  const input = await docxTextRangeDefinitions();
+  const compiled = await compileScalarFields({
+    source: input.source,
+    fileName: "Карточка.docx",
+    expectedSourceSha256: input.structure.sourceSha256,
+    expectedStructureSha256: input.structure.structureSha256,
+    fields: input.fields
+  });
+  const byId = new Map(compiled.fields.map((field) => [field.fieldId, field]));
+  const rendered = await renderScalarValues({
+    compiled: compiled.output,
+    fields: input.fields.map((field) => ({
+      fieldId: field.id,
+      fieldKey: field.key,
+      technicalBinding: byId.get(field.id)?.technicalBinding!,
+      fieldBinding: field.binding,
+      valueType: "string" as const,
+      value: field.id === "field-name" ? "Иванов Иван" : "Инженер"
+    }))
+  });
+
+  assert.deepEqual(
+    rendered.fields.map((field) => [field.fieldKey, field.readBackValue]),
+    [
+      ["person.full_name", "Иванов Иван"],
+      ["person.position", "Инженер"]
+    ]
+  );
+  const entries = await readOoxmlPackage(rendered.output);
+  const xml = packageEntry(entries, "word/document.xml").content.toString("utf8");
+  assert.match(xml, /ФИО: /u);
+  assert.match(xml, /Должность: /u);
+  assert.match(xml, /Иванов Иван/u);
+  assert.match(xml, /Инженер/u);
+  assert.match(xml, /<w:rPr><w:i\/><\/w:rPr>/u);
+  assert.doesNotMatch(xml, /____/u);
 });
 
 test("XLSX compiles and renders two typed cells without changing a neighbour", async () => {

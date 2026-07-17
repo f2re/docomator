@@ -52,7 +52,7 @@ function sourceDocx(): Buffer {
         ? {
             ...entry,
             content:
-              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>ФИО получателя</w:t></w:r></w:p><w:p><w:r><w:t>Должность</w:t></w:r></w:p></w:body></w:document>'
+              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>ФИО получателя</w:t></w:r></w:p><w:p><w:r><w:t>Должность</w:t></w:r></w:p><w:p><w:r><w:t>ФИО: ______</w:t></w:r></w:p></w:body></w:document>'
           }
         : entry
     )
@@ -156,6 +156,92 @@ test("API creates a draft from quarantined bytes and saves a verified field", as
       events.map((row) => row.event_type),
       ["template.draft.created", "template.draft.field.created"]
     );
+  } finally {
+    await app.close();
+    await fsPromises.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("API stores a verified DOCX text range without changing Document IR", async () => {
+  const { app, dataDir } = await testApp();
+  try {
+    const source = await quarantineSource(app);
+    const draftResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/${source.id}/draft`,
+      headers: { "content-type": "application/json" },
+      payload: {}
+    });
+    const draft = draftResponse.json().data as {
+      id: string;
+      structureSha256: string;
+      structure: {
+        elements: Array<{ id: string; kind: string; text: string }>;
+      };
+    };
+    const paragraph = draft.structure.elements.find(
+      (element) => element.kind === "paragraph" && element.text === "ФИО: ______"
+    );
+    assert.ok(paragraph);
+    const startOffset = paragraph.text.indexOf("______");
+
+    const fieldResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.full_name",
+        label: "ФИО",
+        valueType: "string",
+        required: true,
+        elementId: paragraph.id,
+        textRange: {
+          startOffset,
+          endOffset: startOffset + 6
+        }
+      }
+    });
+    assert.equal(fieldResponse.statusCode, 201, fieldResponse.body);
+    const responseData = fieldResponse.json().data as {
+      structureSha256: string;
+      field: {
+        originalPreview: string;
+        binding: {
+          kind: string;
+          startOffset: number;
+          endOffset: number;
+          selectedText: string;
+        };
+      };
+    };
+    assert.equal(responseData.structureSha256, draft.structureSha256);
+    assert.equal(responseData.field.originalPreview, "______");
+    assert.deepEqual(responseData.field.binding, {
+      version: 1,
+      kind: "docx.text-range",
+      elementId: paragraph.id,
+      part: "word/document.xml",
+      index: 2,
+      startOffset,
+      endOffset: startOffset + 6,
+      selectedText: "______",
+      tableLocation: null
+    });
+
+    const invalid = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.position",
+        label: "Должность",
+        valueType: "string",
+        elementId: paragraph.id,
+        textRange: { startOffset: 0, endOffset: 100 }
+      }
+    });
+    assert.equal(invalid.statusCode, 400, invalid.body);
+    assert.match(invalid.json().error.message, /границ.*текст/ui);
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });

@@ -11,6 +11,7 @@ let structureReport = null;
 let structureDraft = null;
 let structureSource = null;
 let selectedStructureElement = null;
+let selectedStructureTextRange = null;
 let structurePropertyDefinitions = [];
 
 function structureEscape(value) {
@@ -78,7 +79,7 @@ function createStructurePanel() {
       </div>
       <div class="structure-actions">
         <button class="primary-button" id="documentStructureButton" type="button">Построить структуру</button>
-        <p id="documentStructureHint">После анализа выберите абзац DOCX или ячейку XLSX. Поле можно сохранить только для исходника, помещённого в выбранное пространство.</p>
+        <p id="documentStructureHint">После анализа выберите абзац DOCX и выделите в нём изменяемый текст либо выберите ячейку XLSX.</p>
       </div>
       <div id="documentStructureResult" class="structure-result" aria-live="polite">
         <div class="structure-empty"><span aria-hidden="true">🧱</span><div><strong>Структура ещё не построена</strong><p>Сначала завершите проверку документа, затем нажмите кнопку выше.</p></div></div>
@@ -95,6 +96,7 @@ function resetStructurePanel() {
   structureDraft = null;
   structureSource = null;
   selectedStructureElement = null;
+  selectedStructureTextRange = null;
   const panel = structurePanel();
   if (!panel) return;
   panel.hidden = true;
@@ -216,8 +218,46 @@ function renderNewStructurePropertyFields() {
   fields.hidden = select.value !== "__new__";
 }
 
+function structureTextRangeControl(element) {
+  if (element.kind !== "paragraph") return "";
+  const unavailable = element.runsTruncated || !element.text;
+  return `
+    <label class="structure-text-range-field" for="documentFieldTextRange">
+      <span>Какой текст заменить значением?</span>
+      <textarea id="documentFieldTextRange" readonly${unavailable ? " disabled" : ""}>${structureEscape(element.text || "")}</textarea>
+      <small id="documentFieldTextRangeMessage">${
+        element.runsTruncated
+          ? "В этом абзаце слишком много фрагментов для безопасного выделения. Выберите другой абзац."
+          : element.text
+            ? "Выделите плейсхолдер или другой изменяемый текст. Подпись до и после выделения останется без изменений."
+            : "В пустом абзаце нельзя выделить место для поля. Выберите абзац с текстом."
+      }</small>
+    </label>`;
+}
+
+function captureStructureTextRange() {
+  const control = document.querySelector("#documentFieldTextRange");
+  const message = document.querySelector("#documentFieldTextRangeMessage");
+  const save = document.querySelector("#documentFieldSave");
+  if (!control || !message || !selectedStructureElement) return;
+  const startOffset = control.selectionStart;
+  const endOffset = control.selectionEnd;
+  if (endOffset <= startOffset) {
+    selectedStructureTextRange = null;
+    if (save) save.disabled = true;
+    message.textContent =
+      "Выделите плейсхолдер или другой изменяемый текст. Подпись до и после выделения останется без изменений.";
+    return;
+  }
+  selectedStructureTextRange = { startOffset, endOffset };
+  if (save) save.disabled = false;
+  const selected = selectedStructureElement.text.slice(startOffset, endOffset);
+  message.textContent = `Будет заменён только фрагмент «${selected}». Остальной текст абзаца сохранится.`;
+}
+
 function renderStructureSelection(element) {
   selectedStructureElement = element;
+  selectedStructureTextRange = null;
   document.querySelectorAll(".structure-element.is-selected").forEach((item) => {
     item.classList.remove("is-selected");
     item.setAttribute("aria-pressed", "false");
@@ -234,6 +274,7 @@ function renderStructureSelection(element) {
       <p>${structureEscape(structurePreview(element))}</p>
       <form class="structure-field-form" id="documentFieldForm" novalidate>
         <div class="structure-field-grid">
+          ${structureTextRangeControl(element)}
           <label>
             <span>Какое поле сотрудника поставить сюда?</span>
             <select id="documentFieldProperty" name="propertyKey">${structurePropertyOptions()}</select>
@@ -263,7 +304,7 @@ function renderStructureSelection(element) {
           <p>Координата: <code>${structureEscape(element.id)}</code>. Часть пакета: <code>${structureEscape(element.part || element.sheetName || "не указана")}</code>. Сервер повторно проверит её по сохранённой структуре.</p>
         </details>
         <div class="structure-field-actions">
-          <button class="primary-button" id="documentFieldSave" type="submit">Связать с документом</button>
+          <button class="primary-button" id="documentFieldSave" type="submit"${element.kind === "paragraph" ? " disabled" : ""}>Связать с документом</button>
           <p id="documentFieldMessage">Исходник должен быть сохранён в выбранном разделе данных.</p>
         </div>
       </form>
@@ -272,6 +313,10 @@ function renderStructureSelection(element) {
   detail
     .querySelector("#documentFieldProperty")
     ?.addEventListener("change", renderNewStructurePropertyFields);
+  const textRange = detail.querySelector("#documentFieldTextRange");
+  for (const eventName of ["select", "mouseup", "keyup", "touchend"]) {
+    textRange?.addEventListener(eventName, captureStructureTextRange);
+  }
   renderNewStructurePropertyFields();
   detail.querySelector("#documentFieldForm")?.addEventListener("submit", saveSelectedField);
 }
@@ -325,6 +370,15 @@ async function saveSelectedField(event) {
   const required = Boolean(form.querySelector("#documentFieldRequired")?.checked);
   const creatingProperty = propertyKey === "__new__";
   const propertyConfirmed = Boolean(form.querySelector("#documentPropertyConfirm")?.checked);
+  if (
+    selectedStructureElement.kind === "paragraph" &&
+    selectedStructureTextRange === null
+  ) {
+    message.className = "is-error";
+    message.textContent =
+      "Выделите в абзаце плейсхолдер или другой текст, который нужно заменять.";
+    return;
+  }
   if (!propertyKey || (creatingProperty && (!label || !propertyConfirmed))) {
     message.className = "is-error";
     message.textContent = creatingProperty
@@ -388,7 +442,10 @@ async function saveSelectedField(event) {
           label: definition.label,
           valueType: definition.valueType,
           required,
-          elementId: selectedStructureElement.id
+          elementId: selectedStructureElement.id,
+          ...(selectedStructureElement.kind === "paragraph"
+            ? { textRange: selectedStructureTextRange }
+            : {})
         })
       }
     );
@@ -476,7 +533,7 @@ function renderStructure(report, operationId) {
   result.innerHTML = `
     <article class="structure-report">
       <header>
-        <div><p class="eyebrow">Поля документа</p><h3>${structureEscape(report.fileName)}</h3><p>Выберите абзац или ячейку, куда нужно подставить значение карточки сотрудника.</p></div>
+        <div><p class="eyebrow">Поля документа</p><h3>${structureEscape(report.fileName)}</h3><p>В DOCX выберите абзац, затем выделите только изменяемый текст. В XLSX выберите нужную ячейку.</p></div>
         <span class="pill pill-success">Готово</span>
       </header>
       <div class="structure-metrics">${metrics

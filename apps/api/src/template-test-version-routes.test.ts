@@ -53,7 +53,7 @@ function sourceDocx(): Buffer {
         ? {
             ...entry,
             content:
-              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>ФИО получателя</w:t></w:r></w:p><w:p><w:r><w:t>Неизменяемый текст</w:t></w:r></w:p></w:body></w:document>'
+              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">ФИО: ______</w:t></w:r></w:p><w:p><w:r><w:t>Неизменяемый текст</w:t></w:r></w:p></w:body></w:document>'
           }
         : entry
     )
@@ -87,9 +87,10 @@ async function createDraftAndField(app: ReturnType<typeof buildApp>) {
     };
   };
   const element = draft.structure.elements.find(
-    (candidate) => candidate.kind === "paragraph" && candidate.text === "ФИО получателя"
+    (candidate) => candidate.kind === "paragraph" && candidate.text === "ФИО: ______"
   );
   assert.ok(element);
+  const startOffset = element.text.indexOf("______");
 
   const fieldResponse = await app.inject({
     method: "POST",
@@ -100,7 +101,8 @@ async function createDraftAndField(app: ReturnType<typeof buildApp>) {
       label: "ФИО получателя",
       valueType: "string",
       required: true,
-      elementId: element.id
+      elementId: element.id,
+      textRange: { startOffset, endOffset: startOffset + 6 }
     }
   });
   assert.equal(fieldResponse.statusCode, 201, fieldResponse.body);
@@ -183,8 +185,11 @@ test("trial endpoint compiles, renders, reads back and stores immutable files", 
       "word/document.xml"
     ).content.toString("utf8");
     assert.match(compiledXml, /aifield:/u);
-    assert.match(compiledXml, /ФИО получателя/u);
+    assert.match(compiledXml, /ФИО: /u);
+    assert.match(compiledXml, /______/u);
     assert.match(trialXml, /Иванов Иван Иванович/u);
+    assert.match(trialXml, /ФИО: /u);
+    assert.doesNotMatch(trialXml, /______/u);
     assert.match(trialXml, /Неизменяемый текст/u);
 
     const list = await app.inject({

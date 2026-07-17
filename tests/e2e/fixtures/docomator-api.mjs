@@ -145,7 +145,7 @@ function structureReport(fileName) {
         kind: "paragraph",
         part: "word/document.xml",
         index: 0,
-        text: "ФИО сотрудника",
+        text: "ФИО: ______",
         runsTruncated: false
       }
     ]
@@ -546,7 +546,8 @@ export async function installDocomatorApiMock(page, options = {}) {
         label: payload.label,
         valueType: payload.valueType,
         required: Boolean(payload.required),
-        elementId: payload.elementId
+        elementId: payload.elementId,
+        textRange: payload.textRange || null
       };
       draft.fields.push(field);
       data = { field };

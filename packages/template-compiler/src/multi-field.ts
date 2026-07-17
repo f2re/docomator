@@ -11,6 +11,7 @@ import {
   type CompileScalarFieldDefinition,
   type CompiledTechnicalBinding,
   type DocxParagraphBinding,
+  type DocxTextRangeBinding,
   type ScalarFieldBinding,
   type XlsxCellBinding
 } from "./compiler.js";
@@ -118,6 +119,21 @@ function requiredText(value: unknown, label: string, maximum: number): string {
   return normalized;
 }
 
+function exactText(value: unknown, label: string, maximum = 20_000): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > maximum ||
+    /\u0000/u.test(value)
+  ) {
+    throw new TemplateCompilerError(
+      "invalid_binding",
+      `Значение «${label}» имеет недопустимый размер или содержит запрещённый знак.`
+    );
+  }
+  return value;
+}
+
 function expectedSha256(value: string, label: string): string {
   const normalized = value.trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/u.test(normalized)) {
@@ -167,6 +183,29 @@ function parseBinding(value: unknown): ScalarFieldBinding {
         : { tableLocation: value.tableLocation })
     };
   }
+  if (value.kind === "docx.text-range") {
+    const startOffset = integer(value.startOffset, "начало текста");
+    const endOffset = integer(value.endOffset, "конец текста");
+    if (endOffset <= startOffset || endOffset > 20_000) {
+      throw new TemplateCompilerError(
+        "invalid_binding",
+        "Сохранённые границы текста DOCX имеют недопустимое значение."
+      );
+    }
+    return {
+      version: 1,
+      kind: "docx.text-range",
+      elementId,
+      part: requiredText(value.part, "часть DOCX", 500),
+      index: integer(value.index, "номер абзаца"),
+      startOffset,
+      endOffset,
+      selectedText: exactText(value.selectedText, "выбранный текст"),
+      ...(value.tableLocation === undefined
+        ? {}
+        : { tableLocation: value.tableLocation })
+    };
+  }
   if (value.kind === "xlsx.cell") {
     const address = requiredText(value.address, "адрес ячейки", 32).toUpperCase();
     if (!/^[A-Z]{1,4}[1-9][0-9]{0,6}$/u.test(address)) {
@@ -186,14 +225,18 @@ function parseBinding(value: unknown): ScalarFieldBinding {
   }
   throw new TemplateCompilerError(
     "unsupported_binding",
-    "Многополевой компилятор поддерживает целые абзацы DOCX и отдельные ячейки XLSX."
+    "Многополевой компилятор поддерживает целые абзацы или выбранный текст DOCX и отдельные ячейки XLSX."
   );
 }
 
 function coordinate(binding: ScalarFieldBinding): string {
-  return binding.kind === "docx.paragraph"
-    ? `docx:${binding.part}:${binding.index}`
-    : `xlsx:${binding.sheetPath}:${binding.address}`;
+  if (binding.kind === "docx.paragraph") {
+    return `docx:${binding.part}:${binding.index}`;
+  }
+  if (binding.kind === "docx.text-range") {
+    return `docx:${binding.part}:${binding.index}:${binding.startOffset}:${binding.endOffset}`;
+  }
+  return `xlsx:${binding.sheetPath}:${binding.address}`;
 }
 
 function ensureFieldCount(count: number): void {
@@ -267,7 +310,7 @@ function locateElement(
   format: "docx" | "xlsx"
 ): DocumentStructureElement {
   const element = elements.find((candidate) => {
-    if (binding.kind === "docx.paragraph") {
+    if (binding.kind === "docx.paragraph" || binding.kind === "docx.text-range") {
       return (
         format === "docx" &&
         candidate.kind === "paragraph" &&
@@ -286,7 +329,7 @@ function locateElement(
   if (element === undefined) {
     throw new TemplateCompilerError(
       "binding_coordinate_mismatch",
-      binding.kind === "docx.paragraph"
+      binding.kind === "docx.paragraph" || binding.kind === "docx.text-range"
         ? "Координата абзаца не совпадает с текущей структурой DOCX."
         : "Координата ячейки не совпадает с текущей структурой XLSX."
     );
@@ -298,9 +341,13 @@ function remapBinding(
   binding: ScalarFieldBinding,
   elementId: string
 ): ScalarFieldBinding {
-  return binding.kind === "docx.paragraph"
-    ? ({ ...binding, elementId } satisfies DocxParagraphBinding)
-    : ({ ...binding, elementId } satisfies XlsxCellBinding);
+  if (binding.kind === "docx.paragraph") {
+    return { ...binding, elementId } satisfies DocxParagraphBinding;
+  }
+  if (binding.kind === "docx.text-range") {
+    return { ...binding, elementId } satisfies DocxTextRangeBinding;
+  }
+  return { ...binding, elementId } satisfies XlsxCellBinding;
 }
 
 export async function compileScalarFields(
