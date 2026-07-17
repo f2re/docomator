@@ -227,3 +227,85 @@ test("spaces API rejects cross-space group membership", async () => {
     fixture.cleanup();
   }
 });
+
+test("spaces API exposes one shared workspace without IAM filters", async () => {
+  const fixture = migratedFixture();
+  const app = buildApp(
+    loadApiConfig({
+      DOCOMATOR_DATA_DIR: fixture.directory,
+      DOCOMATOR_LOG_LEVEL: "fatal"
+    }),
+    { store: fixture.store }
+  );
+
+  try {
+    for (const [key, name, actorId] of [
+      ["finance", "Финансовая служба", "operator-finance"],
+      ["legal", "Юридическая служба", "operator-legal"]
+    ]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/spaces",
+        headers: {
+          "x-correlation-id": `corr-${key}`,
+          "x-actor-id": actorId
+        },
+        payload: { key, name }
+      });
+      assert.equal(response.statusCode, 201, response.body);
+    }
+
+    const withoutActor = await app.inject({
+      method: "GET",
+      url: "/api/v1/spaces?limit=100"
+    });
+    const arbitraryActor = await app.inject({
+      method: "GET",
+      url: "/api/v1/spaces?limit=100",
+      headers: { "x-actor-id": "unregistered-operator" }
+    });
+    assert.equal(withoutActor.statusCode, 200, withoutActor.body);
+    assert.equal(arbitraryActor.statusCode, 200, arbitraryActor.body);
+    assert.deepEqual(
+      (arbitraryActor.json() as { data: Array<{ id: string }> }).data.map(
+        (space) => space.id
+      ),
+      (withoutActor.json() as { data: Array<{ id: string }> }).data.map(
+        (space) => space.id
+      )
+    );
+
+    const obsoleteFilter = await app.inject({
+      method: "GET",
+      url: "/api/v1/spaces?actorId=operator-finance"
+    });
+    assert.equal(obsoleteFilter.statusCode, 200, obsoleteFilter.body);
+    assert.deepEqual(
+      (obsoleteFilter.json() as { data: Array<{ id: string }> }).data.map(
+        (space) => space.id
+      ),
+      (withoutActor.json() as { data: Array<{ id: string }> }).data.map(
+        (space) => space.id
+      )
+    );
+
+    const finance = (
+      withoutActor.json() as { data: Array<{ id: string; key: string }> }
+    ).data.find((space) => space.key === "finance");
+    assert.ok(finance);
+    const obsoleteList = await app.inject({
+      method: "GET",
+      url: `/api/v1/spaces/${finance.id}/access-members`
+    });
+    const obsoleteMutation = await app.inject({
+      method: "PUT",
+      url: `/api/v1/spaces/${finance.id}/access-members/operator-1`,
+      payload: { role: "owner" }
+    });
+    assert.equal(obsoleteList.statusCode, 404, obsoleteList.body);
+    assert.equal(obsoleteMutation.statusCode, 404, obsoleteMutation.body);
+  } finally {
+    await app.close();
+    fixture.cleanup();
+  }
+});

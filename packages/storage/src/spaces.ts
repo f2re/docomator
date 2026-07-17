@@ -12,8 +12,6 @@ import { DomainEventOutbox } from "./outbox.js";
 export const DEFAULT_SPACE_ID = "00000000-0000-4000-8000-000000000001";
 
 export type SpaceStatus = "active" | "archived";
-export type SpaceActorRole = "owner" | "manager" | "editor" | "viewer";
-export type SpaceMembershipStatus = "active" | "inactive";
 export type AudienceSourceKind = "all_space" | "group" | "selected";
 export type DocumentTargetMode = "one_per_member" | "aggregate";
 
@@ -38,25 +36,8 @@ export interface CreateSpaceInput {
 }
 
 export interface ListSpacesOptions {
-  actorId?: string;
   status?: SpaceStatus;
   limit?: number;
-}
-
-export interface SpaceActorMembershipRecord {
-  spaceId: string;
-  actorId: string;
-  role: SpaceActorRole;
-  status: SpaceMembershipStatus;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface UpsertSpaceActorMembershipInput {
-  actorId: string;
-  role: SpaceActorRole;
-  status?: SpaceMembershipStatus;
 }
 
 export interface SpaceEntityRecord {
@@ -190,16 +171,6 @@ interface SpaceRow {
   version: number;
   entity_count: number;
   group_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-interface SpaceActorMembershipRow {
-  space_id: string;
-  actor_id: string;
-  role: string;
-  status: string;
-  version: number;
   created_at: string;
   updated_at: string;
 }
@@ -351,20 +322,6 @@ function entityStatus(value: string): "active" | "inactive" | "archived" {
   throw new SpaceValidationError(`Unsupported entity status: ${value}`);
 }
 
-function actorRole(value: string): SpaceActorRole {
-  if (value === "owner" || value === "manager" || value === "editor" || value === "viewer") {
-    return value;
-  }
-  throw new SpaceValidationError(`Unsupported space actor role: ${value}`);
-}
-
-function membershipStatus(value: string): SpaceMembershipStatus {
-  if (value === "active" || value === "inactive") {
-    return value;
-  }
-  throw new SpaceValidationError(`Unsupported membership status: ${value}`);
-}
-
 function targetMode(value: string): DocumentTargetMode {
   if (value === "one_per_member" || value === "aggregate") {
     return value;
@@ -408,18 +365,6 @@ function mapSpace(row: SpaceRow): SpaceRecord {
     version: row.version,
     entityCount: Number(row.entity_count),
     groupCount: Number(row.group_count),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
-}
-
-function mapActorMembership(row: SpaceActorMembershipRow): SpaceActorMembershipRecord {
-  return {
-    spaceId: row.space_id,
-    actorId: row.actor_id,
-    role: actorRole(row.role),
-    status: membershipStatus(row.status),
-    version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -693,23 +638,13 @@ export class SpaceRegistry {
         `)
         .run(id, key, name, description, context.now, context.now);
 
-      if (context.actorId !== null) {
-        connection
-          .prepare(`
-            INSERT INTO space_actor_memberships(
-              space_id, actor_id, role, status, version, created_at, updated_at
-            ) VALUES (?, ?, 'owner', 'active', 1, ?, ?)
-          `)
-          .run(id, context.actorId, context.now, context.now);
-      }
-
       this.outbox.append(
         {
           eventType: "space.created",
           schemaVersion: 1,
           source: "space-registry",
           occurredAt: context.now,
-          payload: { id, key, name, ownerActorId: context.actorId },
+          payload: { id, key, name, initiatedBy: context.actorId },
           dedupeKey: `space.created:${id}:v1`,
           now: context.now
         },
@@ -739,8 +674,6 @@ export class SpaceRegistry {
 
   listSpaces(options: ListSpacesOptions = {}): SpaceRecord[] {
     const status = options.status === undefined ? null : spaceStatus(options.status);
-    const actorId =
-      options.actorId === undefined ? null : requiredText(options.actorId, "actorId", 160);
     const limit = normalizeLimit(options.limit);
 
     return this.store.execute((connection) => {
@@ -751,19 +684,10 @@ export class SpaceRegistry {
                  (SELECT COUNT(*) FROM audience_groups g WHERE g.space_id = s.id AND g.status = 'active') AS group_count
           FROM spaces s
           WHERE (? IS NULL OR s.status = ?)
-            AND (
-              ? IS NULL OR EXISTS (
-                SELECT 1
-                FROM space_actor_memberships sam
-                WHERE sam.space_id = s.id
-                  AND sam.actor_id = ?
-                  AND sam.status = 'active'
-              )
-            )
           ORDER BY CASE WHEN s.id = ? THEN 0 ELSE 1 END, s.name ASC, s.id ASC
           LIMIT ?
         `)
-        .all(status, status, actorId, actorId, DEFAULT_SPACE_ID, limit) as unknown as SpaceRow[];
+        .all(status, status, DEFAULT_SPACE_ID, limit) as unknown as SpaceRow[];
       return rows.map(mapSpace);
     });
   }
@@ -775,79 +699,6 @@ export class SpaceRegistry {
         throw new SpaceNotFoundError(`Space was not found: ${identity}`);
       }
       return mapSpace(row);
-    });
-  }
-
-  upsertActorMembership(
-    spaceIdentity: string,
-    input: UpsertSpaceActorMembershipInput,
-    contextInput: MutationContext
-  ): SpaceActorMembershipRecord {
-    const actorId = requiredText(input.actorId, "actorId", 160);
-    const role = actorRole(input.role);
-    const status = membershipStatus(input.status ?? "active");
-    const context = normalizeContext(contextInput);
-
-    return this.store.transaction((connection) => {
-      const space = requireSpace(connection, spaceIdentity);
-      connection
-        .prepare(`
-          INSERT INTO space_actor_memberships(
-            space_id, actor_id, role, status, version, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, 1, ?, ?)
-          ON CONFLICT(space_id, actor_id) DO UPDATE SET
-            role = excluded.role,
-            status = excluded.status,
-            version = space_actor_memberships.version + 1,
-            updated_at = excluded.updated_at
-        `)
-        .run(space.id, actorId, role, status, context.now, context.now);
-
-      const row = connection
-        .prepare("SELECT * FROM space_actor_memberships WHERE space_id = ? AND actor_id = ?")
-        .get(space.id, actorId) as unknown as SpaceActorMembershipRow;
-      this.outbox.append(
-        {
-          eventType: "space.actor_membership.upserted",
-          schemaVersion: 1,
-          source: "space-registry",
-          occurredAt: context.now,
-          payload: { spaceId: space.id, actorId, role, status, version: row.version },
-          dedupeKey: `space.actor_membership.upserted:${space.id}:${actorId}:v${row.version}`,
-          now: context.now
-        },
-        connection
-      );
-      this.audit.record(
-        {
-          occurredAt: context.now,
-          actorType: context.actorType,
-          actorId: context.actorId,
-          action: "upsert_membership",
-          objectType: "space",
-          objectId: space.id,
-          correlationId: context.correlationId,
-          details: { memberActorId: actorId, role, status, version: row.version }
-        },
-        connection
-      );
-      return mapActorMembership(row);
-    });
-  }
-
-  listActorMemberships(spaceIdentity: string): SpaceActorMembershipRecord[] {
-    return this.store.execute((connection) => {
-      const space = requireSpace(connection, spaceIdentity);
-      const rows = connection
-        .prepare(`
-          SELECT *
-          FROM space_actor_memberships
-          WHERE space_id = ?
-          ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 WHEN 'editor' THEN 2 ELSE 3 END,
-                   actor_id ASC
-        `)
-        .all(space.id) as unknown as SpaceActorMembershipRow[];
-      return rows.map(mapActorMembership);
     });
   }
 

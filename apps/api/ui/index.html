@@ -120,7 +120,7 @@
 
         <section class="view" data-view="spaces" aria-labelledby="spaces-heading">
           <div class="section-intro">
-            <div><p class="eyebrow">Изолированные наборы данных</p><h2 id="spaces-heading">Пространства и аудитории</h2><p>Каждый человек принадлежит одному пространству. Группы, выборки и снимки аудитории не могут смешивать данные разных пространств.</p></div>
+            <div><p class="eyebrow">Организация общих данных</p><h2 id="spaces-heading">Разделы, участники и группы</h2><p>Разделы группируют участников, шаблоны и процессы. Все пользователи корпоративного сервиса могут работать с любым разделом.</p></div>
             <button class="primary-button" type="button" data-create="space"><span aria-hidden="true">＋</span><span>Создать пространство</span></button>
           </div>
 
@@ -132,9 +132,8 @@
 
             <div class="workspace-content">
               <article class="panel workspace-summary" id="spaceSummary">
-                <div><p class="eyebrow">Текущее пространство</p><h2 id="spaceName">Загружаем…</h2><p id="spaceDescription">Получаем изолированный состав и группы.</p></div>
+                <div><p class="eyebrow">Текущий раздел</p><h2 id="spaceName">Загружаем…</h2><p id="spaceDescription">Получаем состав и группы выбранного раздела.</p></div>
                 <div class="summary-actions">
-                  <button class="secondary-button" type="button" data-create="space-access">Добавить доступ</button>
                   <button class="primary-button" type="button" data-create="space-entity">Добавить человека</button>
                 </div>
               </article>
@@ -143,7 +142,6 @@
                 <button type="button" role="tab" aria-selected="true" data-space-tab="members">Участники</button>
                 <button type="button" role="tab" aria-selected="false" data-space-tab="groups">Группы</button>
                 <button type="button" role="tab" aria-selected="false" data-space-tab="audience">Документ</button>
-                <button type="button" role="tab" aria-selected="false" data-space-tab="access">Доступ</button>
               </div>
 
               <section class="space-pane is-visible" data-space-pane="members">
@@ -165,7 +163,7 @@
 
               <section class="space-pane" data-space-pane="audience">
                 <article class="panel audience-builder">
-                  <div class="panel-heading"><div><p class="eyebrow">Предварительный план</p><h2>Для кого формировать документ?</h2><p>Сейчас система фиксирует состав и строит исполнимый план. Сам DOCX/XLSX будет создан после подключения компилятора шаблонов.</p></div><span class="large-emoji" aria-hidden="true">📋</span></div>
+                  <div class="panel-heading"><div><p class="eyebrow">Предварительный план</p><h2>Для кого формировать документ?</h2><p>Система фиксирует состав и строит исполнимый план. Для выпуска готовых файлов перейдите в «Создать документы».</p></div><span class="large-emoji" aria-hidden="true">📋</span></div>
                   <div class="audience-form-grid">
                     <div class="field"><label for="audienceSource">Источник участников</label><select id="audienceSource"></select><small>Все активные участники, сохранённая группа или отмеченные вручную.</small></div>
                     <fieldset class="mode-fieldset"><legend>Форма результата</legend>
@@ -178,11 +176,6 @@
                 <div id="audiencePlan" class="plan-result" aria-live="polite"></div>
                 <div class="panel-heading compact-heading"><div><h2>Последние снимки</h2><p>Состав каждого снимка остаётся неизменным.</p></div></div>
                 <div id="audienceSnapshots" class="snapshot-list"></div>
-              </section>
-
-              <section class="space-pane" data-space-pane="access">
-                <div class="panel-heading compact-heading"><div><h2>Доступ к пространству</h2><p>Это пользователи приложения. Права будут проверяться модулем управления доступом до публикации службы в общей сети.</p></div><button class="primary-button" type="button" data-create="space-access">Добавить доступ</button></div>
-                <div id="spaceAccess" class="access-list" aria-live="polite"></div>
               </section>
             </div>
           </div>

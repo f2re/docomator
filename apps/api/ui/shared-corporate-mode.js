@@ -1,13 +1,3 @@
-document.querySelectorAll('[data-create="space-access"]').forEach((element) => {
-  element.hidden = true;
-});
-
-document
-  .querySelectorAll('[data-space-tab="access"], [data-space-pane="access"]')
-  .forEach((element) => {
-    element.hidden = true;
-  });
-
 const spacesNavigation = document.querySelector(
   '[data-view-target="spaces"] span:last-child'
 );

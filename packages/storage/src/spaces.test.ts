@@ -233,33 +233,40 @@ test("cross-space members are rejected before group or snapshot mutation", () =>
   }
 });
 
-test("space actor memberships are versioned and scoped", () => {
+test("legacy space memberships do not create or restrict application access", () => {
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
-    const space = spaces.createSpace(
+    const finance = spaces.createSpace(
       { key: "finance", name: "Финансовая служба" },
       context("corr-space", "owner-1")
     );
-    const owner = spaces.listActorMemberships(space.id)[0];
-    assert.equal(owner?.actorId, "owner-1");
-    assert.equal(owner?.role, "owner");
+    spaces.createSpace(
+      { key: "legal", name: "Юридическая служба" },
+      context("corr-legal", "owner-2")
+    );
 
-    const editor = spaces.upsertActorMembership(
-      space.id,
-      { actorId: "editor-1", role: "editor" },
-      context("corr-editor", "owner-1")
+    const membershipCount = fixture.store.execute((connection) =>
+      connection
+        .prepare("SELECT COUNT(*) AS count FROM space_actor_memberships")
+        .get() as { count: number }
     );
-    assert.equal(editor.version, 1);
-    const viewer = spaces.upsertActorMembership(
-      space.id,
-      { actorId: "editor-1", role: "viewer" },
-      context("corr-viewer", "owner-1")
-    );
-    assert.equal(viewer.version, 2);
+    assert.equal(membershipCount.count, 0);
+
+    const visibleBeforeLegacyRow = spaces.listSpaces().map((item) => item.id);
+    fixture.store.execute((connection) => {
+      connection
+        .prepare(`
+          INSERT INTO space_actor_memberships(
+            space_id, actor_id, role, status, version, created_at, updated_at
+          ) VALUES (?, 'legacy-user', 'viewer', 'active', 1, ?, ?)
+        `)
+        .run(finance.id, T0, T0);
+    });
+
     assert.deepEqual(
-      spaces.listSpaces({ actorId: "editor-1" }).map((item) => item.id),
-      [space.id]
+      spaces.listSpaces().map((item) => item.id),
+      visibleBeforeLegacyRow
     );
   } finally {
     fixture.cleanup();

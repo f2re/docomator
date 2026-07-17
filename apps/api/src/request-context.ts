@@ -21,6 +21,7 @@ export function mutationContextFromRequest(request: FastifyRequest): MutationCon
   return {
     correlationId: correlationId(request),
     actorType: "api",
+    // Это непроверенное обозначение инициатора для аудита, а не субъект доступа.
     actorId: headerValue(request, "x-actor-id") ?? request.id
   };
 }

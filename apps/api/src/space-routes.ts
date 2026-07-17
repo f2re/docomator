@@ -3,8 +3,6 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   type AudienceSelectionSource,
   type DocumentTargetMode,
-  type SpaceActorRole,
-  type SpaceMembershipStatus,
   type SpaceRegistry,
   SpaceValidationError,
   type SpaceStatus
@@ -14,10 +12,6 @@ import { correlationId, mutationContextFromRequest } from "./request-context.js"
 
 interface SpaceParams {
   spaceId: string;
-}
-
-interface ActorParams extends SpaceParams {
-  actorId: string;
 }
 
 interface EntityParams extends SpaceParams {
@@ -37,7 +31,6 @@ interface PaginationQuery {
 }
 
 interface SpaceListQuery extends PaginationQuery {
-  actorId?: string;
   status?: SpaceStatus;
 }
 
@@ -50,11 +43,6 @@ interface CreateSpaceBody {
   key?: string;
   name: string;
   description?: string;
-}
-
-interface UpsertActorMembershipBody {
-  role: SpaceActorRole;
-  status?: SpaceMembershipStatus;
 }
 
 interface CreateSpaceEntityBody {
@@ -164,7 +152,6 @@ export function registerSpaceRoutes(
           additionalProperties: false,
           properties: {
             ...paginationProperties,
-            actorId: idSchema,
             status: { type: "string", enum: ["active", "archived"] }
           }
         }
@@ -186,66 +173,6 @@ export function registerSpaceRoutes(
     },
     async (request) =>
       responseEnvelope(request, registry.getSpace(request.params.spaceId))
-  );
-
-  app.put<{ Params: ActorParams; Body: UpsertActorMembershipBody }>(
-    "/api/v1/spaces/:spaceId/access-members/:actorId",
-    {
-      schema: {
-        params: {
-          type: "object",
-          required: ["spaceId", "actorId"],
-          properties: { spaceId: idSchema, actorId: idSchema }
-        },
-        body: {
-          type: "object",
-          additionalProperties: false,
-          required: ["role"],
-          properties: {
-            role: {
-              type: "string",
-              enum: ["owner", "manager", "editor", "viewer"]
-            },
-            status: { type: "string", enum: ["active", "inactive"] }
-          }
-        }
-      }
-    },
-    async (request) => {
-      const input = {
-        actorId: request.params.actorId,
-        role: request.body.role,
-        ...(request.body.status === undefined
-          ? {}
-          : { status: request.body.status })
-      };
-      return responseEnvelope(
-        request,
-        registry.upsertActorMembership(
-          request.params.spaceId,
-          input,
-          mutationContextFromRequest(request)
-        )
-      );
-    }
-  );
-
-  app.get<{ Params: SpaceParams }>(
-    "/api/v1/spaces/:spaceId/access-members",
-    {
-      schema: {
-        params: {
-          type: "object",
-          required: ["spaceId"],
-          properties: { spaceId: idSchema }
-        }
-      }
-    },
-    async (request) =>
-      responseEnvelope(
-        request,
-        registry.listActorMemberships(request.params.spaceId)
-      )
   );
 
   app.post<{ Params: SpaceParams; Body: CreateSpaceEntityBody }>(

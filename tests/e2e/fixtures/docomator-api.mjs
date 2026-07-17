@@ -373,7 +373,7 @@ export async function installDocomatorApiMock(page, options = {}) {
       data = space.employees.find((employee) => employee.id === id) || null;
     } else if (/\/entities$/.test(path)) {
       data = space.entities;
-    } else if (/\/(?:groups|audience-snapshots|access-members)$/.test(path) && method === "GET") {
+    } else if (/\/(?:groups|audience-snapshots)$/.test(path) && method === "GET") {
       data = [];
     } else if (/\/active-templates$/.test(path)) {
       data = space.activeTemplates;

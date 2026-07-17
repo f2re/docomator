@@ -19,7 +19,7 @@ business record
 При ошибке откатываются все три записи.
 
 > [!WARNING]
-> В milestone M1 полноценные authentication и authorization ещё не реализованы. API по умолчанию слушает `127.0.0.1`. До внедрения IAM его нельзя напрямую публиковать в недоверенную сеть; допустим только localhost или доверенный reverse proxy с собственным контролем доступа.
+> Согласно [ADR-0006](adr/0006-shared-trusted-workspace-without-iam.md), приложение намеренно не реализует authentication, authorization, учётные записи и роли. API по умолчанию слушает `127.0.0.1`; публиковать его можно только внутри доверенного корпоративного периметра. Docomator не заменяет сетевой и системный контроль допуска.
 
 ## Базовый URL
 
@@ -33,10 +33,10 @@ business record
 
 ```http
 X-Correlation-ID: request-2026-07-11-001
-X-Actor-ID: operator-42
+X-Actor-ID: workstation-42
 ```
 
-Разрешены латинские буквы, цифры и символы `._:/-`, длина — до 160 знаков. Некорректный correlation ID заменяется внутренним Fastify request ID. Если `X-Actor-ID` отсутствует, в аудит записывается request ID.
+Разрешены латинские буквы, цифры и символы `._:/-`, длина — до 160 знаков. Некорректный correlation ID заменяется внутренним Fastify request ID. Если `X-Actor-ID` отсутствует, в аудит записывается request ID. `X-Actor-ID` задаётся клиентом и является только непроверенным обозначением инициатора для происхождения и диагностики; он не подтверждает личность и не влияет на доступ.
 
 Каждый ответ содержит:
 
@@ -136,7 +136,7 @@ value_file_id
 ```bash
 curl -X POST http://127.0.0.1:8080/api/v1/knowledge/entity-types \
   -H 'content-type: application/json' \
-  -H 'x-actor-id: admin-1' \
+  -H 'x-actor-id: workstation-1' \
   -d '{
     "key": "person",
     "label": "Человек",
@@ -149,7 +149,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/knowledge/entity-types \
 ```bash
 curl -X POST http://127.0.0.1:8080/api/v1/knowledge/property-definitions \
   -H 'content-type: application/json' \
-  -H 'x-actor-id: data-steward-1' \
+  -H 'x-actor-id: workstation-1' \
   -d '{
     "key": "person.height",
     "label": "Рост",
@@ -169,7 +169,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/knowledge/property-definitions \
 ```bash
 curl -X POST http://127.0.0.1:8080/api/v1/knowledge/entities \
   -H 'content-type: application/json' \
-  -H 'x-actor-id: operator-1' \
+  -H 'x-actor-id: workstation-1' \
   -d '{
     "entityTypeKey": "person",
     "displayName": "Иванов Иван Иванович"
@@ -184,11 +184,11 @@ curl -X POST http://127.0.0.1:8080/api/v1/knowledge/entities \
 curl -X PUT \
   http://127.0.0.1:8080/api/v1/knowledge/entities/ENTITY_ID/properties/person.height \
   -H 'content-type: application/json' \
-  -H 'x-actor-id: operator-1' \
+  -H 'x-actor-id: workstation-1' \
   -d '{
     "value": 181.5,
     "sourceType": "user_input",
-    "confirmedBy": "operator-1",
+    "confirmedBy": "workstation-1",
     "validFrom": "2026-07-11"
   }'
 ```
@@ -216,9 +216,7 @@ curl 'http://127.0.0.1:8080/api/v1/knowledge/entities/ENTITY_ID/property-values?
 
 ## Следующие шаги
 
-- authentication, RBAC и field-level access для `personal/restricted`;
 - update/deactivate operations с optimistic version check;
-- bulk CSV/XLSX import preview;
 - current-value resolver с учётом периода действия и cardinality;
 - semantic duplicate suggestions для новых property definitions;
 - UI динамических форм поверх JSON Schema.

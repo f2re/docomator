@@ -27,6 +27,7 @@ Do not silently weaken a MUST requirement. Update requirements and add an ADR wh
 - SMTP and network destinations are allowlisted.
 - Network share writes must verify mount + sentinel and use temp-file/atomic-rename semantics.
 - Keep the modular monolith. Do not introduce a broker, cache server, microservice, or vector database without measured need and an ADR.
+- The application has no authentication, accounts, roles or section-level access control: every client admitted by the trusted corporate perimeter works with shared data. Do not add IAM without a superseding ADR.
 
 ## Repository structure
 

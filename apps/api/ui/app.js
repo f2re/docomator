@@ -29,16 +29,6 @@ const displayNames = Object.freeze({
     active: "Активный",
     inactive: "Неактивный",
     archived: "Архивный"
-  },
-  spaceRole: {
-    owner: "Владелец",
-    manager: "Руководитель",
-    editor: "Редактор",
-    viewer: "Наблюдатель"
-  },
-  membershipStatus: {
-    active: "Доступ включён",
-    inactive: "Доступ отключён"
   }
 });
 
@@ -79,8 +69,7 @@ const state = {
     activeTemplates: [],
     spaceEntities: [],
     groups: [],
-    snapshots: [],
-    access: []
+    snapshots: []
   }
 };
 
@@ -237,21 +226,6 @@ const dialogs = {
         body: JSON.stringify({ entityIds: [...state.selectedEntityIds] })
       });
     }
-  },
-  "space-access": {
-    eyebrow: "Доступ к пространству",
-    title: "Добавить пользователя приложения",
-    description: "Укажите внутренний идентификатор пользователя и его роль в текущем пространстве.",
-    endpoint: (values) => spaceEndpoint(`/access-members/${encodeURIComponent(values.actorId)}`),
-    method: "PUT",
-    success: "Доступ обновлён",
-    submit: "Сохранить доступ",
-    fields: [
-      ["actorId", "Идентификатор пользователя", "text", true, "user-42", "Внутренний идентификатор локальной учётной записи. Раздел управления учётными записями будет добавлен отдельным этапом."],
-      ["role", "Роль", "space-role", true, "", "Владелец управляет пространством; руководитель — составом; редактор — данными; наблюдатель — только просматривает."],
-      ["status", "Статус доступа", "membership-status", true, "", "Неактивный доступ сохраняется в истории, но не разрешает вход."]
-    ],
-    payload: (values) => ({ role: values.role, status: values.status })
   }
 };
 
@@ -388,7 +362,7 @@ function setKnowledgeTab(tab) {
 }
 
 function setSpaceTab(tab) {
-  if (!['members', 'groups', 'audience', 'access'].includes(tab)) return;
+  if (!['members', 'groups', 'audience'].includes(tab)) return;
   state.spaceTab = tab;
   $$('[data-space-tab]').forEach((button) => button.setAttribute("aria-selected", String(button.dataset.spaceTab === tab)));
   $$('[data-space-pane]').forEach((pane) => pane.classList.toggle("is-visible", pane.dataset.spacePane === tab));
@@ -468,15 +442,6 @@ function renderGroups() {
   root.innerHTML = state.data.groups.map((group) => `<article class="collection-card group-card"><header><div><h3>${escapeHtml(group.name)}</h3></div><span class="pill">${group.memberCount} чел.</span></header><p>${escapeHtml(group.description || "Описание не добавлено.")}</p><div class="card-actions"><button class="text-button" type="button" data-edit-group="${escapeHtml(group.id)}">Показать состав</button><button class="secondary-button compact-button" type="button" data-use-group="${escapeHtml(group.id)}">Использовать для документа</button></div><details class="technical-details"><summary>Технические сведения</summary><dl><div><dt>Системное обозначение</dt><dd><code>${escapeHtml(group.key)}</code></dd></div></dl></details></article>`).join("");
 }
 
-function renderAccess() {
-  const root = $("#spaceAccess");
-  if (state.data.access.length === 0) {
-    root.innerHTML = '<div class="empty-state compact-empty"><div><span class="empty-emoji" aria-hidden="true">🔐</span><h3>Дополнительный доступ не настроен</h3><p>Создатель пространства уже имеет роль владельца. При необходимости добавьте внутренний идентификатор другого пользователя.</p><button class="primary-button" type="button" data-create="space-access">Добавить доступ</button></div></div>';
-    return;
-  }
-  root.innerHTML = state.data.access.map((member) => `<article class="access-row"><span class="member-avatar" aria-hidden="true">🔑</span><span><strong>${escapeHtml(member.actorId)}</strong><small>Роль: ${escapeHtml(displayLabel("spaceRole", member.role))} · ${escapeHtml(displayLabel("membershipStatus", member.status))}</small></span><span class="pill">Версия ${member.version}</span></article>`).join("");
-}
-
 function sourceLabel(snapshot) {
   if (snapshot.sourceKind === "all_space") return "Все активные";
   if (snapshot.sourceKind === "group") return "Сохранённая группа";
@@ -545,7 +510,6 @@ function renderSpaces() {
   renderSpaceSummary();
   renderMembers();
   renderGroups();
-  renderAccess();
   renderAudienceSource();
   renderSnapshots();
   setSpaceTab(state.spaceTab);
@@ -577,7 +541,6 @@ async function loadCurrentSpaceData() {
     state.data.spaceEntities = [];
     state.data.groups = [];
     state.data.snapshots = [];
-    state.data.access = [];
     renderSpaces();
     updateMetrics();
     return;
@@ -585,16 +548,14 @@ async function loadCurrentSpaceData() {
   state.spaceLoading = true;
   try {
     const base = `/api/v1/spaces/${encodeURIComponent(space.id)}`;
-    const [entities, groups, snapshots, access] = await Promise.all([
+    const [entities, groups, snapshots] = await Promise.all([
       api(`${base}/entities?limit=1000`),
       api(`${base}/groups?limit=500`),
-      api(`${base}/audience-snapshots?limit=50`),
-      api(`${base}/access-members`)
+      api(`${base}/audience-snapshots?limit=50`)
     ]);
     state.data.spaceEntities = entities?.data || [];
     state.data.groups = groups?.data || [];
     state.data.snapshots = snapshots?.data || [];
-    state.data.access = access?.data || [];
     const available = new Set(state.data.spaceEntities.map((entity) => entity.entityId));
     state.selectedEntityIds = new Set([...state.selectedEntityIds].filter((id) => available.has(id)));
     renderSpaces();
@@ -674,8 +635,6 @@ function optionsFor(type) {
   if (type === "value-type") return [["string", "Короткая строка"], ["text", "Длинный текст"], ["number", "Число"], ["integer", "Целое число"], ["boolean", "Да / нет"], ["date", "Дата"], ["date-time", "Дата и время"], ["enum", "Список вариантов"], ["entity-reference", "Ссылка на объект"], ["list", "Список"], ["json", "Структурированные данные"], ["file", "Файл"], ["image", "Изображение"]];
   if (type === "sensitivity") return [["internal", "Внутренние"], ["public", "Публичные"], ["personal", "Персональные"], ["restricted", "Ограниченные"]];
   if (type === "status") return [["active", "Активный"], ["inactive", "Неактивный"], ["archived", "Архивный"]];
-  if (type === "space-role") return [["viewer", "Наблюдатель — просмотр"], ["editor", "Редактор — изменение данных"], ["manager", "Руководитель — состав и группы"], ["owner", "Владелец — полное управление"]];
-  if (type === "membership-status") return [["active", "Активный доступ"], ["inactive", "Доступ отключён"]];
   if (type === "entity-type") return state.data.types.map((item) => [item.key, item.label]);
   return null;
 }
@@ -694,7 +653,7 @@ function fieldHtml([name, label, type, required, placeholder, hint]) {
 
 function openDialog(kind) {
   if (!dialogs[kind]) return;
-  if ((kind === "space-entity" || kind === "group" || kind === "space-access") && !currentSpace()) {
+  if ((kind === "space-entity" || kind === "group") && !currentSpace()) {
     notify("💡", "Сначала выберите пространство", "Эта операция должна иметь однозначную границу данных.");
     kind = "space";
   }
@@ -754,7 +713,6 @@ async function submitDialog(event) {
     if (kind === "entity-type" || kind === "property") selectView("knowledge"); else selectView("spaces");
     if (kind === "property") setKnowledgeTab("properties");
     if (kind === "group") setSpaceTab("groups");
-    if (kind === "space-access") setSpaceTab("access");
   } catch (cause) {
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось сохранить изменение.");
     $("#formError").hidden = false;
