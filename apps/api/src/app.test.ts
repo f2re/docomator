@@ -111,3 +111,37 @@ test("readiness stays degraded until template formatter migration is applied", a
   assert.equal(response.json().checks.database, "error");
   await app.close();
 });
+
+test("readiness stays degraded until DOCX repeat migration is applied", async () => {
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-ready-0024-"));
+  const databasePath = path.join(dataDir, "docomator.db");
+  const database = new DatabaseSync(databasePath);
+  database.exec("PRAGMA foreign_keys = ON;");
+  const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const migrationsDirectory = path.resolve(currentDirectory, "../../../migrations");
+  for (const migration of fsSync
+    .readdirSync(migrationsDirectory)
+    .filter((name) => /^\d{4}_.+\.sql$/.test(name) && name < "0024_")
+    .sort()) {
+    database.exec(fsSync.readFileSync(path.join(migrationsDirectory, migration), "utf8"));
+  }
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      name TEXT PRIMARY KEY,
+      checksum TEXT NOT NULL,
+      applied_at TEXT NOT NULL
+    );
+  `);
+  database.close();
+
+  const app = buildApp(
+    loadApiConfig({
+      DOCOMATOR_DATA_DIR: dataDir,
+      DOCOMATOR_LOG_LEVEL: "fatal"
+    })
+  );
+  const response = await app.inject({ method: "GET", url: "/readyz" });
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().checks.database, "error");
+  await app.close();
+});

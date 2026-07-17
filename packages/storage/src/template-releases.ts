@@ -148,6 +148,7 @@ interface ReleaseSourceRow {
   compiled_file_id: string;
   compiled_sha256: string;
   trial_sha256: string;
+  repeat_contract_json: string | null;
   draft_id: string;
   space_id: string;
   title: string;
@@ -816,6 +817,7 @@ export class TemplateReleaseRegistry {
             c.compiled_file_id,
             c.compiled_sha256,
             c.trial_sha256,
+            c.repeat_contract_json,
             d.id AS draft_id,
             d.space_id,
             d.title,
@@ -880,7 +882,7 @@ export class TemplateReleaseRegistry {
       const versionNumber = Number(current.value) + 1;
       const versionKind = candidateKind(source.version_kind);
       const manifest = toJsonValue({
-        version: 3,
+        version: 4,
         draftId: source.draft_id,
         title: source.title,
         format: source.format,
@@ -891,6 +893,12 @@ export class TemplateReleaseRegistry {
         compiledSha256: source.compiled_sha256,
         trialSha256: source.trial_sha256,
         previewSha256: source.preview_sha256,
+        compatibilityLevel:
+          source.repeat_contract_json === null ? "safe-scalar" : "structured",
+        repeats:
+          source.repeat_contract_json === null
+            ? []
+            : [parseJson(source.repeat_contract_json)],
         fields: fields.map((field) => ({
           id: field.field_id,
           key: field.field_key,

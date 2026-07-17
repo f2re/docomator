@@ -62,7 +62,7 @@ function createMultiTrialPanel() {
       </div>
       <div class="multi-trial-guidance">
         <span aria-hidden="true">ⓘ</span>
-        <p>Этот шаг доступен для черновика с двумя или более полями. Требуется заполнить весь набор: неполная версия не сохраняется.</p>
+        <p>Этот шаг доступен для черновика с несколькими полями или с повторяемой строкой. Требуется заполнить весь набор: неполная версия не сохраняется.</p>
       </div>
       <div id="templateMultiTrialContent" class="multi-trial-content" aria-live="polite">
         <div class="multi-trial-state"><span aria-hidden="true">⏳</span><div><strong>Получаем черновики</strong><p>Ищем в выбранном пространстве документы с несколькими сохранёнными полями.</p></div></div>
@@ -205,11 +205,15 @@ function renderMultiTrialWorkspace() {
   const content = document.querySelector("#templateMultiTrialContent");
   if (!content) return;
   const usable = multiTrialDrafts.filter(
-    (draft) => draft.status === "draft" && Array.isArray(draft.fields) && draft.fields.length >= 2
+    (draft) =>
+      draft.status === "draft" &&
+      Array.isArray(draft.fields) &&
+      (draft.fields.length >= 2 ||
+        (draft.repeatBinding && draft.fields.length >= 1))
   );
   if (usable.length === 0) {
     content.innerHTML = `
-      <div class="multi-trial-state"><span aria-hidden="true">📭</span><div><strong>Нет черновика с несколькими полями</strong><p>Сохраните не менее двух разных полей одного DOCX/XLSX. После этого форма появится автоматически.</p></div></div>`;
+      <div class="multi-trial-state"><span aria-hidden="true">📭</span><div><strong>Нет черновика для полной проверки</strong><p>Сохраните не менее двух разных полей или одно поле в повторяемой строке DOCX. После этого форма появится автоматически.</p></div></div>`;
     return;
   }
   multiTrialDrafts = usable;

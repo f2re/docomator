@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -212,6 +213,135 @@ test("formatter migration preserves old rendering and constrains new contracts",
       database
         .prepare("UPDATE template_draft_fields SET formatter_json = '[]' WHERE id = 'field'")
         .run()
+    );
+    database.exec(
+      fs.readFileSync(
+        path.join(migrationsDirectory, "0024_docx_repeat_rows.sql"),
+        "utf8"
+      )
+    );
+    assert.equal(
+      database
+        .prepare("SELECT repeat_binding_json FROM template_drafts WHERE id = 'draft'")
+        .get().repeat_binding_json,
+      null
+    );
+    assert.equal(
+      database
+        .prepare(
+          "SELECT repeat_contract_json FROM template_multi_test_versions WHERE id = 'multi-version'"
+        )
+        .get().repeat_contract_json,
+      null
+    );
+    assert.deepEqual(
+      database
+        .prepare(
+          "SELECT DISTINCT repeat_contract_json FROM template_release_candidates ORDER BY id"
+        )
+        .all()
+        .map((row) => row.repeat_contract_json),
+      [null]
+    );
+    assert.throws(() =>
+      database
+        .prepare("UPDATE template_drafts SET repeat_binding_json = '[]' WHERE id = 'draft'")
+        .run()
+    );
+    const repeatBinding = {
+      version: 1,
+      kind: "docx.repeat-row",
+      source: "audience.members",
+      anchorElementId: "paragraph-1",
+      part: "word/document.xml",
+      tableIndex: 0,
+      rowIndex: 1
+    };
+    const repeatIdentifier = `airepeat:${createHash("sha256")
+      .update(repeatBinding.part)
+      .update("\u0000")
+      .update(String(repeatBinding.tableIndex))
+      .update("\u0000")
+      .update(String(repeatBinding.rowIndex))
+      .update("\u0000")
+      .update(repeatBinding.source)
+      .digest("hex")
+      .slice(0, 24)}`;
+    const repeatContract = {
+      version: 1,
+      kind: "docx.repeat-row-contract",
+      binding: repeatBinding,
+      technicalBinding: {
+        kind: "docx.repeat-sdt",
+        identifier: repeatIdentifier,
+        part: repeatBinding.part,
+        target: "таблица 1, строка 2"
+      }
+    };
+    database
+      .prepare("UPDATE template_drafts SET repeat_binding_json = ? WHERE id = 'draft'")
+      .run(JSON.stringify(repeatBinding));
+    database
+      .prepare(`
+        INSERT INTO template_multi_test_versions(
+          id, space_id, draft_id, version_number, format,
+          compiled_file_id, trial_file_id, compiled_sha256, trial_sha256,
+          sample_values_json, verification_json, field_count, status,
+          repeat_contract_json, created_by, correlation_id, created_at
+        ) VALUES (
+          'repeat-version', '00000000-0000-4000-8000-000000000001',
+          'draft', 3, 'docx', 'file-compiled', 'file-trial', ?, ?,
+          '{"person.rate":13}', '{}', 1, 'tested', ?,
+          'migration-test', 'corr-repeat', ?
+        )
+      `)
+      .run(
+        compiledSha256,
+        trialSha256,
+        JSON.stringify(repeatContract),
+        timestamp
+      );
+    assert.deepEqual(
+      JSON.parse(
+        database
+          .prepare(
+            "SELECT repeat_contract_json FROM template_release_candidates WHERE id = 'repeat-version'"
+          )
+          .get().repeat_contract_json
+      ),
+      repeatContract
+    );
+    assert.throws(() =>
+      database
+        .prepare(
+          "UPDATE template_release_candidates SET repeat_contract_json = NULL WHERE id = 'repeat-version'"
+        )
+        .run()
+    );
+    assert.throws(() =>
+      database
+        .prepare(`
+          INSERT INTO template_multi_test_versions(
+            id, space_id, draft_id, version_number, format,
+            compiled_file_id, trial_file_id, compiled_sha256, trial_sha256,
+            sample_values_json, verification_json, field_count, status,
+            repeat_contract_json, created_by, correlation_id, created_at
+          ) VALUES (
+            'broken-repeat-version', '00000000-0000-4000-8000-000000000001',
+            'draft', 4, 'docx', 'file-compiled', 'file-trial', ?, ?,
+            '{"person.rate":14}', '{}', 1, 'tested', ?, 'migration-test', 'corr-broken', ?
+          )
+        `)
+        .run(
+          compiledSha256,
+          trialSha256,
+          JSON.stringify({
+            version: 1,
+            kind: "docx.repeat-row-contract",
+            binding: repeatBinding
+          }),
+          timestamp
+        )
     );
     assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);

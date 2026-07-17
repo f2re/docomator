@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 
 import {
+  parseDocxRepeatRowContract,
   TemplateCompilerError,
+  type CompiledRepeatTechnicalBinding,
   type CompiledTechnicalBinding,
+  type DocxRepeatRowBinding,
   type ScalarFieldBinding
 } from "./compiler.js";
 import {
@@ -51,6 +54,43 @@ export interface RenderScalarValueResult {
   modifiedPart: string;
   verification: {
     matched: true;
+    message: string;
+  };
+}
+
+export interface RenderDocxRepeatField {
+  fieldId: string;
+  fieldKey: string;
+  required: boolean;
+  technicalBinding: CompiledTechnicalBinding;
+  fieldBinding: ScalarFieldBinding;
+  valueType: ScalarValueType;
+  formatter?: unknown;
+}
+
+export interface RenderDocxRepeatMember {
+  memberId: string;
+  values: readonly unknown[];
+}
+
+export interface RenderDocxRepeatRowsInput {
+  compiled: Uint8Array;
+  binding: DocxRepeatRowBinding;
+  technicalBinding: CompiledRepeatTechnicalBinding;
+  fields: readonly RenderDocxRepeatField[];
+  members: readonly RenderDocxRepeatMember[];
+}
+
+export interface RenderDocxRepeatRowsResult {
+  output: Buffer;
+  inputSha256: string;
+  outputSha256: string;
+  modifiedPart: string;
+  rowCount: number;
+  fieldCount: number;
+  verification: {
+    matched: true;
+    checkedValues: number;
     message: string;
   };
 }
@@ -437,6 +477,24 @@ function tagsInside(
   return result;
 }
 
+function directChildElements(
+  tags: readonly XmlTag[],
+  parentOpenIndex: number,
+  parentCloseIndex: number
+): Array<{ tag: XmlTag; index: number; closeIndex: number }> {
+  const result: Array<{ tag: XmlTag; index: number; closeIndex: number }> = [];
+  let index = parentOpenIndex + 1;
+  while (index < parentCloseIndex) {
+    const tag = tags[index];
+    if (tag === undefined || tag.closing) throwInvalidXml();
+    const closeIndex = matchingCloseIndex(tags, index);
+    if (closeIndex > parentCloseIndex) throwInvalidXml();
+    result.push({ tag, index, closeIndex });
+    index = closeIndex + 1;
+  }
+  return result;
+}
+
 function xmlAttribute(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -529,17 +587,24 @@ function docxContentTarget(
     const sdtCloseIndex = matchingCloseIndex(tags, sdtIndex);
     const sdtClose = tags[sdtCloseIndex];
     if (sdtClose === undefined) throwInvalidXml();
-    const inside = tagsInside(tags, sdt.end, sdtClose.start);
-    const identifierFound = inside.some(
-      ({ tag }) =>
-        !tag.closing &&
-        tag.localName === "tag" &&
-        (attributeValue(tag.raw, "w:val") ??
-          attributeValue(tag.raw, "val")) === identifier
+    const children = directChildElements(tags, sdtIndex, sdtCloseIndex);
+    const properties = children.find(
+      ({ tag }) => tag.localName === "sdtPr"
     );
+    const propertiesClose =
+      properties === undefined ? undefined : tags[properties.closeIndex];
+    const identifierFound =
+      properties !== undefined &&
+      propertiesClose !== undefined &&
+      directChildElements(tags, properties.index, properties.closeIndex).some(
+        ({ tag }) =>
+          tag.localName === "tag" &&
+          (attributeValue(tag.raw, "w:val") ??
+            attributeValue(tag.raw, "val")) === identifier
+      );
     if (!identifierFound) continue;
-    const content = inside.find(
-      ({ tag }) => !tag.closing && tag.localName === "sdtContent"
+    const content = children.find(
+      ({ tag }) => tag.localName === "sdtContent"
     );
     if (content === undefined) {
       throw new TemplateCompilerError(
@@ -547,7 +612,7 @@ function docxContentTarget(
         "В технической привязке DOCX отсутствует содержимое."
       );
     }
-    const contentCloseIndex = matchingCloseIndex(tags, content.index);
+    const contentCloseIndex = content.closeIndex;
     const contentClose = tags[contentCloseIndex];
     if (contentClose === undefined) throwInvalidXml();
     return {
@@ -589,19 +654,44 @@ function tagPrefix(qualifiedName: string): string {
   return separator < 0 ? "" : qualifiedName.slice(0, separator + 1);
 }
 
-function renderDocx(
-  entries: readonly OoxmlPackageEntry[],
-  technical: CompiledTechnicalBinding,
+interface XmlReplacement {
+  start: number;
+  end: number;
+  value: string;
+}
+
+function applyXmlReplacements(
+  xml: string,
+  replacements: readonly XmlReplacement[]
+): string {
+  const ordered = [...replacements].sort((left, right) => left.start - right.start);
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const replacement of ordered) {
+    if (
+      replacement.start < cursor ||
+      replacement.start < 0 ||
+      replacement.end < replacement.start ||
+      replacement.end > xml.length
+    ) {
+      throwInvalidXml();
+    }
+    parts.push(xml.slice(cursor, replacement.start), replacement.value);
+    cursor = replacement.end;
+  }
+  parts.push(xml.slice(cursor));
+  return parts.join("");
+}
+
+function docxValueReplacement(
+  xml: string,
+  target: ReturnType<typeof docxContentTarget>,
   binding: ScalarFieldBinding,
   value: NormalizedScalarValue
-): OoxmlPackageEntry[] {
-  const entry = packageEntry(entries, technical.part);
-  const decoded = decodeXml(entry.content);
-  const target = docxContentTarget(decoded.text, technical.identifier);
+): XmlReplacement {
   const content = target.tags[target.contentOpenIndex];
   const contentClose = target.tags[target.contentCloseIndex];
   if (content === undefined || contentClose === undefined) throwInvalidXml();
-  let updated: string;
   if (binding.kind === "docx.paragraph") {
     const paragraph = tagsInside(
       target.tags,
@@ -621,14 +711,14 @@ function renderDocx(
     const paragraphClose = target.tags[paragraphCloseIndex];
     if (paragraphClose === undefined) throwInvalidXml();
     const paragraphProperties = firstChildXml(
-      decoded.text,
+      xml,
       target.tags,
       paragraph.index,
       paragraphCloseIndex,
       "pPr"
     );
     const runProperties = firstChildXml(
-      decoded.text,
+      xml,
       target.tags,
       paragraph.index,
       paragraphCloseIndex,
@@ -636,16 +726,18 @@ function renderDocx(
     );
     const prefix = tagPrefix(paragraph.tag.name) || "w:";
     const run = `<${prefix}r>${runProperties}<${prefix}t xml:space="preserve">${xmlText(value.display)}</${prefix}t></${prefix}r>`;
-    const opening = decoded.text.slice(paragraph.tag.start, paragraph.tag.end);
+    const opening = xml.slice(paragraph.tag.start, paragraph.tag.end);
     const closing = paragraph.tag.selfClosing
       ? `</${paragraph.tag.name}>`
-      : decoded.text.slice(paragraphClose.start, paragraphClose.end);
+      : xml.slice(paragraphClose.start, paragraphClose.end);
     const replacement = `${opening.replace(/\/>$/u, ">")}${paragraphProperties}${run}${closing}`;
-    updated =
-      decoded.text.slice(0, paragraph.tag.start) +
-      replacement +
-      decoded.text.slice(paragraphClose.end);
-  } else if (binding.kind === "docx.text-range") {
+    return {
+      start: paragraph.tag.start,
+      end: paragraphClose.end,
+      value: replacement
+    };
+  }
+  if (binding.kind === "docx.text-range") {
     const run = tagsInside(target.tags, content.end, contentClose.start).find(
       ({ tag }) => !tag.closing && tag.localName === "r"
     );
@@ -657,7 +749,7 @@ function renderDocx(
     }
     const runCloseIndex = matchingCloseIndex(target.tags, run.index);
     const runProperties = firstChildXml(
-      decoded.text,
+      xml,
       target.tags,
       run.index,
       runCloseIndex,
@@ -665,20 +757,42 @@ function renderDocx(
     );
     const prefix = tagPrefix(run.tag.name) || "w:";
     const replacement = `<${prefix}r>${runProperties}<${prefix}t xml:space="preserve">${xmlText(value.display)}</${prefix}t></${prefix}r>`;
-    updated =
-      decoded.text.slice(0, content.end) +
-      replacement +
-      decoded.text.slice(contentClose.start);
-  } else {
-    throw new TemplateCompilerError(
-      "technical_binding_mismatch",
-      "Для DOCX требуется координата абзаца или выбранного текста."
-    );
+    return {
+      start: content.end,
+      end: contentClose.start,
+      value: replacement
+    };
   }
+  throw new TemplateCompilerError(
+    "technical_binding_mismatch",
+    "Для DOCX требуется координата абзаца или выбранного текста."
+  );
+}
+
+function renderDocxXml(
+  xml: string,
+  technical: CompiledTechnicalBinding,
+  binding: ScalarFieldBinding,
+  value: NormalizedScalarValue
+): string {
+  const target = docxContentTarget(xml, technical.identifier);
+  return applyXmlReplacements(xml, [
+    docxValueReplacement(xml, target, binding, value)
+  ]);
+}
+
+function renderDocx(
+  entries: readonly OoxmlPackageEntry[],
+  technical: CompiledTechnicalBinding,
+  binding: ScalarFieldBinding,
+  value: NormalizedScalarValue
+): OoxmlPackageEntry[] {
+  const entry = packageEntry(entries, technical.part);
+  const decoded = decodeXml(entry.content);
   return replacePackageEntry(
     entries,
     technical.part,
-    encodeXml(decoded, updated)
+    encodeXml(decoded, renderDocxXml(decoded.text, technical, binding, value))
   );
 }
 
@@ -790,6 +904,419 @@ function readDocx(
     value: collectTextElements(decoded.text, content.end, contentClose.start),
     part: technical.part,
     target: technical.target
+  };
+}
+
+function repeatValueMissing(value: unknown): boolean {
+  return (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && value.length === 0) ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
+function directDocxRows(
+  xml: string,
+  tags: readonly XmlTag[],
+  contentOpenIndex: number,
+  contentCloseIndex: number
+): string[] {
+  const children = directChildElements(
+    tags,
+    contentOpenIndex,
+    contentCloseIndex
+  );
+  if (children.some(({ tag }) => tag.localName !== "tr")) {
+    throw new TemplateCompilerError(
+      "repeat_row_structure_mismatch",
+      "Техническая привязка повтора должна содержать только строки таблицы DOCX."
+    );
+  }
+  return children.map(({ tag, closeIndex }) => {
+    const close = tags[closeIndex];
+    if (close === undefined) throwInvalidXml();
+    return xml.slice(tag.start, close.end);
+  });
+}
+
+function setWordIdAttribute(opening: string, value: number): string {
+  const expression = /(\s+(?:[A-Za-z_][\w.-]*:)?val\s*=\s*)(["']).*?\2/u;
+  if (!expression.test(opening)) {
+    throw new TemplateCompilerError(
+      "repeat_field_id_missing",
+      "В технической привязке поля отсутствует идентификатор Word."
+    );
+  }
+  return opening.replace(expression, `$1"${value}"`);
+}
+
+function repeatWordId(fieldId: string, memberIndex: number): number {
+  const raw = createHash("sha256")
+    .update("repeat-member")
+    .update("\u0000")
+    .update(fieldId)
+    .update("\u0000")
+    .update(String(memberIndex))
+    .digest()
+    .readUInt32BE(0);
+  const positive = raw & 0x7fffffff;
+  return positive === 0 ? 1 : positive;
+}
+
+function existingWordIds(xml: string): Set<number> {
+  const values = new Set<number>();
+  for (const tag of scanXmlTags(xml)) {
+    if (tag.closing || tag.localName !== "id") continue;
+    const raw = attributeValue(tag.raw, "w:val") ?? attributeValue(tag.raw, "val");
+    if (raw === null) continue;
+    const value = Number(raw);
+    if (Number.isInteger(value) && value > 0 && value <= 0x7fffffff) {
+      values.add(value);
+    }
+  }
+  return values;
+}
+
+function allocateRepeatWordId(
+  fieldId: string,
+  memberIndex: number,
+  used: Set<number>
+): number {
+  let candidate = repeatWordId(fieldId, memberIndex);
+  const first = candidate;
+  do {
+    if (!used.has(candidate)) {
+      used.add(candidate);
+      return candidate;
+    }
+    candidate = candidate === 0x7fffffff ? 1 : candidate + 1;
+  } while (candidate !== first);
+  throw new TemplateCompilerError(
+    "repeat_field_id_exhausted",
+    "Не удалось назначить уникальные идентификаторы повторяемым полям DOCX."
+  );
+}
+
+function docxWordIdReplacement(
+  xml: string,
+  target: ReturnType<typeof docxContentTarget>,
+  value: number
+): XmlReplacement {
+  const children = directChildElements(
+    target.tags,
+    target.sdtOpenIndex,
+    target.sdtCloseIndex
+  );
+  const properties = children.find(
+    ({ tag }) => tag.localName === "sdtPr"
+  );
+  if (properties === undefined) throwInvalidXml();
+  const id = directChildElements(
+    target.tags,
+    properties.index,
+    properties.closeIndex
+  ).find(({ tag }) => tag.localName === "id");
+  if (id === undefined) {
+    throw new TemplateCompilerError(
+      "repeat_field_id_missing",
+      "В технической привязке поля отсутствует идентификатор Word."
+    );
+  }
+  const opening = xml.slice(id.tag.start, id.tag.end);
+  return {
+    start: id.tag.start,
+    end: id.tag.end,
+    value: setWordIdAttribute(opening, value)
+  };
+}
+
+function readDocxSdtValues(
+  xml: string,
+  wanted: ReadonlySet<string>
+): Map<string, { count: number; value: string }> {
+  const tags = scanXmlTags(xml);
+  const result = new Map<string, { count: number; value: string }>();
+  for (let index = 0; index < tags.length; index += 1) {
+    const sdt = tags[index];
+    if (
+      sdt === undefined ||
+      sdt.closing ||
+      sdt.selfClosing ||
+      sdt.localName !== "sdt"
+    ) {
+      continue;
+    }
+    const sdtCloseIndex = matchingCloseIndex(tags, index);
+    const children = directChildElements(tags, index, sdtCloseIndex);
+    const properties = children.find(({ tag }) => tag.localName === "sdtPr");
+    if (properties === undefined) continue;
+    const identifierTag = directChildElements(
+      tags,
+      properties.index,
+      properties.closeIndex
+    ).find(({ tag }) => tag.localName === "tag");
+    const identifier =
+      identifierTag === undefined
+        ? null
+        : (attributeValue(identifierTag.tag.raw, "w:val") ??
+          attributeValue(identifierTag.tag.raw, "val"));
+    if (identifier === null || !wanted.has(identifier)) continue;
+    const content = children.find(
+      ({ tag }) => tag.localName === "sdtContent"
+    );
+    const contentClose =
+      content === undefined ? undefined : tags[content.closeIndex];
+    if (content === undefined || contentClose === undefined) throwInvalidXml();
+    const previous = result.get(identifier);
+    result.set(identifier, {
+      count: (previous?.count ?? 0) + 1,
+      value: collectTextElements(xml, content.tag.end, contentClose.start)
+    });
+  }
+  return result;
+}
+
+function wordIdCounts(xml: string): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const tag of scanXmlTags(xml)) {
+    if (tag.closing || tag.localName !== "id") continue;
+    const raw = attributeValue(tag.raw, "w:val") ?? attributeValue(tag.raw, "val");
+    if (raw === null) continue;
+    const value = Number(raw);
+    if (Number.isInteger(value) && value > 0 && value <= 0x7fffffff) {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+export async function renderDocxRepeatRows(
+  input: RenderDocxRepeatRowsInput
+): Promise<RenderDocxRepeatRowsResult> {
+  parseDocxRepeatRowContract({
+    version: 1,
+    kind: "docx.repeat-row-contract",
+    binding: input.binding,
+    technicalBinding: input.technicalBinding
+  });
+  if (
+    input.binding.kind !== "docx.repeat-row" ||
+    input.binding.source !== "audience.members" ||
+    input.technicalBinding.kind !== "docx.repeat-sdt" ||
+    input.binding.part !== input.technicalBinding.part
+  ) {
+    throw new TemplateCompilerError(
+      "repeat_binding_mismatch",
+      "Техническая привязка повтора не соответствует сохранённой строке DOCX."
+    );
+  }
+  if (input.fields.length < 1 || input.fields.length > 100) {
+    throw new TemplateCompilerError(
+      "invalid_repeat_field_count",
+      "Повторяемая строка должна содержать от 1 до 100 полей."
+    );
+  }
+  if (input.members.length < 1 || input.members.length > 1_000) {
+    throw new TemplateCompilerError(
+      "invalid_repeat_member_count",
+      "Для повторяемой строки требуется от 1 до 1000 участников."
+    );
+  }
+  const fieldIdentifiers = new Set<string>();
+  for (const field of input.fields) {
+    if (
+      field.technicalBinding.kind !== "docx.sdt" ||
+      field.technicalBinding.part !== input.binding.part ||
+      (field.fieldBinding.kind !== "docx.paragraph" &&
+        field.fieldBinding.kind !== "docx.text-range")
+    ) {
+      throw new TemplateCompilerError(
+        "repeat_field_outside_row",
+        "Повторяемая строка DOCX содержит несовместимое скалярное поле."
+      );
+    }
+    if (fieldIdentifiers.has(field.technicalBinding.identifier)) {
+      throw new TemplateCompilerError(
+        "duplicate_repeat_field",
+        "Повторяемая строка содержит повторяющуюся техническую привязку."
+      );
+    }
+    fieldIdentifiers.add(field.technicalBinding.identifier);
+  }
+  for (const member of input.members) {
+    if (member.values.length !== input.fields.length) {
+      throw new TemplateCompilerError(
+        "repeat_member_value_count_mismatch",
+        "Набор значений участника не совпадает с полями повторяемой строки."
+      );
+    }
+  }
+
+  const compiled = Buffer.from(input.compiled);
+  const entries = await readOoxmlPackage(compiled);
+  const entry = packageEntry(entries, input.binding.part);
+  const decoded = decodeXml(entry.content);
+  const target = docxContentTarget(
+    decoded.text,
+    input.technicalBinding.identifier
+  );
+  const content = target.tags[target.contentOpenIndex];
+  const contentClose = target.tags[target.contentCloseIndex];
+  if (content === undefined || contentClose === undefined) throwInvalidXml();
+  const templates = directDocxRows(
+    decoded.text,
+    target.tags,
+    target.contentOpenIndex,
+    target.contentCloseIndex
+  );
+  if (templates.length !== 1) {
+    throw new TemplateCompilerError(
+      "repeat_template_row_count_mismatch",
+      "Скомпилированный повтор должен содержать ровно одну строку-образец."
+    );
+  }
+  const template = templates[0];
+  if (template === undefined) throwInvalidXml();
+  const templateValues = readDocxSdtValues(template, fieldIdentifiers);
+  const fieldTargets = input.fields.map((field, fieldIndex) => {
+    if (templateValues.get(field.technicalBinding.identifier)?.count !== 1) {
+      throw new TemplateCompilerError(
+        "repeat_field_count_mismatch",
+        `В строке-образце поле «${field.fieldKey}» найдено не ровно один раз.`
+      );
+    }
+    return {
+      field,
+      fieldIndex,
+      target: docxContentTarget(template, field.technicalBinding.identifier)
+    };
+  });
+  const expectedRows: string[][] = [];
+  const usedWordIds = existingWordIds(decoded.text);
+  const generatedWordIds = new Set<number>();
+  let expandedRowsBytes = 0;
+  const renderedRows = input.members.map((member, memberIndex) => {
+    const replacements: XmlReplacement[] = [];
+    const expected = Array<string>(input.fields.length);
+    for (const { field, fieldIndex, target: fieldTarget } of fieldTargets) {
+      const value = member.values[fieldIndex];
+      const missing = repeatValueMissing(value);
+      if (missing && field.required) {
+        throw new TemplateCompilerError(
+          "repeat_required_value_missing",
+          `Для участника ${memberIndex + 1} не заполнено обязательное поле «${field.fieldKey}».`
+        );
+      }
+      const normalized: NormalizedScalarValue = missing
+        ? { display: "", xlsxMode: "inline-string", xlsxValue: "" }
+        : normalizeScalarValue(field.valueType, value, field.formatter);
+      const wordId = allocateRepeatWordId(
+        field.fieldId,
+        memberIndex,
+        usedWordIds
+      );
+      generatedWordIds.add(wordId);
+      replacements.push(
+        docxWordIdReplacement(template, fieldTarget, wordId),
+        docxValueReplacement(
+          template,
+          fieldTarget,
+          field.fieldBinding,
+          normalized
+        )
+      );
+      expected[fieldIndex] = normalized.display;
+    }
+    const row = applyXmlReplacements(template, replacements);
+    expandedRowsBytes += Buffer.byteLength(row, "utf8");
+    if (expandedRowsBytes > 32 * 1024 * 1024) {
+      throw new TemplateCompilerError(
+        "repeat_output_too_large",
+        "Повторяемые строки превышают безопасный размер части DOCX. Уменьшите состав или объём значений."
+      );
+    }
+    expectedRows.push(expected);
+    return row;
+  });
+  const updatedXml =
+    decoded.text.slice(0, content.end) +
+    renderedRows.join("") +
+    decoded.text.slice(contentClose.start);
+  if (Buffer.byteLength(updatedXml, "utf8") > 32 * 1024 * 1024) {
+    throw new TemplateCompilerError(
+      "repeat_output_too_large",
+      "Сформированная часть DOCX превышает безопасный размер. Уменьшите состав или объём значений."
+    );
+  }
+  const output = writeOoxmlPackage(
+    replacePackageEntry(
+      entries,
+      input.binding.part,
+      encodeXml(decoded, updatedXml)
+    )
+  );
+
+  const verifiedEntries = await readOoxmlPackage(output);
+  const verifiedDecoded = decodeXml(
+    packageEntry(verifiedEntries, input.binding.part).content
+  );
+  const verifiedWordIds = wordIdCounts(verifiedDecoded.text);
+  if (
+    generatedWordIds.size !== input.members.length * input.fields.length ||
+    [...generatedWordIds].some((wordId) => verifiedWordIds.get(wordId) !== 1)
+  ) {
+    throw new TemplateCompilerError(
+      "repeat_field_id_mismatch",
+      "После формирования идентификаторы повторяемых полей DOCX не остались уникальными."
+    );
+  }
+  const verifiedTarget = docxContentTarget(
+    verifiedDecoded.text,
+    input.technicalBinding.identifier
+  );
+  const verifiedRows = directDocxRows(
+    verifiedDecoded.text,
+    verifiedTarget.tags,
+    verifiedTarget.contentOpenIndex,
+    verifiedTarget.contentCloseIndex
+  );
+  if (verifiedRows.length !== input.members.length) {
+    throw new TemplateCompilerError(
+      "repeat_row_count_mismatch",
+      "После формирования число строк не совпало с зафиксированным составом участников."
+    );
+  }
+  for (const [rowIndex, row] of verifiedRows.entries()) {
+    const values = readDocxSdtValues(row, fieldIdentifiers);
+    for (const [fieldIndex, field] of input.fields.entries()) {
+      const readBack = values.get(field.technicalBinding.identifier);
+      if (readBack?.count !== 1) {
+        throw new TemplateCompilerError(
+          "repeat_field_count_mismatch",
+          `В строке ${rowIndex + 1} поле «${field.fieldKey}» найдено не ровно один раз.`
+        );
+      }
+      if (readBack.value !== expectedRows[rowIndex]?.[fieldIndex]) {
+        throw new TemplateCompilerError(
+          "repeat_value_mismatch",
+          `После формирования значение поля «${field.fieldKey}» в строке ${rowIndex + 1} не совпало с ожидаемым.`
+        );
+      }
+    }
+  }
+  return {
+    output,
+    inputSha256: sha256(compiled),
+    outputSha256: sha256(output),
+    modifiedPart: input.binding.part,
+    rowCount: verifiedRows.length,
+    fieldCount: input.fields.length,
+    verification: {
+      matched: true,
+      checkedValues: verifiedRows.length * input.fields.length,
+      message: `Повторно проверены строки (${verifiedRows.length}) и значения (${verifiedRows.length * input.fields.length}).`
+    }
   };
 }
 

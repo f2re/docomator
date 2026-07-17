@@ -59,7 +59,24 @@ function sourceDocx(): Buffer {
   );
 }
 
-async function quarantineSource(app: ReturnType<typeof buildApp>) {
+function repeatSourceDocx(): Buffer {
+  return buildZipFixture(
+    minimalDocxEntries().map((entry) =>
+      entry.name === "word/document.xml"
+        ? {
+            ...entry,
+            content:
+              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Список сотрудников</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>ФИО</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Должность</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:tc><w:p><w:r><w:t>____</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>____</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>'
+          }
+        : entry
+    )
+  );
+}
+
+async function quarantineSource(
+  app: ReturnType<typeof buildApp>,
+  buffer = sourceDocx()
+) {
   const response = await app.inject({
     method: "POST",
     url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/quarantine?fileName=${encodeURIComponent("Письмо.docx")}`,
@@ -69,7 +86,7 @@ async function quarantineSource(app: ReturnType<typeof buildApp>) {
       "x-actor-id": "editor-1",
       "x-correlation-id": "corr-source"
     },
-    payload: sourceDocx()
+    payload: buffer
   });
   assert.equal(response.statusCode, 201, response.body);
   return response.json().data as { id: string; sha256: string };
@@ -327,6 +344,97 @@ test("API derives and stores safe formatter contracts from field settings", asyn
     });
     assert.equal(invalid.statusCode, 400, invalid.body);
     assert.match(invalid.json().error.message, /знаков после запятой/ui);
+  } finally {
+    await app.close();
+    await fsPromises.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("API derives one DOCX repeat row and keeps every field inside it", async () => {
+  const { app, dataDir } = await testApp();
+  try {
+    const source = await quarantineSource(app, repeatSourceDocx());
+    const draftResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/${source.id}/draft`,
+      headers: { "content-type": "application/json" },
+      payload: { title: "Список сотрудников" }
+    });
+    const draft = draftResponse.json().data as {
+      id: string;
+      structure: {
+        elements: Array<{
+          id: string;
+          kind: string;
+          text: string;
+          tableLocation: {
+            tableIndex: number;
+            rowIndex: number;
+            columnIndex: number;
+          } | null;
+        }>;
+      };
+    };
+    const rowFields = draft.structure.elements.filter(
+      (element) =>
+        element.kind === "paragraph" &&
+        element.text === "____" &&
+        element.tableLocation?.rowIndex === 1
+    );
+    assert.equal(rowFields.length, 2);
+    const first = rowFields[0];
+    assert.ok(first);
+    const created = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.full_name",
+        label: "ФИО",
+        valueType: "string",
+        required: true,
+        elementId: first.id,
+        textRange: { startOffset: 0, endOffset: 4 },
+        repeatRow: true
+      }
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    assert.deepEqual(created.json().data.repeatBinding, {
+      version: 1,
+      kind: "docx.repeat-row",
+      source: "audience.members",
+      anchorElementId: first.id,
+      part: "word/document.xml",
+      tableIndex: 0,
+      rowIndex: 1
+    });
+
+    const outside = draft.structure.elements.find(
+      (element) => element.text === "Список сотрудников"
+    );
+    assert.ok(outside);
+    const rejected = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "document.title",
+        label: "Заголовок",
+        valueType: "string",
+        elementId: outside.id
+      }
+    });
+    assert.equal(rejected.statusCode, 400, rejected.body);
+    assert.match(rejected.json().error.message, /одной выбранной строке/ui);
+
+    const refreshed = await app.inject({
+      method: "GET",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}`
+    });
+    assert.deepEqual(
+      refreshed.json().data.repeatBinding,
+      created.json().data.repeatBinding
+    );
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });

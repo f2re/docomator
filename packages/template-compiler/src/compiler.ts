@@ -48,6 +48,16 @@ export type ScalarFieldBinding =
   | DocxTextRangeBinding
   | XlsxCellBinding;
 
+export interface DocxRepeatRowBinding {
+  version: 1;
+  kind: "docx.repeat-row";
+  source: "audience.members";
+  anchorElementId: string;
+  part: string;
+  tableIndex: number;
+  rowIndex: number;
+}
+
 export interface CompileScalarFieldDefinition {
   id: string;
   key: string;
@@ -69,6 +79,40 @@ export interface CompiledTechnicalBinding {
   identifier: string;
   part: string;
   target: string;
+}
+
+export interface CompiledRepeatTechnicalBinding {
+  kind: "docx.repeat-sdt";
+  identifier: string;
+  part: string;
+  target: string;
+}
+
+export interface DocxRepeatRowContract {
+  version: 1;
+  kind: "docx.repeat-row-contract";
+  binding: DocxRepeatRowBinding;
+  technicalBinding: CompiledRepeatTechnicalBinding;
+}
+
+export interface CompileDocxRepeatRowInput {
+  compiled: Uint8Array;
+  binding: unknown;
+  fieldTechnicalBindings: readonly CompiledTechnicalBinding[];
+}
+
+export interface CompileDocxRepeatRowResult {
+  output: Buffer;
+  inputSha256: string;
+  outputSha256: string;
+  modifiedPart: string;
+  binding: DocxRepeatRowBinding;
+  technicalBinding: CompiledRepeatTechnicalBinding;
+  verification: {
+    found: true;
+    fieldCount: number;
+    message: string;
+  };
 }
 
 export interface CompileScalarFieldResult {
@@ -250,6 +294,96 @@ function parseBinding(value: unknown): ScalarFieldBinding {
     "unsupported_binding",
     "Компилятор поддерживает целый абзац или выбранный текст DOCX и одну ячейку XLSX."
   );
+}
+
+export function parseDocxRepeatRowBinding(
+  value: unknown
+): DocxRepeatRowBinding {
+  if (
+    !isObject(value) ||
+    value.version !== 1 ||
+    value.kind !== "docx.repeat-row" ||
+    value.source !== "audience.members"
+  ) {
+    throw new TemplateCompilerError(
+      "invalid_repeat_binding",
+      "Сохранённая повторяемая строка имеет неподдерживаемый формат."
+    );
+  }
+  return {
+    version: 1,
+    kind: "docx.repeat-row",
+    source: "audience.members",
+    anchorElementId: requiredText(
+      value.anchorElementId,
+      "опорный элемент повторяемой строки",
+      160
+    ),
+    part: requiredText(value.part, "часть DOCX", 500),
+    tableIndex: integerValue(value.tableIndex, "номер таблицы"),
+    rowIndex: integerValue(value.rowIndex, "номер строки")
+  };
+}
+
+export function parseDocxRepeatRowContract(
+  value: unknown
+): DocxRepeatRowContract {
+  if (
+    !isObject(value) ||
+    value.version !== 1 ||
+    value.kind !== "docx.repeat-row-contract" ||
+    !isObject(value.technicalBinding) ||
+    value.technicalBinding.kind !== "docx.repeat-sdt"
+  ) {
+    throw new TemplateCompilerError(
+      "invalid_repeat_contract",
+      "Сохранённый контракт повторяемой строки имеет неподдерживаемый формат."
+    );
+  }
+  const binding = parseDocxRepeatRowBinding(value.binding);
+  const identifier = requiredText(
+    value.technicalBinding.identifier,
+    "техническая метка повторяемой строки",
+    80
+  );
+  if (!/^airepeat:[a-f0-9]{24}$/u.test(identifier)) {
+    throw new TemplateCompilerError(
+      "invalid_repeat_contract",
+      "Техническая метка повторяемой строки имеет недопустимый формат."
+    );
+  }
+  if (identifier !== technicalRepeatTag(binding)) {
+    throw new TemplateCompilerError(
+      "invalid_repeat_contract",
+      "Техническая метка повторяемой строки не соответствует сохранённой координате."
+    );
+  }
+  const part = requiredText(
+    value.technicalBinding.part,
+    "часть повторяемой строки DOCX",
+    500
+  );
+  if (part !== binding.part) {
+    throw new TemplateCompilerError(
+      "invalid_repeat_contract",
+      "Техническая привязка повтора указывает на другую часть DOCX."
+    );
+  }
+  return {
+    version: 1,
+    kind: "docx.repeat-row-contract",
+    binding,
+    technicalBinding: {
+      kind: "docx.repeat-sdt",
+      identifier,
+      part,
+      target: requiredText(
+        value.technicalBinding.target,
+        "описание повторяемой строки",
+        500
+      )
+    }
+  };
 }
 
 function decodeXml(buffer: Buffer): DecodedXml {
@@ -552,6 +686,24 @@ function matchingCloseIndex(tags: readonly XmlTag[], openingIndex: number): numb
     if (depth === 0) return index;
   }
   throwInvalidXml();
+}
+
+function directChildElements(
+  tags: readonly XmlTag[],
+  parentOpenIndex: number,
+  parentCloseIndex: number
+): Array<{ tag: XmlTag; index: number; closeIndex: number }> {
+  const result: Array<{ tag: XmlTag; index: number; closeIndex: number }> = [];
+  let index = parentOpenIndex + 1;
+  while (index < parentCloseIndex) {
+    const tag = tags[index];
+    if (tag === undefined || tag.closing) throwInvalidXml();
+    const closeIndex = matchingCloseIndex(tags, index);
+    if (closeIndex > parentCloseIndex) throwInvalidXml();
+    result.push({ tag, index, closeIndex });
+    index = closeIndex + 1;
+  }
+  return result;
 }
 
 function decodeXmlText(value: string): string {
@@ -970,6 +1122,319 @@ function compileXlsx(
   };
 }
 
+function technicalRepeatTag(binding: DocxRepeatRowBinding): string {
+  const suffix = createHash("sha256")
+    .update(binding.part)
+    .update("\u0000")
+    .update(String(binding.tableIndex))
+    .update("\u0000")
+    .update(String(binding.rowIndex))
+    .update("\u0000")
+    .update(binding.source)
+    .digest("hex")
+    .slice(0, 24);
+  return `airepeat:${suffix}`;
+}
+
+function findDocxTableRowRange(
+  xml: string,
+  tableIndex: number,
+  rowIndex: number
+): XmlElementRange {
+  const tags = scanXmlTags(xml);
+  const openStack: XmlTag[] = [];
+  const tableStack: Array<{
+    tableIndex: number;
+    rowIndex: number;
+  }> = [];
+  let tableSequence = -1;
+  for (let index = 0; index < tags.length; index += 1) {
+    const tag = tags[index];
+    if (tag === undefined) continue;
+    if (tag.closing) {
+      const opening = openStack.pop();
+      if (opening === undefined || opening.name !== tag.name) throwInvalidXml();
+      if (tag.localName === "tbl") tableStack.pop();
+      continue;
+    }
+    if (tag.localName === "tbl") {
+      tableSequence += 1;
+      tableStack.push({ tableIndex: tableSequence, rowIndex: -1 });
+    } else if (tag.localName === "tr") {
+      const table = tableStack.at(-1);
+      if (table !== undefined) {
+        table.rowIndex += 1;
+        if (
+          table.tableIndex === tableIndex &&
+          table.rowIndex === rowIndex
+        ) {
+          if (openStack.at(-1)?.localName !== "tbl" || tag.selfClosing) {
+            throw new TemplateCompilerError(
+              "unsupported_repeat_row",
+              "Повторяемая строка должна быть обычной строкой верхнего уровня таблицы DOCX."
+            );
+          }
+          const close = tags[matchingCloseIndex(tags, index)];
+          if (close === undefined) throwInvalidXml();
+          return {
+            start: tag.start,
+            end: close.end,
+            openEnd: tag.end,
+            closeStart: close.start,
+            name: tag.name,
+            selfClosing: false
+          };
+        }
+      }
+    }
+    if (!tag.selfClosing) openStack.push(tag);
+    else if (tag.localName === "tbl") tableStack.pop();
+  }
+  throw new TemplateCompilerError(
+    "repeat_row_not_found",
+    `Строка ${rowIndex + 1} таблицы ${tableIndex + 1} не найдена в сохранённой части DOCX.`
+  );
+}
+
+function docxTagIdentifiers(xml: string): string[] {
+  return scanXmlTags(xml)
+    .filter((tag) => !tag.closing && tag.localName === "tag")
+    .map(
+      (tag) =>
+        attributeValue(tag.raw, "w:val") ??
+        attributeValue(tag.raw, "val") ??
+        ""
+    )
+    .filter((value) => value.length > 0);
+}
+
+function docxSdtContentRange(
+  xml: string,
+  identifier: string
+): XmlElementRange | null {
+  const tags = scanXmlTags(xml);
+  for (let index = 0; index < tags.length; index += 1) {
+    const sdt = tags[index];
+    if (
+      sdt === undefined ||
+      sdt.closing ||
+      sdt.selfClosing ||
+      sdt.localName !== "sdt"
+    ) {
+      continue;
+    }
+    const sdtCloseIndex = matchingCloseIndex(tags, index);
+    const sdtClose = tags[sdtCloseIndex];
+    if (sdtClose === undefined) throwInvalidXml();
+    const children = directChildElements(tags, index, sdtCloseIndex);
+    const properties = children.find(
+      ({ tag }) => tag.localName === "sdtPr"
+    );
+    const propertiesClose =
+      properties === undefined ? undefined : tags[properties.closeIndex];
+    const matched =
+      properties !== undefined &&
+      propertiesClose !== undefined &&
+      directChildElements(tags, properties.index, properties.closeIndex).some(
+        ({ tag }) =>
+          tag.localName === "tag" &&
+          (attributeValue(tag.raw, "w:val") ??
+            attributeValue(tag.raw, "val")) === identifier
+      );
+    if (!matched) continue;
+    const content = children.find(
+      ({ tag }) => tag.localName === "sdtContent"
+    );
+    if (content === undefined || content.tag.selfClosing) throwInvalidXml();
+    const close = tags[content.closeIndex];
+    if (close === undefined) throwInvalidXml();
+    return {
+      start: content.tag.start,
+      end: close.end,
+      openEnd: content.tag.end,
+      closeStart: close.start,
+      name: content.tag.name,
+      selfClosing: false
+    };
+  }
+  return null;
+}
+
+export async function compileDocxRepeatRow(
+  input: CompileDocxRepeatRowInput
+): Promise<CompileDocxRepeatRowResult> {
+  const compiled = Buffer.from(input.compiled);
+  const binding = parseDocxRepeatRowBinding(input.binding);
+  if (
+    input.fieldTechnicalBindings.length < 1 ||
+    input.fieldTechnicalBindings.length > 100
+  ) {
+    throw new TemplateCompilerError(
+      "invalid_repeat_field_count",
+      "Повторяемая строка должна содержать от 1 до 100 полей."
+    );
+  }
+  const identifiers = input.fieldTechnicalBindings.map((field) => {
+    if (field.kind !== "docx.sdt" || field.part !== binding.part) {
+      throw new TemplateCompilerError(
+        "repeat_field_outside_row",
+        "Все поля повторяемой строки должны находиться в одной части DOCX."
+      );
+    }
+    return field.identifier;
+  });
+  if (new Set(identifiers).size !== identifiers.length) {
+    throw new TemplateCompilerError(
+      "duplicate_repeat_field",
+      "Повторяемая строка содержит повторяющуюся техническую привязку."
+    );
+  }
+
+  let entries: OoxmlPackageEntry[];
+  try {
+    entries = await readOoxmlPackage(compiled);
+  } catch (error) {
+    if (error instanceof OoxmlPackageError) {
+      throw new TemplateCompilerError(error.code, error.message);
+    }
+    throw error;
+  }
+  const entry = packageEntry(entries, binding.part);
+  const decoded = decodeXml(entry.content);
+  const repeatIdentifier = technicalRepeatTag(binding);
+  if (docxSdtContentRange(decoded.text, repeatIdentifier) !== null) {
+    throw new TemplateCompilerError(
+      "repeat_binding_already_exists",
+      "Техническая привязка повторяемой строки уже существует в документе."
+    );
+  }
+  const row = findDocxTableRowRange(
+    decoded.text,
+    binding.tableIndex,
+    binding.rowIndex
+  );
+  const rowXml = decoded.text.slice(row.start, row.end);
+  const rowTags = scanXmlTags(rowXml);
+  if (
+    rowTags.some(
+      (tag) =>
+        !tag.closing &&
+        (/\s(?:[A-Za-z_][\w.-]*:)?(?:anchorId|paraId|textId)\s*=/u.test(
+          tag.raw
+        ) ||
+          tag.localName === "tbl" ||
+          tag.localName === "vMerge" ||
+          tag.localName === "tblHeader" ||
+          [
+            "altChunk",
+            "bookmarkStart",
+            "bookmarkEnd",
+            "commentRangeStart",
+            "commentRangeEnd",
+            "commentReference",
+            "control",
+            "customXml",
+            "customXmlDelRangeEnd",
+            "customXmlDelRangeStart",
+            "customXmlInsRangeEnd",
+            "customXmlInsRangeStart",
+            "del",
+            "drawing",
+            "endnoteReference",
+            "fldSimple",
+            "fldChar",
+            "footnoteReference",
+            "hyperlink",
+            "ins",
+            "instrText",
+            "moveFrom",
+            "moveFromRangeEnd",
+            "moveFromRangeStart",
+            "moveTo",
+            "moveToRangeEnd",
+            "moveToRangeStart",
+            "object",
+            "permStart",
+            "permEnd",
+            "pict",
+            "proofErr",
+            "smartTag",
+            "subDoc"
+          ].includes(tag.localName))
+    )
+  ) {
+    throw new TemplateCompilerError(
+      "unsupported_repeat_row",
+      "Строка с вложенной таблицей, вертикальным объединением, признаком заголовка или сложным объектом DOCX не может повторяться."
+    );
+  }
+  const sdtCount = rowTags.filter(
+    (tag) => !tag.closing && tag.localName === "sdt"
+  ).length;
+  const actualIdentifiers = docxTagIdentifiers(rowXml).filter((value) =>
+    value.startsWith("aifield:")
+  );
+  if (
+    sdtCount !== identifiers.length ||
+    actualIdentifiers.length !== identifiers.length ||
+    [...actualIdentifiers].sort().join("\u0000") !==
+      [...identifiers].sort().join("\u0000")
+  ) {
+    throw new TemplateCompilerError(
+      "repeat_field_outside_row",
+      "Повторяемая строка должна содержать весь и только сохранённый набор скалярных полей черновика."
+    );
+  }
+  const prefix = tagPrefix(row.name) || "w:";
+  const namespace =
+    tagPrefix(row.name).length === 0
+      ? ' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+      : "";
+  const wrapper = `<${prefix}sdt${namespace}><${prefix}sdtPr><${prefix}alias ${prefix}val="Повтор участников"/><${prefix}tag ${prefix}val="${xmlAttribute(repeatIdentifier)}"/><${prefix}id ${prefix}val="${deterministicWordId(repeatIdentifier)}"/></${prefix}sdtPr><${prefix}sdtContent>${rowXml}</${prefix}sdtContent></${prefix}sdt>`;
+  const updated =
+    decoded.text.slice(0, row.start) +
+    wrapper +
+    decoded.text.slice(row.end);
+  const output = writeOoxmlPackage(
+    replacePackageEntry(entries, binding.part, encodeXml(decoded, updated))
+  );
+  const verifiedEntries = await readOoxmlPackage(output);
+  const verifiedXml = decodeXml(
+    packageEntry(verifiedEntries, binding.part).content
+  ).text;
+  const content = docxSdtContentRange(verifiedXml, repeatIdentifier);
+  if (content === null) {
+    throw new TemplateCompilerError(
+      "compiled_repeat_binding_not_found",
+      "После сборки не удалось повторно найти повторяемую строку DOCX."
+    );
+  }
+  const verifiedRow = verifiedXml.slice(content.openEnd, content.closeStart);
+  findDocxTableRowRange(
+    `<w:tbl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${verifiedRow}</w:tbl>`,
+    0,
+    0
+  );
+  return {
+    output,
+    inputSha256: sha256(compiled),
+    outputSha256: sha256(output),
+    modifiedPart: binding.part,
+    binding,
+    technicalBinding: {
+      kind: "docx.repeat-sdt",
+      identifier: repeatIdentifier,
+      part: binding.part,
+      target: `таблица ${binding.tableIndex + 1}, строка ${binding.rowIndex + 1}`
+    },
+    verification: {
+      found: true,
+      fieldCount: identifiers.length,
+      message: `Повторяемая строка и её поля повторно найдены: ${identifiers.length}.`
+    }
+  };
+}
+
 async function verifyTechnicalBinding(
   output: Buffer,
   binding: CompiledTechnicalBinding,
@@ -979,64 +1444,30 @@ async function verifyTechnicalBinding(
   const target = packageEntry(entries, binding.part);
   const text = decodeXml(target.content).text;
   if (binding.kind === "docx.sdt") {
-    const tags = scanXmlTags(text);
-    let readBack: string | null = null;
-    for (let index = 0; index < tags.length; index += 1) {
-      const sdt = tags[index];
-      if (
-        sdt === undefined ||
-        sdt.closing ||
-        sdt.selfClosing ||
-        sdt.localName !== "sdt"
-      ) {
-        continue;
-      }
-      const sdtCloseIndex = matchingCloseIndex(tags, index);
-      const sdtClose = tags[sdtCloseIndex];
-      if (sdtClose === undefined) throwInvalidXml();
-      const inside = tags
-        .map((tag, tagIndex) => ({ tag, tagIndex }))
-        .filter(
-          ({ tag }) => tag.start >= sdt.end && tag.end <= sdtClose.start
-        );
-      const identifierFound = inside.some(
-        ({ tag }) =>
-          !tag.closing &&
-          tag.localName === "tag" &&
-          (attributeValue(tag.raw, "w:val") ??
-            attributeValue(tag.raw, "val")) === binding.identifier
-      );
-      if (!identifierFound) continue;
-      const content = inside.find(
-        ({ tag }) => !tag.closing && tag.localName === "sdtContent"
-      );
-      if (content === undefined) break;
-      const contentCloseIndex = matchingCloseIndex(tags, content.tagIndex);
-      const contentClose = tags[contentCloseIndex];
-      if (contentClose === undefined) throwInvalidXml();
-      readBack = inside
-        .filter(
-          ({ tag }) =>
-            !tag.closing &&
-            tag.localName === "t" &&
-            tag.start >= content.tag.end &&
-            tag.end <= contentClose.start
-        )
-        .map(({ tag, tagIndex }) => {
-          if (tag.selfClosing) return "";
-          const close = tags[matchingCloseIndex(tags, tagIndex)];
-          if (close === undefined) throwInvalidXml();
-          return decodeXmlText(text.slice(tag.end, close.start));
-        })
-        .join("");
-      break;
-    }
-    if (readBack === null) {
+    const content = docxSdtContentRange(text, binding.identifier);
+    if (content === null) {
       throw new TemplateCompilerError(
         "compiled_binding_not_found",
         "После сборки не удалось повторно найти техническую привязку DOCX."
       );
     }
+    const tags = scanXmlTags(text);
+    const readBack = tags
+      .map((tag, tagIndex) => ({ tag, tagIndex }))
+      .filter(
+        ({ tag }) =>
+          !tag.closing &&
+          tag.localName === "t" &&
+          tag.start >= content.openEnd &&
+          tag.end <= content.closeStart
+      )
+      .map(({ tag, tagIndex }) => {
+        if (tag.selfClosing) return "";
+        const close = tags[matchingCloseIndex(tags, tagIndex)];
+        if (close === undefined) throwInvalidXml();
+        return decodeXmlText(text.slice(tag.end, close.start));
+      })
+      .join("");
     if (
       sourceBinding.kind === "docx.text-range" &&
       readBack !== sourceBinding.selectedText

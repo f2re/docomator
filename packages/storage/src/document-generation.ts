@@ -111,6 +111,7 @@ export interface DocumentGenerationWork {
     title: string;
     format: DocumentGenerationFormat;
     compiledSha256: string;
+    repeatContract: JsonValue | null;
     fields: DocumentGenerationField[];
   };
   members: DocumentGenerationMember[];
@@ -166,6 +167,7 @@ interface SourceRow {
   format: string;
   compiled_sha256: string;
   field_count: number;
+  repeat_contract_json: string | null;
   snapshot_id: string;
   target_mode: string;
   member_count: number;
@@ -557,6 +559,7 @@ export class DocumentGenerationRegistry {
             r.format,
             c.compiled_sha256,
             c.field_count,
+            c.repeat_contract_json,
             s.id AS snapshot_id,
             s.target_mode,
             s.member_count
@@ -572,6 +575,16 @@ export class DocumentGenerationRegistry {
         );
       }
       const mode = generationMode(source.target_mode);
+      if (source.repeat_contract_json !== null && mode !== "aggregate") {
+        throw new DocumentGenerationValidationError(
+          "Template repeat row requires an aggregate audience snapshot"
+        );
+      }
+      if (source.repeat_contract_json !== null && source.format !== "docx") {
+        throw new DocumentGenerationConflictError(
+          "Stored repeat row is only compatible with DOCX"
+        );
+      }
       const memberCount = Number(source.member_count);
       if (memberCount < 1 || memberCount > 1_000) {
         throw new DocumentGenerationValidationError(
@@ -772,6 +785,7 @@ export class DocumentGenerationRegistry {
             r.format,
             c.compiled_sha256,
             c.field_count,
+            c.repeat_contract_json,
             s.id AS snapshot_id,
             s.target_mode,
             s.member_count
@@ -858,6 +872,10 @@ export class DocumentGenerationRegistry {
           title: source.title,
           format: formatValue(source.format),
           compiledSha256: source.compiled_sha256,
+          repeatContract:
+            source.repeat_contract_json === null
+              ? null
+              : parseJson(source.repeat_contract_json),
           fields: fieldRows.map((field) => ({
             id: field.field_id,
             ordinal: Number(field.ordinal),

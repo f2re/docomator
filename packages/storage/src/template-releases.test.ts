@@ -303,9 +303,10 @@ test("single and multi-field tested versions share one release catalog", async (
       fieldCount: number;
       fields: Array<{ key: string; required: boolean; formatter: unknown }>;
     };
-    assert.equal(manifest.version, 3);
+    assert.equal(manifest.version, 4);
     assert.equal(manifest.versionKind, "multi");
     assert.equal(manifest.fieldCount, 2);
+    assert.deepEqual((multiRelease.manifest as { repeats: unknown[] }).repeats, []);
     assert.deepEqual(
       manifest.fields.map((field) => [field.key, field.required]),
       [

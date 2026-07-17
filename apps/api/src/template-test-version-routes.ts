@@ -111,6 +111,11 @@ export function registerTemplateTestVersionRoutes(
       const field = draft.fields.find(
         (candidate) => candidate.id === request.body.fieldId
       );
+      if (draft.repeatBinding !== null) {
+        throw new TemplateDraftValidationError(
+          "Повторяемую строку нужно проверять целиком через форму всех полей."
+        );
+      }
       if (field === undefined) {
         throw new TemplateDraftValidationError(
           `Template field was not found in this draft: ${request.body.fieldId}`

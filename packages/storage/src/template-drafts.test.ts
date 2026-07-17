@@ -147,12 +147,25 @@ test("field binding is stored once and remains scoped to the draft structure", a
             elementId: "paragraph-example",
             elementKind: "paragraph",
             binding: { kind: "docx.paragraph" },
+            repeatBinding: {
+              version: 1,
+              kind: "docx.repeat-row",
+              source: "audience.members",
+              anchorElementId: "paragraph-example",
+              part: "word/document.xml",
+              tableIndex: 0,
+              rowIndex: 1
+            },
             originalPreview: "Получатель",
             structureSha256: STRUCTURE_SHA
           },
           context("corr-duplicate-element")
         ),
       TemplateDraftConflictError
+    );
+    assert.equal(
+      setup.drafts.getDraft(DEFAULT_SPACE_ID, draft.id).repeatBinding,
+      null
     );
   } finally {
     setup.fixture.cleanup();

@@ -41,6 +41,7 @@ export interface CreateTemplateDraftFieldInput {
   elementKind: TemplateFieldElementKind;
   binding: JsonValue;
   formatter?: JsonValue;
+  repeatBinding?: JsonValue;
   originalPreview: string;
   structureSha256: string;
 }
@@ -76,6 +77,7 @@ export interface TemplateDraftRecord {
   structureSha256: string;
   structure: JsonValue;
   structureTruncated: boolean;
+  repeatBinding: JsonValue | null;
   status: TemplateDraftStatus;
   version: number;
   createdBy: string | null;
@@ -96,6 +98,7 @@ interface DraftRow {
   structure_sha256: string;
   structure_json: string;
   structure_truncated: number;
+  repeat_binding_json: string | null;
   status: string;
   version: number;
   created_by: string | null;
@@ -279,6 +282,10 @@ function mapDraft(
     structureSha256: row.structure_sha256,
     structure: parseJson(row.structure_json),
     structureTruncated: row.structure_truncated === 1,
+    repeatBinding:
+      row.repeat_binding_json === null
+        ? null
+        : parseJson(row.repeat_binding_json),
     status: draftStatus(row.status),
     version: row.version,
     createdBy: row.created_by,
@@ -500,6 +507,10 @@ export class TemplateDraftRegistry {
     const formatter = toJsonValue(
       input.formatter ?? { version: 1, kind: "legacy" }
     );
+    const repeatBinding =
+      input.repeatBinding === undefined
+        ? undefined
+        : toJsonValue(input.repeatBinding);
     const originalPreview = input.originalPreview.trim().slice(0, 4_000);
     const structureSha256 = sha256(input.structureSha256, "structureSha256");
     const context = contextValue(contextInput);
@@ -521,6 +532,27 @@ export class TemplateDraftRegistry {
         throw new TemplateDraftValidationError(
           "Template field does not match the current draft structure"
         );
+      }
+      if (repeatBinding !== undefined) {
+        const repeatBindingJson = stringifyJson(repeatBinding);
+        if (
+          draft.repeat_binding_json !== null &&
+          stringifyJson(parseJson(draft.repeat_binding_json)) !==
+            repeatBindingJson
+        ) {
+          throw new TemplateDraftConflictError(
+            "Template draft already uses another repeat row"
+          );
+        }
+        if (draft.repeat_binding_json === null) {
+          connection
+            .prepare(`
+              UPDATE template_drafts
+              SET repeat_binding_json = ?, version = version + 1, updated_at = ?
+              WHERE id = ? AND repeat_binding_json IS NULL
+            `)
+            .run(repeatBindingJson, context.now, draftId);
+        }
       }
       const duplicate = connection
         .prepare(`

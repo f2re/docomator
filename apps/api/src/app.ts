@@ -182,7 +182,10 @@ function databaseSchemaReady(store: SqliteStore): boolean {
       const requiredColumns = [
         ["template_draft_fields", "formatter_json"],
         ["template_multi_test_version_fields", "formatter_json"],
-        ["template_release_candidate_fields", "formatter_json"]
+        ["template_release_candidate_fields", "formatter_json"],
+        ["template_drafts", "repeat_binding_json"],
+        ["template_multi_test_versions", "repeat_contract_json"],
+        ["template_release_candidates", "repeat_contract_json"]
       ] as const;
       const column = database.prepare(
         "SELECT name FROM pragma_table_info(?) WHERE name = ?"

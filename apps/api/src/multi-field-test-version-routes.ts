@@ -110,7 +110,7 @@ export function registerMultiFieldTestVersionRoutes(
           properties: {
             values: {
               type: "array",
-              minItems: 2,
+              minItems: 1,
               maxItems: 100,
               items: {
                 type: "object",
@@ -137,7 +137,7 @@ export function registerMultiFieldTestVersionRoutes(
         request.params.spaceId,
         request.params.draftId
       );
-      if (draft.fields.length < 2) {
+      if (draft.fields.length < 2 && draft.repeatBinding === null) {
         throw new MultiFieldTestVersionValidationError(
           "Multi-field trial requires at least two saved fields"
         );
@@ -172,8 +172,25 @@ export function registerMultiFieldTestVersionRoutes(
           label: field.label,
           elementId: field.elementId,
           binding: field.binding
-        }))
+        })),
+        ...(draft.repeatBinding === null
+          ? {}
+          : { repeatBinding: draft.repeatBinding })
       });
+      if (draft.repeatBinding !== null && compiled.repeat === null) {
+        throw new MultiFieldTestVersionValidationError(
+          "Compiled repeat row was not found"
+        );
+      }
+      const repeatContract =
+        compiled.repeat === null
+          ? null
+          : toJsonValue({
+              version: 1,
+              kind: "docx.repeat-row-contract",
+              binding: compiled.repeat.binding,
+              technicalBinding: compiled.repeat.technicalBinding
+            });
       const compiledByField = new Map(
         compiled.fields.map((field) => [field.fieldId, field])
       );
@@ -234,6 +251,7 @@ export function registerMultiFieldTestVersionRoutes(
               })
             };
           }),
+          ...(repeatContract === null ? {} : { repeatContract }),
           verification: toJsonValue({
             compiledFields: compiled.verification.checkedFields,
             readBackFields: rendered.verification.checkedFields,

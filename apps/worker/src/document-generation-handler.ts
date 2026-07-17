@@ -7,7 +7,9 @@ import {
 } from "@docomator/storage";
 import {
   renderAudienceAggregate,
+  renderDocxRepeatRows,
   renderScalarValues,
+  parseDocxRepeatRowContract,
   writeOoxmlPackage,
   type CompiledTechnicalBinding,
   type OoxmlPackageEntry,
@@ -135,21 +137,51 @@ export function createDocumentGenerationHandler(
             context
           );
         } else {
-          const output = renderAudienceAggregate({
-            format: work.template.format,
-            title: `${work.template.title} — сводный документ`,
-            fields: work.template.fields.map((field) => ({
-              key: field.key,
-              label: field.label,
-              valueType: field.valueType as ScalarValueType,
-              formatter: field.formatter
-            })),
-            members: rows.map(({ member, resolved }) => ({
-              entityId: member.entityId,
-              displayName: member.displayName,
-              values: resolved.values
-            }))
-          });
+          let output: Buffer;
+          if (work.template.repeatContract === null) {
+            output = renderAudienceAggregate({
+              format: work.template.format,
+              title: `${work.template.title} — сводный документ`,
+              fields: work.template.fields.map((field) => ({
+                key: field.key,
+                label: field.label,
+                valueType: field.valueType as ScalarValueType,
+                formatter: field.formatter
+              })),
+              members: rows.map(({ member, resolved }) => ({
+                entityId: member.entityId,
+                displayName: member.displayName,
+                values: resolved.values
+              }))
+            });
+          } else {
+            const repeat = parseDocxRepeatRowContract(
+              work.template.repeatContract
+            );
+            const compiled = await options.objectStore.getBuffer(
+              work.template.compiledSha256
+            );
+            const rendered = await renderDocxRepeatRows({
+              compiled,
+              binding: repeat.binding,
+              technicalBinding: repeat.technicalBinding,
+              fields: work.template.fields.map((field) => ({
+                fieldId: field.id,
+                fieldKey: field.key,
+                required: field.required,
+                technicalBinding:
+                  field.technicalBinding as unknown as CompiledTechnicalBinding,
+                fieldBinding: field.binding as unknown as ScalarFieldBinding,
+                valueType: field.valueType as ScalarValueType,
+                formatter: field.formatter
+              })),
+              members: rows.map(({ member, resolved }) => ({
+                memberId: member.entityId,
+                values: resolved.values
+              }))
+            });
+            output = rendered.output;
+          }
           const outputName = `${safeName(work.template.title, "сводный-документ")}-участники-${work.members.length}.${work.template.format}`;
           await options.registry.completeUnit(
             unit.id,

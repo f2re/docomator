@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import os from "node:os";
@@ -12,6 +13,7 @@ import {
   DEFAULT_SPACE_ID,
   DocumentGenerationRegistry,
   DocumentQuarantineRegistry,
+  MultiFieldTestVersionRegistry,
   SpaceRegistry,
   SqliteStore,
   TemplateDraftRegistry,
@@ -19,7 +21,10 @@ import {
   TemplateTestVersionRegistry,
   WorkerQueue
 } from "@docomator/storage";
-import { readOoxmlPackage } from "@docomator/template-compiler";
+import {
+  readOoxmlPackage,
+  writeOoxmlPackage
+} from "@docomator/template-compiler";
 
 import { createDocumentGenerationHandler } from "./document-generation-handler.js";
 import { JobHandlerRegistry, processNextJob } from "./processor.js";
@@ -54,7 +59,47 @@ function applyMigrations(dataDir: string): void {
   database.close();
 }
 
-async function fixture() {
+function repeatTechnicalIdentifier(): string {
+  return `airepeat:${createHash("sha256")
+    .update("word/document.xml")
+    .update("\u0000")
+    .update("0")
+    .update("\u0000")
+    .update("1")
+    .update("\u0000")
+    .update("audience.members")
+    .digest("hex")
+    .slice(0, 24)}`;
+}
+
+function repeatCompiledTemplate(fieldId: string): Buffer {
+  const fieldIdentifier = `aifield:${fieldId}`;
+  const repeatIdentifier = repeatTechnicalIdentifier();
+  const documentXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Пользовательский заголовок</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>ФИО</w:t></w:r></w:p></w:tc></w:tr><w:sdt><w:sdtPr><w:tag w:val="${repeatIdentifier}"/><w:id w:val="100"/></w:sdtPr><w:sdtContent><w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:sdt><w:sdtPr><w:tag w:val="${fieldIdentifier}"/><w:id w:val="101"/></w:sdtPr><w:sdtContent><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>____</w:t></w:r></w:p></w:sdtContent></w:sdt></w:tc></w:tr></w:sdtContent></w:sdt></w:tbl><w:p><w:r><w:t>Пользовательская подпись</w:t></w:r></w:p></w:body></w:document>`;
+  return writeOoxmlPackage([
+    {
+      name: "[Content_Types].xml",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      )
+    },
+    {
+      name: "_rels/.rels",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
+      )
+    },
+    {
+      name: "word/document.xml",
+      isDirectory: false,
+      content: Buffer.from(documentXml)
+    }
+  ]);
+}
+
+async function fixture(options: { repeat?: boolean } = {}) {
   const dataDir = await fsPromises.mkdtemp(
     path.join(os.tmpdir(), "docomator-generation-handler-")
   );
@@ -65,6 +110,10 @@ async function fixture() {
   const quarantine = new DocumentQuarantineRegistry(store, objectStore);
   const drafts = new TemplateDraftRegistry(store);
   const testedVersions = new TemplateTestVersionRegistry(store, objectStore);
+  const multiTestedVersions = new MultiFieldTestVersionRegistry(
+    store,
+    objectStore
+  );
   const releases = new TemplateReleaseRegistry(store, objectStore, { queue });
   const spaces = new SpaceRegistry(store);
 
@@ -109,20 +158,97 @@ async function fixture() {
         kind: "docx.paragraph",
         elementId: "paragraph-1",
         part: "word/document.xml",
-        index: 0
+        index: options.repeat ? 2 : 0,
+        ...(options.repeat
+          ? {
+              tableLocation: {
+                tableIndex: 0,
+                rowIndex: 1,
+                columnIndex: 0
+              }
+            }
+          : {})
       },
+      ...(options.repeat
+        ? {
+            repeatBinding: {
+              version: 1,
+              kind: "docx.repeat-row",
+              source: "audience.members",
+              anchorElementId: "paragraph-1",
+              part: "word/document.xml",
+              tableIndex: 0,
+              rowIndex: 1
+            }
+          }
+        : {}),
       originalPreview: "ФИО участника",
       structureSha256: STRUCTURE_SHA
     },
     context("corr-field", 2)
   );
-  const tested = await testedVersions.recordTestedVersion(
-    {
+  const compiled = options.repeat
+    ? repeatCompiledTemplate(field.id)
+    : Buffer.from("compiled-template");
+  const repeatContract = {
+    version: 1,
+    kind: "docx.repeat-row-contract",
+    binding: {
+      version: 1,
+      kind: "docx.repeat-row",
+      source: "audience.members",
+      anchorElementId: "paragraph-1",
+      part: "word/document.xml",
+      tableIndex: 0,
+      rowIndex: 1
+    },
+    technicalBinding: {
+      kind: "docx.repeat-sdt",
+      identifier: repeatTechnicalIdentifier(),
+      part: "word/document.xml",
+      target: "таблица 1, строка 2"
+    }
+  } as const;
+  const tested = options.repeat
+    ? await multiTestedVersions.recordTestedVersion(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          draftId: draft.id,
+          format: "docx",
+          compiledBuffer: compiled,
+          trialBuffer: compiled,
+          fields: [
+            {
+              fieldId: field.id,
+              fieldKey: field.key,
+              fieldLabel: field.label,
+              valueType: field.valueType,
+              required: field.required,
+              binding: field.binding,
+              formatter: field.formatter,
+              technicalBinding: {
+                kind: "docx.sdt",
+                identifier: `aifield:${field.id}`,
+                part: "word/document.xml",
+                target: "таблица 1, строка 2, ячейка 1"
+              },
+              sampleValue: "Иванов Иван",
+              renderedValue: "Иванов Иван",
+              readBackValue: "Иванов Иван",
+              verification: { matched: true }
+            }
+          ],
+          repeatContract,
+          verification: { matched: true }
+        },
+        context("corr-tested", 3)
+      )
+    : await testedVersions.recordTestedVersion({
       spaceId: DEFAULT_SPACE_ID,
       draftId: draft.id,
       fieldId: field.id,
       format: "docx",
-      compiledBuffer: Buffer.from("compiled-template"),
+      compiledBuffer: compiled,
       trialBuffer: Buffer.from("trial-template"),
       technicalBinding: {
         kind: "docx.sdt",
@@ -133,14 +259,12 @@ async function fixture() {
       renderedValue: "Иванов Иван",
       readBackValue: "Иванов Иван",
       verification: { matched: true }
-    },
-    context("corr-tested", 3)
-  );
+    }, context("corr-tested", 3));
   const requested = releases.requestPreview(
     {
       spaceId: DEFAULT_SPACE_ID,
       versionId: tested.id,
-      versionKind: "single"
+      versionKind: options.repeat ? "multi" : "single"
     },
     context("corr-preview-request", 4)
   );
@@ -196,8 +320,11 @@ async function fixture() {
     objectStore,
     queue,
     registry,
+    spaces,
+    memberIds: [anna.entityId, boris.entityId],
     release,
     snapshot: snapshot.snapshot,
+    repeat: Boolean(options.repeat),
     async cleanup() {
       store.close();
       await fsPromises.rm(dataDir, { recursive: true, force: true });
@@ -244,6 +371,14 @@ async function assertGeneratedDocument(
   const content = documentXml.content.toString("utf8");
   assert.match(content, /Анна Алексеева/u);
   assert.match(content, /Борис Борисов/u);
+  if (setup.repeat) {
+    assert.match(content, /Пользовательский заголовок/u);
+    assert.match(content, /Пользовательская подпись/u);
+    assert.equal((content.match(/<w:tr>/gu) ?? []).length, 3);
+    assert.equal((content.match(/<w:cantSplit\/>/gu) ?? []).length, 2);
+    assert.doesNotMatch(content, /Участников: 2/u);
+    assert.doesNotMatch(content, /____/u);
+  }
 
   const persisted = setup.store.execute((database) =>
     database
@@ -361,6 +496,57 @@ test("graceful interruption keeps generation retryable and the next worker finis
     });
     assert.equal(second.status, "completed");
     assert.equal(second.job.attempts, 2);
+    await assertGeneratedDocument(setup, created.id);
+  } finally {
+    await setup.cleanup();
+  }
+});
+
+test("aggregate generation uses the activated user DOCX repeat row", async () => {
+  const setup = await fixture({ repeat: true });
+  try {
+    const personal = setup.spaces.createAudienceSnapshot(
+      DEFAULT_SPACE_ID,
+      {
+        source: { kind: "selected", entityIds: setup.memberIds },
+        targetMode: "one_per_member"
+      },
+      context("corr-repeat-personal-snapshot", 19)
+    );
+    assert.throws(
+      () =>
+        setup.registry.createJob(
+          {
+            spaceId: DEFAULT_SPACE_ID,
+            activeReleaseId: setup.release.id,
+            snapshotId: personal.snapshot.id,
+            idempotencyKey: "generation-repeat-personal"
+          },
+          context("corr-repeat-personal", 20)
+        ),
+      /aggregate audience snapshot/u
+    );
+    const created = setup.registry.createJob(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        activeReleaseId: setup.release.id,
+        snapshotId: setup.snapshot.id,
+        idempotencyKey: "generation-user-repeat"
+      },
+      context("corr-repeat-generate", 20)
+    ).job;
+    const currentTime = at(20);
+    const result = await processNextJob({
+      queue: setup.queue,
+      handlers: handlers(setup, "worker-repeat", () => currentTime),
+      workerId: "worker-repeat",
+      leaseDurationMs: 60_000,
+      retryBaseMs: 100,
+      retryMaxMs: 1_000,
+      signal: new AbortController().signal,
+      now: () => currentTime
+    });
+    assert.equal(result.status, "completed");
     await assertGeneratedDocument(setup, created.id);
   } finally {
     await setup.cleanup();

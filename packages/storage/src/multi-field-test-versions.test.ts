@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import test from "node:test";
 
@@ -25,7 +26,7 @@ function context(correlationId: string) {
   };
 }
 
-async function setupFixture() {
+async function setupFixture(options: { repeat?: boolean } = {}) {
   const fixture = createMigratedTestStore();
   const objectStore = new ContentAddressedObjectStore(
     path.join(fixture.directory, "objects")
@@ -77,6 +78,19 @@ async function setupFixture() {
         index: 0
       },
       formatter: { version: 1, kind: "identity" },
+      ...(options.repeat
+        ? {
+            repeatBinding: {
+              version: 1,
+              kind: "docx.repeat-row",
+              source: "audience.members",
+              anchorElementId: "p1",
+              part: "word/document.xml",
+              tableIndex: 0,
+              rowIndex: 1
+            }
+          }
+        : {}),
       originalPreview: "ФИО",
       structureSha256: STRUCTURE_SHA
     },
@@ -105,7 +119,14 @@ async function setupFixture() {
     },
     context("corr-position")
   );
-  return { fixture, objectStore, versions, draft, name, position };
+  return {
+    fixture,
+    objectStore,
+    versions,
+    draft: drafts.getDraft(DEFAULT_SPACE_ID, draft.id),
+    name,
+    position
+  };
 }
 
 function values(setup: Awaited<ReturnType<typeof setupFixture>>) {
@@ -139,6 +160,23 @@ function values(setup: Awaited<ReturnType<typeof setupFixture>>) {
       verification: { matched: true }
     }
   ] as const;
+}
+
+function repeatTechnicalIdentifier(binding: {
+  part: string;
+  tableIndex: number;
+  rowIndex: number;
+}): string {
+  return `airepeat:${createHash("sha256")
+    .update(binding.part)
+    .update("\u0000")
+    .update(String(binding.tableIndex))
+    .update("\u0000")
+    .update(String(binding.rowIndex))
+    .update("\u0000")
+    .update("audience.members")
+    .digest("hex")
+    .slice(0, 24)}`;
 }
 
 test("multi-field version stores ordered field rows, files, audit and event", async () => {
@@ -303,6 +341,109 @@ test("multi-field versions are immutable and hidden from another space", async (
           .prepare("UPDATE template_multi_test_versions SET field_count = 1 WHERE id = ?")
           .run(version.id)
       )
+    );
+  } finally {
+    setup.fixture.cleanup();
+  }
+});
+
+test("repeat contract is frozen in multi-field version and release candidate", async () => {
+  const setup = await setupFixture({ repeat: true });
+  try {
+    assert.ok(setup.draft.repeatBinding);
+    assert.equal(typeof setup.draft.repeatBinding, "object");
+    const binding = setup.draft.repeatBinding as {
+      part: string;
+      tableIndex: number;
+      rowIndex: number;
+    };
+    const repeatContract = {
+      version: 1,
+      kind: "docx.repeat-row-contract",
+      binding: setup.draft.repeatBinding,
+      technicalBinding: {
+        kind: "docx.repeat-sdt",
+        identifier: repeatTechnicalIdentifier(binding),
+        part: "word/document.xml",
+        target: "таблица 1, строка 2"
+      }
+    };
+    const otherBinding = {
+      version: 1 as const,
+      kind: "docx.repeat-row" as const,
+      source: "audience.members" as const,
+      anchorElementId: "p1",
+      part: "word/document.xml",
+      tableIndex: 0,
+      rowIndex: 2
+    };
+    const version = await setup.versions.recordTestedVersion(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        draftId: setup.draft.id,
+        format: "docx",
+        compiledBuffer: Buffer.from("repeat-compiled"),
+        trialBuffer: Buffer.from("repeat-trial"),
+        fields: values(setup),
+        repeatContract,
+        verification: { matched: true }
+      },
+      context("corr-repeat-version")
+    );
+    assert.deepEqual(version.repeatContract, repeatContract);
+    const candidate = setup.fixture.store.execute((database) =>
+      database
+        .prepare(
+          "SELECT repeat_contract_json FROM template_release_candidates WHERE id = ?"
+        )
+        .get(version.id)
+    ) as { repeat_contract_json: string };
+    assert.deepEqual(JSON.parse(candidate.repeat_contract_json), repeatContract);
+
+    await assert.rejects(
+      setup.versions.recordTestedVersion(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          draftId: setup.draft.id,
+          format: "docx",
+          compiledBuffer: Buffer.from("repeat-compiled-mismatch"),
+          trialBuffer: Buffer.from("repeat-trial-mismatch"),
+          fields: values(setup),
+          repeatContract: {
+            ...repeatContract,
+            binding: otherBinding,
+            technicalBinding: {
+              ...repeatContract.technicalBinding,
+              identifier: repeatTechnicalIdentifier(otherBinding)
+            }
+          },
+          verification: { matched: true }
+        },
+        context("corr-repeat-mismatch")
+      ),
+      /does not match/u
+    );
+    await assert.rejects(
+      setup.versions.recordTestedVersion(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          draftId: setup.draft.id,
+          format: "docx",
+          compiledBuffer: Buffer.from("repeat-compiled-forged"),
+          trialBuffer: Buffer.from("repeat-trial-forged"),
+          fields: values(setup),
+          repeatContract: {
+            ...repeatContract,
+            technicalBinding: {
+              ...repeatContract.technicalBinding,
+              identifier: "airepeat:0123456789abcdef01234567"
+            }
+          },
+          verification: { matched: true }
+        },
+        context("corr-repeat-forged")
+      ),
+      /supported DOCX repeat row contract/u
     );
   } finally {
     setup.fixture.cleanup();

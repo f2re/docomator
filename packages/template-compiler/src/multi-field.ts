@@ -6,11 +6,15 @@ import {
 } from "@docomator/document-intake";
 
 import {
+  compileDocxRepeatRow,
   compileScalarField,
+  parseDocxRepeatRowBinding,
   TemplateCompilerError,
   type CompileScalarFieldDefinition,
+  type CompiledRepeatTechnicalBinding,
   type CompiledTechnicalBinding,
   type DocxParagraphBinding,
+  type DocxRepeatRowBinding,
   type DocxTextRangeBinding,
   type ScalarFieldBinding,
   type XlsxCellBinding
@@ -27,6 +31,7 @@ export interface CompileScalarFieldsInput {
   expectedSourceSha256: string;
   expectedStructureSha256: string;
   fields: readonly CompileScalarFieldDefinition[];
+  repeatBinding?: unknown;
 }
 
 export interface CompiledScalarFieldResult {
@@ -45,6 +50,10 @@ export interface CompileScalarFieldsResult {
   outputSha256: string;
   modifiedParts: string[];
   fields: CompiledScalarFieldResult[];
+  repeat: {
+    binding: DocxRepeatRowBinding;
+    technicalBinding: CompiledRepeatTechnicalBinding;
+  } | null;
   verification: {
     found: true;
     checkedFields: number;
@@ -356,6 +365,10 @@ export async function compileScalarFields(
 ): Promise<CompileScalarFieldsResult> {
   const source = Buffer.from(input.source);
   const normalizedFields = normalizeCompileFields(input.fields);
+  const repeatBinding =
+    input.repeatBinding === undefined
+      ? null
+      : parseDocxRepeatRowBinding(input.repeatBinding);
   const sourceHash = sha256(source);
   const wantedSourceHash = expectedSha256(
     input.expectedSourceSha256,
@@ -392,6 +405,37 @@ export async function compileScalarFields(
       throw new TemplateCompilerError(
         "binding_element_mismatch",
         `Поле «${field.label}» относится к другой версии структурного элемента.`
+      );
+    }
+    if (repeatBinding !== null) {
+      if (
+        initialAnalysis.format !== "docx" ||
+        original.kind !== "paragraph" ||
+        original.part !== repeatBinding.part ||
+        original.tableLocation?.tableIndex !== repeatBinding.tableIndex ||
+        original.tableLocation.rowIndex !== repeatBinding.rowIndex
+      ) {
+        throw new TemplateCompilerError(
+          "repeat_field_outside_row",
+          `Поле «${field.label}» находится вне выбранной повторяемой строки.`
+        );
+      }
+    }
+  }
+  if (repeatBinding !== null) {
+    const anchor = initialAnalysis.elements.find(
+      (element) => element.id === repeatBinding.anchorElementId
+    );
+    if (
+      initialAnalysis.format !== "docx" ||
+      anchor?.kind !== "paragraph" ||
+      anchor.part !== repeatBinding.part ||
+      anchor.tableLocation?.tableIndex !== repeatBinding.tableIndex ||
+      anchor.tableLocation.rowIndex !== repeatBinding.rowIndex
+    ) {
+      throw new TemplateCompilerError(
+        "repeat_anchor_mismatch",
+        "Опорный элемент повторяемой строки не совпадает с текущей структурой DOCX."
       );
     }
   }
@@ -433,18 +477,41 @@ export async function compileScalarFields(
     });
   }
 
+  let repeat: CompileScalarFieldsResult["repeat"] = null;
+  if (repeatBinding !== null) {
+    const compiledRepeat = await compileDocxRepeatRow({
+      compiled: current,
+      binding: repeatBinding,
+      fieldTechnicalBindings: results.map((field) => field.technicalBinding)
+    });
+    current = compiledRepeat.output;
+    repeat = {
+      binding: compiledRepeat.binding,
+      technicalBinding: compiledRepeat.technicalBinding
+    };
+  }
+
   return {
     output: current,
     format: initialAnalysis.format,
     sourceSha256: sourceHash,
     structureSha256: initialAnalysis.structureSha256,
     outputSha256: sha256(current),
-    modifiedParts: [...new Set(results.map((field) => field.modifiedPart))].sort(),
+    modifiedParts: [
+      ...new Set([
+        ...results.map((field) => field.modifiedPart),
+        ...(repeat === null ? [] : [repeat.technicalBinding.part])
+      ])
+    ].sort(),
     fields: results,
+    repeat,
     verification: {
       found: true,
       checkedFields: results.length,
-      message: `После сборки повторно найдены технические привязки: ${results.length}.`
+      message:
+        repeat === null
+          ? `После сборки повторно найдены технические привязки: ${results.length}.`
+          : `После сборки повторно найдены поля (${results.length}) и повторяемая строка.`
     }
   };
 }

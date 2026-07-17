@@ -59,6 +59,20 @@ function sourceDocx(): Buffer {
   );
 }
 
+function repeatSourceDocx(): Buffer {
+  return buildZipFixture(
+    minimalDocxEntries().map((entry) =>
+      entry.name === "word/document.xml"
+        ? {
+            ...entry,
+            content:
+              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Сводный список</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>ФИО</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Должность</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:p><w:r><w:t>____</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>____</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:t>Конец списка</w:t></w:r></w:p></w:body></w:document>'
+          }
+        : entry
+    )
+  );
+}
+
 async function createDraftWithFields(app: ReturnType<typeof buildApp>) {
   const source = await app.inject({
     method: "POST",
@@ -215,6 +229,110 @@ test("API creates, reads and downloads a complete multi-field tested version", a
     });
     assert.equal(duplicate.statusCode, 201, duplicate.body);
     assert.equal(duplicate.json().data.version.id, body.data.version.id);
+  } finally {
+    await app.close();
+    await fsPromises.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("API compiles and freezes a DOCX audience repeat row", async () => {
+  const { app, dataDir } = await testApp();
+  try {
+    const source = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/quarantine?fileName=${encodeURIComponent("Сводный список.docx")}`,
+      headers: {
+        "content-type":
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      },
+      payload: repeatSourceDocx()
+    });
+    assert.equal(source.statusCode, 201, source.body);
+    const draftResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/${source.json().data.id}/draft`,
+      headers: { "content-type": "application/json" },
+      payload: { title: "Сводный список" }
+    });
+    const draft = draftResponse.json().data as {
+      id: string;
+      structure: {
+        elements: Array<{
+          id: string;
+          kind: string;
+          text: string;
+          tableLocation: { rowIndex: number; columnIndex: number } | null;
+        }>;
+      };
+    };
+    const placeholders = draft.structure.elements
+      .filter(
+        (element) =>
+          element.kind === "paragraph" &&
+          element.text === "____" &&
+          element.tableLocation?.rowIndex === 1
+      )
+      .sort(
+        (left, right) =>
+          (left.tableLocation?.columnIndex ?? 0) -
+          (right.tableLocation?.columnIndex ?? 0)
+      );
+    assert.equal(placeholders.length, 2);
+    const definitions = [
+      { key: "person.full_name", label: "ФИО" },
+      { key: "person.position", label: "Должность" }
+    ];
+    const fields: Array<{ id: string }> = [];
+    for (const [index, definition] of definitions.entries()) {
+      const element = placeholders[index];
+      assert.ok(element);
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+        headers: { "content-type": "application/json" },
+        payload: {
+          ...definition,
+          valueType: "string",
+          required: true,
+          elementId: element.id,
+          textRange: { startOffset: 0, endOffset: 4 },
+          ...(index === 0 ? { repeatRow: true } : {})
+        }
+      });
+      assert.equal(response.statusCode, 201, response.body);
+      fields.push(response.json().data.field);
+    }
+
+    const trialResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/trial-all`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        values: [
+          { fieldId: fields[0]?.id, value: "Иванов Иван" },
+          { fieldId: fields[1]?.id, value: "Инженер" }
+        ]
+      }
+    });
+    assert.equal(trialResponse.statusCode, 201, trialResponse.body);
+    const version = trialResponse.json().data.version;
+    assert.equal(version.repeatContract.kind, "docx.repeat-row-contract");
+    assert.equal(
+      version.repeatContract.technicalBinding.kind,
+      "docx.repeat-sdt"
+    );
+    const compiled = await app.inject({
+      method: "GET",
+      url: trialResponse.json().data.downloads.compiled
+    });
+    const xml = packageEntry(
+      await readOoxmlPackage(compiled.rawPayload),
+      "word/document.xml"
+    ).content.toString("utf8");
+    assert.equal((xml.match(/airepeat:/gu) ?? []).length, 1);
+    assert.equal((xml.match(/aifield:/gu) ?? []).length, 2);
+    assert.match(xml, /Сводный список/u);
+    assert.match(xml, /Конец списка/u);
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });

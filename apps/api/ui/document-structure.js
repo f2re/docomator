@@ -281,6 +281,21 @@ function structureTextRangeControl(element) {
     </label>`;
 }
 
+function structureRepeatRowControl(element) {
+  if (element.kind !== "paragraph" || !element.tableLocation) return "";
+  const current = structureDraft?.repeatBinding;
+  const selected =
+    current &&
+    current.part === element.part &&
+    current.tableIndex === element.tableLocation.tableIndex &&
+    current.rowIndex === element.tableLocation.rowIndex;
+  return `
+    <label class="structure-required-field">
+      <input id="documentFieldRepeatRow" type="checkbox"${selected ? " checked" : ""} />
+      <span><strong>Повторять эту строку для сотрудников</strong><small>В сводном документе строка будет скопирована по одному разу для каждого участника. Все изменяемые поля такого шаблона должны находиться в этой строке.</small></span>
+    </label>`;
+}
+
 function captureStructureTextRange() {
   const control = document.querySelector("#documentFieldTextRange");
   const message = document.querySelector("#documentFieldTextRangeMessage");
@@ -321,6 +336,7 @@ function renderStructureSelection(element) {
       <form class="structure-field-form" id="documentFieldForm" novalidate>
         <div class="structure-field-grid">
           ${structureTextRangeControl(element)}
+          ${structureRepeatRowControl(element)}
           <label>
             <span>Какое поле сотрудника поставить сюда?</span>
             <select id="documentFieldProperty" name="propertyKey">${structurePropertyOptions()}</select>
@@ -418,6 +434,7 @@ async function saveSelectedField(event) {
   const label = form.querySelector("#documentFieldLabel")?.value?.trim() || "";
   const valueType = form.querySelector("#documentFieldType")?.value || "string";
   const required = Boolean(form.querySelector("#documentFieldRequired")?.checked);
+  const repeatRow = Boolean(form.querySelector("#documentFieldRepeatRow")?.checked);
   const creatingProperty = propertyKey === "__new__";
   const propertyConfirmed = Boolean(form.querySelector("#documentPropertyConfirm")?.checked);
   if (
@@ -497,6 +514,7 @@ async function saveSelectedField(event) {
           valueType: definition.valueType,
           required,
           elementId: selectedStructureElement.id,
+          ...(repeatRow ? { repeatRow: true } : {}),
           ...(definition.valueType === "number" && decimalPlacesValue !== ""
             ? { decimalPlaces: Number(decimalPlacesValue) }
             : {}),
@@ -513,6 +531,11 @@ async function saveSelectedField(event) {
     message.innerHTML = `Поле «${structureEscape(fieldBody.data.field.label)}» связано с документом. Следующий шаг — пробное заполнение.`;
     button.textContent = "Связано";
     button.hidden = true;
+    structureDraft.repeatBinding = fieldBody.data.repeatBinding;
+    structureDraft.fields = [
+      ...(Array.isArray(structureDraft.fields) ? structureDraft.fields : []),
+      fieldBody.data.field
+    ];
     form.querySelectorAll("input, select").forEach((control) => {
       control.disabled = true;
     });

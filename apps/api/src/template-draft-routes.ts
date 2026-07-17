@@ -47,6 +47,7 @@ interface CreateFieldBody {
   elementId: string;
   decimalPlaces?: number;
   timeZone?: string;
+  repeatRow?: boolean;
   textRange?: {
     startOffset: number;
     endOffset: number;
@@ -61,7 +62,9 @@ function responseEnvelope<T>(request: FastifyRequest, data: T) {
   return { data, correlationId: correlationId(request) };
 }
 
-function isJsonObject(value: JsonValue): value is { [key: string]: JsonValue } {
+function isJsonObject(
+  value: JsonValue | undefined
+): value is { [key: string]: JsonValue } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -204,6 +207,94 @@ function bindingForElement(
   }
   throw new TemplateDraftValidationError(
     `Unsupported structure element kind: ${kind}`
+  );
+}
+
+function elementTableRow(
+  element: { [key: string]: JsonValue }
+): { part: string; tableIndex: number; rowIndex: number } | null {
+  if (element.kind !== "paragraph" || !isJsonObject(element.tableLocation)) {
+    return null;
+  }
+  const tableIndex = element.tableLocation.tableIndex;
+  const rowIndex = element.tableLocation.rowIndex;
+  if (
+    typeof tableIndex !== "number" ||
+    !Number.isInteger(tableIndex) ||
+    tableIndex < 0 ||
+    typeof rowIndex !== "number" ||
+    !Number.isInteger(rowIndex) ||
+    rowIndex < 0
+  ) {
+    return null;
+  }
+  return {
+    part: requiredString(element, "part"),
+    tableIndex,
+    rowIndex
+  };
+}
+
+function repeatBindingForElement(
+  element: { [key: string]: JsonValue }
+): JsonValue {
+  const row = elementTableRow(element);
+  if (row === null) {
+    throw new TemplateDraftValidationError(
+      "Повторять можно только обычную строку таблицы DOCX."
+    );
+  }
+  return toJsonValue({
+    version: 1,
+    kind: "docx.repeat-row",
+    source: "audience.members",
+    anchorElementId: requiredString(element, "id"),
+    part: row.part,
+    tableIndex: row.tableIndex,
+    rowIndex: row.rowIndex
+  });
+}
+
+function repeatRowCoordinate(
+  value: JsonValue
+): { part: string; tableIndex: number; rowIndex: number } | null {
+  if (!isJsonObject(value)) return null;
+  const part = value.part;
+  const tableIndex = value.tableIndex;
+  const rowIndex = value.rowIndex;
+  return typeof part === "string" &&
+    part.length > 0 &&
+    typeof tableIndex === "number" &&
+    Number.isInteger(tableIndex) &&
+    tableIndex >= 0 &&
+    typeof rowIndex === "number" &&
+    Number.isInteger(rowIndex) &&
+    rowIndex >= 0
+    ? { part, tableIndex, rowIndex }
+    : null;
+}
+
+function fieldRepeatRow(
+  binding: JsonValue
+): { part: string; tableIndex: number; rowIndex: number } | null {
+  if (!isJsonObject(binding) || !isJsonObject(binding.tableLocation)) {
+    return null;
+  }
+  return repeatRowCoordinate({
+    part: binding.part ?? null,
+    tableIndex: binding.tableLocation.tableIndex ?? null,
+    rowIndex: binding.tableLocation.rowIndex ?? null
+  });
+}
+
+function sameRepeatRow(
+  left: { part: string; tableIndex: number; rowIndex: number },
+  right: { part: string; tableIndex: number; rowIndex: number }
+): boolean {
+  return (
+    left.part === right.part &&
+    left.tableIndex === right.tableIndex &&
+    left.rowIndex === right.rowIndex
   );
 }
 
@@ -371,6 +462,7 @@ export function registerTemplateDraftRoutes(
               maxLength: 100,
               pattern: "^(?:UTC|[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+)+)$"
             },
+            repeatRow: { type: "boolean", default: false },
             textRange: {
               type: "object",
               additionalProperties: false,
@@ -399,6 +491,39 @@ export function registerTemplateDraftRoutes(
       );
       const element = findElement(draft.structure, request.body.elementId);
       const binding = bindingForElement(element, request.body.textRange);
+      const selectedRow = elementTableRow(element);
+      const currentRepeatRow =
+        draft.repeatBinding === null
+          ? null
+          : repeatRowCoordinate(draft.repeatBinding);
+      if (
+        currentRepeatRow !== null &&
+        (selectedRow === null || !sameRepeatRow(currentRepeatRow, selectedRow))
+      ) {
+        throw new TemplateDraftValidationError(
+          "Все поля шаблона с повторяемой строкой должны находиться в одной выбранной строке таблицы."
+        );
+      }
+      const repeatBinding = request.body.repeatRow
+        ? repeatBindingForElement(element)
+        : undefined;
+      if (repeatBinding !== undefined) {
+        const wantedRow = repeatRowCoordinate(repeatBinding);
+        if (wantedRow === null) {
+          throw new TemplateDraftValidationError(
+            "Не удалось определить повторяемую строку таблицы DOCX."
+          );
+        }
+        const outsideField = draft.fields.find((field) => {
+          const row = fieldRepeatRow(field.binding);
+          return row === null || !sameRepeatRow(row, wantedRow);
+        });
+        if (outsideField !== undefined) {
+          throw new TemplateDraftValidationError(
+            `Поле «${outsideField.label}» находится вне выбранной повторяемой строки.`
+          );
+        }
+      }
       if (
         request.body.decimalPlaces !== undefined &&
         request.body.valueType !== "number"
@@ -435,6 +560,7 @@ export function registerTemplateDraftRoutes(
           elementKind: binding.kind,
           binding: binding.binding,
           formatter: toJsonValue(formatter),
+          ...(repeatBinding === undefined ? {} : { repeatBinding }),
           originalPreview: binding.preview,
           structureSha256: draft.structureSha256
         },
@@ -444,6 +570,7 @@ export function registerTemplateDraftRoutes(
       return responseEnvelope(request, {
         draftId: draft.id,
         structureSha256: draft.structureSha256,
+        repeatBinding: draft.repeatBinding ?? repeatBinding ?? null,
         field
       });
     }

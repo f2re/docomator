@@ -99,7 +99,7 @@ function sharedResultFixture(space) {
   };
 }
 
-function structureReport(fileName) {
+function structureReport(fileName, repeatTemplate = false) {
   const format = fileName.toLowerCase().endsWith(".xlsx") ? "xlsx" : "docx";
   const common = {
     fileName,
@@ -146,7 +146,16 @@ function structureReport(fileName) {
         part: "word/document.xml",
         index: 0,
         text: "ФИО: ______",
-        runsTruncated: false
+        runsTruncated: false,
+        ...(repeatTemplate
+          ? {
+              tableLocation: {
+                tableIndex: 0,
+                rowIndex: 1,
+                columnIndex: 0
+              }
+            }
+          : {})
       }
     ]
   };
@@ -176,6 +185,13 @@ export function createDocomatorScenario(options = {}) {
   secondary.operations = Array.isArray(options.secondaryOperations)
     ? options.secondaryOperations.map((operation) => ({ ...operation }))
     : [];
+  if (options.activeTemplateRepeat && primary.activeTemplates[0]) {
+    primary.activeTemplates[0].manifest = {
+      version: 4,
+      compatibilityLevel: "structured",
+      repeats: [{ kind: "docx.repeat-row-contract" }]
+    };
+  }
   return {
     ...primary,
     primary,
@@ -191,7 +207,8 @@ export function createDocomatorScenario(options = {}) {
     draftRequests: [],
     fieldRequests: [],
     inspectedFileName: "Личная карточка.docx",
-    format: "docx"
+    format: "docx",
+    repeatTemplate: Boolean(options.repeatTemplate)
   };
 }
 
@@ -486,7 +503,8 @@ export async function installDocomatorApiMock(page, options = {}) {
     ) {
       state.directAnalyzeCalls += 1;
       data = structureReport(
-        url.searchParams.get("fileName") || state.inspectedFileName
+        url.searchParams.get("fileName") || state.inspectedFileName,
+        state.repeatTemplate
       );
     } else if (/\/document-sources\/quarantine$/.test(path) && method === "POST") {
       const fileName = url.searchParams.get("fileName") || state.inspectedFileName;
@@ -513,7 +531,8 @@ export async function installDocomatorApiMock(page, options = {}) {
         sourceId
       });
       const sourceStructure = structureReport(
-        source?.fileName || state.inspectedFileName
+        source?.fileName || state.inspectedFileName,
+        state.repeatTemplate
       );
       let draft = space.drafts[0];
       if (!draft) {
@@ -528,6 +547,7 @@ export async function installDocomatorApiMock(page, options = {}) {
           structureSha256: sourceStructure.structureSha256,
           structure: sourceStructure,
           structureTruncated: false,
+          repeatBinding: null,
           fields: []
         };
         space.drafts.push(draft);
@@ -552,7 +572,18 @@ export async function installDocomatorApiMock(page, options = {}) {
         textRange: payload.textRange || null
       };
       draft.fields.push(field);
-      data = { field };
+      if (payload.repeatRow) {
+        draft.repeatBinding = {
+          version: 1,
+          kind: "docx.repeat-row",
+          source: "audience.members",
+          anchorElementId: payload.elementId,
+          part: "word/document.xml",
+          tableIndex: 0,
+          rowIndex: 1
+        };
+      }
+      data = { field, repeatBinding: draft.repeatBinding };
     } else if (/\/template-drafts$/.test(path) && method === "GET") {
       data = space.drafts;
     } else if (/\/template-drafts\/[^/]+$/.test(path) && method === "GET") {

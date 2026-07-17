@@ -146,6 +146,31 @@ function selectedGenerationTemplate() {
   return generationTemplates.find((template) => template.id === id) || null;
 }
 
+function generationTemplateHasRepeat(template) {
+  return Array.isArray(template?.manifest?.repeats) && template.manifest.repeats.length > 0;
+}
+
+function syncGenerationTemplateMode() {
+  const template = selectedGenerationTemplate();
+  const personal = document.querySelector(
+    'input[name="generationMode"][value="one_per_member"]'
+  );
+  const aggregate = document.querySelector(
+    'input[name="generationMode"][value="aggregate"]'
+  );
+  const hint = document.querySelector("#generationModeHint");
+  if (!personal || !aggregate) return;
+  const repeat = generationTemplateHasRepeat(template);
+  personal.disabled = repeat;
+  if (repeat) aggregate.checked = true;
+  if (hint) {
+    hint.textContent = repeat
+      ? "Этот шаблон содержит повторяемую строку сотрудников и создаёт один сводный документ."
+      : "Выберите отдельные документы или один сводный результат.";
+  }
+  updateGenerationEstimate();
+}
+
 function currentGenerationMode() {
   return (
     document.querySelector('input[name="generationMode"]:checked')?.value ||
@@ -272,6 +297,7 @@ function renderGenerationWorkspace() {
       <div class="generation-state is-warning"><div><strong>Сначала подключите шаблон</strong><p>Проверьте документ, свяжите его с полями сотрудников и подтвердите предварительный просмотр.</p><button class="primary-button" type="button" data-view-target="templates">Открыть шаблоны</button></div></div>`;
     return;
   }
+  const repeatByDefault = generationTemplateHasRepeat(generationTemplates[0]);
   content.innerHTML = `
     <form class="generation-form generation-wizard" id="documentGenerationForm" novalidate>
       <section class="generation-wizard-section" aria-labelledby="generationTemplateLabel">
@@ -306,14 +332,15 @@ function renderGenerationWorkspace() {
         <legend id="generationModeLabel">Какой результат нужен?</legend>
         <div class="generation-mode-options">
           <label class="generation-mode-option">
-            <input type="radio" name="generationMode" value="one_per_member" checked />
+            <input type="radio" name="generationMode" value="one_per_member"${repeatByDefault ? " disabled" : " checked"} />
             <span><strong>По одному документу на каждого</strong><small>Каждый сотрудник получит собственную заполненную копию. Несколько файлов соберутся в ZIP.</small></span>
           </label>
           <label class="generation-mode-option">
-            <input type="radio" name="generationMode" value="aggregate" />
+            <input type="radio" name="generationMode" value="aggregate"${repeatByDefault ? " checked" : ""} />
             <span><strong>Один сводный документ</strong><small>Система создаст один файл с таблицей сотрудников.</small></span>
           </label>
         </div>
+        <small id="generationModeHint">${repeatByDefault ? "Этот шаблон содержит повторяемую строку сотрудников и создаёт один сводный документ." : "Выберите отдельные документы или один сводный результат."}</small>
       </fieldset>
       </section>
       <section class="generation-wizard-section generation-wizard-summary" aria-labelledby="generationSummaryLabel">
@@ -333,7 +360,7 @@ function renderGenerationWorkspace() {
     ?.addEventListener("change", renderGenerationSourceDetails);
   content
     .querySelector("#generationTemplate")
-    ?.addEventListener("change", updateGenerationEstimate);
+    ?.addEventListener("change", syncGenerationTemplateMode);
   content.querySelectorAll('input[name="generationMode"]').forEach((radio) =>
     radio.addEventListener("change", updateGenerationEstimate)
   );

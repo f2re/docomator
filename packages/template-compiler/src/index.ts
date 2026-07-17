@@ -1,4 +1,7 @@
 export {
+  compileDocxRepeatRow,
+  parseDocxRepeatRowBinding,
+  parseDocxRepeatRowContract,
   TemplateCompilerError,
   compileScalarField
 } from "./compiler.js";
@@ -7,8 +10,13 @@ export type {
   CompileScalarFieldDefinition,
   CompileScalarFieldInput,
   CompileScalarFieldResult,
+  CompileDocxRepeatRowInput,
+  CompileDocxRepeatRowResult,
+  CompiledRepeatTechnicalBinding,
   CompiledTechnicalBinding,
   DocxParagraphBinding,
+  DocxRepeatRowBinding,
+  DocxRepeatRowContract,
   DocxTextRangeBinding,
   ScalarFieldBinding,
   XlsxCellBinding
@@ -38,6 +46,7 @@ export type {
 
 export {
   readScalarValue,
+  renderDocxRepeatRows,
   renderScalarValue
 } from "./scalar-render.js";
 
@@ -51,6 +60,10 @@ export type { ScalarFormatter } from "./scalar-formatter.js";
 export type {
   ReadScalarValueInput,
   ReadScalarValueResult,
+  RenderDocxRepeatField,
+  RenderDocxRepeatMember,
+  RenderDocxRepeatRowsInput,
+  RenderDocxRepeatRowsResult,
   RenderScalarValueInput,
   RenderScalarValueResult,
   ScalarValueType

@@ -51,6 +51,7 @@ interface SourceRow {
   title: string;
   format: string;
   field_count: number;
+  repeat_contract_json: string | null;
   snapshot_id: string;
   target_mode: string;
   member_count: number;
@@ -251,6 +252,7 @@ export class DocumentPreflightRegistry {
             r.title,
             r.format,
             c.field_count,
+            c.repeat_contract_json,
             s.id AS snapshot_id,
             s.target_mode,
             s.member_count
@@ -273,6 +275,16 @@ export class DocumentPreflightRegistry {
       }
       const targetMode = generationMode(source.target_mode);
       const format = formatValue(source.format);
+      if (source.repeat_contract_json !== null && targetMode !== "aggregate") {
+        throw new DocumentPreflightValidationError(
+          "Template repeat row requires an aggregate audience snapshot"
+        );
+      }
+      if (source.repeat_contract_json !== null && format !== "docx") {
+        throw new DocumentPreflightConflictError(
+          "Stored repeat row is only compatible with DOCX"
+        );
+      }
       const fieldCount = Number(source.field_count);
       const memberCount = Number(source.member_count);
       if (memberCount < 1 || memberCount > 1_000) {

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { AuditRepository } from "./audit.js";
 import { type SqliteExecutor, SqliteStore } from "./database.js";
@@ -40,6 +40,7 @@ export interface RecordMultiFieldTestVersionInput {
   compiledBuffer: Uint8Array;
   trialBuffer: Uint8Array;
   fields: readonly RecordMultiFieldTestValueInput[];
+  repeatContract?: JsonValue;
   verification: JsonValue;
 }
 
@@ -72,6 +73,7 @@ export interface MultiFieldTestVersionRecord {
   sampleValues: JsonValue;
   verification: JsonValue;
   fieldCount: number;
+  repeatContract: JsonValue | null;
   fields: MultiFieldTestValueRecord[];
   status: "tested";
   createdBy: string | null;
@@ -92,6 +94,7 @@ interface VersionRow {
   sample_values_json: string;
   verification_json: string;
   field_count: number;
+  repeat_contract_json: string | null;
   status: string;
   created_by: string | null;
   correlation_id: string;
@@ -121,6 +124,7 @@ interface DraftRow {
   title: string;
   format: string;
   status: string;
+  repeat_binding_json: string | null;
 }
 
 interface DraftFieldRow {
@@ -355,12 +359,69 @@ function mapVersion(
     sampleValues: parseJson(row.sample_values_json),
     verification: parseJson(row.verification_json),
     fieldCount: Number(row.field_count),
+    repeatContract:
+      row.repeat_contract_json === null
+        ? null
+        : parseJson(row.repeat_contract_json),
     fields,
     status: "tested",
     createdBy: row.created_by,
     correlationId: row.correlation_id,
     createdAt: row.created_at
   };
+}
+
+function jsonObject(
+  value: JsonValue | undefined
+): value is { [key: string]: JsonValue } {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function repeatIdentifier(binding: { [key: string]: JsonValue }): string {
+  return `airepeat:${createHash("sha256")
+    .update(String(binding.part))
+    .update("\u0000")
+    .update(String(binding.tableIndex))
+    .update("\u0000")
+    .update(String(binding.rowIndex))
+    .update("\u0000")
+    .update("audience.members")
+    .digest("hex")
+    .slice(0, 24)}`;
+}
+
+function repeatBindingFromContract(contract: JsonValue): JsonValue {
+  if (
+    !jsonObject(contract) ||
+    contract.version !== 1 ||
+    contract.kind !== "docx.repeat-row-contract" ||
+    !jsonObject(contract.binding) ||
+    contract.binding.version !== 1 ||
+    contract.binding.kind !== "docx.repeat-row" ||
+    contract.binding.source !== "audience.members" ||
+    typeof contract.binding.anchorElementId !== "string" ||
+    contract.binding.anchorElementId.length === 0 ||
+    typeof contract.binding.part !== "string" ||
+    contract.binding.part.length === 0 ||
+    typeof contract.binding.tableIndex !== "number" ||
+    !Number.isInteger(contract.binding.tableIndex) ||
+    contract.binding.tableIndex < 0 ||
+    typeof contract.binding.rowIndex !== "number" ||
+    !Number.isInteger(contract.binding.rowIndex) ||
+    contract.binding.rowIndex < 0 ||
+    !jsonObject(contract.technicalBinding) ||
+    contract.technicalBinding.kind !== "docx.repeat-sdt" ||
+    contract.technicalBinding.identifier !==
+      repeatIdentifier(contract.binding) ||
+    contract.technicalBinding.part !== contract.binding.part ||
+    typeof contract.technicalBinding.target !== "string" ||
+    contract.technicalBinding.target.length === 0
+  ) {
+    throw new MultiFieldTestVersionValidationError(
+      "repeatContract must contain a supported DOCX repeat row contract"
+    );
+  }
+  return toJsonValue(contract.binding);
 }
 
 function versionRow(
@@ -454,6 +515,10 @@ export class MultiFieldTestVersionRegistry {
     const format = formatValue(input.format);
     const fields = normalizeFields(input.fields);
     const verification = toJsonValue(input.verification);
+    const repeatContract =
+      input.repeatContract === undefined
+        ? null
+        : toJsonValue(input.repeatContract);
     const sampleValues = toJsonValue(
       Object.fromEntries(fields.map((field) => [field.fieldKey, field.sampleValue]))
     );
@@ -472,7 +537,7 @@ export class MultiFieldTestVersionRegistry {
     return this.store.transaction((connection) => {
       const draft = connection
         .prepare(
-          "SELECT id, space_id, title, format, status FROM template_drafts WHERE id = ? AND space_id = ?"
+          "SELECT id, space_id, title, format, status, repeat_binding_json FROM template_drafts WHERE id = ? AND space_id = ?"
         )
         .get(draftId, spaceId) as DraftRow | undefined;
       if (draft === undefined || draft.status !== "draft") {
@@ -483,6 +548,17 @@ export class MultiFieldTestVersionRegistry {
       if (draft.format !== format) {
         throw new MultiFieldTestVersionValidationError(
           "Multi-field test format does not match the template draft"
+        );
+      }
+      if (
+        (draft.repeat_binding_json === null) !== (repeatContract === null) ||
+        (draft.repeat_binding_json !== null &&
+          repeatContract !== null &&
+          stringifyJson(parseJson(draft.repeat_binding_json)) !==
+            stringifyJson(repeatBindingFromContract(repeatContract)))
+      ) {
+        throw new MultiFieldTestVersionValidationError(
+          "Repeat row contract does not match the template draft"
         );
       }
 
@@ -574,8 +650,8 @@ export class MultiFieldTestVersionRegistry {
             id, space_id, draft_id, version_number, format,
             compiled_file_id, trial_file_id, compiled_sha256, trial_sha256,
             sample_values_json, verification_json, field_count, status,
-            created_by, correlation_id, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tested', ?, ?, ?)
+            repeat_contract_json, created_by, correlation_id, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tested', ?, ?, ?, ?)
         `)
         .run(
           id,
@@ -590,6 +666,7 @@ export class MultiFieldTestVersionRegistry {
           sampleValuesJson,
           stringifyJson(verification),
           fields.length,
+          repeatContract === null ? null : stringifyJson(repeatContract),
           context.actorId,
           context.correlationId,
           context.now
