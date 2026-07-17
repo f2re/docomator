@@ -176,7 +176,21 @@ function databaseSchemaReady(store: SqliteStore): boolean {
           WHERE type = 'table' AND name IN (${placeholders})
         `)
         .all(...requiredTables) as unknown as Array<{ name: string }>;
-      return new Set(rows.map((row) => row.name)).size === requiredTables.length;
+      if (new Set(rows.map((row) => row.name)).size !== requiredTables.length) {
+        return false;
+      }
+      const requiredColumns = [
+        ["template_draft_fields", "formatter_json"],
+        ["template_multi_test_version_fields", "formatter_json"],
+        ["template_release_candidate_fields", "formatter_json"]
+      ] as const;
+      const column = database.prepare(
+        "SELECT name FROM pragma_table_info(?) WHERE name = ?"
+      );
+      return requiredColumns.every(
+        ([tableName, columnName]) =>
+          column.get(tableName, columnName) !== undefined
+      );
     });
   } catch {
     return false;

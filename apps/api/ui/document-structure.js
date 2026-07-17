@@ -216,6 +216,52 @@ function renderNewStructurePropertyFields() {
   const fields = document.querySelector("#documentNewPropertyFields");
   if (!select || !fields) return;
   fields.hidden = select.value !== "__new__";
+  renderStructureFormatterFields();
+}
+
+function selectedStructureValueType() {
+  const propertyKey = document.querySelector("#documentFieldProperty")?.value || "";
+  if (propertyKey === "__new__") {
+    return document.querySelector("#documentFieldType")?.value || "string";
+  }
+  return (
+    structurePropertyDefinitions.find((definition) => definition.key === propertyKey)
+      ?.valueType || "string"
+  );
+}
+
+function renderStructureFormatterFields() {
+  const container = document.querySelector("#documentFieldFormatter");
+  if (!container) return;
+  const valueType = selectedStructureValueType();
+  if (valueType === "number") {
+    const options = [
+      '<option value="">Без фиксированного количества</option>',
+      ...Array.from(
+        { length: 7 },
+        (_, digits) => `<option value="${digits}">${digits}</option>`
+      )
+    ].join("");
+    container.innerHTML = `
+      <label>
+        <span>Знаков после запятой</span>
+        <select id="documentFieldDecimalPlaces">${options}</select>
+        <small>В документе используется запятая. Без фиксации лишние нули не добавляются.</small>
+      </label>`;
+    return;
+  }
+  if (valueType === "date-time") {
+    const detectedTimeZone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow";
+    container.innerHTML = `
+      <label>
+        <span>Часовой пояс документа</span>
+        <input id="documentFieldTimeZone" type="text" maxlength="100" value="${structureEscape(detectedTimeZone)}" placeholder="Europe/Moscow" />
+        <small>Дата и время будут зафиксированы в этом часовом поясе, например 16.07.2026 12:30.</small>
+      </label>`;
+    return;
+  }
+  container.innerHTML = "";
 }
 
 function structureTextRangeControl(element) {
@@ -294,6 +340,7 @@ function renderStructureSelection(element) {
               <span><strong>Добавить поле всем сотрудникам</strong><small>Поле появится в карточках и будет доступно другим шаблонам.</small></span>
             </label>
           </div>
+          <div id="documentFieldFormatter" class="structure-new-property"></div>
           <label class="structure-required-field">
             <input id="documentFieldRequired" name="required" type="checkbox" />
             <span><strong>Обязательное поле</strong><small>Без значения документ нельзя будет завершить.</small></span>
@@ -313,6 +360,9 @@ function renderStructureSelection(element) {
   detail
     .querySelector("#documentFieldProperty")
     ?.addEventListener("change", renderNewStructurePropertyFields);
+  detail
+    .querySelector("#documentFieldType")
+    ?.addEventListener("change", renderStructureFormatterFields);
   const textRange = detail.querySelector("#documentFieldTextRange");
   for (const eventName of ["select", "mouseup", "keyup", "touchend"]) {
     textRange?.addEventListener(eventName, captureStructureTextRange);
@@ -432,6 +482,10 @@ async function saveSelectedField(event) {
       }
     }
     if (!definition) throw { message: "Выбранное поле сотрудника не найдено." };
+    const decimalPlacesValue =
+      form.querySelector("#documentFieldDecimalPlaces")?.value ?? "";
+    const timeZone =
+      form.querySelector("#documentFieldTimeZone")?.value?.trim() || "";
     const fieldBody = await structureFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts/${encodeURIComponent(draft.id)}/fields`,
       {
@@ -443,6 +497,12 @@ async function saveSelectedField(event) {
           valueType: definition.valueType,
           required,
           elementId: selectedStructureElement.id,
+          ...(definition.valueType === "number" && decimalPlacesValue !== ""
+            ? { decimalPlaces: Number(decimalPlacesValue) }
+            : {}),
+          ...(definition.valueType === "date-time" && timeZone
+            ? { timeZone }
+            : {}),
           ...(selectedStructureElement.kind === "paragraph"
             ? { textRange: selectedStructureTextRange }
             : {})

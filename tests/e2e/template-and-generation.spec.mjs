@@ -180,6 +180,40 @@ for (const templateCase of templateCases) {
   });
 }
 
+test("мастер сохраняет ограниченные настройки числового форматтера", async ({
+  page
+}) => {
+  const scenario = await installDocomatorApiMock(page);
+  const app = new DocomatorPage(page);
+  await app.open();
+  await app.openView("templates");
+  await uploadAndSaveSource(page, templateCases[0]);
+  await page.locator("#documentStructureButton").click();
+  await page.locator(".structure-element").first().click();
+  const textRange = page.locator("#documentFieldTextRange");
+  await textRange.evaluate((control) => {
+    const start = control.value.indexOf("______");
+    control.focus();
+    control.setSelectionRange(start, start + 6);
+    control.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await page.locator("#documentFieldProperty").selectOption("__new__");
+  await page.locator("#documentFieldLabel").fill("Ставка");
+  await page.locator("#documentFieldType").selectOption("number");
+  await expect(page.locator("#documentFieldDecimalPlaces")).toBeVisible();
+  await page.locator("#documentFieldDecimalPlaces").selectOption("2");
+  await page.locator("#documentPropertyConfirm").check();
+  await page.locator("#documentFieldSave").click();
+  await expect(page.locator("#documentFieldMessage")).toContainText(
+    "Следующий шаг — пробное заполнение"
+  );
+  expect(scenario.fieldRequests).toHaveLength(1);
+  expect(scenario.fieldRequests[0]).toMatchObject({
+    valueType: "number",
+    decimalPlaces: 2
+  });
+});
+
 test("ошибка сервера сохраняет пробное значение и показывает идентификатор операции", async ({
   page
 }) => {

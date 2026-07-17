@@ -129,6 +129,7 @@ test("field binding is stored once and remains scoped to the draft structure", a
 
     assert.equal(field.key, "recipient.full_name");
     assert.equal(field.required, true);
+    assert.deepEqual(field.formatter, { version: 1, kind: "legacy" });
     assert.equal(
       setup.drafts.getDraft(DEFAULT_SPACE_ID, draft.id).fields[0]?.id,
       field.id

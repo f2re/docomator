@@ -141,7 +141,8 @@ export function createDocumentGenerationHandler(
             fields: work.template.fields.map((field) => ({
               key: field.key,
               label: field.label,
-              valueType: field.valueType as ScalarValueType
+              valueType: field.valueType as ScalarValueType,
+              formatter: field.formatter
             })),
             members: rows.map(({ member, resolved }) => ({
               entityId: member.entityId,
@@ -216,7 +217,8 @@ export function createDocumentGenerationHandler(
                 valueType: (emptyOptional
                   ? "string"
                   : field.valueType) as ScalarValueType,
-                value: emptyOptional ? "" : value
+                value: emptyOptional ? "" : value,
+                ...(emptyOptional ? {} : { formatter: field.formatter })
               };
             })
           });

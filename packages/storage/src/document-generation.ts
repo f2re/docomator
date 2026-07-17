@@ -91,6 +91,7 @@ export interface DocumentGenerationField {
   valueType: DocumentGenerationValueType;
   required: boolean;
   binding: JsonValue;
+  formatter: JsonValue;
   technicalBinding: JsonValue;
 }
 
@@ -178,6 +179,7 @@ interface FieldRow {
   value_type: string;
   required: number;
   binding_json: string;
+  formatter_json: string;
   technical_binding_json: string;
 }
 
@@ -790,7 +792,7 @@ export class DocumentGenerationRegistry {
         .prepare(`
           SELECT
             field_id, ordinal, field_key, field_label, value_type,
-            required, binding_json, technical_binding_json
+            required, binding_json, formatter_json, technical_binding_json
           FROM template_release_candidate_fields
           WHERE candidate_id = ?
           ORDER BY ordinal ASC, field_id ASC
@@ -864,6 +866,7 @@ export class DocumentGenerationRegistry {
             valueType: valueType(field.value_type),
             required: field.required === 1,
             binding: parseJson(field.binding_json),
+            formatter: parseJson(field.formatter_json),
             technicalBinding: parseJson(field.technical_binding_json)
           }))
         },

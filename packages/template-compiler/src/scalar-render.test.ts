@@ -270,8 +270,23 @@ test("XLSX trial render supports text, numbers and booleans and preserves cell s
     valueType: "number",
     value: "12,5"
   });
-  assert.equal(number.readBackValue, "12.5");
+  assert.equal(number.renderedValue, "12,5");
+  assert.equal(number.readBackValue, "12,5");
   entries = await readOoxmlPackage(number.output);
+  xml = packageEntry(entries, "xl/worksheets/sheet1.xml").content.toString("utf8");
+  assert.match(xml, /<c r="B7" s="2"><v>12\.5<\/v><\/c>/u);
+
+  const fixedNumber = await renderScalarValue({
+    compiled: input.compiled.output,
+    technicalBinding: input.compiled.technicalBinding,
+    fieldBinding: input.fieldBinding,
+    valueType: "number",
+    value: "12,5",
+    formatter: { version: 1, kind: "number.ru", fractionDigits: 2 }
+  });
+  assert.equal(fixedNumber.renderedValue, "12,50");
+  assert.equal(fixedNumber.readBackValue, "12,50");
+  entries = await readOoxmlPackage(fixedNumber.output);
   xml = packageEntry(entries, "xl/worksheets/sheet1.xml").content.toString("utf8");
   assert.match(xml, /<c r="B7" s="2"><v>12\.5<\/v><\/c>/u);
 
@@ -336,4 +351,17 @@ test("trial render validates dates, integers and binding pairs", async () => {
       error instanceof TemplateCompilerError &&
       error.code === "technical_binding_mismatch"
   );
+});
+
+test("production fallback renders a missing optional value as an empty string", async () => {
+  const input = await compiledDocx();
+  const result = await renderScalarValue({
+    compiled: input.compiled.output,
+    technicalBinding: input.compiled.technicalBinding,
+    fieldBinding: input.fieldBinding,
+    valueType: "string",
+    value: ""
+  });
+  assert.equal(result.renderedValue, "");
+  assert.equal(result.readBackValue, "");
 });

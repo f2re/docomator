@@ -162,6 +162,7 @@ interface CandidateFieldRow {
   value_type: string;
   required: number;
   binding_json: string;
+  formatter_json: string;
   technical_binding_json: string;
 }
 
@@ -405,7 +406,7 @@ function candidateFields(
     .prepare(`
       SELECT
         field_id, ordinal, field_key, field_label, value_type,
-        required, binding_json, technical_binding_json
+        required, binding_json, formatter_json, technical_binding_json
       FROM template_release_candidate_fields
       WHERE candidate_id = ?
       ORDER BY ordinal ASC, field_id ASC
@@ -879,7 +880,7 @@ export class TemplateReleaseRegistry {
       const versionNumber = Number(current.value) + 1;
       const versionKind = candidateKind(source.version_kind);
       const manifest = toJsonValue({
-        version: 2,
+        version: 3,
         draftId: source.draft_id,
         title: source.title,
         format: source.format,
@@ -897,6 +898,7 @@ export class TemplateReleaseRegistry {
           valueType: field.value_type,
           required: field.required === 1,
           binding: parseJson(field.binding_json),
+          formatter: parseJson(field.formatter_json),
           technicalBinding: parseJson(field.technical_binding_json)
         }))
       });

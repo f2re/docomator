@@ -292,7 +292,7 @@ test("API previews and activates a multi-field tested version", async () => {
     assert.equal(active.versionKind, "multi");
     assert.equal(active.fieldCount, 2);
     assert.equal(active.compiledSha256, setup.version.compiledSha256);
-    assert.equal(active.manifest.version, 2);
+    assert.equal(active.manifest.version, 3);
     assert.equal(active.manifest.fieldCount, 2);
     assert.deepEqual(
       active.manifest.fields.map((field) => field.key),

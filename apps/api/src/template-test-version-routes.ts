@@ -141,7 +141,8 @@ export function registerTemplateTestVersionRoutes(
         technicalBinding: compiled.technicalBinding,
         fieldBinding: field.binding as unknown as ScalarFieldBinding,
         valueType: field.valueType as ScalarValueType,
-        value: request.body.value
+        value: request.body.value,
+        formatter: field.formatter
       });
       const version = await versionRegistry.recordTestedVersion(
         {

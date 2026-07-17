@@ -59,6 +59,7 @@ export interface RenderScalarFieldValue {
   fieldBinding: ScalarFieldBinding;
   valueType: ScalarValueType;
   value: unknown;
+  formatter?: unknown;
 }
 
 export interface RenderedScalarFieldValue {
@@ -493,7 +494,8 @@ export async function renderScalarValues(
       technicalBinding: field.technicalBinding,
       fieldBinding: field.fieldBinding,
       valueType: field.valueType,
-      value: field.value
+      value: field.value,
+      formatter: field.formatter
     });
     current = result.output;
     rendered.push({
@@ -520,7 +522,8 @@ export async function renderScalarValues(
       document: current,
       technicalBinding: field.technicalBinding,
       fieldBinding: field.fieldBinding,
-      valueType: field.valueType
+      valueType: field.valueType,
+      formatter: field.formatter
     });
     expected.readBackValue = readBack.value;
     if (readBack.value !== expected.renderedValue) {

@@ -192,7 +192,8 @@ export function registerMultiFieldTestVersionRoutes(
             technicalBinding: compiledField.technicalBinding,
             fieldBinding: field.binding as unknown as ScalarFieldBinding,
             valueType: field.valueType as ScalarValueType,
-            value: provided.get(field.id)
+            value: provided.get(field.id),
+            formatter: field.formatter
           };
         })
       });
@@ -221,6 +222,7 @@ export function registerMultiFieldTestVersionRoutes(
               valueType: field.valueType,
               required: field.required,
               binding: field.binding,
+              formatter: field.formatter,
               technicalBinding: toJsonValue(compiledField.technicalBinding),
               sampleValue: toJsonValue(provided.get(field.id)),
               renderedValue: renderedField.renderedValue,

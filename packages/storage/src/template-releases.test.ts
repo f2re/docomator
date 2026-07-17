@@ -113,6 +113,7 @@ async function setupFixture() {
       elementId: "paragraph-1",
       elementKind: "paragraph",
       binding: nameBinding,
+      formatter: { version: 1, kind: "identity" },
       originalPreview: "ФИО получателя",
       structureSha256: STRUCTURE_SHA
     },
@@ -129,6 +130,7 @@ async function setupFixture() {
       elementId: "paragraph-2",
       elementKind: "paragraph",
       binding: positionBinding,
+      formatter: { version: 1, kind: "identity" },
       originalPreview: "Должность получателя",
       structureSha256: STRUCTURE_SHA
     },
@@ -166,6 +168,7 @@ async function setupFixture() {
           valueType: "string",
           required: true,
           binding: positionBinding,
+          formatter: positionField.formatter,
           technicalBinding: technicalBinding(positionField.id, 1),
           sampleValue: "Ведущий инженер",
           renderedValue: "Ведущий инженер",
@@ -179,6 +182,7 @@ async function setupFixture() {
           valueType: "string",
           required: true,
           binding: nameBinding,
+          formatter: nameField.formatter,
           technicalBinding: technicalBinding(nameField.id, 0),
           sampleValue: "Иванов Иван Иванович",
           renderedValue: "Иванов Иван Иванович",
@@ -196,6 +200,8 @@ async function setupFixture() {
     objectStore,
     releases,
     draft,
+    nameField,
+    positionField,
     single,
     multi
   };
@@ -295,9 +301,9 @@ test("single and multi-field tested versions share one release catalog", async (
       version: number;
       versionKind: string;
       fieldCount: number;
-      fields: Array<{ key: string; required: boolean }>;
+      fields: Array<{ key: string; required: boolean; formatter: unknown }>;
     };
-    assert.equal(manifest.version, 2);
+    assert.equal(manifest.version, 3);
     assert.equal(manifest.versionKind, "multi");
     assert.equal(manifest.fieldCount, 2);
     assert.deepEqual(
@@ -307,6 +313,10 @@ test("single and multi-field tested versions share one release catalog", async (
         ["recipient.position", true]
       ]
     );
+    assert.deepEqual(manifest.fields[0]?.formatter, {
+      version: 1,
+      kind: "identity"
+    });
 
     const active = setup.releases.listActiveTemplates(DEFAULT_SPACE_ID);
     assert.equal(active.length, 1);
@@ -339,6 +349,58 @@ test("single and multi-field tested versions share one release catalog", async (
           .run("Изменено", multiRelease.id)
       )
     );
+  } finally {
+    setup.fixture.cleanup();
+  }
+});
+
+test("formatter contracts stay immutable and constrained across release rows", async () => {
+  const setup = await setupFixture();
+  try {
+    const stored = setup.fixture.store.execute((database) =>
+      database
+        .prepare(`
+          SELECT formatter_json
+          FROM template_release_candidate_fields
+          WHERE candidate_id = ?
+          ORDER BY ordinal
+        `)
+        .all(setup.multi.id)
+    ) as Array<{ formatter_json: string }>;
+    assert.equal(stored.length, 2);
+    assert.deepEqual(
+      stored.map((row) => JSON.parse(row.formatter_json)),
+      [
+        { version: 1, kind: "identity" },
+        { version: 1, kind: "identity" }
+      ]
+    );
+
+    assert.throws(() =>
+      setup.fixture.store.execute((database) =>
+        database
+          .prepare("UPDATE template_draft_fields SET formatter_json = '[]' WHERE id = ?")
+          .run(setup.nameField.id)
+      )
+    );
+    assert.throws(() =>
+      setup.fixture.store.execute((database) =>
+        database
+          .prepare(
+            "UPDATE template_release_candidate_fields SET formatter_json = ? WHERE candidate_id = ?"
+          )
+          .run('{"version":1,"kind":"legacy"}', setup.multi.id)
+      )
+    );
+
+    const checks = setup.fixture.store.execute((database) => ({
+      integrity: database.prepare("PRAGMA integrity_check").get() as {
+        integrity_check: string;
+      },
+      foreignKeys: database.prepare("PRAGMA foreign_key_check").all()
+    }));
+    assert.equal(checks.integrity.integrity_check, "ok");
+    assert.deepEqual(checks.foreignKeys, []);
   } finally {
     setup.fixture.cleanup();
   }

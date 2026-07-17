@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { analyzeOoxmlBuffer } from "@docomator/document-intake";
+import { defaultScalarFormatter } from "@docomator/template-compiler";
 import {
   ContentAddressedObjectStore,
   DocumentQuarantineRegistry,
@@ -44,6 +45,8 @@ interface CreateFieldBody {
     | "date-time";
   required?: boolean;
   elementId: string;
+  decimalPlaces?: number;
+  timeZone?: string;
   textRange?: {
     startOffset: number;
     endOffset: number;
@@ -357,6 +360,17 @@ export function registerTemplateDraftRoutes(
             },
             required: { type: "boolean", default: false },
             elementId: { type: "string", minLength: 1, maxLength: 160 },
+            decimalPlaces: {
+              type: "integer",
+              minimum: 0,
+              maximum: 6
+            },
+            timeZone: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+              pattern: "^(?:UTC|[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+)+)$"
+            },
             textRange: {
               type: "object",
               additionalProperties: false,
@@ -385,6 +399,30 @@ export function registerTemplateDraftRoutes(
       );
       const element = findElement(draft.structure, request.body.elementId);
       const binding = bindingForElement(element, request.body.textRange);
+      if (
+        request.body.decimalPlaces !== undefined &&
+        request.body.valueType !== "number"
+      ) {
+        throw new TemplateDraftValidationError(
+          "Число знаков после запятой можно задать только для числового поля."
+        );
+      }
+      if (
+        request.body.timeZone !== undefined &&
+        request.body.valueType !== "date-time"
+      ) {
+        throw new TemplateDraftValidationError(
+          "Часовой пояс можно задать только для поля даты и времени."
+        );
+      }
+      const formatter = defaultScalarFormatter(request.body.valueType, {
+        ...(request.body.decimalPlaces === undefined
+          ? {}
+          : { fractionDigits: request.body.decimalPlaces }),
+        ...(request.body.timeZone === undefined
+          ? {}
+          : { timeZone: request.body.timeZone })
+      });
       const field = draftRegistry.createField(
         request.params.spaceId,
         draft.id,
@@ -396,6 +434,7 @@ export function registerTemplateDraftRoutes(
           elementId: request.body.elementId,
           elementKind: binding.kind,
           binding: binding.binding,
+          formatter: toJsonValue(formatter),
           originalPreview: binding.preview,
           structureSha256: draft.structureSha256
         },

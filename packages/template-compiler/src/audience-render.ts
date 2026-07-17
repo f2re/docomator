@@ -1,10 +1,14 @@
 import { writeOoxmlPackage, type OoxmlPackageEntry } from "./ooxml-package.js";
-import type { ScalarValueType } from "./scalar-render.js";
+import {
+  formatScalarDisplay,
+  type ScalarValueType
+} from "./scalar-formatter.js";
 
 export interface AudienceAggregateField {
   key: string;
   label: string;
   valueType: ScalarValueType;
+  formatter?: unknown;
 }
 
 export interface AudienceAggregateMember {
@@ -30,15 +34,25 @@ function xmlText(value: unknown): string {
     .replace(/'/gu, "&apos;");
 }
 
-function displayValue(type: ScalarValueType, value: unknown): string {
+function displayValue(
+  type: ScalarValueType,
+  value: unknown,
+  formatter: unknown
+): string {
   if (value === null || value === undefined) return "";
-  if (Array.isArray(value)) return value.map((item) => displayValue(type, item)).join(", ");
-  if (type === "boolean") {
-    if (value === true || value === 1 || value === "true" || value === "1") return "Да";
-    if (value === false || value === 0 || value === "false" || value === "0") return "Нет";
+  if (Array.isArray(value)) {
+    return value.map((item) => displayValue(type, item, formatter)).join(", ");
   }
   if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+  if (type === "boolean") {
+    if (value === true || value === 1 || value === "true" || value === "1") {
+      return formatScalarDisplay(type, true, formatter);
+    }
+    if (value === false || value === 0 || value === "false" || value === "0") {
+      return formatScalarDisplay(type, false, formatter);
+    }
+  }
+  return formatScalarDisplay(type, value as string | number | boolean, formatter);
 }
 
 function validate(input: RenderAudienceAggregateInput): void {
@@ -69,7 +83,11 @@ function renderDocx(input: RenderAudienceAggregateInput): Buffer {
   const rows = input.members
     .map((member, index) => {
       const values = input.fields.map((field, fieldIndex) =>
-        displayValue(field.valueType, member.values[fieldIndex])
+        displayValue(
+          field.valueType,
+          member.values[fieldIndex],
+          field.formatter
+        )
       );
       return `<w:tr>${[
         String(index + 1),
@@ -117,7 +135,12 @@ function columnName(index: number): string {
   return result;
 }
 
-function xlsxCell(reference: string, value: unknown, type: ScalarValueType | "text"): string {
+function xlsxCell(
+  reference: string,
+  value: unknown,
+  type: ScalarValueType | "text",
+  formatter?: unknown
+): string {
   if (value === null || value === undefined || value === "") {
     return `<c r="${reference}" t="inlineStr"><is><t></t></is></c>`;
   }
@@ -129,7 +152,7 @@ function xlsxCell(reference: string, value: unknown, type: ScalarValueType | "te
     const flag = value === true || value === 1 || value === "true" || value === "1";
     return `<c r="${reference}" t="b"><v>${flag ? 1 : 0}</v></c>`;
   }
-  return `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${xmlText(displayValue(type === "text" ? "string" : type, value))}</t></is></c>`;
+  return `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${xmlText(displayValue(type === "text" ? "string" : type, value, formatter))}</t></is></c>`;
 }
 
 function renderXlsx(input: RenderAudienceAggregateInput): Buffer {
@@ -147,7 +170,8 @@ function renderXlsx(input: RenderAudienceAggregateInput): Buffer {
           xlsxCell(
             `${columnName(fieldIndex + 2)}${rowNumber}`,
             member.values[fieldIndex],
-            field.valueType
+            field.valueType,
+            field.formatter
           )
         )
       ];

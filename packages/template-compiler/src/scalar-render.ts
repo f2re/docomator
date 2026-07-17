@@ -6,20 +6,18 @@ import {
   type ScalarFieldBinding
 } from "./compiler.js";
 import {
+  formatScalarDisplay,
+  parseScalarFormatter,
+  type ScalarValueType
+} from "./scalar-formatter.js";
+import {
   packageEntry,
   readOoxmlPackage,
   writeOoxmlPackage,
   type OoxmlPackageEntry
 } from "./ooxml-package.js";
 
-export type ScalarValueType =
-  | "string"
-  | "text"
-  | "number"
-  | "integer"
-  | "boolean"
-  | "date"
-  | "date-time";
+export type { ScalarValueType } from "./scalar-formatter.js";
 
 export interface RenderScalarValueInput {
   compiled: Uint8Array;
@@ -27,6 +25,7 @@ export interface RenderScalarValueInput {
   fieldBinding: ScalarFieldBinding;
   valueType: ScalarValueType;
   value: unknown;
+  formatter?: unknown;
 }
 
 export interface ReadScalarValueInput {
@@ -34,6 +33,7 @@ export interface ReadScalarValueInput {
   technicalBinding: CompiledTechnicalBinding;
   fieldBinding: ScalarFieldBinding;
   valueType: ScalarValueType;
+  formatter?: unknown;
 }
 
 export interface ReadScalarValueResult {
@@ -159,6 +159,12 @@ function normalizeDate(value: unknown): string {
 
 function normalizeDateTime(value: unknown): string {
   const text = requiredText(value, "пробные дата и время", 80).trim();
+  if (!/T.*(?:Z|[+-]\d{2}:\d{2})$/u.test(text)) {
+    throw new TemplateCompilerError(
+      "invalid_trial_value",
+      "Пробные дата и время должны содержать явный часовой пояс."
+    );
+  }
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) {
     throw new TemplateCompilerError(
@@ -171,7 +177,8 @@ function normalizeDateTime(value: unknown): string {
 
 function normalizeScalarValue(
   valueType: ScalarValueType,
-  value: unknown
+  value: unknown,
+  formatterValue: unknown
 ): NormalizedScalarValue {
   if (valueType === "string") {
     const text = requiredText(value, "пробное значение", 4_000);
@@ -183,7 +190,11 @@ function normalizeScalarValue(
   }
   if (valueType === "number" || valueType === "integer") {
     const number = normalizeNumber(value, valueType === "integer");
-    return { display: number, xlsxMode: "number", xlsxValue: number };
+    return {
+      display: formatScalarDisplay(valueType, number, formatterValue),
+      xlsxMode: "number",
+      xlsxValue: number
+    };
   }
   if (valueType === "boolean") {
     if (typeof value !== "boolean") {
@@ -193,18 +204,26 @@ function normalizeScalarValue(
       );
     }
     return {
-      display: value ? "Да" : "Нет",
+      display: formatScalarDisplay(valueType, value, formatterValue),
       xlsxMode: "boolean",
       xlsxValue: value ? "1" : "0"
     };
   }
   if (valueType === "date") {
     const text = normalizeDate(value);
-    return { display: text, xlsxMode: "inline-string", xlsxValue: text };
+    return {
+      display: formatScalarDisplay(valueType, text, formatterValue),
+      xlsxMode: "inline-string",
+      xlsxValue: formatScalarDisplay(valueType, text, formatterValue)
+    };
   }
   if (valueType === "date-time") {
     const text = normalizeDateTime(value);
-    return { display: text, xlsxMode: "inline-string", xlsxValue: text };
+    return {
+      display: formatScalarDisplay(valueType, text, formatterValue),
+      xlsxMode: "inline-string",
+      xlsxValue: formatScalarDisplay(valueType, text, formatterValue)
+    };
   }
   throw new TemplateCompilerError(
     "unsupported_trial_value_type",
@@ -793,7 +812,9 @@ function firstElementText(
 
 function readXlsx(
   entries: readonly OoxmlPackageEntry[],
-  binding: ScalarFieldBinding
+  binding: ScalarFieldBinding,
+  valueType: ScalarValueType,
+  formatterValue: unknown
 ): ReadScalarValueResult {
   if (binding.kind !== "xlsx.cell") {
     throw new TemplateCompilerError(
@@ -819,7 +840,12 @@ function readXlsx(
       cellClose.start,
       "v"
     );
-    value = type === "b" ? (raw === "1" ? "Да" : "Нет") : raw;
+    value =
+      type === "b"
+        ? formatScalarDisplay(valueType, raw === "1", formatterValue)
+        : type === "n" && (valueType === "number" || valueType === "integer")
+          ? formatScalarDisplay(valueType, raw, formatterValue)
+          : raw;
   }
   return { value, part: binding.sheetPath, target: binding.address };
 }
@@ -828,10 +854,16 @@ export async function readScalarValue(
   input: ReadScalarValueInput
 ): Promise<ReadScalarValueResult> {
   validateBindings(input.technicalBinding, input.fieldBinding);
+  parseScalarFormatter(input.valueType, input.formatter);
   const entries = await readOoxmlPackage(input.document);
   return input.technicalBinding.kind === "docx.sdt"
     ? readDocx(entries, input.technicalBinding)
-    : readXlsx(entries, input.fieldBinding);
+    : readXlsx(
+        entries,
+        input.fieldBinding,
+        input.valueType,
+        input.formatter
+      );
 }
 
 export async function renderScalarValue(
@@ -839,7 +871,11 @@ export async function renderScalarValue(
 ): Promise<RenderScalarValueResult> {
   validateBindings(input.technicalBinding, input.fieldBinding);
   const compiled = Buffer.from(input.compiled);
-  const normalized = normalizeScalarValue(input.valueType, input.value);
+  const normalized = normalizeScalarValue(
+    input.valueType,
+    input.value,
+    input.formatter
+  );
   const entries = await readOoxmlPackage(compiled);
   const updatedEntries =
     input.technicalBinding.kind === "docx.sdt"
@@ -855,7 +891,8 @@ export async function renderScalarValue(
     document: output,
     technicalBinding: input.technicalBinding,
     fieldBinding: input.fieldBinding,
-    valueType: input.valueType
+    valueType: input.valueType,
+    formatter: input.formatter
   });
   if (readBack.value !== normalized.display) {
     throw new TemplateCompilerError(

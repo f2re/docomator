@@ -24,6 +24,7 @@ export interface RecordMultiFieldTestValueInput {
   valueType: MultiFieldValueType;
   required: boolean;
   binding: JsonValue;
+  formatter?: JsonValue;
   technicalBinding: JsonValue;
   sampleValue: JsonValue;
   renderedValue: string;
@@ -50,6 +51,7 @@ export interface MultiFieldTestValueRecord {
   valueType: MultiFieldValueType;
   required: boolean;
   binding: JsonValue;
+  formatter: JsonValue;
   technicalBinding: JsonValue;
   sampleValue: JsonValue;
   renderedValue: string;
@@ -105,6 +107,7 @@ interface FieldRow {
   value_type: string;
   required: number;
   binding_json: string;
+  formatter_json: string;
   technical_binding_json: string;
   sample_value_json: string;
   rendered_value: string;
@@ -128,6 +131,7 @@ interface DraftFieldRow {
   value_type: string;
   required: number;
   binding_json: string;
+  formatter_json: string;
 }
 
 interface FileRow {
@@ -301,6 +305,7 @@ function mapField(row: FieldRow): MultiFieldTestValueRecord {
     valueType: valueType(row.value_type),
     required: row.required === 1,
     binding: parseJson(row.binding_json),
+    formatter: parseJson(row.formatter_json),
     technicalBinding: parseJson(row.technical_binding_json),
     sampleValue: parseJson(row.sample_value_json),
     renderedValue: row.rendered_value,
@@ -393,6 +398,9 @@ function normalizeFields(
       valueType: valueType(field.valueType),
       required: Boolean(field.required),
       binding: toJsonValue(field.binding),
+      formatter: toJsonValue(
+        field.formatter ?? { version: 1, kind: "legacy" }
+      ),
       technicalBinding: toJsonValue(field.technicalBinding),
       sampleValue: toJsonValue(field.sampleValue),
       renderedValue,
@@ -481,7 +489,8 @@ export class MultiFieldTestVersionRegistry {
       const placeholders = fields.map(() => "?").join(", ");
       const draftFields = connection
         .prepare(`
-          SELECT id, draft_id, field_key, label, value_type, required, binding_json
+          SELECT id, draft_id, field_key, label, value_type, required,
+                 binding_json, formatter_json
           FROM template_draft_fields
           WHERE draft_id = ? AND id IN (${placeholders})
         `)
@@ -500,7 +509,8 @@ export class MultiFieldTestVersionRegistry {
           stored.label !== field.fieldLabel ||
           stored.value_type !== field.valueType ||
           (stored.required === 1) !== field.required ||
-          stringifyJson(parseJson(stored.binding_json)) !== stringifyJson(field.binding)
+          stringifyJson(parseJson(stored.binding_json)) !== stringifyJson(field.binding) ||
+          stringifyJson(parseJson(stored.formatter_json)) !== stringifyJson(field.formatter)
         ) {
           throw new MultiFieldTestVersionValidationError(
             `Stored template field changed before multi-field testing: ${field.fieldKey}`
@@ -587,9 +597,9 @@ export class MultiFieldTestVersionRegistry {
       const insertField = connection.prepare(`
         INSERT INTO template_multi_test_version_fields(
           test_version_id, field_id, ordinal, field_key, field_label,
-          value_type, required, binding_json, technical_binding_json,
+          value_type, required, binding_json, formatter_json, technical_binding_json,
           sample_value_json, rendered_value, read_back_value, verification_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const [ordinal, field] of fields.entries()) {
         insertField.run(
@@ -601,6 +611,7 @@ export class MultiFieldTestVersionRegistry {
           field.valueType,
           field.required ? 1 : 0,
           stringifyJson(field.binding),
+          stringifyJson(field.formatter),
           stringifyJson(field.technicalBinding),
           stringifyJson(field.sampleValue),
           field.renderedValue,

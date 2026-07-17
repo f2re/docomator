@@ -76,6 +76,7 @@ async function setupFixture() {
         part: "word/document.xml",
         index: 0
       },
+      formatter: { version: 1, kind: "identity" },
       originalPreview: "ФИО",
       structureSha256: STRUCTURE_SHA
     },
@@ -98,6 +99,7 @@ async function setupFixture() {
         part: "word/document.xml",
         index: 1
       },
+      formatter: { version: 1, kind: "identity" },
       originalPreview: "Должность",
       structureSha256: STRUCTURE_SHA
     },
@@ -115,6 +117,7 @@ function values(setup: Awaited<ReturnType<typeof setupFixture>>) {
       valueType: setup.position.valueType,
       required: setup.position.required,
       binding: setup.position.binding,
+      formatter: setup.position.formatter,
       technicalBinding: { kind: "docx.sdt", identifier: "aifield:position" },
       sampleValue: "Ведущий инженер",
       renderedValue: "Ведущий инженер",
@@ -128,6 +131,7 @@ function values(setup: Awaited<ReturnType<typeof setupFixture>>) {
       valueType: setup.name.valueType,
       required: setup.name.required,
       binding: setup.name.binding,
+      formatter: setup.name.formatter,
       technicalBinding: { kind: "docx.sdt", identifier: "aifield:name" },
       sampleValue: "Иванов Иван Иванович",
       renderedValue: "Иванов Иван Иванович",
@@ -167,6 +171,10 @@ test("multi-field version stores ordered field rows, files, audit and event", as
     assert.deepEqual(first.sampleValues, {
       "recipient.full_name": "Иванов Иван Иванович",
       "recipient.position": "Ведущий инженер"
+    });
+    assert.deepEqual(first.fields[0]?.formatter, {
+      version: 1,
+      kind: "identity"
     });
     assert.equal(
       (await setup.objectStore.getBuffer(first.compiledSha256)).toString(),
@@ -236,6 +244,27 @@ test("multi-field version validates all fields and exact read-back values", asyn
           verification: { matched: true }
         },
         context("corr-changed")
+      ),
+      /changed before multi-field testing/u
+    );
+
+    await assert.rejects(
+      setup.versions.recordTestedVersion(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          draftId: setup.draft.id,
+          format: "docx",
+          compiledBuffer: Buffer.from("compiled-formatter"),
+          trialBuffer: Buffer.from("trial-formatter"),
+          fields: [
+            {
+              ...values(setup)[0],
+              formatter: { version: 1, kind: "legacy" }
+            }
+          ],
+          verification: { matched: true }
+        },
+        context("corr-formatter-changed")
       ),
       /changed before multi-field testing/u
     );

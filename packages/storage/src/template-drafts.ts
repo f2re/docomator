@@ -40,6 +40,7 @@ export interface CreateTemplateDraftFieldInput {
   elementId: string;
   elementKind: TemplateFieldElementKind;
   binding: JsonValue;
+  formatter?: JsonValue;
   originalPreview: string;
   structureSha256: string;
 }
@@ -54,6 +55,7 @@ export interface TemplateDraftFieldRecord {
   elementId: string;
   elementKind: TemplateFieldElementKind;
   binding: JsonValue;
+  formatter: JsonValue;
   originalPreview: string;
   structureSha256: string;
   version: number;
@@ -112,6 +114,7 @@ interface FieldRow {
   element_id: string;
   element_kind: string;
   binding_json: string;
+  formatter_json: string;
   original_preview: string;
   structure_sha256: string;
   version: number;
@@ -235,6 +238,7 @@ function mapField(row: FieldRow): TemplateDraftFieldRecord {
     elementId: row.element_id,
     elementKind: elementKind(row.element_kind),
     binding: parseJson(row.binding_json),
+    formatter: parseJson(row.formatter_json),
     originalPreview: row.original_preview,
     structureSha256: row.structure_sha256,
     version: row.version,
@@ -493,6 +497,9 @@ export class TemplateDraftRegistry {
     const elementId = requiredText(input.elementId, "elementId", 160);
     const kind = elementKind(input.elementKind);
     const binding = toJsonValue(input.binding);
+    const formatter = toJsonValue(
+      input.formatter ?? { version: 1, kind: "legacy" }
+    );
     const originalPreview = input.originalPreview.trim().slice(0, 4_000);
     const structureSha256 = sha256(input.structureSha256, "structureSha256");
     const context = contextValue(contextInput);
@@ -537,10 +544,10 @@ export class TemplateDraftRegistry {
         .prepare(`
           INSERT INTO template_draft_fields(
             id, draft_id, field_key, label, value_type, required,
-            element_id, element_kind, binding_json, original_preview,
+            element_id, element_kind, binding_json, formatter_json, original_preview,
             structure_sha256, version, created_by, correlation_id,
             created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
         `)
         .run(
           id,
@@ -552,6 +559,7 @@ export class TemplateDraftRegistry {
           elementId,
           kind,
           stringifyJson(binding),
+          stringifyJson(formatter),
           originalPreview,
           structureSha256,
           context.actorId,

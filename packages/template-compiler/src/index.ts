@@ -41,6 +41,13 @@ export {
   renderScalarValue
 } from "./scalar-render.js";
 
+export {
+  defaultScalarFormatter,
+  formatScalarDisplay,
+  parseScalarFormatter
+} from "./scalar-formatter.js";
+export type { ScalarFormatter } from "./scalar-formatter.js";
+
 export type {
   ReadScalarValueInput,
   ReadScalarValueResult,

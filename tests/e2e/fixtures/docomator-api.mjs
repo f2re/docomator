@@ -189,6 +189,7 @@ export function createDocomatorScenario(options = {}) {
     importRuns: [],
     directAnalyzeCalls: 0,
     draftRequests: [],
+    fieldRequests: [],
     inspectedFileName: "Личная карточка.docx",
     format: "docx"
   };
@@ -539,6 +540,7 @@ export async function installDocomatorApiMock(page, options = {}) {
       data = space.documentSources.find((record) => record.id === sourceId) || null;
     } else if (/\/template-drafts\/[^/]+\/fields$/.test(path) && method === "POST") {
       const payload = await jsonBody(request);
+      state.fieldRequests.push(payload);
       const draft = space.drafts[0];
       const field = {
         id: `template-field-${draft.fields.length + 1}`,

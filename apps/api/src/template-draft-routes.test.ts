@@ -130,6 +130,7 @@ test("API creates a draft from quarantined bytes and saves a verified field", as
       elementId: string;
       originalPreview: string;
       binding: { kind: string; part: string; index: number };
+      formatter: { version: number; kind: string };
     };
     assert.equal(field.key, "recipient.full_name");
     assert.equal(field.elementId, paragraph.id);
@@ -137,6 +138,7 @@ test("API creates a draft from quarantined bytes and saves a verified field", as
     assert.equal(field.binding.kind, "docx.paragraph");
     assert.equal(field.binding.part, "word/document.xml");
     assert.equal(field.binding.index, 0);
+    assert.deepEqual(field.formatter, { version: 1, kind: "identity" });
 
     const getResponse = await app.inject({
       method: "GET",
@@ -242,6 +244,89 @@ test("API stores a verified DOCX text range without changing Document IR", async
     });
     assert.equal(invalid.statusCode, 400, invalid.body);
     assert.match(invalid.json().error.message, /границ.*текст/ui);
+  } finally {
+    await app.close();
+    await fsPromises.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("API derives and stores safe formatter contracts from field settings", async () => {
+  const { app, dataDir } = await testApp();
+  try {
+    const source = await quarantineSource(app);
+    const draftResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/${source.id}/draft`,
+      headers: { "content-type": "application/json" },
+      payload: {}
+    });
+    const draft = draftResponse.json().data as {
+      id: string;
+      structure: {
+        elements: Array<{ id: string; kind: string; text: string }>;
+      };
+    };
+    const first = draft.structure.elements.find(
+      (element) => element.kind === "paragraph" && element.text === "ФИО получателя"
+    );
+    const second = draft.structure.elements.find(
+      (element) => element.kind === "paragraph" && element.text === "Должность"
+    );
+    assert.ok(first);
+    assert.ok(second);
+
+    const numberResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.rate",
+        label: "Ставка",
+        valueType: "number",
+        decimalPlaces: 2,
+        elementId: first.id
+      }
+    });
+    assert.equal(numberResponse.statusCode, 201, numberResponse.body);
+    assert.deepEqual(numberResponse.json().data.field.formatter, {
+      version: 1,
+      kind: "number.ru",
+      fractionDigits: 2
+    });
+
+    const dateTimeResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.approved_at",
+        label: "Дата согласования",
+        valueType: "date-time",
+        timeZone: "Europe/Moscow",
+        elementId: second.id
+      }
+    });
+    assert.equal(dateTimeResponse.statusCode, 201, dateTimeResponse.body);
+    assert.deepEqual(dateTimeResponse.json().data.field.formatter, {
+      version: 1,
+      kind: "date-time.ru",
+      timeZone: "Europe/Moscow"
+    });
+
+    const invalid = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.position",
+        label: "Должность",
+        valueType: "string",
+        decimalPlaces: 2,
+        elementId: second.id
+      }
+    });
+    assert.equal(invalid.statusCode, 400, invalid.body);
+    assert.match(invalid.json().error.message, /знаков после запятой/ui);
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });
