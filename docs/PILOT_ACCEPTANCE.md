@@ -57,4 +57,24 @@ sudo bash /opt/docomator/current/app/scripts/runtime/pilot-check.sh \
 7. восстановить созданную копию на отдельном стенде;
 8. сравнить количество участников, шаблонов и результатов после восстановления.
 
+## Отдельная UX-приёмка
+
+P5 проводится по [протоколу ручной UX-приёмки](UX_ACCEPTANCE_PROTOCOL.md). На каноническом Linux-стенде создаётся незаполненный акт:
+
+```bash
+sudo /opt/docomator/current/runtime/node/bin/node \
+  /opt/docomator/current/app/scripts/runtime/ux-acceptance.mjs \
+  init /var/lib/docomator/pilot-reports/ux-acceptance.json
+```
+
+После ручной матрицы доступности, утверждения шести PNG и трёх заданий каждого из двух новых пользователей акт проверяется тем же встроенным Node.js:
+
+```bash
+sudo /opt/docomator/current/runtime/node/bin/node \
+  /opt/docomator/current/app/scripts/runtime/ux-acceptance.mjs \
+  validate /var/lib/docomator/pilot-reports/ux-acceptance.json
+```
+
+Автоматический pilot report и axe не заменяют эти свидетельства. До фактического акта пользовательская приёмка остаётся открытой.
+
 Основные журналы доступны для служб API, фонового обработчика и резервирования. Каждый акт содержит рекомендуемое действие для выявленной проблемы.

@@ -257,6 +257,10 @@ npm run check
 npm run test:release-gate
 npm run test:release-gate:libreoffice
 
+# Создать или проверить акт ручной UX-приёмки
+npm run acceptance:ux -- init ux-acceptance.json
+npm run acceptance:ux -- validate ux-acceptance.json
+
 export DOCOMATOR_DATA_DIR="$PWD/.tmp/data"
 npm run migrate
 npm run build
