@@ -230,7 +230,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   return {
     ...common(env),
     host: env.DOCOMATOR_HOST ?? "127.0.0.1",
-    port: parseInteger("DOCOMATOR_PORT", env.DOCOMATOR_PORT, 8080, 1, 65535),
+    port: parseInteger("DOCOMATOR_PORT", env.DOCOMATOR_PORT, 8080, 0, 65535),
     networkDeliveryRoot:
       networkDeliveryRoot === undefined || networkDeliveryRoot.length === 0
         ? null

@@ -34,6 +34,19 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 
 try {
   await app.listen({ host: config.host, port: config.port });
+  const address = app.server.address();
+  if (
+    typeof process.send === "function" &&
+    process.connected &&
+    address !== null &&
+    typeof address === "object"
+  ) {
+    process.send({
+      type: "listening",
+      host: config.host,
+      port: address.port
+    });
+  }
 } catch (error) {
   app.log.fatal({ error }, "api failed to start");
   process.exit(1);

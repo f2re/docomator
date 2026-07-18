@@ -253,6 +253,10 @@ flowchart TB
 npm ci
 npm run check
 
+# Отдельный запуск обязательного процессного gate
+npm run test:release-gate
+npm run test:release-gate:libreoffice
+
 export DOCOMATOR_DATA_DIR="$PWD/.tmp/data"
 npm run migrate
 npm run build
@@ -310,8 +314,8 @@ sudo /opt/docomator/current/first-run.sh \
 2. Пилот на реальных шаблонах и чистой Astra/Debian.
 3. Выпуски на 1, 10, 100 и 1000 участников и пробное восстановление резервной копии на отдельном стенде.
 4. Поиск физических объектов, отсутствующих в SQLite.
-5. Повторяемая область внутри пользовательского DOCX/XLSX.
+5. Повторяемые диапазоны XLSX и более сложные структурные области DOCX.
 6. Предметные события.
 7. Локальные агенты ИИ — после стабилизации детерминированного пути.
 
-Подробности: [архитектура](docs/ARCHITECTURE.md), [требования](docs/REQUIREMENTS.md), [план](docs/ROADMAP.md), [ближайшие приращения](docs/NEXT_ITERATIONS.md) и [автономное развёртывание](docs/OFFLINE_DEPLOYMENT.md).
+Подробности: [архитектура](docs/ARCHITECTURE.md), [требования](docs/REQUIREMENTS.md), [release-gate](docs/RELEASE_GATE.md), [план](docs/ROADMAP.md), [ближайшие приращения](docs/NEXT_ITERATIONS.md) и [автономное развёртывание](docs/OFFLINE_DEPLOYMENT.md).

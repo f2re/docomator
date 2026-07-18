@@ -16,6 +16,7 @@ test("invalid ports are rejected", () => {
     () => loadApiConfig({ DOCOMATOR_PORT: "70000" }),
     /DOCOMATOR_PORT must be an integer/
   );
+  assert.equal(loadApiConfig({ DOCOMATOR_PORT: "0" }).port, 0);
 });
 
 test("worker queue timings and identity are configurable", () => {
