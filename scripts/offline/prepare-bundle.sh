@@ -300,6 +300,7 @@ cp "$SCRIPT_DIR/lib.sh" \
   "$SCRIPT_DIR/verify-release.mjs" \
   "$BUNDLE_DIR/"
 cp "$ROOT_DIR/docs/RELEASE_NOTES.md" "$BUNDLE_DIR/RELEASE_NOTES.md"
+cp "$ROOT_DIR/docs/SUPPORT_MATRIX.md" "$BUNDLE_DIR/SUPPORT_MATRIX.md"
 chmod 0755 "$BUNDLE_DIR"/*.sh "$BUNDLE_DIR"/*.mjs
 
 printf '%s\n' "$VERSION" > "$BUNDLE_DIR/VERSION"

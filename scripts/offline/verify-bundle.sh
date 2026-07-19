@@ -18,6 +18,8 @@ require_command sort
 [[ -f "$BUNDLE_ROOT/VERSION" ]] || die "В комплекте отсутствует VERSION: $BUNDLE_ROOT"
 [[ -f "$BUNDLE_ROOT/RELEASE_NOTES.md" ]] || \
   die "В комплекте отсутствуют примечания к выпуску"
+[[ -f "$BUNDLE_ROOT/SUPPORT_MATRIX.md" ]] || \
+  die "В комплекте отсутствует матрица совместимости"
 [[ -f "$BUNDLE_ROOT/release.json" ]] || die "В комплекте отсутствует release.json"
 [[ -f "$BUNDLE_ROOT/manifest.sha256" ]] || die "В комплекте отсутствует manifest.sha256"
 [[ -f "$BUNDLE_ROOT/manifest.symlinks" ]] || die "В комплекте отсутствует manifest.symlinks"
