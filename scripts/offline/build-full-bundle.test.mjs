@@ -47,9 +47,10 @@ test("full bundle builder exposes the Debian/Astra contract", async () => {
 });
 
 test("full bundle commands select exact target profiles", async () => {
-  const [builder, packageSource] = await Promise.all([
+  const [builder, packageSource, readme] = await Promise.all([
     fs.readFile(builderPath, "utf8"),
-    fs.readFile(path.join(repositoryRoot, "package.json"), "utf8")
+    fs.readFile(path.join(repositoryRoot, "package.json"), "utf8"),
+    fs.readFile(path.join(repositoryRoot, "README.md"), "utf8")
   ]);
   const packageJson = JSON.parse(packageSource);
 
@@ -65,6 +66,12 @@ test("full bundle commands select exact target profiles", async () => {
   assert.match(builder, /offline-bundles\/targets\/\$\{TARGET\}/u);
   assert.match(builder, /verify_target_os_package_profile/u);
   assert.doesNotMatch(builder, /--skip-tests/u);
+
+  assert.match(readme, /### 🟦 Debian/u);
+  assert.match(readme, /npm run bundle:offline:debian/u);
+  assert.match(readme, /### 🟨 Astra Linux/u);
+  assert.match(readme, /npm run bundle:offline:astra/u);
+  assert.match(readme, /Debian и Astra Linux собираются как разные target-профили/u);
 });
 
 test(
