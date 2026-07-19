@@ -15,6 +15,79 @@ const MAXIMUM_COLLECTOR_OUTPUT_BYTES = 1024 * 1024;
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const collectorPath = path.join(scriptDirectory, "pilot-readiness.mjs");
 
+function parseEnv(text) {
+  const values = {};
+  for (const rawLine of text.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (line.length === 0 || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    if (separator < 1) continue;
+    const key = line.slice(0, separator).trim();
+    let value = line.slice(separator + 1).trim();
+    if (
+      value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'")))
+    ) {
+      value = value.slice(1, -1);
+    }
+    values[key] = value;
+  }
+  return values;
+}
+
+function optionValue(argumentsList, name, fallback = null) {
+  let value = fallback;
+  for (let index = 0; index < argumentsList.length; index += 1) {
+    if (argumentsList[index] !== name) continue;
+    index += 1;
+    if (argumentsList[index] === undefined) {
+      throw new Error(`Не указано значение после ${name}.`);
+    }
+    value = argumentsList[index];
+  }
+  return value;
+}
+
+function collectorArguments(argumentsList, stagingDirectory) {
+  const result = [];
+  for (let index = 0; index < argumentsList.length; index += 1) {
+    const argument = argumentsList[index];
+    if (argument === "--output") {
+      index += 1;
+      if (argumentsList[index] === undefined) {
+        throw new Error("Не указано значение после --output.");
+      }
+      continue;
+    }
+    result.push(argument);
+  }
+  result.push("--output", stagingDirectory);
+  if (!result.includes("--json-only")) result.push("--json-only");
+  return result;
+}
+
+async function finalOutputDirectory(argumentsList) {
+  const explicitOutput = optionValue(argumentsList, "--output");
+  if (explicitOutput !== null) return path.resolve(explicitOutput);
+
+  const configFile = path.resolve(
+    optionValue(argumentsList, "--config", "/etc/docomator/docomator.env")
+  );
+  let config = {};
+  try {
+    config = parseEnv(await fs.readFile(configFile, "utf8"));
+  } catch (error) {
+    if (error === null || typeof error !== "object" || error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+  const dataDirectory = path.resolve(
+    config.DOCOMATOR_DATA_DIR || process.env.DOCOMATOR_DATA_DIR || "/var/lib/docomator"
+  );
+  return path.join(dataDirectory, "pilot-reports");
+}
+
 function appendLimited(chunks, chunk, currentSize, streamName) {
   const nextSize = currentSize + chunk.length;
   if (nextSize > MAXIMUM_COLLECTOR_OUTPUT_BYTES) {
@@ -71,9 +144,24 @@ function runCollector(argumentsList) {
 }
 
 async function atomicWrite(filePath, content) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o750 });
   const temporary = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   await fs.writeFile(temporary, content, { encoding: "utf8", mode: 0o640 });
   await fs.rename(temporary, filePath);
+}
+
+function reportPath(stagingDirectory, candidate, extension) {
+  if (typeof candidate !== "string") {
+    throw new Error("Сценарий пилотной проверки вернул неполные пути отчётов.");
+  }
+  const resolved = path.resolve(candidate);
+  if (
+    path.dirname(resolved) !== stagingDirectory ||
+    !new RegExp(`^pilot-[0-9TZ]+\\.${extension}$`, "u").test(path.basename(resolved))
+  ) {
+    throw new Error("Сценарий пилотной проверки вернул небезопасный путь отчёта.");
+  }
+  return resolved;
 }
 
 function outputResult(result, jsonOnly) {
@@ -98,12 +186,18 @@ function exitCode(status) {
 
 const originalArguments = process.argv.slice(2);
 const jsonOnly = originalArguments.includes("--json-only");
-const collectorArguments = jsonOnly
-  ? originalArguments
-  : [...originalArguments, "--json-only"];
+let stagingDirectory = null;
+let completed = false;
 
 try {
-  const collected = await runCollector(collectorArguments);
+  const outputDirectory = await finalOutputDirectory(originalArguments);
+  await fs.mkdir(outputDirectory, { recursive: true, mode: 0o750 });
+  stagingDirectory = await fs.mkdtemp(path.join(outputDirectory, ".pilot-staging-"));
+  await fs.chmod(stagingDirectory, 0o700);
+
+  const collected = await runCollector(
+    collectorArguments(originalArguments, stagingDirectory)
+  );
   if (collected.stderr !== "") process.stderr.write(collected.stderr);
   if (collected.signal !== null) {
     throw new Error(`Сценарий пилотной проверки остановлен сигналом ${collected.signal}.`);
@@ -118,17 +212,18 @@ try {
       `Сценарий пилотной проверки не вернул JSON-результат (код ${collected.code}).`
     );
   }
-  if (
-    typeof collectorResult?.jsonReport !== "string" ||
-    typeof collectorResult?.markdownReport !== "string"
-  ) {
-    throw new Error("Сценарий пилотной проверки вернул неполные пути отчётов.");
-  }
 
-  const jsonReportPath = path.resolve(collectorResult.jsonReport);
-  const markdownReportPath = path.resolve(collectorResult.markdownReport);
-  const source = await fs.readFile(jsonReportPath, "utf8");
-  const report = JSON.parse(source);
+  const stagingJsonPath = reportPath(
+    stagingDirectory,
+    collectorResult?.jsonReport,
+    "json"
+  );
+  const stagingMarkdownPath = reportPath(
+    stagingDirectory,
+    collectorResult?.markdownReport,
+    "md"
+  );
+  const report = JSON.parse(await fs.readFile(stagingJsonPath, "utf8"));
 
   let identity = null;
   let identityError = null;
@@ -139,8 +234,21 @@ try {
   }
 
   const boundReport = bindPilotReleaseIdentity(report, identity, identityError);
-  await atomicWrite(jsonReportPath, `${JSON.stringify(boundReport, null, 2)}\n`);
-  await atomicWrite(markdownReportPath, pilotMarkdownReport(boundReport));
+  const jsonContent = `${JSON.stringify(boundReport, null, 2)}\n`;
+  const markdownContent = pilotMarkdownReport(boundReport);
+
+  // Даже оставшийся после сбоя staging-каталог не должен содержать успешный
+  // акт без привязки к установленному релизу.
+  await atomicWrite(stagingJsonPath, jsonContent);
+  await atomicWrite(stagingMarkdownPath, markdownContent);
+
+  const jsonReportPath = path.join(outputDirectory, path.basename(stagingJsonPath));
+  const markdownReportPath = path.join(
+    outputDirectory,
+    path.basename(stagingMarkdownPath)
+  );
+  await atomicWrite(jsonReportPath, jsonContent);
+  await atomicWrite(markdownReportPath, markdownContent);
 
   const result = {
     status: boundReport.status,
@@ -148,6 +256,7 @@ try {
     markdownReport: markdownReportPath,
     summary: boundReport.summary
   };
+  completed = true;
   outputResult(result, jsonOnly);
   process.exitCode = exitCode(boundReport.status);
 } catch (error) {
@@ -157,4 +266,17 @@ try {
     }\n`
   );
   process.exitCode = 2;
+} finally {
+  if (stagingDirectory !== null) {
+    try {
+      await fs.rm(stagingDirectory, { recursive: true, force: true });
+    } catch (error) {
+      process.stderr.write(
+        `Не удалось удалить временный каталог пилотной проверки ${stagingDirectory}: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`
+      );
+      if (!completed) process.exitCode = 2;
+    }
+  }
 }
