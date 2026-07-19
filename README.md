@@ -292,16 +292,63 @@ DOCOMATOR_E2E_BASE_URL=http://127.0.0.1:8080 npm run test:e2e
 
 ## 📦 Автономная поставка
 
-```bash
-sudo scripts/offline/collect-os-packages.sh --apt-update
+> [!IMPORTANT]
+> **Debian и Astra Linux собираются как разные target-профили.** Нельзя повторно использовать набор `.deb` или архив между выпусками ОС. Обе команды ниже создают полный пакет: локальная модель, LibreOffice preview, offline Chromium/Playwright/axe и все обязательные target gates. Команду запускают обычным пользователем на подключённой эталонной VM; `sudo` используется только внутренним шагом скачивания `.deb`.
 
-scripts/offline/prepare-bundle.sh \
-  --llama-server /opt/build/llama.cpp/llama-server \
-  --model /opt/build/models/model.gguf \
-  --with-preview \
-  --with-ux-acceptance \
-  --os-packages-dir offline-bundles/os-packages
+### 🟦 Debian
+
+> [!TIP]
+> Debian-профиль использует пакет `chromium` и путь `/usr/bin/chromium`, если они не переопределены явно.
+
+```bash
+npm run bundle:offline:debian -- \
+  --apt-update \
+  --llama-server /srv/build/llama.cpp/llama-server \
+  --model /srv/models/model.gguf
 ```
+
+Артефакты сохраняются отдельно от Astra:
+
+```text
+offline-bundles/targets/debian-<VERSION_ID>-<deb-arch>/
+├── os-packages/
+└── release/
+    ├── docomator-<version>-linux-<arch>.tar.gz
+    └── docomator-<version>-linux-<arch>.tar.gz.sha256
+```
+
+### 🟨 Astra Linux
+
+> [!WARNING]
+> На Astra Linux пакет и executable Chromium зависят от редакции, update и подключённых репозиториев. Их нельзя угадывать или наследовать из Debian-профиля: сначала подтвердите фактические значения на той же эталонной VM.
+
+```bash
+ASTRA_CHROMIUM_PACKAGE='chromium'
+ASTRA_CHROMIUM_BIN='/usr/bin/chromium'
+
+dpkg-query -W -f='${Package}\t${Version}\n' "$ASTRA_CHROMIUM_PACKAGE"
+dpkg-query -S "$ASTRA_CHROMIUM_BIN"
+
+npm run bundle:offline:astra -- \
+  --apt-update \
+  --llama-server /srv/build/llama.cpp/llama-server \
+  --model /srv/models/model.gguf \
+  --ux-chromium-package "$ASTRA_CHROMIUM_PACKAGE" \
+  --ux-chromium-bin "$ASTRA_CHROMIUM_BIN"
+```
+
+Если Astra использует другое имя пакета браузера, сборщик заменяет строку `chromium` только во временном effective package list; исходный `config/os-packages.txt` не меняется. Артефакты сохраняются в `offline-bundles/targets/astra-<VERSION_ID>-<deb-arch>/`.
+
+Для уже собранного и проверенного набора `.deb` повторный `sudo`-шаг можно исключить:
+
+```bash
+npm run bundle:offline:debian -- \
+  --os-packages-dir /srv/docomator-os-packages/debian \
+  --llama-server /srv/build/llama.cpp/llama-server \
+  --model /srv/models/model.gguf
+```
+
+Полный список параметров, варианты с локальным Node.js archive/runtime и требования к reference host приведены в [процедуре автономного развёртывания](docs/OFFLINE_DEPLOYMENT.md).
 
 Архив нельзя распаковывать через `sudo` сразу после переноса. Установка выполняется только по [fail-fast процедуре автономного развёртывания](docs/OFFLINE_DEPLOYMENT.md): сверка закреплённого SHA-256 из подписанного организационного manifest, непривилегированный preflight, копирование тех же байтов в уникальный root-owned staging-каталог и повторная проверка перед `install.sh`.
 
