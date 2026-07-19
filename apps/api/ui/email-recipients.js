@@ -190,7 +190,7 @@ async function enhanceEmailRecipientPanel(job) {
         <label class="generation-field">
           <span>Сохранённый получатель</span>
           <select id="savedEmailRecipient"><option value="">Ввести адрес вручную</option></select>
-          <small>Получатели изолированы внутри текущего пространства.</small>
+          <small>Получатели относятся к текущему пространству.</small>
         </label>
         <label class="generation-field document-email-wide">
           <span>Описание получателя</span>

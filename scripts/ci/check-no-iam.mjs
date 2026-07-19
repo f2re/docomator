@@ -17,6 +17,15 @@ const forbidden = [
   ["upsertActorMembership", "изменение членства в разделе"],
   ["listActorMemberships", "чтение членства в разделе"]
 ];
+const forbiddenUiCopy = [
+  [/будущий класс доступа/iu, "ложное обещание класса доступа"],
+  [/провер(?:ка|ять|яем|ит)\s+прав/iu, "ложное обещание проверки прав"],
+  [/настройк[аиу]\s+доступа/iu, "настройки пользовательского доступа"],
+  [/(?:изолир|изоляц)\p{L}*/iu, "пользовательскую семантику изоляции данных"],
+  [/доступ\p{L}*\s+только\s+в\s+(?:этом|выбранном)\s+пространств/iu, "ограничение доступа пространством"],
+  [/доступ\p{L}*\s+пользовател\p{L}*\s+пространств/iu, "доступ пользователей пространства"],
+  [/организац\p{L}*\s+данных,\s*доступ\s+и\s+диагностик/iu, "настройки доступа"]
+];
 
 function runtimeFiles(relativeDirectory) {
   const absoluteDirectory = path.join(repositoryRoot, relativeDirectory);
@@ -38,15 +47,22 @@ for (const relativePath of runtimeRoots.flatMap(runtimeFiles)) {
     const line = text.slice(0, index).split("\n").length;
     failures.push(`${relativePath}:${line}: найдено ${description} (${token})`);
   }
+  if (!relativePath.startsWith("apps/api/ui")) continue;
+  for (const [pattern, description] of forbiddenUiCopy) {
+    const match = text.match(pattern);
+    if (!match || match.index === undefined) continue;
+    const line = text.slice(0, match.index).split("\n").length;
+    failures.push(`${relativePath}:${line}: найдено ${description} (${match[0]})`);
+  }
 }
 
 if (failures.length > 0) {
   process.stderr.write(
-    "Исполнимая модель IAM противоречит ADR-0006:\n" +
+    "Исполнимая модель или пользовательская семантика IAM противоречит ADR-0006:\n" +
       failures.map((failure) => `- ${failure}`).join("\n") +
       "\nИзменение продуктовой границы требует нового ADR, а не скрытого возврата ролей.\n"
   );
   process.exitCode = 1;
 } else {
-  process.stdout.write("Исполнимая модель IAM отсутствует; разделы остаются общей организационной структурой.\n");
+  process.stdout.write("Исполнимая и пользовательская модель IAM отсутствует; разделы остаются общей организационной структурой.\n");
 }

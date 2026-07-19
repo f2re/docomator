@@ -252,7 +252,7 @@ async function loadMultiTrialDrafts() {
   const spaceId = currentMultiTrialSpaceId();
   if (!content) return;
   if (!spaceId) {
-    content.innerHTML = `<div class="multi-trial-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Черновики и проверенные версии изолированы по пространствам.</p></div></div>`;
+    content.innerHTML = `<div class="multi-trial-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Черновики и проверенные версии относятся к выбранному пространству.</p></div></div>`;
     return;
   }
   const existingForm = content.querySelector("#templateMultiTrialForm");

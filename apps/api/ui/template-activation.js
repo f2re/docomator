@@ -234,7 +234,7 @@ function renderPreviewReady(data) {
         <a class="secondary-button" href="${activationEscape(data.previewUrl)}" target="_blank" rel="noopener">Открыть PDF отдельно</a>
         <label class="activation-confirmation">
           <input id="templateActivationConfirmed" type="checkbox" />
-          <span><strong>Я просмотрел PDF</strong><small>Версия будет доступна пользователям пространства после отдельного подтверждения.</small></span>
+          <span><strong>Я просмотрел PDF</strong><small>Версия появится в каталоге выбранного пространства после отдельного подтверждения.</small></span>
         </label>
         <button class="primary-button" id="templateActivateButton" type="button" disabled>Активировать версию</button>
       </div>
@@ -399,7 +399,7 @@ async function loadActivationVersions() {
   if (!content) return;
   if (!spaceId) {
     content.innerHTML = `
-      <div class="activation-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Предварительный просмотр и активный каталог изолированы по пространствам.</p></div></div>`;
+      <div class="activation-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Предварительный просмотр и активный каталог относятся к выбранному пространству.</p></div></div>`;
     return;
   }
   const existingForm = content.querySelector("#templateActivationForm");

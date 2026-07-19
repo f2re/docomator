@@ -322,7 +322,7 @@ async function loadScheduleWorkspace() {
   const spaceId = currentGenerationSpaceId();
   if (!holder) return;
   if (!spaceId) {
-    holder.innerHTML = `<div class="generation-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Расписания изолированы по пространствам.</p></div></div>`;
+    holder.innerHTML = `<div class="generation-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Расписания организованы по пространствам.</p></div></div>`;
     return;
   }
   holder.innerHTML = `<div class="generation-state"><span aria-hidden="true">⏳</span><div><strong>Получаем расписания</strong><p>Загружаем рабочие зависимости выбранного пространства.</p></div></div>`;
