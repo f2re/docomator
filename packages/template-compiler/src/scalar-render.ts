@@ -19,6 +19,13 @@ import {
   writeOoxmlPackage,
   type OoxmlPackageEntry
 } from "./ooxml-package.js";
+import {
+  hasCanonicalXlsxMetadata,
+  verifyXlsxMetadata,
+  verifyXlsxWorksheetBinding,
+  xlsxMetadataRecord,
+  type XlsxMetadataRecord
+} from "./xlsx-metadata.js";
 
 export type { ScalarValueType } from "./scalar-formatter.js";
 
@@ -29,6 +36,7 @@ export interface RenderScalarValueInput {
   valueType: ScalarValueType;
   value: unknown;
   formatter?: unknown;
+  expectedXlsxMetadataRecords?: readonly XlsxMetadataRecord[];
 }
 
 export interface ReadScalarValueInput {
@@ -37,6 +45,7 @@ export interface ReadScalarValueInput {
   fieldBinding: ScalarFieldBinding;
   valueType: ScalarValueType;
   formatter?: unknown;
+  expectedXlsxMetadataRecords?: readonly XlsxMetadataRecord[];
 }
 
 export interface ReadScalarValueResult {
@@ -271,10 +280,16 @@ export function normalizeScalarValueForRendering(
   );
 }
 
-function validateBindings(
+export function validateScalarBindings(
   technical: CompiledTechnicalBinding,
   field: ScalarFieldBinding
 ): void {
+  if (technical.kind !== "docx.sdt" && technical.kind !== "xlsx.defined-name") {
+    throw new TemplateCompilerError(
+      "technical_binding_mismatch",
+      "Вид технической привязки не поддерживается."
+    );
+  }
   if (technical.kind === "docx.sdt") {
     if (field.kind !== "docx.paragraph" && field.kind !== "docx.text-range") {
       throw new TemplateCompilerError(
@@ -288,6 +303,16 @@ function validateBindings(
         "Техническая привязка указывает на другую часть DOCX."
       );
     }
+    if (
+      technical.metadataVersion !== undefined ||
+      !/^aifield:.{1,160}$/u.test(technical.identifier) ||
+      /[\u0000-\u001f\u007f]/u.test(technical.identifier)
+    ) {
+      throw new TemplateCompilerError(
+        "technical_binding_mismatch",
+        "Техническая привязка DOCX имеет неподдерживаемый формат."
+      );
+    }
     return;
   }
   if (field.kind !== "xlsx.cell") {
@@ -296,6 +321,48 @@ function validateBindings(
       "Техническая привязка не соответствует сохранённой координате поля."
     );
   }
+  const address = /^([A-Z]{1,4})([1-9][0-9]{0,6})$/u.exec(field.address);
+  const expectedTarget =
+    address === null
+      ? null
+      : `'${field.sheetName.replaceAll("'", "''")}'!$${address[1]}$${address[2]}`;
+  if (
+    technical.part !== "xl/workbook.xml" ||
+    !/^_DOCOMATOR_[A-F0-9]{24}$/u.test(technical.identifier) ||
+    expectedTarget === null ||
+    technical.target !== expectedTarget ||
+    (technical.metadataVersion !== undefined && technical.metadataVersion !== 1)
+  ) {
+    throw new TemplateCompilerError(
+      "technical_binding_mismatch",
+      "Техническая привязка XLSX не соответствует сохранённой ячейке или версии служебных данных."
+    );
+  }
+}
+
+function verifyRequiredXlsxMetadata(
+  entries: readonly OoxmlPackageEntry[],
+  technical: CompiledTechnicalBinding,
+  expectedRecords?: readonly XlsxMetadataRecord[]
+): void {
+  if (technical.kind !== "xlsx.defined-name") {
+    return;
+  }
+  if (technical.metadataVersion !== 1) {
+    if (hasCanonicalXlsxMetadata(entries)) {
+      throw new TemplateCompilerError(
+        "xlsx_metadata_version_downgrade",
+        "Книга содержит новые служебные данные XLSX, но привязка помечена как прежняя. Повторно активируйте шаблон."
+      );
+    }
+    return;
+  }
+  verifyXlsxMetadata(entries, {
+    expectedRecords:
+      expectedRecords ?? [xlsxMetadataRecord("field", technical)],
+    exactExpectedRecords: true,
+    definedNames: "present"
+  });
 }
 
 function decodeXml(buffer: Buffer): DecodedXml {
@@ -1384,9 +1451,24 @@ function readXlsx(
 export async function readScalarValue(
   input: ReadScalarValueInput
 ): Promise<ReadScalarValueResult> {
-  validateBindings(input.technicalBinding, input.fieldBinding);
+  validateScalarBindings(input.technicalBinding, input.fieldBinding);
   parseScalarFormatter(input.valueType, input.formatter);
   const entries = await readOoxmlPackage(input.document);
+  if (
+    input.technicalBinding.kind === "xlsx.defined-name" &&
+    input.fieldBinding.kind === "xlsx.cell"
+  ) {
+    verifyXlsxWorksheetBinding(
+      entries,
+      input.fieldBinding.sheetName,
+      input.fieldBinding.sheetPath
+    );
+  }
+  verifyRequiredXlsxMetadata(
+    entries,
+    input.technicalBinding,
+    input.expectedXlsxMetadataRecords
+  );
   return input.technicalBinding.kind === "docx.sdt"
     ? readDocx(entries, input.technicalBinding)
     : readXlsx(
@@ -1400,7 +1482,7 @@ export async function readScalarValue(
 export async function renderScalarValue(
   input: RenderScalarValueInput
 ): Promise<RenderScalarValueResult> {
-  validateBindings(input.technicalBinding, input.fieldBinding);
+  validateScalarBindings(input.technicalBinding, input.fieldBinding);
   const compiled = Buffer.from(input.compiled);
   const normalized = normalizeScalarValueForRendering(
     input.valueType,
@@ -1408,6 +1490,21 @@ export async function renderScalarValue(
     input.formatter
   );
   const entries = await readOoxmlPackage(compiled);
+  if (
+    input.technicalBinding.kind === "xlsx.defined-name" &&
+    input.fieldBinding.kind === "xlsx.cell"
+  ) {
+    verifyXlsxWorksheetBinding(
+      entries,
+      input.fieldBinding.sheetName,
+      input.fieldBinding.sheetPath
+    );
+  }
+  verifyRequiredXlsxMetadata(
+    entries,
+    input.technicalBinding,
+    input.expectedXlsxMetadataRecords
+  );
   const updatedEntries =
     input.technicalBinding.kind === "docx.sdt"
       ? renderDocx(
@@ -1423,7 +1520,12 @@ export async function renderScalarValue(
     technicalBinding: input.technicalBinding,
     fieldBinding: input.fieldBinding,
     valueType: input.valueType,
-    formatter: input.formatter
+    formatter: input.formatter,
+    ...(input.expectedXlsxMetadataRecords === undefined
+      ? {}
+      : {
+          expectedXlsxMetadataRecords: input.expectedXlsxMetadataRecords
+        })
   });
   if (readBack.value !== normalized.display) {
     throw new TemplateCompilerError(

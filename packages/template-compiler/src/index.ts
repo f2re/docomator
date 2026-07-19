@@ -102,3 +102,14 @@ export type {
   OoxmlPackageEntry,
   OoxmlPackageLimits
 } from "./ooxml-package.js";
+
+export {
+  XLSX_METADATA_PART,
+  XLSX_METADATA_SHEET_NAME,
+  XLSX_METADATA_VERSION,
+  verifyXlsxMetadata
+} from "./xlsx-metadata.js";
+export type {
+  VerifyXlsxMetadataOptions,
+  XlsxMetadataRecord
+} from "./xlsx-metadata.js";

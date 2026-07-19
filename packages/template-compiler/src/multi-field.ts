@@ -30,6 +30,11 @@ import {
   type XlsxRepeatRowBinding,
   type XlsxRepeatTechnicalBinding
 } from "./xlsx-repeat.js";
+import { readOoxmlPackage } from "./ooxml-package.js";
+import {
+  verifyXlsxMetadata,
+  xlsxMetadataRecord
+} from "./xlsx-metadata.js";
 
 export interface CompileScalarFieldsInput {
   source: Uint8Array;
@@ -45,6 +50,7 @@ export interface CompiledScalarFieldResult {
   fieldKey: string;
   originalElementId: string;
   modifiedPart: string;
+  modifiedParts: string[];
   technicalBinding: CompiledTechnicalBinding;
 }
 
@@ -95,6 +101,7 @@ export interface RenderedScalarFieldValue {
 export interface RenderScalarValuesInput {
   compiled: Uint8Array;
   fields: readonly RenderScalarFieldValue[];
+  repeatTechnicalBinding?: XlsxRepeatTechnicalBinding;
 }
 
 export interface RenderScalarValuesResult {
@@ -581,6 +588,9 @@ export async function compileScalarFields(
       fileName: input.fileName,
       expectedSourceSha256: analysis.sourceSha256,
       expectedStructureSha256: analysis.structureSha256,
+      existingTechnicalBindings: results.map(
+        (result) => result.technicalBinding
+      ),
       field: {
         id: field.id,
         key: field.key,
@@ -595,6 +605,7 @@ export async function compileScalarFields(
       fieldKey: field.key,
       originalElementId: field.elementId,
       modifiedPart: compiled.modifiedPart,
+      modifiedParts: compiled.modifiedParts,
       technicalBinding: compiled.technicalBinding
     });
   }
@@ -648,7 +659,7 @@ export async function compileScalarFields(
     outputSha256: sha256(current),
     modifiedParts: [
       ...new Set([
-        ...results.map((field) => field.modifiedPart),
+        ...results.flatMap((field) => field.modifiedParts),
         ...(repeat === null ? [] : [repeat.technicalBinding.part])
       ])
     ].sort(),
@@ -701,6 +712,56 @@ export async function renderScalarValues(
 ): Promise<RenderScalarValuesResult> {
   const original = Buffer.from(input.compiled);
   const fields = normalizeRenderFields(input.fields);
+  const metadataFields = fields.filter(
+    (field) => field.technicalBinding.metadataVersion === 1
+  );
+  const unsupportedMetadataVersion = fields.some((field) => {
+    const version = (field.technicalBinding as { metadataVersion?: unknown })
+      .metadataVersion;
+    return version !== undefined && version !== 1;
+  });
+  if (unsupportedMetadataVersion) {
+    throw new TemplateCompilerError(
+      "technical_binding_mismatch",
+      "Набор полей XLSX использует неподдерживаемую версию служебных данных."
+    );
+  }
+  if (metadataFields.length !== 0 && metadataFields.length !== fields.length) {
+    throw new TemplateCompilerError(
+      "mixed_xlsx_metadata_contract",
+      "Поля используют разные версии служебных данных XLSX. Повторно проверьте и активируйте шаблон."
+    );
+  }
+  const expectedMetadataRecords =
+    metadataFields.length === fields.length
+      ? [
+          ...fields.map((field) =>
+            xlsxMetadataRecord("field", field.technicalBinding)
+          ),
+          ...(input.repeatTechnicalBinding === undefined
+            ? []
+            : [xlsxMetadataRecord("repeat", input.repeatTechnicalBinding)])
+        ]
+      : [];
+  if (metadataFields.length === fields.length) {
+    if (
+      fields.some(
+        (field) =>
+          field.technicalBinding.kind !== "xlsx.defined-name" ||
+          field.fieldBinding.kind !== "xlsx.cell"
+      )
+    ) {
+      throw new TemplateCompilerError(
+        "technical_binding_mismatch",
+        "Служебные данные XLSX не соответствуют набору полей."
+      );
+    }
+    verifyXlsxMetadata(await readOoxmlPackage(original), {
+      expectedRecords: expectedMetadataRecords,
+      exactExpectedRecords: true,
+      definedNames: "present"
+    });
+  }
   let current: Buffer<ArrayBufferLike> = original;
   const rendered: RenderedScalarFieldValue[] = [];
 
@@ -711,7 +772,10 @@ export async function renderScalarValues(
       fieldBinding: field.fieldBinding,
       valueType: field.valueType,
       value: field.value,
-      formatter: field.formatter
+      formatter: field.formatter,
+      ...(metadataFields.length === fields.length
+        ? { expectedXlsxMetadataRecords: expectedMetadataRecords }
+        : {})
     });
     current = result.output;
     rendered.push({
@@ -739,7 +803,10 @@ export async function renderScalarValues(
       technicalBinding: field.technicalBinding,
       fieldBinding: field.fieldBinding,
       valueType: field.valueType,
-      formatter: field.formatter
+      formatter: field.formatter,
+      ...(metadataFields.length === fields.length
+        ? { expectedXlsxMetadataRecords: expectedMetadataRecords }
+        : {})
     });
     expected.readBackValue = readBack.value;
     if (readBack.value !== expected.renderedValue) {
@@ -748,6 +815,14 @@ export async function renderScalarValues(
         `После итоговой сборки значение поля «${field.fieldKey}» не совпало с ожидаемым.`
       );
     }
+  }
+
+  if (metadataFields.length === fields.length) {
+    verifyXlsxMetadata(await readOoxmlPackage(current), {
+      expectedRecords: expectedMetadataRecords,
+      exactExpectedRecords: true,
+      definedNames: "present"
+    });
   }
 
   return {

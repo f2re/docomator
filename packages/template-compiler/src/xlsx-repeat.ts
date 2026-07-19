@@ -9,6 +9,7 @@ import {
 import { formatScalarDisplay, type ScalarValueType } from "./scalar-formatter.js";
 import {
   normalizeScalarValueForRendering,
+  validateScalarBindings,
   type NormalizedScalarValue
 } from "./scalar-render.js";
 import {
@@ -17,6 +18,13 @@ import {
   writeOoxmlPackage,
   type OoxmlPackageEntry
 } from "./ooxml-package.js";
+import {
+  hasCanonicalXlsxMetadata,
+  upsertXlsxMetadataRecord,
+  verifyXlsxMetadata,
+  xlsxMetadataRecord,
+  type XlsxMetadataRecord
+} from "./xlsx-metadata.js";
 import {
   translateSafeXlsxFormula,
   type SafeXlsxFormulaArea
@@ -1418,6 +1426,7 @@ function normalizedCompileFields(
   const start = parseCellAddress(binding.startAddress);
   const end = parseCellAddress(binding.endAddress);
   const result = fields.map((field) => {
+    validateScalarBindings(field.technicalBinding, field.fieldBinding);
     if (
       field.technicalBinding.kind !== "xlsx.defined-name" ||
       field.fieldBinding.kind !== "xlsx.cell" ||
@@ -1656,8 +1665,22 @@ export async function compileXlsxRepeatRow(
 ): Promise<CompileXlsxRepeatRowResult> {
   const compiled = Buffer.from(input.compiled);
   const binding = parseXlsxRepeatRowBinding(input.binding);
+  if (input.fields.some((field) => field.technicalBinding.metadataVersion !== 1)) {
+    throw new TemplateCompilerError(
+      "xlsx_metadata_required",
+      "Новая повторяемая строка XLSX требует проверенный служебный лист _AI_META. Повторите проверку шаблона."
+    );
+  }
   const entries = await readOoxmlPackage(compiled);
   validateRepeatTemplate(entries, binding, input.fields);
+  const fieldMetadata = input.fields.map((field) =>
+    xlsxMetadataRecord("field", field.technicalBinding)
+  );
+  verifyXlsxMetadata(entries, {
+    expectedRecords: fieldMetadata,
+    exactExpectedRecords: true,
+    definedNames: "present"
+  });
   const workbookEntry = packageEntry(entries, WORKBOOK_PART);
   const decoded = decodeXml(workbookEntry.content);
   validateTechnicalDefinedNames(decoded.text, binding, input.fields, null);
@@ -1668,11 +1691,16 @@ export async function compileXlsxRepeatRow(
     target: repeatTarget(binding)
   };
   const updatedWorkbook = addDefinedName(decoded.text, technicalBinding);
-  let updatedEntries = replaceEntry(
+  const withRepeatName = replaceEntry(
     entries,
     WORKBOOK_PART,
     encodeXml(decoded, updatedWorkbook)
   );
+  const metadata = upsertXlsxMetadataRecord(
+    withRepeatName,
+    xlsxMetadataRecord("repeat", technicalBinding)
+  );
+  let updatedEntries = metadata.entries;
   const output = writeOoxmlPackage(updatedEntries);
   updatedEntries = await readOoxmlPackage(output);
   validateRepeatTemplate(updatedEntries, binding, input.fields);
@@ -1685,6 +1713,14 @@ export async function compileXlsxRepeatRow(
     input.fields,
     technicalBinding
   );
+  verifyXlsxMetadata(updatedEntries, {
+    expectedRecords: [
+      ...fieldMetadata,
+      xlsxMetadataRecord("repeat", technicalBinding)
+    ],
+    exactExpectedRecords: true,
+    definedNames: "present"
+  });
   return {
     output,
     inputSha256: sha256(compiled),
@@ -2425,8 +2461,28 @@ export async function renderXlsxRepeatRows(
     technicalBinding: input.technicalBinding
   });
   const fields = normalizedRenderFields(input.fields, contract.binding);
+  const metadataFieldCount = fields.filter(
+    (field) => field.technicalBinding.metadataVersion === 1
+  ).length;
+  if (metadataFieldCount !== 0 && metadataFieldCount !== fields.length) {
+    throw new TemplateCompilerError(
+      "mixed_xlsx_metadata_contract",
+      "Поля XLSX используют разные версии служебных данных. Повторно проверьте и активируйте шаблон."
+    );
+  }
+  const metadataRecords: XlsxMetadataRecord[] = [
+    ...fields.map((field) => xlsxMetadataRecord("field", field.technicalBinding)),
+    xlsxMetadataRecord("repeat", contract.technicalBinding)
+  ];
+  const metadataRequired = metadataFieldCount === fields.length;
   const values = normalizedMemberValues(fields, input.members);
   const entries = await readOoxmlPackage(compiled);
+  if (!metadataRequired && hasCanonicalXlsxMetadata(entries)) {
+    throw new TemplateCompilerError(
+      "xlsx_metadata_version_downgrade",
+      "Книга содержит новые служебные данные XLSX, но поля помечены как прежние. Повторно активируйте шаблон."
+    );
+  }
   const compileFields: CompileXlsxRepeatField[] = fields.map((field) => ({
     fieldId: field.fieldId,
     technicalBinding: field.technicalBinding,
@@ -2440,6 +2496,13 @@ export async function renderXlsxRepeatRows(
     compileFields,
     contract.technicalBinding
   );
+  if (metadataRequired) {
+    verifyXlsxMetadata(entries, {
+      expectedRecords: metadataRecords,
+      exactExpectedRecords: true,
+      definedNames: "present"
+    });
+  }
   const renderedRows = renderedWorksheetRows(
     sourceModel,
     contract.binding,
@@ -2486,6 +2549,13 @@ export async function renderXlsxRepeatRows(
   ]);
   const output = writeOoxmlPackage(updatedEntries);
   const verifiedEntries = await readOoxmlPackage(output);
+  if (metadataRequired) {
+    verifyXlsxMetadata(verifiedEntries, {
+      expectedRecords: metadataRecords,
+      exactExpectedRecords: true,
+      definedNames: "absent"
+    });
+  }
   verifyRenderedWorkbook(
     entries,
     verifiedEntries,

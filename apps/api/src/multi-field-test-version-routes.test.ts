@@ -13,7 +13,11 @@ import {
   minimalDocxEntries,
   type ZipFixtureEntry
 } from "@docomator/document-intake/testing";
-import { packageEntry, readOoxmlPackage } from "@docomator/template-compiler";
+import {
+  packageEntry,
+  readOoxmlPackage,
+  verifyXlsxMetadata
+} from "@docomator/template-compiler";
 import { DEFAULT_SPACE_ID } from "@docomator/storage";
 
 import { buildApp } from "./app.js";
@@ -468,6 +472,19 @@ test("API compiles and freezes an XLSX audience repeat row", async () => {
     assert.match(workbook, /_DOCOMATOR_REPEAT_/u);
     assert.equal((workbook.match(/_DOCOMATOR_/gu) ?? []).length, 3);
     assert.match(worksheet, /<f>C2\*2<\/f>/u);
+    const metadata = verifyXlsxMetadata(entries, {
+      definedNames: "present"
+    });
+    assert.deepEqual(
+      metadata.map((record) => record.kind),
+      ["field", "field", "repeat"]
+    );
+    assert.ok(
+      version.fields.every(
+        (field: { technicalBinding: { metadataVersion?: number } }) =>
+          field.technicalBinding.metadataVersion === 1
+      )
+    );
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });

@@ -30,6 +30,7 @@ import {
   compileScalarFields,
   readOoxmlPackage,
   renderScalarValues,
+  verifyXlsxMetadata,
   writeOoxmlPackage
 } from "@docomator/template-compiler";
 import yauzl from "yauzl";
@@ -559,8 +560,32 @@ async function seedXlsxRepeatRelease(registries) {
   assert.equal(compiled.repeat?.binding.kind, "xlsx.repeat-row");
   const compiledField = compiled.fields[0];
   assert.ok(compiledField);
+  const expectedMetadata = [
+    {
+      kind: "field",
+      identifier: compiledField.technicalBinding.identifier,
+      part: compiledField.technicalBinding.part,
+      target: compiledField.technicalBinding.target
+    },
+    {
+      kind: "repeat",
+      identifier: compiled.repeat.technicalBinding.identifier,
+      part: compiled.repeat.technicalBinding.part,
+      target: compiled.repeat.technicalBinding.target
+    }
+  ];
+  const compiledMetadata = verifyXlsxMetadata(
+    await readOoxmlPackage(compiled.output),
+    {
+      expectedRecords: expectedMetadata,
+      exactExpectedRecords: true,
+      definedNames: "present"
+    }
+  );
+  assert.deepEqual(compiledMetadata, expectedMetadata);
   const trial = await renderScalarValues({
     compiled: compiled.output,
+    repeatTechnicalBinding: compiled.repeat.technicalBinding,
     fields: [
       {
         fieldId: field.id,
@@ -613,13 +638,20 @@ async function seedXlsxRepeatRelease(registries) {
     },
     context("xlsx-repeat-tested")
   );
-  return activateCandidate(
+  const release = await activateCandidate(
     registries.releases,
     registries.queue,
     tested,
     "multi",
     "xlsx-repeat"
   );
+  assert.equal(release.manifest.version, 5);
+  assert.deepEqual(release.manifest.xlsxMetadata, {
+    version: 1,
+    sheetName: "_AI_META",
+    visibility: "veryHidden"
+  });
+  return release;
 }
 
 function childEnvironment(env) {
@@ -1263,6 +1295,27 @@ async function main() {
   assert.match(worksheetXml, /<dimension ref="B2:C11"\/>/u);
   assert.doesNotMatch(worksheetXml, /____/u);
   assert.doesNotMatch(workbookXml, /_DOCOMATOR_/u);
+  const resultMetadata = verifyXlsxMetadata(xlsxEntries, {
+    expectedRecords: [
+      {
+        kind: "field",
+        identifier:
+          xlsxRepeatRelease.manifest.fields[0].technicalBinding.identifier,
+        part: xlsxRepeatRelease.manifest.fields[0].technicalBinding.part,
+        target: xlsxRepeatRelease.manifest.fields[0].technicalBinding.target
+      },
+      {
+        kind: "repeat",
+        identifier:
+          xlsxRepeatRelease.manifest.repeats[0].technicalBinding.identifier,
+        part: xlsxRepeatRelease.manifest.repeats[0].technicalBinding.part,
+        target: xlsxRepeatRelease.manifest.repeats[0].technicalBinding.target
+      }
+    ],
+    exactExpectedRecords: true,
+    definedNames: "absent"
+  });
+  assert.equal(resultMetadata.length, 2);
   let previousXlsxPosition = -1;
   for (const [index] of members.entries()) {
     const name = `Сотрудник ${String(index + 1).padStart(2, "0")}`;

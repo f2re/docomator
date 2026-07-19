@@ -22,8 +22,17 @@ import {
   renderScalarValues,
   type CompileScalarFieldsResult
 } from "./multi-field.js";
-import { packageEntry, readOoxmlPackage } from "./ooxml-package.js";
+import {
+  packageEntry,
+  readOoxmlPackage,
+  writeOoxmlPackage
+} from "./ooxml-package.js";
 import { renderDocxRepeatRows } from "./scalar-render.js";
+import {
+  XLSX_METADATA_PART,
+  upsertXlsxMetadataRecord,
+  verifyXlsxMetadata
+} from "./xlsx-metadata.js";
 
 function requireDocxRepeat(result: CompileScalarFieldsResult): {
   binding: DocxRepeatRowBinding;
@@ -662,6 +671,25 @@ test("XLSX compiles and renders two typed cells without changing a neighbour", a
     fields: input.fields
   });
   const byId = new Map(compiled.fields.map((field) => [field.fieldId, field]));
+  const compiledEntries = await readOoxmlPackage(compiled.output);
+  const metadataRecords = verifyXlsxMetadata(compiledEntries, {
+    expectedRecords: compiled.fields.map((field) => ({
+      kind: "field" as const,
+      identifier: field.technicalBinding.identifier,
+      part: field.technicalBinding.part,
+      target: field.technicalBinding.target
+    })),
+    exactExpectedRecords: true,
+    definedNames: "present"
+  });
+  assert.equal(metadataRecords.length, 2);
+  assert.ok(
+    compiled.fields.every((field) => field.technicalBinding.metadataVersion === 1)
+  );
+  assert.ok(compiled.modifiedParts.includes(XLSX_METADATA_PART));
+  assert.ok(
+    compiled.fields.every((field) => field.modifiedParts.includes(XLSX_METADATA_PART))
+  );
   const rendered = await renderScalarValues({
     compiled: compiled.output,
     fields: input.fields.map((field) => ({
@@ -689,6 +717,133 @@ test("XLSX compiles and renders two typed cells without changing a neighbour", a
   assert.match(sheet, /Петров Пётр/u);
   assert.match(sheet, /<c r="C2" s="2"><v>12<\/v><\/c>/u);
   assert.match(sheet, /<c r="D2"><v>7<\/v><\/c>/u);
+  assert.deepEqual(
+    packageEntry(entries, XLSX_METADATA_PART).content,
+    packageEntry(compiledEntries, XLSX_METADATA_PART).content
+  );
+  verifyXlsxMetadata(entries, {
+    expectedRecords: metadataRecords,
+    exactExpectedRecords: true,
+    definedNames: "present"
+  });
+});
+
+test("multi-field XLSX render rejects mixed legacy and _AI_META bindings", async () => {
+  const input = await xlsxDefinitions();
+  const compiled = await compileScalarFields({
+    source: input.source,
+    fileName: "Сотрудники.xlsx",
+    expectedSourceSha256: input.structure.sourceSha256,
+    expectedStructureSha256: input.structure.structureSha256,
+    fields: input.fields
+  });
+  const byId = new Map(compiled.fields.map((field) => [field.fieldId, field]));
+  await assert.rejects(
+    renderScalarValues({
+      compiled: compiled.output,
+      fields: input.fields.map((field, index) => {
+        const technical = byId.get(field.id)?.technicalBinding;
+        assert.ok(technical);
+        return {
+          fieldId: field.id,
+          fieldKey: field.key,
+          technicalBinding:
+            index === 0
+              ? {
+                  kind: technical.kind,
+                  identifier: technical.identifier,
+                  part: technical.part,
+                  target: technical.target
+                }
+              : technical,
+          fieldBinding: field.binding,
+          valueType: index === 0 ? ("string" as const) : ("integer" as const),
+          value: index === 0 ? "Иванов Иван" : 12
+        };
+      })
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError &&
+      error.code === "mixed_xlsx_metadata_contract"
+  );
+  await assert.rejects(
+    renderScalarValues({
+      compiled: compiled.output,
+      fields: input.fields.map((field, index) => {
+        const technical = byId.get(field.id)?.technicalBinding;
+        assert.ok(technical);
+        return {
+          fieldId: field.id,
+          fieldKey: field.key,
+          technicalBinding: {
+            kind: technical.kind,
+            identifier: technical.identifier,
+            part: technical.part,
+            target: technical.target
+          },
+          fieldBinding: field.binding,
+          valueType: index === 0 ? ("string" as const) : ("integer" as const),
+          value: index === 0 ? "Иванов Иван" : 12
+        };
+      })
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError &&
+      error.code === "xlsx_metadata_version_downgrade"
+  );
+});
+
+test("multi-field XLSX render rejects an extra self-consistent metadata record", async () => {
+  const input = await xlsxDefinitions();
+  const compiled = await compileScalarFields({
+    source: input.source,
+    fileName: "Сотрудники.xlsx",
+    expectedSourceSha256: input.structure.sourceSha256,
+    expectedStructureSha256: input.structure.structureSha256,
+    fields: input.fields
+  });
+  const entries = await readOoxmlPackage(compiled.output);
+  const identifier = "_DOCOMATOR_FFFFFFFFFFFFFFFFFFFFFFFF";
+  const target = "'Сотрудники'!$D$2";
+  const withDefinedName = entries.map((entry) =>
+    entry.name === "xl/workbook.xml"
+      ? {
+          ...entry,
+          content: Buffer.from(
+            entry.content
+              .toString("utf8")
+              .replace(
+                "</definedNames>",
+                `<definedName name="${identifier}">${target}</definedName></definedNames>`
+              ),
+            "utf8"
+          )
+        }
+      : entry
+  );
+  const forged = upsertXlsxMetadataRecord(withDefinedName, {
+    kind: "field",
+    identifier,
+    part: "xl/workbook.xml",
+    target
+  });
+  const byId = new Map(compiled.fields.map((field) => [field.fieldId, field]));
+  await assert.rejects(
+    renderScalarValues({
+      compiled: writeOoxmlPackage(forged.entries),
+      fields: input.fields.map((field, index) => ({
+        fieldId: field.id,
+        fieldKey: field.key,
+        technicalBinding: byId.get(field.id)?.technicalBinding!,
+        fieldBinding: field.binding,
+        valueType: index === 0 ? ("string" as const) : ("integer" as const),
+        value: index === 0 ? "Иванов Иван" : 12
+      }))
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError &&
+      error.code === "invalid_xlsx_metadata"
+  );
 });
 
 test("multi-field compiler rejects duplicate coordinates and stale element identifiers", async () => {

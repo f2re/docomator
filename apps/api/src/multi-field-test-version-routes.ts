@@ -199,6 +199,10 @@ export function registerMultiFieldTestVersionRoutes(
       );
       const rendered = await renderScalarValues({
         compiled: compiled.output,
+        ...(compiled.repeat?.technicalBinding.kind ===
+        "xlsx.repeat-defined-name"
+          ? { repeatTechnicalBinding: compiled.repeat.technicalBinding }
+          : {}),
         fields: draft.fields.map((field) => {
           const compiledField = compiledByField.get(field.id);
           if (compiledField === undefined) {

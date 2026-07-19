@@ -9,6 +9,7 @@ import { ContentAddressedObjectStore } from "./object-store.js";
 import { DEFAULT_SPACE_ID, SpaceRegistry } from "./spaces.js";
 import { TemplateDraftRegistry } from "./template-drafts.js";
 import {
+  TemplatePreviewConflictError,
   TemplatePreviewNotFoundError
 } from "./template-preview-activation.js";
 import { TemplateReleaseRegistry } from "./template-releases.js";
@@ -352,6 +353,269 @@ test("single and multi-field tested versions share one release catalog", async (
     );
   } finally {
     setup.fixture.cleanup();
+  }
+});
+
+test("XLSX _AI_META bindings use manifest v5 while legacy bindings stay on v4", async () => {
+  const fixture = createMigratedTestStore();
+  const objectStore = new ContentAddressedObjectStore(
+    path.join(fixture.directory, "objects")
+  );
+  const quarantine = new DocumentQuarantineRegistry(fixture.store, objectStore);
+  const drafts = new TemplateDraftRegistry(fixture.store);
+  const versions = new TemplateTestVersionRegistry(fixture.store, objectStore);
+  const multiVersions = new MultiFieldTestVersionRegistry(
+    fixture.store,
+    objectStore
+  );
+  const releases = new TemplateReleaseRegistry(fixture.store, objectStore);
+  try {
+    const source = await quarantine.saveAcceptedDocument(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        fileName: "Реестр.xlsx",
+        mediaType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        format: "xlsx",
+        decision: "accepted",
+        buffer: Buffer.from("verified-xlsx-source"),
+        report: { decision: "accepted" }
+      },
+      context("corr-xlsx-source", 20)
+    );
+    const draft = drafts.createOrGetDraft(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        sourceRecordId: source.id,
+        title: "Реестр",
+        format: "xlsx",
+        sourceSha256: source.sha256,
+        structureSha256: STRUCTURE_SHA,
+        structure: {
+          elements: [
+            { id: "cell-b2", kind: "cell" },
+            { id: "cell-c2", kind: "cell" }
+          ]
+        },
+        structureTruncated: false
+      },
+      context("corr-xlsx-draft", 21)
+    );
+    const fieldBinding = {
+      version: 1 as const,
+      kind: "xlsx.cell" as const,
+      elementId: "cell-b2",
+      sheetName: "Реестр",
+      sheetPath: "xl/worksheets/sheet1.xml",
+      address: "B2"
+    };
+    const field = drafts.createField(
+      DEFAULT_SPACE_ID,
+      draft.id,
+      {
+        key: "person.full_name",
+        label: "ФИО",
+        valueType: "string",
+        required: true,
+        elementId: "cell-b2",
+        elementKind: "cell",
+        binding: fieldBinding,
+        formatter: { version: 1, kind: "identity" },
+        originalPreview: "ФИО",
+        structureSha256: STRUCTURE_SHA
+      },
+      context("corr-xlsx-field", 22)
+    );
+    const record = (suffix: string, metadataVersion?: 1) =>
+      versions.recordTestedVersion(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          draftId: draft.id,
+          fieldId: field.id,
+          format: "xlsx",
+          compiledBuffer: Buffer.from(`xlsx-compiled-${suffix}`),
+          trialBuffer: Buffer.from(`xlsx-trial-${suffix}`),
+          technicalBinding: {
+            kind: "xlsx.defined-name",
+            identifier: "_DOCOMATOR_FIELD_A",
+            part: "xl/workbook.xml",
+            target: "'Реестр'!$B$2",
+            ...(metadataVersion === undefined ? {} : { metadataVersion })
+          },
+          sampleValue: suffix,
+          renderedValue: suffix,
+          readBackValue: suffix,
+          verification: { matched: true }
+        },
+        context(`corr-xlsx-version-${suffix}`, suffix === "legacy" ? 23 : 27)
+      );
+    const activate = async (
+      versionId: string,
+      suffix: string,
+      offset: number
+    ) => {
+      const request = releases.requestPreview(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          versionId,
+          versionKind: "single"
+        },
+        context(`corr-xlsx-preview-${suffix}`, offset)
+      );
+      const ready = await releases.completePreview(
+        {
+          requestId: request.request.id,
+          previewBuffer: pdf(`xlsx-${suffix}`),
+          converter: { converter: "LibreOffice", durationMs: 10 }
+        },
+        context(`corr-xlsx-ready-${suffix}`, offset + 1)
+      );
+      return releases.activateVersion(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          previewRequestId: ready.id
+        },
+        context(`corr-xlsx-activate-${suffix}`, offset + 2)
+      );
+    };
+
+    const legacyVersion = await record("legacy");
+    const legacyRelease = await activate(legacyVersion.id, "legacy", 24);
+    assert.equal((legacyRelease.manifest as { version: number }).version, 4);
+    assert.equal(
+      Object.hasOwn(legacyRelease.manifest as object, "xlsxMetadata"),
+      false
+    );
+
+    const metadataVersion = await record("metadata", 1);
+    const metadataRelease = await activate(metadataVersion.id, "metadata", 28);
+    const manifest = metadataRelease.manifest as {
+      version: number;
+      xlsxMetadata: unknown;
+      fields: Array<{ technicalBinding: unknown }>;
+    };
+    assert.equal(manifest.version, 5);
+    assert.deepEqual(manifest.xlsxMetadata, {
+      version: 1,
+      sheetName: "_AI_META",
+      visibility: "veryHidden"
+    });
+    assert.deepEqual(manifest.fields[0]?.technicalBinding, {
+      kind: "xlsx.defined-name",
+      identifier: "_DOCOMATOR_FIELD_A",
+      part: "xl/workbook.xml",
+      target: "'Реестр'!$B$2",
+      metadataVersion: 1
+    });
+
+    const secondBinding = {
+      version: 1 as const,
+      kind: "xlsx.cell" as const,
+      elementId: "cell-c2",
+      sheetName: "Реестр",
+      sheetPath: "xl/worksheets/sheet1.xml",
+      address: "C2"
+    };
+    const secondField = drafts.createField(
+      DEFAULT_SPACE_ID,
+      draft.id,
+      {
+        key: "person.position",
+        label: "Должность",
+        valueType: "string",
+        required: true,
+        elementId: "cell-c2",
+        elementKind: "cell",
+        binding: secondBinding,
+        formatter: { version: 1, kind: "identity" },
+        originalPreview: "Должность",
+        structureSha256: STRUCTURE_SHA
+      },
+      context("corr-xlsx-second-field", 31)
+    );
+    const mixedVersion = await multiVersions.recordTestedVersion(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        draftId: draft.id,
+        format: "xlsx",
+        compiledBuffer: Buffer.from("xlsx-mixed-compiled"),
+        trialBuffer: Buffer.from("xlsx-mixed-trial"),
+        fields: [
+          {
+            fieldId: field.id,
+            fieldKey: field.key,
+            fieldLabel: field.label,
+            valueType: field.valueType,
+            required: field.required,
+            binding: field.binding,
+            formatter: field.formatter,
+            technicalBinding: {
+              kind: "xlsx.defined-name",
+              identifier: "_DOCOMATOR_FIELD_A",
+              part: "xl/workbook.xml",
+              target: "'Реестр'!$B$2",
+              metadataVersion: 1
+            },
+            sampleValue: "Иванов И.И.",
+            renderedValue: "Иванов И.И.",
+            readBackValue: "Иванов И.И.",
+            verification: { matched: true }
+          },
+          {
+            fieldId: secondField.id,
+            fieldKey: secondField.key,
+            fieldLabel: secondField.label,
+            valueType: secondField.valueType,
+            required: secondField.required,
+            binding: secondField.binding,
+            formatter: secondField.formatter,
+            technicalBinding: {
+              kind: "xlsx.defined-name",
+              identifier: "_DOCOMATOR_FIELD_B",
+              part: "xl/workbook.xml",
+              target: "'Реестр'!$C$2"
+            },
+            sampleValue: "Инженер",
+            renderedValue: "Инженер",
+            readBackValue: "Инженер",
+            verification: { matched: true }
+          }
+        ],
+        verification: { matched: true }
+      },
+      context("corr-xlsx-mixed-version", 32)
+    );
+    const mixedRequest = releases.requestPreview(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        versionId: mixedVersion.id,
+        versionKind: "multi"
+      },
+      context("corr-xlsx-mixed-preview", 33)
+    );
+    const mixedReady = await releases.completePreview(
+      {
+        requestId: mixedRequest.request.id,
+        previewBuffer: pdf("xlsx-mixed"),
+        converter: { converter: "LibreOffice", durationMs: 10 }
+      },
+      context("corr-xlsx-mixed-ready", 34)
+    );
+    assert.throws(
+      () =>
+        releases.activateVersion(
+          {
+            spaceId: DEFAULT_SPACE_ID,
+            previewRequestId: mixedReady.id
+          },
+          context("corr-xlsx-mixed-activate", 35)
+        ),
+      (error: unknown) =>
+        error instanceof TemplatePreviewConflictError &&
+        /смешивает прежние и новые/u.test(error.message)
+    );
+  } finally {
+    fixture.cleanup();
   }
 });
 

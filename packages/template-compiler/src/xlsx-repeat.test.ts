@@ -22,6 +22,10 @@ import {
   renderXlsxRepeatRows,
   type XlsxRepeatRowBinding
 } from "./xlsx-repeat.js";
+import {
+  XLSX_METADATA_PART,
+  verifyXlsxMetadata
+} from "./xlsx-metadata.js";
 
 interface XlsxRepeatFixtureOptions {
   duplicateCell?: boolean;
@@ -223,6 +227,26 @@ async function compiledRepeat(options: XlsxRepeatFixtureOptions = {}) {
 
 test("XLSX repeat clones a styled row, formulas and merges deterministically", async () => {
   const input = await compiledRepeat();
+  const compiledEntries = await readOoxmlPackage(input.repeat.output);
+  const metadataRecords = verifyXlsxMetadata(compiledEntries, {
+    expectedRecords: [
+      ...input.repeatFields.map((field) => ({
+        kind: "field" as const,
+        identifier: field.technicalBinding.identifier,
+        part: field.technicalBinding.part,
+        target: field.technicalBinding.target
+      })),
+      {
+        kind: "repeat" as const,
+        identifier: input.repeat.technicalBinding.identifier,
+        part: input.repeat.technicalBinding.part,
+        target: input.repeat.technicalBinding.target
+      }
+    ],
+    exactExpectedRecords: true,
+    definedNames: "present"
+  });
+  assert.equal(metadataRecords.length, 3);
   const renderInput = {
     compiled: input.repeat.output,
     binding: input.binding,
@@ -265,6 +289,66 @@ test("XLSX repeat clones a styled row, formulas and merges deterministically", a
   assert.match(workbook, /calcMode="auto"/u);
   assert.match(workbook, /fullCalcOnLoad="1"/u);
   assert.match(workbook, /forceFullCalc="1"/u);
+  assert.deepEqual(
+    packageEntry(entries, XLSX_METADATA_PART).content,
+    packageEntry(compiledEntries, XLSX_METADATA_PART).content
+  );
+  verifyXlsxMetadata(entries, {
+    expectedRecords: metadataRecords,
+    exactExpectedRecords: true,
+    definedNames: "absent"
+  });
+});
+
+test("XLSX repeat rejects mixed legacy and _AI_META field bindings", async () => {
+  const input = await compiledRepeat();
+  const fields = input.repeatFields.map((field, index) => ({
+    ...field,
+    fieldKey: input.fields[index]?.key ?? "",
+    required: true,
+    valueType: index === 0 ? ("string" as const) : ("integer" as const),
+    technicalBinding:
+      index === 0
+        ? {
+            kind: field.technicalBinding.kind,
+            identifier: field.technicalBinding.identifier,
+            part: field.technicalBinding.part,
+            target: field.technicalBinding.target
+          }
+        : field.technicalBinding
+  }));
+  await assert.rejects(
+    renderXlsxRepeatRows({
+      compiled: input.repeat.output,
+      binding: input.binding,
+      technicalBinding: input.repeat.technicalBinding,
+      fields,
+      members: [{ memberId: "member-1", values: ["Иванов И.И.", 10] }]
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError &&
+      error.code === "mixed_xlsx_metadata_contract"
+  );
+  await assert.rejects(
+    renderXlsxRepeatRows({
+      compiled: input.repeat.output,
+      binding: input.binding,
+      technicalBinding: input.repeat.technicalBinding,
+      fields: fields.map((field) => ({
+        ...field,
+        technicalBinding: {
+          kind: field.technicalBinding.kind,
+          identifier: field.technicalBinding.identifier,
+          part: field.technicalBinding.part,
+          target: field.technicalBinding.target
+        }
+      })),
+      members: [{ memberId: "member-1", values: ["Иванов И.И.", 10] }]
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError &&
+      error.code === "xlsx_metadata_version_downgrade"
+  );
 });
 
 test("XLSX repeat rejects an unsafe formula before compilation", async () => {

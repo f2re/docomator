@@ -170,7 +170,9 @@ export function registerTemplateTestVersionRoutes(
             structureSha256: compiled.structureSha256,
             compiledSha256: compiled.outputSha256,
             trialSha256: trial.outputSha256,
-            modifiedParts: [compiled.modifiedPart, trial.modifiedPart]
+            modifiedParts: [
+              ...new Set([...compiled.modifiedParts, trial.modifiedPart])
+            ].sort()
           })
         },
         mutationContextFromRequest(request)

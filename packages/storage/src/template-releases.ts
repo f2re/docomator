@@ -174,6 +174,40 @@ interface FileRow {
   storage_path: string;
 }
 
+function jsonObject(value: JsonValue): value is { [key: string]: JsonValue } {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function xlsxMetadataManifest(
+  format: ActiveTemplateReleaseFormat,
+  fields: readonly CandidateFieldRow[]
+): JsonValue | null {
+  if (format !== "xlsx") return null;
+  const bindings = fields.map((field) => parseJson(field.technical_binding_json));
+  const metadataBindings = bindings.filter(
+    (binding) => jsonObject(binding) && binding.metadataVersion === 1
+  );
+  if (metadataBindings.length === 0) return null;
+  if (
+    metadataBindings.length !== bindings.length ||
+    bindings.some(
+      (binding) =>
+        !jsonObject(binding) ||
+        binding.kind !== "xlsx.defined-name" ||
+        binding.metadataVersion !== 1
+    )
+  ) {
+    throw new TemplatePreviewConflictError(
+      "Кандидат XLSX смешивает прежние и новые привязки _AI_META"
+    );
+  }
+  return toJsonValue({
+    version: 1,
+    sheetName: "_AI_META",
+    visibility: "veryHidden"
+  });
+}
+
 function requiredText(value: string, name: string, maximum = 500): string {
   if (typeof value !== "string") {
     throw new TemplatePreviewValidationError(`${name} must be a string`);
@@ -881,11 +915,13 @@ export class TemplateReleaseRegistry {
         .get(source.draft_id) as { value: number };
       const versionNumber = Number(current.value) + 1;
       const versionKind = candidateKind(source.version_kind);
+      const releaseFormat = formatValue(source.format);
+      const xlsxMetadata = xlsxMetadataManifest(releaseFormat, fields);
       const manifest = toJsonValue({
-        version: 4,
+        version: xlsxMetadata === null ? 4 : 5,
         draftId: source.draft_id,
         title: source.title,
-        format: source.format,
+        format: releaseFormat,
         candidateId: source.candidate_id,
         versionKind,
         sourceVersionNumber: Number(source.source_version_number),
@@ -899,6 +935,7 @@ export class TemplateReleaseRegistry {
           source.repeat_contract_json === null
             ? []
             : [parseJson(source.repeat_contract_json)],
+        ...(xlsxMetadata === null ? {} : { xlsxMetadata }),
         fields: fields.map((field) => ({
           id: field.field_id,
           key: field.field_key,

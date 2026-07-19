@@ -12,6 +12,15 @@ import {
   writeOoxmlPackage,
   type OoxmlPackageEntry
 } from "./ooxml-package.js";
+import { TemplateCompilerError } from "./errors.js";
+import {
+  assertXlsxMetadataAbsent,
+  upsertXlsxMetadataRecord,
+  verifyXlsxMetadata,
+  xlsxMetadataRecord
+} from "./xlsx-metadata.js";
+
+export { TemplateCompilerError } from "./errors.js";
 
 export interface DocxParagraphBinding {
   version: 1;
@@ -72,6 +81,7 @@ export interface CompileScalarFieldInput {
   expectedSourceSha256: string;
   expectedStructureSha256: string;
   field: CompileScalarFieldDefinition;
+  existingTechnicalBindings?: readonly CompiledTechnicalBinding[];
 }
 
 export interface CompiledTechnicalBinding {
@@ -79,6 +89,7 @@ export interface CompiledTechnicalBinding {
   identifier: string;
   part: string;
   target: string;
+  metadataVersion?: 1;
 }
 
 export interface CompiledRepeatTechnicalBinding {
@@ -124,22 +135,12 @@ export interface CompileScalarFieldResult {
   fieldId: string;
   fieldKey: string;
   modifiedPart: string;
+  modifiedParts: string[];
   technicalBinding: CompiledTechnicalBinding;
   verification: {
     found: true;
     message: string;
   };
-}
-
-export class TemplateCompilerError extends Error {
-  override readonly name = "TemplateCompilerError";
-
-  constructor(
-    readonly code: string,
-    readonly userMessage: string
-  ) {
-    super(userMessage);
-  }
 }
 
 interface XmlTag {
@@ -853,6 +854,7 @@ function compileDocxParagraph(
   field: CompileScalarFieldDefinition
 ): {
   entries: OoxmlPackageEntry[];
+  modifiedParts: string[];
   technicalBinding: CompiledTechnicalBinding;
 } {
   const target = packageEntry(entries, binding.part);
@@ -884,6 +886,7 @@ function compileDocxParagraph(
       binding.part,
       encodeXml(decoded, updated)
     ),
+    modifiedParts: [binding.part],
     technicalBinding: {
       kind: "docx.sdt",
       identifier: tagValue,
@@ -899,6 +902,7 @@ function compileDocxTextRange(
   field: CompileScalarFieldDefinition
 ): {
   entries: OoxmlPackageEntry[];
+  modifiedParts: string[];
   technicalBinding: CompiledTechnicalBinding;
 } {
   const target = packageEntry(entries, binding.part);
@@ -1007,6 +1011,7 @@ function compileDocxTextRange(
       binding.part,
       encodeXml(decoded, updated)
     ),
+    modifiedParts: [binding.part],
     technicalBinding: {
       kind: "docx.sdt",
       identifier: tagValue,
@@ -1052,11 +1057,36 @@ function hasDefinedName(xml: string, name: string): boolean {
 function compileXlsx(
   entries: readonly OoxmlPackageEntry[],
   binding: XlsxCellBinding,
-  field: CompileScalarFieldDefinition
+  field: CompileScalarFieldDefinition,
+  existingTechnicalBindings: readonly CompiledTechnicalBinding[]
 ): {
   entries: OoxmlPackageEntry[];
+  modifiedParts: string[];
   technicalBinding: CompiledTechnicalBinding;
 } {
+  if (existingTechnicalBindings.length === 0) {
+    assertXlsxMetadataAbsent(entries);
+  } else {
+    if (
+      existingTechnicalBindings.some(
+        (candidate) =>
+          candidate.kind !== "xlsx.defined-name" ||
+          candidate.metadataVersion !== 1
+      )
+    ) {
+      throw new TemplateCompilerError(
+        "invalid_existing_xlsx_binding",
+        "Набор ранее скомпилированных привязок XLSX имеет неподдерживаемый формат."
+      );
+    }
+    verifyXlsxMetadata(entries, {
+      expectedRecords: existingTechnicalBindings.map((candidate) =>
+        xlsxMetadataRecord("field", candidate)
+      ),
+      exactExpectedRecords: true,
+      definedNames: "present"
+    });
+  }
   const workbookPart = "xl/workbook.xml";
   const workbookEntry = packageEntry(entries, workbookPart);
   const decoded = decodeXml(workbookEntry.content);
@@ -1107,18 +1137,26 @@ function compileXlsx(
       `<${prefix}definedNames>${node}</${prefix}definedNames>` +
       decoded.text.slice(anchor.end);
   }
+  const technicalBinding: CompiledTechnicalBinding = {
+    kind: "xlsx.defined-name",
+    identifier: name,
+    part: workbookPart,
+    target: reference,
+    metadataVersion: 1
+  };
+  const withDefinedName = replacePackageEntry(
+    entries,
+    workbookPart,
+    encodeXml(decoded, updated)
+  );
+  const metadata = upsertXlsxMetadataRecord(
+    withDefinedName,
+    xlsxMetadataRecord("field", technicalBinding)
+  );
   return {
-    entries: replacePackageEntry(
-      entries,
-      workbookPart,
-      encodeXml(decoded, updated)
-    ),
-    technicalBinding: {
-      kind: "xlsx.defined-name",
-      identifier: name,
-      part: workbookPart,
-      target: reference
-    }
+    entries: metadata.entries,
+    modifiedParts: [...new Set([workbookPart, ...metadata.modifiedParts])].sort(),
+    technicalBinding
   };
 }
 
@@ -1485,6 +1523,12 @@ async function verifyTechnicalBinding(
       "После сборки не удалось повторно найти именованную привязку XLSX."
     );
   }
+  if (binding.metadataVersion === 1) {
+    verifyXlsxMetadata(entries, {
+      expectedRecords: [xlsxMetadataRecord("field", binding)],
+      definedNames: "present"
+    });
+  }
 }
 
 export async function compileScalarField(
@@ -1572,7 +1616,12 @@ export async function compileScalarField(
       ? compileDocxParagraph(entries, binding, field)
       : binding.kind === "docx.text-range"
         ? compileDocxTextRange(entries, binding, field)
-        : compileXlsx(entries, binding, field);
+        : compileXlsx(
+            entries,
+            binding,
+            field,
+            input.existingTechnicalBindings ?? []
+          );
   const output = writeOoxmlPackage(compiled.entries);
   await verifyTechnicalBinding(output, compiled.technicalBinding, binding);
 
@@ -1585,6 +1634,7 @@ export async function compileScalarField(
     fieldId: field.id,
     fieldKey: field.key,
     modifiedPart: compiled.technicalBinding.part,
+    modifiedParts: compiled.modifiedParts,
     technicalBinding: compiled.technicalBinding,
     verification: {
       found: true,

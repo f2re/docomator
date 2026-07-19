@@ -10,9 +10,15 @@ import { fileURLToPath } from "node:url";
 import { loadApiConfig } from "@docomator/config";
 import {
   buildZipFixture,
-  minimalDocxEntries
+  minimalDocxEntries,
+  minimalXlsxEntries
 } from "@docomator/document-intake/testing";
-import { readOoxmlPackage, packageEntry } from "@docomator/template-compiler";
+import {
+  packageEntry,
+  readOoxmlPackage,
+  verifyXlsxMetadata,
+  XLSX_METADATA_PART
+} from "@docomator/template-compiler";
 import { DEFAULT_SPACE_ID } from "@docomator/storage";
 
 import { buildApp } from "./app.js";
@@ -58,6 +64,40 @@ function sourceDocx(): Buffer {
         : entry
     )
   );
+}
+
+function sourceXlsx(): Buffer {
+  return buildZipFixture([
+    ...minimalXlsxEntries().map((entry) => {
+      if (entry.name === "[Content_Types].xml") {
+        return {
+          ...entry,
+          content: String(entry.content ?? "").replace(
+            "</Types>",
+            '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+          )
+        };
+      }
+      if (entry.name === "xl/workbook.xml") {
+        return {
+          ...entry,
+          content:
+            '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Реестр" sheetId="1" r:id="rId1"/></sheets></workbook>'
+        };
+      }
+      return entry;
+    }),
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      content:
+        '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'
+    },
+    {
+      name: "xl/worksheets/sheet1.xml",
+      content:
+        '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="2"><c r="B2" t="inlineStr"><is><t>____</t></is></c><c r="C2"><v>7</v></c></row></sheetData></worksheet>'
+    }
+  ]);
 }
 
 async function createDraftAndField(app: ReturnType<typeof buildApp>) {
@@ -219,6 +259,108 @@ test("trial endpoint compiles, renders, reads back and stores immutable files", 
       .get() as { value: number };
     database.close();
     assert.equal(Number(eventCount.value), 1);
+  } finally {
+    await app.close();
+    await fsPromises.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("XLSX trial endpoint stores and returns a verified _AI_META contract", async () => {
+  const { app, dataDir } = await testApp();
+  try {
+    const source = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/quarantine?fileName=${encodeURIComponent("Реестр.xlsx")}`,
+      headers: {
+        "content-type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      },
+      payload: sourceXlsx()
+    });
+    assert.equal(source.statusCode, 201, source.body);
+    const draftResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/${source.json().data.id}/draft`,
+      headers: { "content-type": "application/json" },
+      payload: { title: "Реестр" }
+    });
+    assert.equal(draftResponse.statusCode, 201, draftResponse.body);
+    const draft = draftResponse.json().data as {
+      id: string;
+      structure: {
+        elements: Array<{ id: string; kind: string; address?: string }>;
+      };
+    };
+    const cell = draft.structure.elements.find(
+      (element) => element.kind === "cell" && element.address === "B2"
+    );
+    assert.ok(cell);
+    const fieldResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.full_name",
+        label: "ФИО",
+        valueType: "string",
+        required: true,
+        elementId: cell.id
+      }
+    });
+    assert.equal(fieldResponse.statusCode, 201, fieldResponse.body);
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/trial`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        fieldId: fieldResponse.json().data.field.id,
+        value: "Иванов Иван"
+      }
+    });
+    assert.equal(response.statusCode, 201, response.body);
+    const body = response.json().data;
+    assert.equal(body.verification.technicalBinding.metadataVersion, 1);
+    assert.ok(body.version.verification.modifiedParts.includes(XLSX_METADATA_PART));
+
+    const compiled = await app.inject({
+      method: "GET",
+      url: body.downloads.compiled
+    });
+    const trial = await app.inject({
+      method: "GET",
+      url: body.downloads.trial
+    });
+    assert.equal(compiled.statusCode, 200, compiled.body);
+    assert.equal(trial.statusCode, 200, trial.body);
+    const compiledEntries = await readOoxmlPackage(compiled.rawPayload);
+    const records = verifyXlsxMetadata(compiledEntries, {
+      expectedRecords: [
+        {
+          kind: "field",
+          identifier: body.verification.technicalBinding.identifier,
+          part: body.verification.technicalBinding.part,
+          target: body.verification.technicalBinding.target
+        }
+      ],
+      exactExpectedRecords: true,
+      definedNames: "present"
+    });
+    const trialEntries = await readOoxmlPackage(trial.rawPayload);
+    assert.deepEqual(
+      packageEntry(trialEntries, XLSX_METADATA_PART).content,
+      packageEntry(compiledEntries, XLSX_METADATA_PART).content
+    );
+    verifyXlsxMetadata(trialEntries, {
+      expectedRecords: records,
+      exactExpectedRecords: true,
+      definedNames: "present"
+    });
+    assert.match(
+      packageEntry(trialEntries, "xl/worksheets/sheet1.xml").content.toString(
+        "utf8"
+      ),
+      /Иванов Иван/u
+    );
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });

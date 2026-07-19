@@ -18,6 +18,10 @@ import {
   readOoxmlPackage,
   writeOoxmlPackage
 } from "./ooxml-package.js";
+import {
+  XLSX_METADATA_PART,
+  verifyXlsxMetadata
+} from "./xlsx-metadata.js";
 
 function docxFixture(): Buffer {
   return buildZipFixture(
@@ -54,7 +58,7 @@ function xlsxFixture(sheetName = "Отдел 'А'"): Buffer {
     {
       name: "[Content_Types].xml",
       content:
-        '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+        '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
     },
     {
       name: "_rels/.rels",
@@ -63,17 +67,22 @@ function xlsxFixture(sheetName = "Отдел 'А'"): Buffer {
     },
     {
       name: "xl/workbook.xml",
-      content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheetName.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="1"/></workbook>`
+      content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheetName.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}" sheetId="1" r:id="rId1"/><sheet name="Справочник" sheetId="2" r:id="rId2"/></sheets><calcPr calcId="1"/></workbook>`
     },
     {
       name: "xl/_rels/workbook.xml.rels",
       content:
-        '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'
+        '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>'
     },
     {
       name: "xl/worksheets/sheet1.xml",
       content:
         '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="7"><c r="B7" t="inlineStr"><is><t>Иванов Иван</t></is></c></row></sheetData></worksheet>'
+    },
+    {
+      name: "xl/worksheets/sheet2.xml",
+      content:
+        '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Неизменяемый справочник</t></is></c></row></sheetData></worksheet>'
     }
   ];
   return buildZipFixture(entries);
@@ -333,19 +342,219 @@ test("XLSX compiler creates a defined name and preserves worksheet bytes", async
 
   assert.equal(result.technicalBinding.kind, "xlsx.defined-name");
   assert.equal(result.technicalBinding.target, "'Отдел ''А'''!$B$7");
+  assert.equal(result.technicalBinding.metadataVersion, 1);
   assert.match(result.technicalBinding.identifier, /^_DOCOMATOR_[A-F0-9]{24}$/u);
+  assert.deepEqual(result.modifiedParts, [
+    "[Content_Types].xml",
+    "xl/_rels/workbook.xml.rels",
+    "xl/workbook.xml",
+    XLSX_METADATA_PART
+  ]);
 
   const sourceEntries = await readOoxmlPackage(input.source);
   const outputEntries = await readOoxmlPackage(result.output);
-  assert.deepEqual(
-    packageEntry(outputEntries, "xl/worksheets/sheet1.xml").content,
-    packageEntry(sourceEntries, "xl/worksheets/sheet1.xml").content
-  );
+  for (const part of [
+    "xl/worksheets/sheet1.xml",
+    "xl/worksheets/sheet2.xml"
+  ]) {
+    assert.deepEqual(
+      packageEntry(outputEntries, part).content,
+      packageEntry(sourceEntries, part).content
+    );
+  }
   const workbookXml = packageEntry(outputEntries, "xl/workbook.xml").content.toString("utf8");
   assert.match(workbookXml, /<definedNames><definedName name="_DOCOMATOR_[A-F0-9]{24}">/u);
   assert.match(workbookXml, /'Отдел ''А'''!\$B\$7<\/definedName>/u);
   assert.ok(workbookXml.indexOf("</sheets>") < workbookXml.indexOf("<definedNames>"));
   assert.ok(workbookXml.indexOf("</definedNames>") < workbookXml.indexOf("<calcPr"));
+  assert.match(
+    workbookXml,
+    /<sheet name="_AI_META" sheetId="3" state="veryHidden" r:id="rIdDocomatorMeta"\/>/u
+  );
+  assert.ok(outputEntries.some((entry) => entry.name === XLSX_METADATA_PART));
+  assert.deepEqual(
+    verifyXlsxMetadata(outputEntries, {
+      expectedRecords: [
+        {
+          kind: "field",
+          identifier: result.technicalBinding.identifier,
+          part: "xl/workbook.xml",
+          target: result.technicalBinding.target
+        }
+      ],
+      exactExpectedRecords: true,
+      definedNames: "present"
+    }),
+    [
+      {
+        kind: "field",
+        identifier: result.technicalBinding.identifier,
+        part: "xl/workbook.xml",
+        target: result.technicalBinding.target
+      }
+    ]
+  );
+});
+
+test("XLSX compiler does not adopt pre-existing _AI_META without trusted bindings", async () => {
+  const input = await xlsxInput();
+  const first = await compileScalarField({
+    source: input.source,
+    fileName: "Сотрудники.xlsx",
+    expectedSourceSha256: input.structure.sourceSha256,
+    expectedStructureSha256: input.structure.structureSha256,
+    field: input.field
+  });
+  const structure = await analyzeOoxmlBuffer({
+    buffer: first.output,
+    fileName: "Сотрудники.xlsx",
+    maxElements: 2_000
+  });
+  const secondCell = structure.elements.find(
+    (candidate): candidate is XlsxCellElement =>
+      candidate.kind === "cell" &&
+      candidate.sheetName === "Справочник" &&
+      candidate.address === "A1"
+  );
+  assert.ok(secondCell);
+  await assert.rejects(
+    compileScalarField({
+      source: first.output,
+      fileName: "Сотрудники.xlsx",
+      expectedSourceSha256: structure.sourceSha256,
+      expectedStructureSha256: structure.structureSha256,
+      field: {
+        id: "field-reference",
+        key: "reference.value",
+        label: "Значение справочника",
+        elementId: secondCell.id,
+        binding: {
+          version: 1,
+          kind: "xlsx.cell",
+          elementId: secondCell.id,
+          sheetName: secondCell.sheetName,
+          sheetPath: secondCell.sheetPath,
+          address: secondCell.address
+        }
+      }
+    }),
+    (error: unknown) =>
+      error instanceof TemplateCompilerError &&
+      error.code === "xlsx_metadata_conflict"
+  );
+});
+
+test("XLSX compiler rejects a user sheet that conflicts with _AI_META", async () => {
+  const base = xlsxFixture("Отдел");
+  const baseEntries = await readOoxmlPackage(base);
+  const source = writeOoxmlPackage([
+    ...baseEntries.map((entry) => {
+      if (entry.name === "xl/workbook.xml") {
+        return {
+          ...entry,
+          content: Buffer.from(
+            entry.content
+              .toString("utf8")
+              .replace(
+                "</sheets>",
+                '<sheet name="_AI_META" sheetId="3" r:id="rId3"/></sheets>'
+              ),
+            "utf8"
+          )
+        };
+      }
+      if (entry.name === "xl/_rels/workbook.xml.rels") {
+        return {
+          ...entry,
+          content: Buffer.from(
+            entry.content
+              .toString("utf8")
+              .replace(
+                "</Relationships>",
+                '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/></Relationships>'
+              ),
+            "utf8"
+          )
+        };
+      }
+      if (entry.name === "[Content_Types].xml") {
+        return {
+          ...entry,
+          content: Buffer.from(
+            entry.content
+              .toString("utf8")
+              .replace(
+                "</Types>",
+                '<Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+              ),
+            "utf8"
+          )
+        };
+      }
+      return entry;
+    }),
+    {
+      name: "xl/worksheets/sheet3.xml",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>',
+        "utf8"
+      )
+    }
+  ]);
+  const encodedSourceEntries = await readOoxmlPackage(source);
+  const encodedSource = writeOoxmlPackage(
+    encodedSourceEntries.map((entry) =>
+      entry.name === "xl/workbook.xml"
+        ? {
+            ...entry,
+            content: Buffer.from(
+              entry.content
+                .toString("utf8")
+                .replace('name="_AI_META"', 'name="_AI&#95;META"'),
+              "utf8"
+            )
+          }
+        : entry
+    )
+  );
+  for (const candidateSource of [source, encodedSource]) {
+    const structure = await analyzeOoxmlBuffer({
+      buffer: candidateSource,
+      fileName: "Сотрудники.xlsx",
+      maxElements: 2_000
+    });
+    const element = structure.elements.find(
+      (candidate): candidate is XlsxCellElement =>
+        candidate.kind === "cell" && candidate.address === "B7"
+    );
+    assert.ok(element);
+    await assert.rejects(
+      compileScalarField({
+        source: candidateSource,
+        fileName: "Сотрудники.xlsx",
+        expectedSourceSha256: structure.sourceSha256,
+        expectedStructureSha256: structure.structureSha256,
+        field: {
+          id: "field-recipient-name",
+          key: "recipient.full_name",
+          label: "ФИО получателя",
+          elementId: element.id,
+          binding: {
+            version: 1,
+            kind: "xlsx.cell",
+            elementId: element.id,
+            sheetName: element.sheetName,
+            sheetPath: element.sheetPath,
+            address: element.address
+          }
+        }
+      }),
+      (error: unknown) =>
+        error instanceof TemplateCompilerError &&
+        error.code === "xlsx_metadata_conflict"
+    );
+  }
 });
 
 test("compiler rejects stale structure and invented coordinates", async () => {
