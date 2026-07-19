@@ -7,12 +7,16 @@ import {
   createUxAcceptanceTemplate,
   validateUxAcceptanceFiles
 } from "./ux-acceptance-lib.mjs";
+import {
+  collectUxAutomationEvidence,
+  UxAutomationEvidenceError
+} from "./ux-acceptance-automation.mjs";
 
 class UxAcceptanceCliError extends Error {}
 
 function usage() {
   process.stdout.write(
-    "Использование:\n  ux-acceptance.mjs init ФАЙЛ\n  ux-acceptance.mjs validate ФАЙЛ [--json]\n"
+    "Использование:\n  ux-acceptance.mjs init ФАЙЛ\n  ux-acceptance.mjs validate ФАЙЛ [--json]\n  ux-acceptance.mjs collect-automation ВХОДНОЙ_АКТ ВЫХОДНОЙ_АКТ PLAYWRIGHT_JSON AXE_JSON\n"
   );
 }
 
@@ -44,7 +48,11 @@ async function readBoundedJson(filePath) {
 }
 
 const [command, fileValue, ...rest] = process.argv.slice(2);
-if (!command || !fileValue || !["init", "validate"].includes(command)) {
+if (
+  !command ||
+  !fileValue ||
+  !["init", "validate", "collect-automation"].includes(command)
+) {
   usage();
   process.exitCode = 2;
 } else {
@@ -73,7 +81,7 @@ if (!command || !fileValue || !["init", "validate"].includes(command)) {
         );
       }
       process.stdout.write(`Создан незавершённый акт UX-приёмки: ${filePath}\n`);
-    } else {
+    } else if (command === "validate") {
       if (
         rest.some((argument) => argument !== "--json") ||
         rest.filter((argument) => argument === "--json").length > 1
@@ -97,11 +105,36 @@ if (!command || !fileValue || !["init", "validate"].includes(command)) {
       }
       process.exitCode =
         result.state === "passed" ? 0 : result.state === "incomplete" ? 1 : 2;
+    } else {
+      if (rest.length !== 3) {
+        throw new UxAcceptanceCliError(
+          "Команда collect-automation требует новое имя выходного акта и пути к Playwright JSON и axe JSON."
+        );
+      }
+      const [outputActValue, playwrightReportPath, axeReportPath] = rest;
+      const result = await collectUxAutomationEvidence({
+        actPath: filePath,
+        outputActPath: path.resolve(outputActValue),
+        playwrightReportPath: path.resolve(playwrightReportPath),
+        axeReportPath: path.resolve(axeReportPath)
+      });
+      const reviewCount =
+        result.automationEvidence.find(
+          (item) => item.id === "axe-json-report"
+        )?.reviews.length ?? 0;
+      process.stdout.write(
+        `Создан производный акт с автоматическими свидетельствами: ${result.actPath}. Входной акт не изменён; ручная UX-приёмка остаётся незавершённой.${
+          reviewCount === 0
+            ? ""
+            : ` Требуется вручную разобрать неопределённые результаты axe: ${reviewCount}.`
+        }\n`
+      );
     }
   } catch (error) {
     process.stderr.write(
       `Не удалось обработать акт UX-приёмки: ${
-        error instanceof UxAcceptanceCliError
+        error instanceof UxAcceptanceCliError ||
+        error instanceof UxAutomationEvidenceError
           ? error.message
           : "внутренняя ошибка валидатора."
       }\n`

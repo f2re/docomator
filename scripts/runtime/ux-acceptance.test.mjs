@@ -21,6 +21,11 @@ import {
   validateUxAcceptance,
   validateUxAcceptanceFiles
 } from "./ux-acceptance-lib.mjs";
+import {
+  UX_E2E_EVIDENCE_CONTRACT_VERSION,
+  UX_E2E_PROJECTS,
+  UX_E2E_TEST_TITLES
+} from "./ux-acceptance-report-contracts.mjs";
 
 const NOW = new Date(Date.now() - 60_000).toISOString();
 const CLI_PATH = fileURLToPath(new URL("./ux-acceptance.mjs", import.meta.url));
@@ -109,6 +114,104 @@ function pngFixture(width) {
   return buffer;
 }
 
+function playwrightEvidenceFixture() {
+  const axeTitles = new Set(UX_E2E_TEST_TITLES.slice(0, 6));
+  const executions = UX_E2E_PROJECTS.flatMap((projectName) =>
+    UX_E2E_TEST_TITLES.map((title) => ({
+      title,
+      projectName,
+      status:
+        (projectName === "chromium-768" && axeTitles.has(title)) ||
+        (projectName === "chromium-1440" &&
+          title === UX_E2E_TEST_TITLES[12])
+          ? "skipped"
+          : "passed"
+    }))
+  );
+  return {
+    config: {
+      metadata: {
+        docomatorEvidenceContractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION
+      },
+      projects: UX_E2E_PROJECTS.map((name) => ({ name }))
+    },
+    suites: [
+      {
+        title: "evidence.spec.mjs",
+        specs: executions.map(({ title, projectName, status }) => ({
+          title,
+          tests: [
+            { projectName, results: [{ status, errors: [] }] }
+          ]
+        }))
+      }
+    ],
+    errors: [],
+    stats: {
+      startTime: NOW,
+      duration: 0,
+      expected: executions.filter(({ status }) => status === "passed").length,
+      skipped: executions.filter(({ status }) => status === "skipped").length,
+      unexpected: 0,
+      flaky: 0
+    }
+  };
+}
+
+function axeEvidenceFixture() {
+  const labels = [
+    "Главная",
+    "Сотрудники",
+    "Шаблоны",
+    "Создать документы",
+    "Результаты",
+    "Добавление сотрудника и поля"
+  ];
+  const tags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+  const results = [
+    ["chromium-320", "light", 320],
+    ["chromium-1440", "dark", 1440]
+  ].flatMap(([project, theme, width]) =>
+    labels.map((label) => ({
+      version: 1,
+      kind: "docomator.axe-result",
+      contractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION,
+      project,
+      title:
+        label === "Добавление сотрудника и поля"
+          ? "диалог сотрудника не содержит машинно-выявляемых нарушений WCAG"
+          : `экран «${label}» не содержит машинно-выявляемых нарушений WCAG`,
+      label,
+      theme,
+      viewport: { width, height: 900 },
+      wcagTags: tags,
+      axe: {
+        violations: [],
+        incomplete: [],
+        passes: [],
+        inapplicable: [],
+        toolOptions: { runOnly: { type: "tag", values: tags } }
+      },
+      testStatus: "passed"
+    }))
+  );
+  return {
+    version: 1,
+    kind: "docomator.axe-report",
+    contractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION,
+    generatedAt: NOW,
+    runStatus: "passed",
+    summary: { checks: results.length, violations: 0, incomplete: 0 },
+    results
+  };
+}
+
+function automationEvidenceFixture(id) {
+  return id === "playwright-json-report"
+    ? playwrightEvidenceFixture()
+    : axeEvidenceFixture();
+}
+
 test("UX acceptance template is intentionally incomplete", () => {
   const result = validateUxAcceptance(createUxAcceptanceTemplate());
   assert.equal(result.state, "incomplete");
@@ -155,15 +258,33 @@ test("UX acceptance detects changed evidence files", async () => {
     const evidenceDirectory = path.join(directory, "evidence");
     await mkdir(evidenceDirectory, { mode: 0o700 });
     const records = [...act.visualBaselines, ...act.automationEvidence];
-    for (const [index, record] of records.entries()) {
+    for (const record of records) {
       const content = Object.prototype.hasOwnProperty.call(record, "viewport")
         ? pngFixture(record.viewport)
-        : Buffer.from(JSON.stringify({ passed: true, index }));
+        : Buffer.from(JSON.stringify(automationEvidenceFixture(record.id)));
       await writeFile(path.join(directory, record.file), content);
       record.sha256 = createHash("sha256").update(content).digest("hex");
     }
     const actPath = path.join(directory, "ux-acceptance.json");
     assert.equal((await validateUxAcceptanceFiles(act, actPath)).state, "passed");
+
+    const semanticBypass = structuredClone(act);
+    const automationRecord = semanticBypass.automationEvidence[0];
+    const forged = Buffer.from("{}");
+    await writeFile(path.join(directory, automationRecord.file), forged);
+    automationRecord.sha256 = createHash("sha256").update(forged).digest("hex");
+    assert.equal(
+      (await validateUxAcceptanceFiles(semanticBypass, actPath)).state,
+      "invalid"
+    );
+    const restoredAutomation = Buffer.from(
+      JSON.stringify(automationEvidenceFixture(automationRecord.id))
+    );
+    await writeFile(
+      path.join(directory, automationRecord.file),
+      restoredAutomation
+    );
+
     await writeFile(path.join(directory, records[0].file), "changed evidence");
     assert.equal((await validateUxAcceptanceFiles(act, actPath)).state, "invalid");
 

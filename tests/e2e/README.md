@@ -44,7 +44,9 @@ npm run test:e2e -- --project chromium-320
 npm run test:e2e:a11y
 ```
 
-Отчёт и диагностические материалы пишутся только в `.tmp/playwright-report` и `.tmp/playwright-results`. Трассировка и диагностический снимок сохраняются при падении сценария; визуальный сценарий дополнительно прикладывает успешные PNG для обеих тем и всех размеров экрана.
+HTML-отчёт и диагностические материалы пишутся только в `.tmp/playwright-report` и `.tmp/playwright-results`. Каждый полный прогон также создаёт `.tmp/playwright-report.json` с версией точного inventory из 81 выполнения; если выполнялась axe-матрица, отдельный агрегатор атомарно создаёт `.tmp/axe-report.json` с полными результатами 12 обязательных проверок. Трассировка и диагностический снимок сохраняются при падении сценария; визуальный сценарий дополнительно прикладывает успешные PNG для обеих тем и всех размеров экрана.
+
+Эти JSON-файлы не считаются ручным актом сами по себе. На каноническом Linux-стенде их нужно передать fail-closed сборщику из [протокола UX-приёмки](../../docs/UX_ACCEPTANCE_PROTOCOL.md), который проверит точный inventory, скопирует байты под content-addressed именами и создаст отдельный производный акт с заполненным `automationEvidence`, не изменяя входной файл. Все axe-результаты `incomplete` превращаются в явные обязательные строки ручного разбора, привязанные к SHA-256 отчёта, а не считаются автоматически успешными.
 
 ## Визуальные эталоны
 
@@ -70,6 +72,7 @@ DOCOMATOR_E2E_BASE_URL=http://127.0.0.1:18080 \
 
 ```bash
 node --check tests/e2e/playwright.config.mjs
+node --check tests/e2e/reporters/axe-json-reporter.mjs
 node --check tests/e2e/fixtures/test.mjs
 node --check tests/e2e/fixtures/docomator-api.mjs
 node --check tests/e2e/pages/docomator-page.mjs

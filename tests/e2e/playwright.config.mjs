@@ -1,9 +1,18 @@
 import { defineConfig } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const testDirectory = path.dirname(fileURLToPath(import.meta.url));
+const artifactDirectory = path.join(testDirectory, ".tmp");
+const evidenceContractVersion = 1;
 
 const baseURL =
   process.env.DOCOMATOR_E2E_BASE_URL || "http://127.0.0.1:18080";
 
 export default defineConfig({
+  metadata: {
+    docomatorEvidenceContractVersion: evidenceContractVersion
+  },
   testDir: ".",
   testMatch: "**/*.spec.mjs",
   fullyParallel: false,
@@ -16,11 +25,25 @@ export default defineConfig({
   },
   reporter: [
     ["list"],
-    ["html", { outputFolder: ".tmp/playwright-report", open: "never" }]
+    [
+      "html",
+      {
+        outputFolder: path.join(artifactDirectory, "playwright-report"),
+        open: "never"
+      }
+    ],
+    [
+      "json",
+      { outputFile: path.join(artifactDirectory, "playwright-report.json") }
+    ],
+    [
+      path.join(testDirectory, "reporters", "axe-json-reporter.mjs"),
+      { outputFile: path.join(artifactDirectory, "axe-report.json") }
+    ]
   ],
   snapshotPathTemplate:
     "{testDir}/snapshots/{testFilePath}/{projectName}/{arg}{ext}",
-  outputDir: ".tmp/playwright-results",
+  outputDir: path.join(artifactDirectory, "playwright-results"),
   use: {
     baseURL,
     actionTimeout: 7_000,

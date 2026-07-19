@@ -62,17 +62,33 @@ sudo bash /opt/docomator/current/app/scripts/runtime/pilot-check.sh \
 P5 проводится по [протоколу ручной UX-приёмки](UX_ACCEPTANCE_PROTOCOL.md). На каноническом Linux-стенде создаётся незаполненный акт:
 
 ```bash
+sudo install -d -m 0700 -o root -g root \
+  /var/lib/docomator/pilot-reports
 sudo /opt/docomator/current/runtime/node/bin/node \
   /opt/docomator/current/app/scripts/runtime/ux-acceptance.mjs \
   init /var/lib/docomator/pilot-reports/ux-acceptance.json
 ```
+
+После полного браузерного прогона его два JSON-отчёта добавляются к акту fail-closed командой. Пути к отчётам должны указывать на файлы, полученные на этом же каноническом стенде:
+
+```bash
+sudo /opt/docomator/current/runtime/node/bin/node \
+  /opt/docomator/current/app/scripts/runtime/ux-acceptance.mjs \
+  collect-automation \
+  /var/lib/docomator/pilot-reports/ux-acceptance.json \
+  /var/lib/docomator/pilot-reports/ux-acceptance-with-automation.json \
+  /ПУТЬ/playwright-report.json \
+  /ПУТЬ/axe-report.json
+```
+
+Команда не меняет исходный файл и создаёт новый акт, в котором заполнено только `automationEvidence`; успешное выполнение не закрывает ручную приёмку. Возвращённые axe-пункты `incomplete` появляются как обязательные ручные разборы, привязанные к SHA-256 отчёта. Оба акта находятся в одном каталоге, каталог не должен разрешать запись группе или остальным, существующий отличающийся выходной файл не перезаписывается, а акт с `decision.status: passed` не принимается для повторного сбора.
 
 После ручной матрицы доступности, утверждения шести PNG и трёх заданий каждого из двух новых пользователей акт проверяется тем же встроенным Node.js:
 
 ```bash
 sudo /opt/docomator/current/runtime/node/bin/node \
   /opt/docomator/current/app/scripts/runtime/ux-acceptance.mjs \
-  validate /var/lib/docomator/pilot-reports/ux-acceptance.json
+  validate /var/lib/docomator/pilot-reports/ux-acceptance-with-automation.json
 ```
 
 Автоматический pilot report и axe не заменяют эти свидетельства. До фактического акта пользовательская приёмка остаётся открытой.

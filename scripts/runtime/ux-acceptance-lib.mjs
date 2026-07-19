@@ -3,6 +3,11 @@ import { constants } from "node:fs";
 import { open, realpath } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  uxAutomationReviewKey,
+  validateUxAutomationReport
+} from "./ux-acceptance-report-contracts.mjs";
+
 const MANUAL_CHECKS = Object.freeze([
   "keyboard-route",
   "focus-order-return",
@@ -108,7 +113,8 @@ export function createUxAcceptanceTemplate() {
       id,
       file: "",
       sha256: null,
-      completedAt: null
+      completedAt: null,
+      reviews: []
     })),
     participants: ["participant-01", "participant-02"].map(
       (participantId) => ({
@@ -264,7 +270,7 @@ export function validateUxAcceptance(value) {
     for (const item of value.automationEvidence) {
       exactKeys(
         item,
-        ["id", "file", "sha256", "completedAt"],
+        ["id", "file", "sha256", "completedAt", "reviews"],
         `automationEvidence.${item.id}`,
         errors
       );
@@ -276,6 +282,77 @@ export function validateUxAcceptance(value) {
       }
       if (!timestamp(item.completedAt)) {
         missing.push(`automationEvidence.${item.id}.completedAt`);
+      }
+      if (item.reviews !== undefined && !Array.isArray(item.reviews)) {
+        errors.push(`automationEvidence.${item.id}.reviews: ожидается массив.`);
+        continue;
+      }
+      const reviews = item.reviews ?? [];
+      const reviewKeys = reviews.map((review) =>
+        object(review) ? uxAutomationReviewKey(review) : null
+      );
+      if (new Set(reviewKeys).size !== reviewKeys.length) {
+        errors.push(
+          `automationEvidence.${item.id}.reviews: повторяется обязательная проверка.`
+        );
+      }
+      for (const [index, review] of reviews.entries()) {
+        if (!object(review)) {
+          errors.push(
+            `automationEvidence.${item.id}.reviews.${index + 1}: ожидается объект.`
+          );
+          continue;
+        }
+        exactKeys(
+          review,
+          [
+            "project",
+            "label",
+            "ruleId",
+            "reportSha256",
+            "status",
+            "reviewedAt",
+            "reviewerId",
+            "evidence"
+          ],
+          `automationEvidence.${item.id}.reviews.${index + 1}`,
+          errors
+        );
+        const key = uxAutomationReviewKey(review);
+        if (
+          !text(review.project, 100) ||
+          !text(review.label, 200) ||
+          !text(review.ruleId, 128) ||
+          !SHA256_PATTERN.test(review.reportSha256 ?? "")
+        ) {
+          errors.push(
+            `automationEvidence.${item.id}.reviews.${index + 1}: недопустимая координата.`
+          );
+        }
+        if (!STATUS_VALUES.has(review.status)) {
+          errors.push(
+            `automationEvidence.${item.id}.reviews.${index + 1}: недопустимый статус.`
+          );
+          continue;
+        }
+        if (review.status === "failed") failed = true;
+        if (review.status !== "passed") {
+          missing.push(`automationEvidence.${item.id}.reviews.${key}`);
+          continue;
+        }
+        if (!timestamp(review.reviewedAt)) {
+          missing.push(
+            `automationEvidence.${item.id}.reviews.${key}.reviewedAt`
+          );
+        }
+        if (!ID_PATTERN.test(review.reviewerId ?? "")) {
+          missing.push(
+            `automationEvidence.${item.id}.reviews.${key}.reviewerId`
+          );
+        }
+        if (!text(review.evidence)) {
+          missing.push(`automationEvidence.${item.id}.reviews.${key}.evidence`);
+        }
       }
     }
   }
@@ -507,10 +584,45 @@ export async function validateUxAcceptanceFiles(value, actPath) {
           );
         }
         try {
-          JSON.parse(content.toString("utf8"));
-        } catch {
+          const parsed = JSON.parse(content.toString("utf8"));
+          const contract = validateUxAutomationReport(record.id, parsed);
+          if (record.completedAt !== contract.completedAt) {
+            throw new EvidenceValidationError(
+              "время свидетельства не совпадает с отчётом"
+            );
+          }
+          const expectedReviews = contract.reviewRequirements.map(
+            uxAutomationReviewKey
+          );
+          const actualReviews = Array.isArray(record.reviews)
+            ? record.reviews.map(uxAutomationReviewKey)
+            : [];
+          if (
+            expectedReviews.length !== actualReviews.length ||
+            new Set(actualReviews).size !== actualReviews.length ||
+            expectedReviews.some((key) => !actualReviews.includes(key))
+          ) {
+            throw new EvidenceValidationError(
+              "ручные разборы unresolved axe не совпадают с отчётом"
+            );
+          }
+          if (
+            (record.reviews ?? []).some(
+              (review) =>
+                review.reportSha256 !== record.sha256 ||
+                (review.status === "passed" &&
+                  Date.parse(review.reviewedAt) <
+                    Date.parse(contract.completedAt))
+            )
+          ) {
+            throw new EvidenceValidationError(
+              "ручной разбор axe не привязан к текущему отчёту или выполнен раньше него"
+            );
+          }
+        } catch (error) {
+          if (error instanceof EvidenceValidationError) throw error;
           throw new EvidenceValidationError(
-            "автоматический отчёт содержит некорректный JSON"
+            "автоматический отчёт не прошёл строгую семантическую проверку"
           );
         }
       }

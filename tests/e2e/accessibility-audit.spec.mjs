@@ -11,6 +11,7 @@ const WCAG_TAGS = [
   "wcag21aa",
   "wcag22aa"
 ];
+const EVIDENCE_CONTRACT_VERSION = 1;
 
 const primaryViews = [
   ["overview", "Главная"],
@@ -50,8 +51,26 @@ function violationReport(violations) {
     .join("\n\n");
 }
 
-async function expectNoDetectableViolations(page, label) {
+async function expectNoDetectableViolations(page, label, testInfo) {
   const result = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+  await testInfo.attach("docomator-axe-result", {
+    body: Buffer.from(
+      JSON.stringify({
+        version: 1,
+        kind: "docomator.axe-result",
+        contractVersion: EVIDENCE_CONTRACT_VERSION,
+        project: testInfo.project.name,
+        title: testInfo.title,
+        label,
+        theme: projectThemes.get(testInfo.project.name),
+        viewport: page.viewportSize(),
+        wcagTags: WCAG_TAGS,
+        axe: result
+      }),
+      "utf8"
+    ),
+    contentType: "application/json"
+  });
   expect(
     result.violations.length,
     `машинно-выявляемые нарушения доступности в состоянии «${label}»:\n${violationReport(result.violations)}`
@@ -61,7 +80,7 @@ async function expectNoDetectableViolations(page, label) {
 for (const [view, label] of primaryViews) {
   test(`экран «${label}» не содержит машинно-выявляемых нарушений WCAG`, async ({
     page
-  }) => {
+  }, testInfo) => {
     await installDocomatorApiMock(page, {
       employeeCount: 3,
       activeTemplate: true
@@ -70,13 +89,13 @@ for (const [view, label] of primaryViews) {
     await app.open();
     await app.openView(view);
 
-    await expectNoDetectableViolations(page, label);
+    await expectNoDetectableViolations(page, label, testInfo);
   });
 }
 
 test("диалог сотрудника не содержит машинно-выявляемых нарушений WCAG", async ({
   page
-}) => {
+}, testInfo) => {
   await installDocomatorApiMock(page);
   const app = new DocomatorPage(page);
   await app.open();
@@ -86,5 +105,9 @@ test("диалог сотрудника не содержит машинно-в�
   await page.locator("#employeeAddFieldButton").click();
   await expect(page.locator("#employeeNewField")).toBeVisible();
 
-  await expectNoDetectableViolations(page, "Добавление сотрудника и поля");
+  await expectNoDetectableViolations(
+    page,
+    "Добавление сотрудника и поля",
+    testInfo
+  );
 });
