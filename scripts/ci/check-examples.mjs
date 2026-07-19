@@ -5,7 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  analyzeOoxmlBuffer
+  analyzeOoxmlBuffer,
+  inspectOoxmlBuffer
 } from "@docomator/document-intake";
 import {
   compileScalarFields,
@@ -17,6 +18,8 @@ import {
 import { parseDataImportBuffer } from "../../apps/api/dist/data-import-parser.js";
 import {
   createExampleAssets,
+  createRejectedExampleAssets,
+  createSafeExampleAssets,
   EXAMPLE_ASSETS,
   exampleManifest
 } from "./example-assets.mjs";
@@ -113,7 +116,24 @@ assert.equal(
   "CSV-пример не должен содержать значения, похожие на формулы."
 );
 
-await validateSafeExampleAssets(EXAMPLE_ASSETS);
+const safeExampleAssets = createSafeExampleAssets();
+const rejectedExampleAssets = createRejectedExampleAssets();
+assert.equal(safeExampleAssets.length, 9);
+assert.equal(rejectedExampleAssets.length, 1);
+await validateSafeExampleAssets(safeExampleAssets);
+
+for (const asset of rejectedExampleAssets) {
+  const report = await inspectOoxmlBuffer({
+    buffer: asset.content,
+    fileName: path.basename(asset.path)
+  });
+  assert.equal(report.decision, "rejected");
+  assert.equal(
+    report.issues.some((issue) => issue.code === asset.expectedIssueCode),
+    true,
+    `Отклоняемый пример ${asset.path} должен вернуть ${asset.expectedIssueCode}.`
+  );
+}
 
 const personalTemplate = EXAMPLE_ASSETS.find(
   (asset) => asset.kind === "docx-template"
@@ -133,13 +153,21 @@ const docxRegisterTemplate = EXAMPLE_ASSETS.find(
 const docxRegisterFilled = EXAMPLE_ASSETS.find(
   (asset) => asset.kind === "docx-repeat-filled"
 );
+const headerTemplate = EXAMPLE_ASSETS.find(
+  (asset) => asset.kind === "docx-header-template"
+);
+const scalarXlsxTemplate = EXAMPLE_ASSETS.find(
+  (asset) => asset.kind === "xlsx-scalar-template"
+);
 assert.ok(
   personalTemplate &&
   personalFilled &&
   registerTemplate &&
   registerFilled &&
   docxRegisterTemplate &&
-  docxRegisterFilled
+  docxRegisterFilled &&
+  headerTemplate &&
+  scalarXlsxTemplate
 );
 
 const personalTemplateStructure = await analyzeOoxmlBuffer({
@@ -155,7 +183,10 @@ for (const placeholder of [
   "Подразделение сотрудника",
   "Дата приёма сотрудника"
 ]) {
-  assert.equal(personalTemplateText.includes(placeholder), true);
+  assert.equal(
+    personalTemplateText.some((text) => text.includes(placeholder)),
+    true
+  );
 }
 
 const personalFilledStructure = await analyzeOoxmlBuffer({
@@ -165,8 +196,14 @@ const personalFilledStructure = await analyzeOoxmlBuffer({
 const personalFilledText = paragraphs(personalFilledStructure).map(
   (paragraph) => paragraph.text
 );
-assert.equal(personalFilledText.includes("Иванов Алексей Сергеевич"), true);
-assert.equal(personalFilledText.includes("ФИО сотрудника"), false);
+assert.equal(
+  personalFilledText.some((text) => text.includes("Иванов Алексей Сергеевич")),
+  true
+);
+assert.equal(
+  personalFilledText.some((text) => text.includes("ФИО сотрудника")),
+  false
+);
 
 const personalDefinitions = [
   ["field-full-name", "person.full_name", "ФИО", "ФИО сотрудника"],
@@ -180,9 +217,10 @@ const personalDefinitions = [
   ["field-hired-at", "person.hired_at", "Дата приёма", "Дата приёма сотрудника"]
 ].map(([id, key, label, text]) => {
   const element = personalTemplateStructure.elements.find(
-    (candidate) => candidate.kind === "paragraph" && candidate.text === text
+    (candidate) => candidate.kind === "paragraph" && candidate.text.includes(text)
   );
   assert.ok(element && element.kind === "paragraph");
+  const startOffset = element.text.indexOf(text);
   return {
     id,
     key,
@@ -190,11 +228,16 @@ const personalDefinitions = [
     elementId: element.id,
     binding: {
       version: 1,
-      kind: "docx.paragraph",
+      kind: "docx.text-range",
       elementId: element.id,
       part: element.part,
       index: element.index,
-      tableLocation: element.tableLocation
+      startOffset,
+      endOffset: startOffset + text.length,
+      selectedText: text,
+      ...(element.tableLocation === undefined
+        ? {}
+        : { tableLocation: element.tableLocation })
     }
   };
 });
@@ -232,6 +275,169 @@ assert.deepEqual(
   renderedPersonal.fields.map((field) => field.readBackValue).sort(),
   [...personalValues].sort()
 );
+const renderedPersonalStructure = await analyzeOoxmlBuffer({
+  buffer: renderedPersonal.output,
+  fileName: "rendered-personal-card.docx"
+});
+const renderedPersonalText = paragraphs(renderedPersonalStructure).map(
+  (paragraph) => paragraph.text
+);
+for (const [label, value] of [
+  ["ФИО", personalValues[0]],
+  ["Должность", personalValues[1]],
+  ["Подразделение", personalValues[2]],
+  ["Дата приёма", personalValues[3]]
+]) {
+  assert.equal(renderedPersonalText.includes(`${label}: ${value}`), true);
+}
+
+const headerStructure = await analyzeOoxmlBuffer({
+  buffer: headerTemplate.content,
+  fileName: path.basename(headerTemplate.path)
+});
+const headerPlaceholder = "Название организации";
+const headerParagraph = headerStructure.elements.find(
+  (element) =>
+    element.kind === "paragraph" &&
+    element.part === "word/header1.xml" &&
+    element.text.includes(headerPlaceholder)
+);
+assert.ok(headerParagraph && headerParagraph.kind === "paragraph");
+const headerStartOffset = headerParagraph.text.indexOf(headerPlaceholder);
+const headerDefinition = {
+  id: "header-organization",
+  key: "organization.name",
+  label: "Организация",
+  elementId: headerParagraph.id,
+  binding: {
+    version: 1,
+    kind: "docx.text-range",
+    elementId: headerParagraph.id,
+    part: headerParagraph.part,
+    index: headerParagraph.index,
+    startOffset: headerStartOffset,
+    endOffset: headerStartOffset + headerPlaceholder.length,
+    selectedText: headerPlaceholder
+  }
+};
+const compiledHeader = await compileScalarFields({
+  source: headerTemplate.content,
+  fileName: path.basename(headerTemplate.path),
+  expectedSourceSha256: headerStructure.sourceSha256,
+  expectedStructureSha256: headerStructure.structureSha256,
+  fields: [headerDefinition]
+});
+const compiledHeaderField = compiledHeader.fields[0];
+assert.ok(compiledHeaderField);
+const headerValue = "ООО «Учебный пример»";
+const renderedHeader = await renderScalarValues({
+  compiled: compiledHeader.output,
+  fields: [
+    {
+      fieldId: headerDefinition.id,
+      fieldKey: headerDefinition.key,
+      technicalBinding: compiledHeaderField.technicalBinding,
+      fieldBinding: headerDefinition.binding,
+      valueType: "string",
+      value: headerValue
+    }
+  ]
+});
+assert.equal(renderedHeader.fields[0]?.readBackValue, headerValue);
+const renderedHeaderStructure = await analyzeOoxmlBuffer({
+  buffer: renderedHeader.output,
+  fileName: "rendered-header-field.docx"
+});
+assert.equal(
+  paragraphs(renderedHeaderStructure).some(
+    (paragraph) =>
+      paragraph.part === "word/header1.xml" &&
+      paragraph.text === `Организация: ${headerValue}`
+  ),
+  true
+);
+assert.equal(
+  paragraphs(renderedHeaderStructure).some(
+    (paragraph) => paragraph.text === "Поле для проверки верхнего колонтитула."
+  ),
+  true
+);
+
+const scalarXlsxStructure = await analyzeOoxmlBuffer({
+  buffer: scalarXlsxTemplate.content,
+  fileName: path.basename(scalarXlsxTemplate.path)
+});
+const scalarXlsxSpecs = [
+  ["xlsx-full-name", "person.full_name", "ФИО", "B3"],
+  ["xlsx-position", "person.position", "Должность", "B4"],
+  ["xlsx-department", "person.department", "Подразделение", "B5"],
+  ["xlsx-hired-at", "person.hired_at", "Дата приёма", "B6"]
+];
+const scalarXlsxCells = cells(scalarXlsxStructure).filter(
+  (cell) => cell.sheetName === "Карточка"
+);
+const scalarXlsxDefinitions = scalarXlsxSpecs.map(
+  ([id, key, label, address]) => {
+    const element = scalarXlsxCells.find((cell) => cell.address === address);
+    assert.ok(element && element.kind === "cell");
+    return {
+      id,
+      key,
+      label,
+      elementId: element.id,
+      binding: {
+        version: 1,
+        kind: "xlsx.cell",
+        elementId: element.id,
+        sheetName: element.sheetName,
+        sheetPath: element.sheetPath,
+        address: element.address
+      }
+    };
+  }
+);
+const compiledScalarXlsx = await compileScalarFields({
+  source: scalarXlsxTemplate.content,
+  fileName: path.basename(scalarXlsxTemplate.path),
+  expectedSourceSha256: scalarXlsxStructure.sourceSha256,
+  expectedStructureSha256: scalarXlsxStructure.structureSha256,
+  fields: scalarXlsxDefinitions
+});
+const renderedScalarXlsx = await renderScalarValues({
+  compiled: compiledScalarXlsx.output,
+  fields: scalarXlsxDefinitions.map((field, index) => {
+    const compiled = compiledScalarXlsx.fields.find(
+      (candidate) => candidate.fieldId === field.id
+    );
+    assert.ok(compiled);
+    return {
+      fieldId: field.id,
+      fieldKey: field.key,
+      technicalBinding: compiled.technicalBinding,
+      fieldBinding: field.binding,
+      valueType: "string",
+      value: personalValues[index]
+    };
+  })
+});
+assert.deepEqual(
+  renderedScalarXlsx.fields.map((field) => field.readBackValue).sort(),
+  [...personalValues].sort()
+);
+const renderedScalarXlsxStructure = await analyzeOoxmlBuffer({
+  buffer: renderedScalarXlsx.output,
+  fileName: "rendered-scalar-fields.xlsx"
+});
+const renderedScalarXlsxCells = cells(renderedScalarXlsxStructure).filter(
+  (cell) => cell.sheetName === "Карточка"
+);
+for (const [index, value] of personalValues.entries()) {
+  assert.equal(
+    renderedScalarXlsxCells.find((cell) => cell.address === `B${index + 3}`)
+      ?.value,
+    value
+  );
+}
 
 const registerMembers = [
   ["1", "Иванов Алексей Сергеевич", "Инженер", "Производственный отдел"],

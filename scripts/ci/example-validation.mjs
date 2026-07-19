@@ -19,6 +19,7 @@ const DOCX_PARTS = [
   "word/document.xml",
   "word/styles.xml"
 ];
+const DOCX_HEADER_PARTS = [...DOCX_PARTS, "word/header1.xml"];
 const XLSX_PARTS = [
   "[Content_Types].xml",
   "_rels/.rels",
@@ -51,6 +52,31 @@ const EXPECTED_RELATIONSHIPS = {
     [
       "word/_rels/document.xml.rels",
       [["rId1", `${OFFICE_RELATIONSHIPS}/styles`, "styles.xml"]]
+    ]
+  ]),
+  "docx-header": new Map([
+    [
+      "_rels/.rels",
+      [
+        ["rId1", `${OFFICE_RELATIONSHIPS}/officeDocument`, "word/document.xml"],
+        [
+          "rId2",
+          "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
+          "docProps/core.xml"
+        ],
+        [
+          "rId3",
+          `${OFFICE_RELATIONSHIPS}/extended-properties`,
+          "docProps/app.xml"
+        ]
+      ]
+    ],
+    [
+      "word/_rels/document.xml.rels",
+      [
+        ["rId1", `${OFFICE_RELATIONSHIPS}/styles`, "styles.xml"],
+        ["rId2", `${OFFICE_RELATIONSHIPS}/header`, "header1.xml"]
+      ]
     ]
   ]),
   xlsx: new Map([
@@ -192,6 +218,7 @@ export async function validateSafeExampleAsset(asset) {
   }
 
   const kind = documentKind(asset);
+  const profile = asset.profile ?? kind;
   const report = await inspectOoxmlBuffer({
     buffer: asset.content,
     fileName: path.basename(asset.path)
@@ -211,7 +238,12 @@ export async function validateSafeExampleAsset(asset) {
   }
 
   const entries = await readOoxmlPackage(asset.content);
-  const expectedParts = kind === "docx" ? DOCX_PARTS : XLSX_PARTS;
+  const expectedParts =
+    profile === "docx-header"
+      ? DOCX_HEADER_PARTS
+      : kind === "docx"
+        ? DOCX_PARTS
+        : XLSX_PARTS;
   const actualParts = entries.map((entry) => entry.name).sort();
   if (
     actualParts.length !== expectedParts.length ||
@@ -220,7 +252,7 @@ export async function validateSafeExampleAsset(asset) {
     fail(asset.path, "состав частей OOXML не совпадает с точным списком.");
   }
 
-  const expectedRelationships = EXPECTED_RELATIONSHIPS[kind];
+  const expectedRelationships = EXPECTED_RELATIONSHIPS[profile];
   for (const entry of entries) {
     if (!/\.(?:xml|rels)$/u.test(entry.name)) continue;
     const xml = entry.content.toString("utf8");

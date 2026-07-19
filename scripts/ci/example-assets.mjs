@@ -41,7 +41,7 @@ function appProperties(application) {
 }
 
 function docxDocument(values) {
-  const rows = [
+  const fields = [
     ["ФИО", values.fullName],
     ["Должность", values.position],
     ["Подразделение", values.department],
@@ -49,28 +49,27 @@ function docxDocument(values) {
   ]
     .map(
       ([label, value]) => `
-      <w:tr>
-        <w:tc><w:tcPr><w:tcW w:w="3200" w:type="dxa"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${xmlEscape(label)}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="6000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>${xmlEscape(value)}</w:t></w:r></w:p></w:tc>
-      </w:tr>`
+    <w:p>
+      <w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${xmlEscape(label)}: </w:t></w:r>
+      <w:r><w:t>${xmlEscape(value)}</w:t></w:r>
+    </w:p>`
     )
     .join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Личная карточка сотрудника</w:t></w:r></w:p>
-    <w:p><w:r><w:t>Учебный шаблон Docomator. Выберите значения во втором столбце и сопоставьте их с полями карточки.</w:t></w:r></w:p>
-    <w:tbl>
-      <w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="9200" w:type="dxa"/></w:tblPr>
-      <w:tblGrid><w:gridCol w:w="3200"/><w:gridCol w:w="6000"/></w:tblGrid>${rows}
-    </w:tbl>
+    <w:p><w:r><w:t>Учебный шаблон Docomator. Выберите значение после подписи и сопоставьте его с полем карточки.</w:t></w:r></w:p>${fields}
     <w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Все имена и сведения в примере вымышлены.</w:t></w:r></w:p>
     <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>
   </w:body>
 </w:document>`;
 }
 
-function docxPackage(document, title, application) {
+function docxPackage(document, title, application, options = {}) {
+  const contentTypeOverrides = options.contentTypeOverrides ?? "";
+  const documentRelationships = options.documentRelationships ?? "";
+  const additionalEntries = options.additionalEntries ?? [];
   return writeOoxmlPackage(
     packageEntries([
       {
@@ -82,7 +81,7 @@ function docxPackage(document, title, application) {
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
-  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>${contentTypeOverrides}
 </Types>`
       },
       {
@@ -116,9 +115,10 @@ function docxPackage(document, title, application) {
         name: "word/_rels/document.xml.rels",
         content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${documentRelationships}
 </Relationships>`
-      }
+      },
+      ...additionalEntries
     ])
   );
 }
@@ -128,6 +128,46 @@ function docxBuffer(values) {
     docxDocument(values),
     "Личная карточка сотрудника",
     "Docomator DOCX example"
+  );
+}
+
+function docxHeaderBuffer(value) {
+  const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Уведомление</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Поле для проверки верхнего колонтитула.</w:t></w:r></w:p>
+    <w:sectPr><w:headerReference w:type="default" r:id="rId2"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>
+  </w:body>
+</w:document>`;
+  const header = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Организация: </w:t></w:r><w:r><w:t>${xmlEscape(value)}</w:t></w:r></w:p>
+</w:hdr>`;
+  return docxPackage(document, "Уведомление с колонтитулом", "Docomator header fixture", {
+    contentTypeOverrides:
+      '\n  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>',
+    documentRelationships:
+      '\n  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>',
+    additionalEntries: [{ name: "word/header1.xml", content: header }]
+  });
+}
+
+function rejectedMacroDocxBuffer() {
+  return docxPackage(
+    docxDocument(personalTemplateValues),
+    "Отклоняемый пример",
+    "Docomator rejected fixture",
+    {
+      contentTypeOverrides:
+        '\n  <Override PartName="/word/vbaProject.bin" ContentType="application/vnd.ms-office.vbaProject"/>',
+      additionalEntries: [
+        {
+          name: "word/vbaProject.bin",
+          content: "INERT DOCOMATOR TEST FIXTURE: MACRO PART MUST BE REJECTED"
+        }
+      ]
+    }
   );
 }
 
@@ -203,7 +243,7 @@ function xlsxWorksheet(rows) {
 </worksheet>`;
 }
 
-function xlsxBuffer(rows) {
+function xlsxPackage(worksheet, options) {
   return writeOoxmlPackage(
     packageEntries([
       {
@@ -230,18 +270,18 @@ function xlsxBuffer(rows) {
       },
       {
         name: "docProps/core.xml",
-        content: coreProperties("Реестр сотрудников")
+        content: coreProperties(options.title)
       },
       {
         name: "docProps/app.xml",
-        content: appProperties("Docomator XLSX example")
+        content: appProperties(options.application)
       },
       {
         name: "xl/workbook.xml",
         content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <bookViews><workbookView xWindow="0" yWindow="0" windowWidth="22000" windowHeight="12000"/></bookViews>
-  <sheets><sheet name="Реестр" sheetId="1" r:id="rId1"/></sheets>
+  <sheets><sheet name="${xmlEscape(options.sheetName)}" sheetId="1" r:id="rId1"/></sheets>
   <calcPr calcId="0" fullCalcOnLoad="1"/>
 </workbook>`
       },
@@ -253,7 +293,7 @@ function xlsxBuffer(rows) {
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`
       },
-      { name: "xl/worksheets/sheet1.xml", content: xlsxWorksheet(rows) },
+      { name: "xl/worksheets/sheet1.xml", content: worksheet },
       {
         name: "xl/styles.xml",
         content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -268,6 +308,49 @@ function xlsxBuffer(rows) {
       }
     ])
   );
+}
+
+function xlsxBuffer(rows) {
+  return xlsxPackage(xlsxWorksheet(rows), {
+    title: "Реестр сотрудников",
+    application: "Docomator XLSX example",
+    sheetName: "Реестр"
+  });
+}
+
+function xlsxScalarWorksheet(values) {
+  const rows = [
+    ["ФИО", values.fullName],
+    ["Должность", values.position],
+    ["Подразделение", values.department],
+    ["Дата приёма", values.hiredAt]
+  ]
+    .map(
+      ([label, value], index) =>
+        `<row r="${index + 3}">${inlineCell(`A${index + 3}`, label, 1)}${inlineCell(`B${index + 3}`, value, 2)}</row>`
+    )
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:B6"/>
+  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <cols><col min="1" max="1" width="22" customWidth="1"/><col min="2" max="2" width="36" customWidth="1"/></cols>
+  <sheetData>
+    <row r="1" ht="24" customHeight="1">${inlineCell("A1", "Личная карточка сотрудника", 1)}</row>
+    ${rows}
+  </sheetData>
+  <mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>`;
+}
+
+function xlsxScalarBuffer(values) {
+  return xlsxPackage(xlsxScalarWorksheet(values), {
+    title: "Личная карточка сотрудника",
+    application: "Docomator scalar XLSX fixture",
+    sheetName: "Карточка"
+  });
 }
 
 const personalTemplateValues = {
@@ -320,6 +403,23 @@ export function createExampleAssets() {
       content: docxRegisterBuffer(registerTemplateRows)
     },
     {
+      path: "fixtures/header-field.docx",
+      kind: "docx-header-template",
+      profile: "docx-header",
+      content: docxHeaderBuffer("Название организации")
+    },
+    {
+      path: "fixtures/scalar-fields.xlsx",
+      kind: "xlsx-scalar-template",
+      content: xlsxScalarBuffer(personalTemplateValues)
+    },
+    {
+      path: "fixtures/rejected/macro-part.docx",
+      kind: "docx-rejected-macro",
+      expectedIssueCode: "macro_content",
+      content: rejectedMacroDocxBuffer()
+    },
+    {
       path: "expected/personal-card-filled.docx",
       kind: "docx-filled",
       content: docxBuffer(personalFilledValues)
@@ -335,6 +435,18 @@ export function createExampleAssets() {
       content: docxRegisterBuffer(registerFilledRows)
     }
   ];
+}
+
+export function createSafeExampleAssets() {
+  return createExampleAssets().filter(
+    (asset) => asset.expectedIssueCode === undefined
+  );
+}
+
+export function createRejectedExampleAssets() {
+  return createExampleAssets().filter(
+    (asset) => asset.expectedIssueCode !== undefined
+  );
 }
 
 export function exampleManifest(assets) {

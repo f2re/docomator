@@ -44,6 +44,9 @@ const EXAMPLE_FILES = [
   "expected/personal-card-filled.docx",
   "expected/team-register-filled.docx",
   "expected/team-register-filled.xlsx",
+  "fixtures/header-field.docx",
+  "fixtures/rejected/macro-part.docx",
+  "fixtures/scalar-fields.xlsx",
   "templates/personal-card.docx",
   "templates/team-register.docx",
   "templates/team-register.xlsx"

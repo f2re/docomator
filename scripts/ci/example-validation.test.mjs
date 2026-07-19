@@ -6,7 +6,10 @@ import {
   writeOoxmlPackage
 } from "@docomator/template-compiler";
 
-import { createExampleAssets } from "./example-assets.mjs";
+import {
+  createExampleAssets,
+  createSafeExampleAssets
+} from "./example-assets.mjs";
 import {
   validateSafeExampleAsset,
   validateSafeExampleAssets
@@ -45,7 +48,7 @@ async function addPart(asset, name, content) {
 }
 
 test("example validator accepts only the generated safe corpus", async () => {
-  await validateSafeExampleAssets(createExampleAssets());
+  await validateSafeExampleAssets(createSafeExampleAssets());
 });
 
 test("example validator rejects a CSV formula-like value", async () => {
