@@ -46,6 +46,10 @@ require_command sort
   die "В комплекте отсутствует сценарий автоматического резервирования"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-readiness.mjs" ]] || \
   die "В комплекте отсутствует сценарий пилотной приёмки"
+[[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-check.mjs" ]] || \
+  die "В комплекте отсутствует оркестратор пилотной приёмки"
+[[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-release-identity.mjs" ]] || \
+  die "В комплекте отсутствует проверка идентичности пилотного релиза"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-check.sh" ]] || \
   die "В комплекте отсутствует штатный запуск пилотной приёмки"
 [[ -f "$BUNDLE_ROOT/payload/deploy/systemd/docomator-backup.service.in" ]] || \
