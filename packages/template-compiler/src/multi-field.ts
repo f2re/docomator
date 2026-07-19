@@ -24,6 +24,12 @@ import {
   renderScalarValue,
   type ScalarValueType
 } from "./scalar-render.js";
+import {
+  compileXlsxRepeatRow,
+  parseXlsxRepeatRowBinding,
+  type XlsxRepeatRowBinding,
+  type XlsxRepeatTechnicalBinding
+} from "./xlsx-repeat.js";
 
 export interface CompileScalarFieldsInput {
   source: Uint8Array;
@@ -50,10 +56,16 @@ export interface CompileScalarFieldsResult {
   outputSha256: string;
   modifiedParts: string[];
   fields: CompiledScalarFieldResult[];
-  repeat: {
-    binding: DocxRepeatRowBinding;
-    technicalBinding: CompiledRepeatTechnicalBinding;
-  } | null;
+  repeat:
+    | {
+        binding: DocxRepeatRowBinding;
+        technicalBinding: CompiledRepeatTechnicalBinding;
+      }
+    | {
+        binding: XlsxRepeatRowBinding;
+        technicalBinding: XlsxRepeatTechnicalBinding;
+      }
+    | null;
   verification: {
     found: true;
     checkedFields: number;
@@ -107,6 +119,10 @@ interface NormalizedCompileField {
 }
 
 const MAX_FIELDS = 100;
+const MAX_XLSX_COLUMN = 16_384;
+const MAX_XLSX_ROW = 1_048_576;
+
+type RepeatRowBinding = DocxRepeatRowBinding | XlsxRepeatRowBinding;
 
 function sha256(value: Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
@@ -157,6 +173,34 @@ function expectedSha256(value: string, label: string): string {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseRepeatRowBinding(value: unknown): RepeatRowBinding {
+  return isObject(value) && value.kind === "xlsx.repeat-row"
+    ? parseXlsxRepeatRowBinding(value)
+    : parseDocxRepeatRowBinding(value);
+}
+
+function xlsxCoordinate(address: string): { column: number; row: number } {
+  const match = /^([A-Z]{1,3})([1-9][0-9]{0,6})$/u.exec(address.toUpperCase());
+  if (match === null) {
+    throw new TemplateCompilerError(
+      "invalid_cell_address",
+      "Сохранённый адрес ячейки XLSX имеет недопустимый формат."
+    );
+  }
+  let column = 0;
+  for (const character of match[1] ?? "") {
+    column = column * 26 + character.charCodeAt(0) - 64;
+  }
+  const row = Number(match[2]);
+  if (column < 1 || column > MAX_XLSX_COLUMN || row < 1 || row > MAX_XLSX_ROW) {
+    throw new TemplateCompilerError(
+      "invalid_cell_address",
+      "Сохранённый адрес ячейки находится за пределами XLSX."
+    );
+  }
+  return { column, row };
 }
 
 function integer(value: unknown, label: string): number {
@@ -368,7 +412,7 @@ export async function compileScalarFields(
   const repeatBinding =
     input.repeatBinding === undefined
       ? null
-      : parseDocxRepeatRowBinding(input.repeatBinding);
+      : parseRepeatRowBinding(input.repeatBinding);
   const sourceHash = sha256(source);
   const wantedSourceHash = expectedSha256(
     input.expectedSourceSha256,
@@ -408,35 +452,113 @@ export async function compileScalarFields(
       );
     }
     if (repeatBinding !== null) {
-      if (
-        initialAnalysis.format !== "docx" ||
-        original.kind !== "paragraph" ||
-        original.part !== repeatBinding.part ||
-        original.tableLocation?.tableIndex !== repeatBinding.tableIndex ||
-        original.tableLocation.rowIndex !== repeatBinding.rowIndex
-      ) {
-        throw new TemplateCompilerError(
-          "repeat_field_outside_row",
-          `Поле «${field.label}» находится вне выбранной повторяемой строки.`
-        );
+      if (repeatBinding.kind === "docx.repeat-row") {
+        if (
+          initialAnalysis.format !== "docx" ||
+          original.kind !== "paragraph" ||
+          original.part !== repeatBinding.part ||
+          original.tableLocation?.tableIndex !== repeatBinding.tableIndex ||
+          original.tableLocation.rowIndex !== repeatBinding.rowIndex
+        ) {
+          throw new TemplateCompilerError(
+            "repeat_field_outside_row",
+            `Поле «${field.label}» находится вне выбранной повторяемой строки.`
+          );
+        }
+      } else {
+        const fieldCoordinate =
+          original.kind === "cell" ? xlsxCoordinate(original.address) : null;
+        const start = xlsxCoordinate(repeatBinding.startAddress);
+        const end = xlsxCoordinate(repeatBinding.endAddress);
+        if (
+          initialAnalysis.format !== "xlsx" ||
+          original.kind !== "cell" ||
+          original.sheetName !== repeatBinding.sheetName ||
+          original.sheetPath !== repeatBinding.sheetPath ||
+          fieldCoordinate?.row !== repeatBinding.rowNumber ||
+          fieldCoordinate.column < start.column ||
+          fieldCoordinate.column > end.column
+        ) {
+          throw new TemplateCompilerError(
+            "repeat_field_outside_row",
+            `Поле «${field.label}» находится вне выбранного повторяемого диапазона XLSX.`
+          );
+        }
       }
     }
   }
   if (repeatBinding !== null) {
-    const anchor = initialAnalysis.elements.find(
-      (element) => element.id === repeatBinding.anchorElementId
-    );
-    if (
-      initialAnalysis.format !== "docx" ||
-      anchor?.kind !== "paragraph" ||
-      anchor.part !== repeatBinding.part ||
-      anchor.tableLocation?.tableIndex !== repeatBinding.tableIndex ||
-      anchor.tableLocation.rowIndex !== repeatBinding.rowIndex
-    ) {
-      throw new TemplateCompilerError(
-        "repeat_anchor_mismatch",
-        "Опорный элемент повторяемой строки не совпадает с текущей структурой DOCX."
+    if (repeatBinding.kind === "docx.repeat-row") {
+      const anchor = initialAnalysis.elements.find(
+        (element) => element.id === repeatBinding.anchorElementId
       );
+      if (
+        initialAnalysis.format !== "docx" ||
+        anchor?.kind !== "paragraph" ||
+        anchor.part !== repeatBinding.part ||
+        anchor.tableLocation?.tableIndex !== repeatBinding.tableIndex ||
+        anchor.tableLocation.rowIndex !== repeatBinding.rowIndex
+      ) {
+        throw new TemplateCompilerError(
+          "repeat_anchor_mismatch",
+          "Опорный элемент повторяемой строки не совпадает с текущей структурой DOCX."
+        );
+      }
+    } else {
+      const start = initialAnalysis.elements.find(
+        (element) => element.id === repeatBinding.startElementId
+      );
+      const end = initialAnalysis.elements.find(
+        (element) => element.id === repeatBinding.endElementId
+      );
+      const exactEndpoint = (
+        element: DocumentStructureElement | undefined,
+        address: string
+      ): boolean =>
+        element?.kind === "cell" &&
+        element.sheetName === repeatBinding.sheetName &&
+        element.sheetPath === repeatBinding.sheetPath &&
+        element.address === address;
+      if (
+        initialAnalysis.format !== "xlsx" ||
+        !exactEndpoint(start, repeatBinding.startAddress) ||
+        !exactEndpoint(end, repeatBinding.endAddress)
+      ) {
+        throw new TemplateCompilerError(
+          "repeat_anchor_mismatch",
+          "Границы повторяемого диапазона не совпадают с текущей структурой XLSX."
+        );
+      }
+      if (repeatBinding.selection === "used-row") {
+        if (initialAnalysis.truncated) {
+          throw new TemplateCompilerError(
+            "repeat_structure_truncated",
+            "Структура XLSX усечена: нельзя надёжно определить всю используемую строку."
+          );
+        }
+        const rowCells = initialAnalysis.elements.filter(
+          (element) =>
+            element.kind === "cell" &&
+            element.sheetName === repeatBinding.sheetName &&
+            element.sheetPath === repeatBinding.sheetPath &&
+            xlsxCoordinate(element.address).row === repeatBinding.rowNumber
+        );
+        const columns = rowCells.map((element) =>
+          xlsxCoordinate(element.kind === "cell" ? element.address : "").column
+        );
+        const startColumn = xlsxCoordinate(repeatBinding.startAddress).column;
+        const endColumn = xlsxCoordinate(repeatBinding.endAddress).column;
+        if (
+          columns.length === 0 ||
+          Math.min(...columns) !== startColumn ||
+          Math.max(...columns) !== endColumn
+        ) {
+          throw new TemplateCompilerError(
+            "repeat_used_row_mismatch",
+            "Границы повтора не охватывают всю используемую строку XLSX."
+          );
+        }
+      }
     }
   }
 
@@ -479,16 +601,43 @@ export async function compileScalarFields(
 
   let repeat: CompileScalarFieldsResult["repeat"] = null;
   if (repeatBinding !== null) {
-    const compiledRepeat = await compileDocxRepeatRow({
-      compiled: current,
-      binding: repeatBinding,
-      fieldTechnicalBindings: results.map((field) => field.technicalBinding)
-    });
-    current = compiledRepeat.output;
-    repeat = {
-      binding: compiledRepeat.binding,
-      technicalBinding: compiledRepeat.technicalBinding
-    };
+    if (repeatBinding.kind === "docx.repeat-row") {
+      const compiledRepeat = await compileDocxRepeatRow({
+        compiled: current,
+        binding: repeatBinding,
+        fieldTechnicalBindings: results.map((field) => field.technicalBinding)
+      });
+      current = compiledRepeat.output;
+      repeat = {
+        binding: compiledRepeat.binding,
+        technicalBinding: compiledRepeat.technicalBinding
+      };
+    } else {
+      const resultById = new Map(results.map((field) => [field.fieldId, field]));
+      const compiledRepeat = await compileXlsxRepeatRow({
+        compiled: current,
+        binding: repeatBinding,
+        fields: normalizedFields.map((field) => {
+          const compiledField = resultById.get(field.id);
+          if (compiledField === undefined) {
+            throw new TemplateCompilerError(
+              "compiled_binding_not_found",
+              "После сборки не найдена техническая привязка поля XLSX."
+            );
+          }
+          return {
+            fieldId: field.id,
+            technicalBinding: compiledField.technicalBinding,
+            fieldBinding: field.binding
+          };
+        })
+      });
+      current = compiledRepeat.output;
+      repeat = {
+        binding: compiledRepeat.binding,
+        technicalBinding: compiledRepeat.technicalBinding
+      };
+    }
   }
 
   return {

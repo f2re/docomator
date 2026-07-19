@@ -45,7 +45,7 @@ test("bootstrap migration is repeatable", () => {
   database.close();
 });
 
-test("formatter migration preserves old rendering and constrains new contracts", () => {
+test("formatter and repeat migrations preserve rows and constrain new contracts", () => {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "docomator-formatter-migrate-")
   );
@@ -247,6 +247,12 @@ test("formatter migration preserves old rendering and constrains new contracts",
       database
         .prepare("UPDATE template_drafts SET repeat_binding_json = '[]' WHERE id = 'draft'")
         .run()
+    );
+    database.exec(
+      fs.readFileSync(
+        path.join(migrationsDirectory, "0025_xlsx_repeat_rows.sql"),
+        "utf8"
+      )
     );
     const repeatBinding = {
       version: 1,

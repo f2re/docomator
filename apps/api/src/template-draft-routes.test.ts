@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 import { loadApiConfig } from "@docomator/config";
 import {
   buildZipFixture,
-  minimalDocxEntries
+  minimalDocxEntries,
+  type ZipFixtureEntry
 } from "@docomator/document-intake/testing";
 import { DEFAULT_SPACE_ID } from "@docomator/storage";
 
@@ -73,6 +74,37 @@ function repeatSourceDocx(): Buffer {
   );
 }
 
+function repeatSourceXlsx(): Buffer {
+  const entries: ZipFixtureEntry[] = [
+    {
+      name: "[Content_Types].xml",
+      content:
+        '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+    },
+    {
+      name: "_rels/.rels",
+      content:
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'
+    },
+    {
+      name: "xl/workbook.xml",
+      content:
+        '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Сотрудники" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      content:
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'
+    },
+    {
+      name: "xl/worksheets/sheet1.xml",
+      content:
+        '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="2"><c r="B2" t="inlineStr"><is><t>ФИО</t></is></c><c r="C2"><v>10</v></c><c r="D2"><f>C2*2</f><v>20</v></c></row></sheetData></worksheet>'
+    }
+  ];
+  return buildZipFixture(entries);
+}
+
 async function quarantineSource(
   app: ReturnType<typeof buildApp>,
   buffer = sourceDocx()
@@ -87,6 +119,20 @@ async function quarantineSource(
       "x-correlation-id": "corr-source"
     },
     payload: buffer
+  });
+  assert.equal(response.statusCode, 201, response.body);
+  return response.json().data as { id: string; sha256: string };
+}
+
+async function quarantineXlsxSource(app: ReturnType<typeof buildApp>) {
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/quarantine?fileName=${encodeURIComponent("Сотрудники.xlsx")}`,
+    headers: {
+      "content-type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    payload: repeatSourceXlsx()
   });
   assert.equal(response.statusCode, 201, response.body);
   return response.json().data as { id: string; sha256: string };
@@ -425,7 +471,7 @@ test("API derives one DOCX repeat row and keeps every field inside it", async ()
       }
     });
     assert.equal(rejected.statusCode, 400, rejected.body);
-    assert.match(rejected.json().error.message, /одной выбранной строке/ui);
+    assert.match(rejected.json().error.message, /внутри выбранной/ui);
 
     const refreshed = await app.inject({
       method: "GET",
@@ -435,6 +481,98 @@ test("API derives one DOCX repeat row and keeps every field inside it", async ()
       refreshed.json().data.repeatBinding,
       created.json().data.repeatBinding
     );
+  } finally {
+    await app.close();
+    await fsPromises.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("API derives a used XLSX row from server-side element identifiers", async () => {
+  const { app, dataDir } = await testApp();
+  try {
+    const source = await quarantineXlsxSource(app);
+    const draftResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/${source.id}/draft`,
+      headers: { "content-type": "application/json" },
+      payload: { title: "Сотрудники" }
+    });
+    assert.equal(draftResponse.statusCode, 201, draftResponse.body);
+    const draft = draftResponse.json().data as {
+      id: string;
+      structure: {
+        elements: Array<{
+          id: string;
+          kind: string;
+          address: string;
+          formula: string | null;
+        }>;
+      };
+    };
+    const byAddress = new Map(
+      draft.structure.elements.map((element) => [element.address, element])
+    );
+    const name = byAddress.get("B2");
+    const experience = byAddress.get("C2");
+    const formula = byAddress.get("D2");
+    assert.ok(name);
+    assert.ok(experience);
+    assert.ok(formula);
+
+    const created = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.full_name",
+        label: "ФИО",
+        valueType: "string",
+        required: true,
+        elementId: name.id,
+        repeatArea: { selection: "used-row" }
+      }
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    assert.deepEqual(created.json().data.repeatBinding, {
+      version: 1,
+      kind: "xlsx.repeat-row",
+      source: "audience.members",
+      selection: "used-row",
+      sheetName: "Сотрудники",
+      sheetPath: "xl/worksheets/sheet1.xml",
+      rowNumber: 2,
+      startAddress: "B2",
+      endAddress: "D2",
+      startElementId: name.id,
+      endElementId: formula.id
+    });
+
+    const second = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.experience_years",
+        label: "Стаж",
+        valueType: "integer",
+        elementId: experience.id
+      }
+    });
+    assert.equal(second.statusCode, 201, second.body);
+
+    const rejectedFormula = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "person.total",
+        label: "Итог",
+        valueType: "number",
+        elementId: formula.id
+      }
+    });
+    assert.equal(rejectedFormula.statusCode, 400, rejectedFormula.body);
+    assert.match(rejectedFormula.json().error.message, /формул/ui);
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });

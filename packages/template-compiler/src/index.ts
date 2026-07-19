@@ -51,6 +51,26 @@ export {
 } from "./scalar-render.js";
 
 export {
+  compileXlsxRepeatRow,
+  parseXlsxRepeatRowBinding,
+  parseXlsxRepeatRowContract,
+  renderXlsxRepeatRows
+} from "./xlsx-repeat.js";
+
+export type {
+  CompileXlsxRepeatField,
+  CompileXlsxRepeatRowInput,
+  CompileXlsxRepeatRowResult,
+  RenderXlsxRepeatField,
+  RenderXlsxRepeatMember,
+  RenderXlsxRepeatRowsInput,
+  RenderXlsxRepeatRowsResult,
+  XlsxRepeatRowBinding,
+  XlsxRepeatRowContract,
+  XlsxRepeatTechnicalBinding
+} from "./xlsx-repeat.js";
+
+export {
   defaultScalarFormatter,
   formatScalarDisplay,
   parseScalarFormatter

@@ -179,6 +179,12 @@ function databaseSchemaReady(store: SqliteStore): boolean {
       if (new Set(rows.map((row) => row.name)).size !== requiredTables.length) {
         return false;
       }
+      const xlsxRepeatMigration = database
+        .prepare("SELECT name FROM schema_migrations WHERE name = ?")
+        .get("0025_xlsx_repeat_rows.sql");
+      if (xlsxRepeatMigration === undefined) {
+        return false;
+      }
       const requiredColumns = [
         ["template_draft_fields", "formatter_json"],
         ["template_multi_test_version_fields", "formatter_json"],

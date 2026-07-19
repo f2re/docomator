@@ -8,8 +8,10 @@ import {
 import {
   renderAudienceAggregate,
   renderDocxRepeatRows,
+  renderXlsxRepeatRows,
   renderScalarValues,
   parseDocxRepeatRowContract,
+  parseXlsxRepeatRowContract,
   writeOoxmlPackage,
   type CompiledTechnicalBinding,
   type OoxmlPackageEntry,
@@ -155,32 +157,58 @@ export function createDocumentGenerationHandler(
               }))
             });
           } else {
-            const repeat = parseDocxRepeatRowContract(
-              work.template.repeatContract
-            );
             const compiled = await options.objectStore.getBuffer(
               work.template.compiledSha256
             );
-            const rendered = await renderDocxRepeatRows({
-              compiled,
-              binding: repeat.binding,
-              technicalBinding: repeat.technicalBinding,
-              fields: work.template.fields.map((field) => ({
-                fieldId: field.id,
-                fieldKey: field.key,
-                required: field.required,
-                technicalBinding:
-                  field.technicalBinding as unknown as CompiledTechnicalBinding,
-                fieldBinding: field.binding as unknown as ScalarFieldBinding,
-                valueType: field.valueType as ScalarValueType,
-                formatter: field.formatter
-              })),
-              members: rows.map(({ member, resolved }) => ({
-                memberId: member.entityId,
-                values: resolved.values
-              }))
-            });
-            output = rendered.output;
+            const fields = work.template.fields.map((field) => ({
+              fieldId: field.id,
+              fieldKey: field.key,
+              required: field.required,
+              technicalBinding:
+                field.technicalBinding as unknown as CompiledTechnicalBinding,
+              fieldBinding: field.binding as unknown as ScalarFieldBinding,
+              valueType: field.valueType as ScalarValueType,
+              formatter: field.formatter
+            }));
+            const members = rows.map(({ member, resolved }) => ({
+              memberId: member.entityId,
+              values: resolved.values
+            }));
+            if (
+              isJsonObject(work.template.repeatContract) &&
+              work.template.repeatContract.kind === "docx.repeat-row-contract"
+            ) {
+              const repeat = parseDocxRepeatRowContract(
+                work.template.repeatContract
+              );
+              const rendered = await renderDocxRepeatRows({
+                compiled,
+                binding: repeat.binding,
+                technicalBinding: repeat.technicalBinding,
+                fields,
+                members
+              });
+              output = rendered.output;
+            } else if (
+              isJsonObject(work.template.repeatContract) &&
+              work.template.repeatContract.kind === "xlsx.repeat-row-contract"
+            ) {
+              const repeat = parseXlsxRepeatRowContract(
+                work.template.repeatContract
+              );
+              const rendered = await renderXlsxRepeatRows({
+                compiled,
+                binding: repeat.binding,
+                technicalBinding: repeat.technicalBinding,
+                fields,
+                members
+              });
+              output = rendered.output;
+            } else {
+              throw new PermanentJobError(
+                "Сохранённый контракт повторяемой строки имеет неподдерживаемый формат."
+              );
+            }
           }
           const outputName = `${safeName(work.template.title, "сводный-документ")}-участники-${work.members.length}.${work.template.format}`;
           await options.registry.completeUnit(

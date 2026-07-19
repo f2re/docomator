@@ -253,6 +253,62 @@ test("мастер сохраняет повторяемую строку DOCX �
   });
 });
 
+test("мастер XLSX выбирает повторяемый диапазон по понятным местам строки", async ({
+  page
+}) => {
+  const scenario = await installDocomatorApiMock(page);
+  const app = new DocomatorPage(page);
+  await app.open();
+  await app.openView("templates");
+  await uploadAndSaveSource(page, templateCases[1]);
+  await page.locator("#documentStructureButton").click();
+  await page.locator(".structure-element").first().click();
+
+  await expect(page.locator("#documentFieldRepeatArea")).toBeVisible();
+  await page.locator("#documentFieldRepeatArea").check();
+  await expect(page.locator("#documentFieldRepeatAreaOptions")).toBeVisible();
+  await expect(page.locator("#documentFieldRepeatAreaOptions")).toContainText(
+    "Всю используемую строку"
+  );
+  await page
+    .locator('input[name="documentFieldRepeatSelection"][value="range"]')
+    .check();
+  await expect(page.locator("#documentFieldRepeatRange")).toBeVisible();
+  await expect(page.locator("#documentFieldRepeatStart")).toContainText(
+    "Место 1: ФИО сотрудника"
+  );
+  await expect(page.locator("#documentFieldRepeatEnd")).toContainText(
+    "Место 2: 10"
+  );
+  await page
+    .locator("#documentFieldRepeatEnd")
+    .selectOption("xl/worksheets/sheet1.xml#cell:C2");
+
+  await page.locator("#documentFieldProperty").selectOption("__new__");
+  await page.locator("#documentFieldLabel").fill("ФИО");
+  await page.locator("#documentFieldType").selectOption("string");
+  await page.locator("#documentPropertyConfirm").check();
+  await page.locator("#documentFieldSave").click();
+  await expect(page.locator("#documentFieldMessage")).toContainText(
+    "Следующий шаг — пробное заполнение"
+  );
+
+  expect(scenario.fieldRequests).toHaveLength(1);
+  expect(scenario.fieldRequests[0]).toMatchObject({
+    repeatArea: {
+      selection: "range",
+      startElementId: "xl/worksheets/sheet1.xml#cell:B2",
+      endElementId: "xl/worksheets/sheet1.xml#cell:C2"
+    }
+  });
+  expect(scenario.primary.drafts[0].repeatBinding).toMatchObject({
+    kind: "xlsx.repeat-row",
+    selection: "range",
+    startAddress: "B2",
+    endAddress: "C2"
+  });
+});
+
 test("ошибка сервера сохраняет пробное значение и показывает идентификатор операции", async ({
   page
 }) => {

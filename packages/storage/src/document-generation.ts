@@ -7,6 +7,7 @@ import type { MutationContext } from "./knowledge.js";
 import { ContentAddressedObjectStore, type StoredObject } from "./object-store.js";
 import { DomainEventOutbox } from "./outbox.js";
 import { WorkerQueue, type WorkerJobState } from "./queue.js";
+import { repeatContractFormat } from "./repeat-contract.js";
 
 const DOCUMENT_GENERATION_MAX_ATTEMPTS = 5;
 
@@ -580,9 +581,12 @@ export class DocumentGenerationRegistry {
           "Template repeat row requires an aggregate audience snapshot"
         );
       }
-      if (source.repeat_contract_json !== null && source.format !== "docx") {
+      if (
+        source.repeat_contract_json !== null &&
+        repeatContractFormat(parseJson(source.repeat_contract_json)) !== source.format
+      ) {
         throw new DocumentGenerationConflictError(
-          "Stored repeat row is only compatible with DOCX"
+          "Stored repeat row is incompatible with the template format"
         );
       }
       const memberCount = Number(source.member_count);

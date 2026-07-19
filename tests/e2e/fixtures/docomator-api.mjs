@@ -113,19 +113,38 @@ function structureReport(fileName, repeatTemplate = false) {
       ...common,
       summary: {
         sheets: 1,
-        cells: 2,
-        formulas: 0,
-        shownElements: 1,
-        totalElements: 1
+        cells: 3,
+        formulas: 1,
+        shownElements: 3,
+        totalElements: 3
       },
       elements: [
         {
           id: "xl/worksheets/sheet1.xml#cell:B2",
           kind: "cell",
           sheetName: "Сотрудники",
+          sheetPath: "xl/worksheets/sheet1.xml",
           address: "B2",
           value: "ФИО сотрудника",
           formula: null
+        },
+        {
+          id: "xl/worksheets/sheet1.xml#cell:C2",
+          kind: "cell",
+          sheetName: "Сотрудники",
+          sheetPath: "xl/worksheets/sheet1.xml",
+          address: "C2",
+          value: "10",
+          formula: null
+        },
+        {
+          id: "xl/worksheets/sheet1.xml#cell:D2",
+          kind: "cell",
+          sheetName: "Сотрудники",
+          sheetPath: "xl/worksheets/sheet1.xml",
+          address: "D2",
+          value: "20",
+          formula: "C2*2"
         }
       ]
     };
@@ -581,6 +600,33 @@ export async function installDocomatorApiMock(page, options = {}) {
           part: "word/document.xml",
           tableIndex: 0,
           rowIndex: 1
+        };
+      } else if (payload.repeatArea) {
+        const elements = draft.structure.elements;
+        const start =
+          payload.repeatArea.selection === "range"
+            ? elements.find(
+                (element) => element.id === payload.repeatArea.startElementId
+              )
+            : elements[0];
+        const end =
+          payload.repeatArea.selection === "range"
+            ? elements.find(
+                (element) => element.id === payload.repeatArea.endElementId
+              )
+            : elements.at(-1);
+        draft.repeatBinding = {
+          version: 1,
+          kind: "xlsx.repeat-row",
+          source: "audience.members",
+          selection: payload.repeatArea.selection,
+          sheetName: "Сотрудники",
+          sheetPath: "xl/worksheets/sheet1.xml",
+          rowNumber: 2,
+          startAddress: start.address,
+          endAddress: end.address,
+          startElementId: start.id,
+          endElementId: end.id
         };
       }
       data = { field, repeatBinding: draft.repeatBinding };

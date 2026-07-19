@@ -12,13 +12,32 @@ import {
   type ZipFixtureEntry
 } from "@docomator/document-intake/testing";
 
-import { TemplateCompilerError } from "./compiler.js";
+import {
+  TemplateCompilerError,
+  type CompiledRepeatTechnicalBinding,
+  type DocxRepeatRowBinding
+} from "./compiler.js";
 import {
   compileScalarFields,
-  renderScalarValues
+  renderScalarValues,
+  type CompileScalarFieldsResult
 } from "./multi-field.js";
 import { packageEntry, readOoxmlPackage } from "./ooxml-package.js";
 import { renderDocxRepeatRows } from "./scalar-render.js";
+
+function requireDocxRepeat(result: CompileScalarFieldsResult): {
+  binding: DocxRepeatRowBinding;
+  technicalBinding: CompiledRepeatTechnicalBinding;
+} {
+  const repeat = result.repeat;
+  assert.ok(repeat);
+  assert.equal(repeat.binding.kind, "docx.repeat-row");
+  assert.equal(repeat.technicalBinding.kind, "docx.repeat-sdt");
+  return repeat as {
+    binding: DocxRepeatRowBinding;
+    technicalBinding: CompiledRepeatTechnicalBinding;
+  };
+}
 
 function docxFixture(): Buffer {
   return buildZipFixture(
@@ -449,7 +468,7 @@ test("DOCX repeat renderer clones the sample row and reverse-reads every value",
     fields: input.fields,
     repeatBinding: input.repeatBinding
   });
-  assert.ok(compiled.repeat);
+  const repeat = requireDocxRepeat(compiled);
   const byId = new Map(compiled.fields.map((field) => [field.fieldId, field]));
   const fields = input.fields.map((field) => ({
     fieldId: field.id,
@@ -475,15 +494,15 @@ test("DOCX repeat renderer clones the sample row and reverse-reads every value",
   ];
   const first = await renderDocxRepeatRows({
     compiled: compiled.output,
-    binding: compiled.repeat.binding,
-    technicalBinding: compiled.repeat.technicalBinding,
+    binding: repeat.binding,
+    technicalBinding: repeat.technicalBinding,
     fields,
     members
   });
   const second = await renderDocxRepeatRows({
     compiled: compiled.output,
-    binding: compiled.repeat.binding,
-    technicalBinding: compiled.repeat.technicalBinding,
+    binding: repeat.binding,
+    technicalBinding: repeat.technicalBinding,
     fields,
     members
   });
@@ -523,7 +542,7 @@ test("DOCX repeat renderer enforces member limits and required values", async ()
     fields: input.fields,
     repeatBinding: input.repeatBinding
   });
-  assert.ok(compiled.repeat);
+  const repeat = requireDocxRepeat(compiled);
   const byId = new Map(compiled.fields.map((field) => [field.fieldId, field]));
   const fields = input.fields.map((field) => ({
     fieldId: field.id,
@@ -535,8 +554,8 @@ test("DOCX repeat renderer enforces member limits and required values", async ()
   }));
   const base = {
     compiled: compiled.output,
-    binding: compiled.repeat.binding,
-    technicalBinding: compiled.repeat.technicalBinding,
+    binding: repeat.binding,
+    technicalBinding: repeat.technicalBinding,
     fields
   };
   await assert.rejects(
@@ -578,7 +597,7 @@ test("DOCX repeat renderer resolves deterministic Word ID collisions", async () 
     fields: input.fields,
     repeatBinding: input.repeatBinding
   });
-  assert.ok(compiled.repeat);
+  const repeat = requireDocxRepeat(compiled);
   const byId = new Map(compiled.fields.map((field) => [field.fieldId, field]));
   const fields = input.fields.map((field, index) => ({
     fieldId: index === 0 ? "field-49" : "field-67",
@@ -590,8 +609,8 @@ test("DOCX repeat renderer resolves deterministic Word ID collisions", async () 
   }));
   const rendered = await renderDocxRepeatRows({
     compiled: compiled.output,
-    binding: compiled.repeat.binding,
-    technicalBinding: compiled.repeat.technicalBinding,
+    binding: repeat.binding,
+    technicalBinding: repeat.technicalBinding,
     fields,
     members: Array.from({ length: 1_000 }, (_, memberIndex) => ({
       memberId: `person-${memberIndex}`,

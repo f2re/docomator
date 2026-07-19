@@ -8,6 +8,7 @@ import type {
 } from "./document-generation.js";
 import { resolveDocumentMemberValues } from "./document-values.js";
 import { parseJson, type JsonValue } from "./json.js";
+import { repeatContractFormat } from "./repeat-contract.js";
 
 export interface DocumentPreflightMissingField {
   key: string;
@@ -280,9 +281,12 @@ export class DocumentPreflightRegistry {
           "Template repeat row requires an aggregate audience snapshot"
         );
       }
-      if (source.repeat_contract_json !== null && format !== "docx") {
+      if (
+        source.repeat_contract_json !== null &&
+        repeatContractFormat(parseJson(source.repeat_contract_json)) !== format
+      ) {
         throw new DocumentPreflightConflictError(
-          "Stored repeat row is only compatible with DOCX"
+          "Stored repeat row is incompatible with the template format"
         );
       }
       const fieldCount = Number(source.field_count);

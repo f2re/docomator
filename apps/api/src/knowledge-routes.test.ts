@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -33,7 +34,17 @@ function migratedFixture(): {
     .readdirSync(migrationsDirectory)
     .filter((name) => /^\d{4}_.+\.sql$/.test(name))
     .sort()) {
-    database.exec(fs.readFileSync(path.join(migrationsDirectory, migration), "utf8"));
+    const sql = fs.readFileSync(path.join(migrationsDirectory, migration), "utf8");
+    database.exec(sql);
+    database
+      .prepare(
+        "INSERT INTO schema_migrations(name, checksum, applied_at) VALUES (?, ?, ?)"
+      )
+      .run(
+        migration,
+        createHash("sha256").update(sql).digest("hex"),
+        "2026-07-18T00:00:00.000Z"
+      );
   }
   database.close();
   const store = new SqliteStore({ databasePath });

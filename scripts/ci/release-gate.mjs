@@ -96,6 +96,53 @@ function repeatSource() {
   );
 }
 
+function repeatXlsxSource() {
+  return writeOoxmlPackage([
+    {
+      name: "[Content_Types].xml",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'
+      )
+    },
+    {
+      name: "_rels/.rels",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'
+      )
+    },
+    {
+      name: "xl/workbook.xml",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Сотрудники" sheetId="1" r:id="rId1"/></sheets></workbook>'
+      )
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'
+      )
+    },
+    {
+      name: "xl/styles.xml",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="3"><xf/><xf/><xf numFmtId="2"/></cellXfs></styleSheet>'
+      )
+    },
+    {
+      name: "xl/worksheets/sheet1.xml",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="B2:C2"/><sheetData><row r="2" s="1" customFormat="1" ht="22" customHeight="1"><c r="B2" s="1" t="inlineStr"><is><t>____</t></is></c><c r="C2" s="2"><f>B2</f><v>0</v></c></row></sheetData></worksheet>'
+      )
+    }
+  ]);
+}
+
 function elementBinding(element, selectedText) {
   const startOffset = element.text.indexOf(selectedText);
   assert.notEqual(startOffset, -1, "placeholder must exist in Document IR");
@@ -115,26 +162,28 @@ function elementBinding(element, selectedText) {
 }
 
 async function activateCandidate(releases, queue, tested, versionKind, label) {
+  const requestedAt = context(`${label}-preview-request`);
   const requested = releases.requestPreview(
     {
       spaceId: DEFAULT_SPACE_ID,
       versionId: tested.id,
       versionKind
     },
-    context(`${label}-preview-request`)
+    requestedAt
   );
+  const completedAt = context(`${label}-preview-ready`);
   await releases.completePreview(
     {
       requestId: requested.request.id,
       previewBuffer: Buffer.from("%PDF-1.4\n% deterministic release gate\n%%EOF\n"),
       converter: toJsonValue({ kind: "release-gate-stub" })
     },
-    context(`${label}-preview-ready`)
+    completedAt
   );
   const previewJob = queue.claimNext({
     workerId: "release-gate-preview",
     leaseDurationMs: 5_000,
-    now: new Date()
+    now: new Date(completedAt.now)
   });
   assert.equal(previewJob?.id, requested.request.workerJobId);
   queue.complete(previewJob.id, "release-gate-preview", new Date());
@@ -408,6 +457,168 @@ async function seedRepeatRelease(registries) {
     tested,
     "multi",
     "repeat"
+  );
+}
+
+async function seedXlsxRepeatRelease(registries) {
+  const sourceBuffer = repeatXlsxSource();
+  const structure = await analyzeOoxmlBuffer({
+    buffer: sourceBuffer,
+    fileName: "Реестр.xlsx",
+    maxElements: 2_000
+  });
+  const fieldCell = structure.elements.find(
+    (element) => element.kind === "cell" && element.address === "B2"
+  );
+  const formulaCell = structure.elements.find(
+    (element) => element.kind === "cell" && element.address === "C2"
+  );
+  assert.ok(fieldCell);
+  assert.ok(formulaCell);
+  const source = await registries.quarantine.saveAcceptedDocument(
+    {
+      spaceId: DEFAULT_SPACE_ID,
+      fileName: "Реестр.xlsx",
+      mediaType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      format: "xlsx",
+      decision: "accepted",
+      buffer: sourceBuffer,
+      report: toJsonValue({ decision: "accepted", gate: "P4" })
+    },
+    context("xlsx-repeat-source")
+  );
+  const draft = registries.drafts.createOrGetDraft(
+    {
+      spaceId: DEFAULT_SPACE_ID,
+      sourceRecordId: source.id,
+      title: "Реестр сотрудников XLSX",
+      format: "xlsx",
+      sourceSha256: source.sha256,
+      structureSha256: structure.structureSha256,
+      structure: toJsonValue(structure),
+      structureTruncated: structure.truncated
+    },
+    context("xlsx-repeat-draft")
+  );
+  const binding = {
+    version: 1,
+    kind: "xlsx.cell",
+    elementId: fieldCell.id,
+    sheetName: fieldCell.sheetName,
+    sheetPath: fieldCell.sheetPath,
+    address: fieldCell.address
+  };
+  const repeatBinding = {
+    version: 1,
+    kind: "xlsx.repeat-row",
+    source: "audience.members",
+    selection: "used-row",
+    sheetName: fieldCell.sheetName,
+    sheetPath: fieldCell.sheetPath,
+    rowNumber: 2,
+    startAddress: fieldCell.address,
+    endAddress: formulaCell.address,
+    startElementId: fieldCell.id,
+    endElementId: formulaCell.id
+  };
+  const field = registries.drafts.createField(
+    DEFAULT_SPACE_ID,
+    draft.id,
+    {
+      key: "person.full_name",
+      label: "ФИО сотрудника",
+      valueType: "string",
+      required: true,
+      elementId: fieldCell.id,
+      elementKind: "cell",
+      binding: toJsonValue(binding),
+      formatter: toJsonValue({ version: 1, kind: "identity" }),
+      repeatBinding: toJsonValue(repeatBinding),
+      originalPreview: fieldCell.value,
+      structureSha256: structure.structureSha256
+    },
+    context("xlsx-repeat-field")
+  );
+  const compiled = await compileScalarFields({
+    source: sourceBuffer,
+    fileName: "Реестр.xlsx",
+    expectedSourceSha256: structure.sourceSha256,
+    expectedStructureSha256: structure.structureSha256,
+    fields: [
+      {
+        id: field.id,
+        key: field.key,
+        label: field.label,
+        elementId: field.elementId,
+        binding: field.binding
+      }
+    ],
+    repeatBinding
+  });
+  assert.equal(compiled.repeat?.binding.kind, "xlsx.repeat-row");
+  const compiledField = compiled.fields[0];
+  assert.ok(compiledField);
+  const trial = await renderScalarValues({
+    compiled: compiled.output,
+    fields: [
+      {
+        fieldId: field.id,
+        fieldKey: field.key,
+        technicalBinding: compiledField.technicalBinding,
+        fieldBinding: field.binding,
+        valueType: field.valueType,
+        formatter: field.formatter,
+        value: "Тестовый Сотрудник"
+      }
+    ]
+  });
+  const renderedField = trial.fields[0];
+  assert.ok(renderedField);
+  const repeatContract = toJsonValue({
+    version: 1,
+    kind: "xlsx.repeat-row-contract",
+    binding: compiled.repeat.binding,
+    technicalBinding: compiled.repeat.technicalBinding
+  });
+  const tested = await registries.multiVersions.recordTestedVersion(
+    {
+      spaceId: DEFAULT_SPACE_ID,
+      draftId: draft.id,
+      format: "xlsx",
+      compiledBuffer: compiled.output,
+      trialBuffer: trial.output,
+      fields: [
+        {
+          fieldId: field.id,
+          fieldKey: field.key,
+          fieldLabel: field.label,
+          valueType: field.valueType,
+          required: field.required,
+          binding: field.binding,
+          formatter: field.formatter,
+          technicalBinding: toJsonValue(compiledField.technicalBinding),
+          sampleValue: "Тестовый Сотрудник",
+          renderedValue: renderedField.renderedValue,
+          readBackValue: renderedField.readBackValue,
+          verification: toJsonValue({ matched: true })
+        }
+      ],
+      repeatContract,
+      verification: toJsonValue({
+        matched: true,
+        compiledFields: 1,
+        readBackFields: 1
+      })
+    },
+    context("xlsx-repeat-tested")
+  );
+  return activateCandidate(
+    registries.releases,
+    registries.queue,
+    tested,
+    "multi",
+    "xlsx-repeat"
   );
 }
 
@@ -717,6 +928,7 @@ async function main() {
   };
   const personalRelease = await seedPersonalRelease(registries);
   const repeatRelease = await seedRepeatRelease(registries);
+  const xlsxRepeatRelease = await seedXlsxRepeatRelease(registries);
   const spaces = new SpaceRegistry(store);
   const members = Array.from({ length: 10 }, (_, index) =>
     spaces.createEntity(
@@ -1000,10 +1212,78 @@ async function main() {
     { units: 1, completedUnits: 1, finishedEvents: 1 }
   );
 
+  const xlsxPreflight = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-jobs/preflight`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        activeReleaseId: xlsxRepeatRelease.id,
+        snapshotId: repeatSnapshotResponse.data.snapshot.id
+      })
+    }
+  );
+  assert.equal(xlsxPreflight.data.format, "xlsx");
+  assert.equal(xlsxPreflight.data.memberCount, 10);
+  assert.equal(xlsxPreflight.data.expectedCount, 1);
+  assert.equal(xlsxPreflight.data.canStart, true);
+  const xlsxJobResponse = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-jobs`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        activeReleaseId: xlsxRepeatRelease.id,
+        snapshotId: repeatSnapshotResponse.data.snapshot.id,
+        idempotencyKey: "release-gate-xlsx-repeat"
+      })
+    }
+  );
+  const xlsxJob = await jobCompleted(baseUrl, xlsxJobResponse.data.job.id);
+  assert.equal(xlsxJob.generatedCount, 1);
+  assert.equal(xlsxJob.failedCount, 0);
+  const xlsxDocument = await download(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-jobs/${xlsxJob.id}/download`
+  );
+  const xlsxEntries = await readOoxmlPackage(xlsxDocument);
+  const worksheet = xlsxEntries.find(
+    (entry) => entry.name === "xl/worksheets/sheet1.xml"
+  );
+  const workbook = xlsxEntries.find(
+    (entry) => entry.name === "xl/workbook.xml"
+  );
+  assert.ok(worksheet);
+  assert.ok(workbook);
+  const worksheetXml = worksheet.content.toString("utf8");
+  const workbookXml = workbook.content.toString("utf8");
+  assert.equal((worksheetXml.match(/<row\b/gu) ?? []).length, 10);
+  assert.equal((worksheetXml.match(/customHeight="1"/gu) ?? []).length, 10);
+  assert.equal((worksheetXml.match(/<f>B\d+<\/f>/gu) ?? []).length, 10);
+  assert.match(worksheetXml, /<dimension ref="B2:C11"\/>/u);
+  assert.doesNotMatch(worksheetXml, /____/u);
+  assert.doesNotMatch(workbookXml, /_DOCOMATOR_/u);
+  let previousXlsxPosition = -1;
+  for (const [index] of members.entries()) {
+    const name = `Сотрудник ${String(index + 1).padStart(2, "0")}`;
+    const position = worksheetXml.indexOf(name);
+    assert.ok(position > previousXlsxPosition, `XLSX repeat order is wrong for ${name}`);
+    assert.equal(worksheetXml.split(name).length - 1, 1);
+    previousXlsxPosition = position;
+  }
+  assert.deepEqual(
+    {
+      units: Number(generationFacts(xlsxJob.id).units),
+      completedUnits: Number(generationFacts(xlsxJob.id).completed_units),
+      finishedEvents: Number(generationFacts(xlsxJob.id).finished_events)
+    },
+    { units: 1, completedUnits: 1, finishedEvents: 1 }
+  );
+
   await stopProcess(workerTwo);
   await stopProcess(api);
   process.stdout.write(
-    `Release gate passed: 10 personal DOCX + ZIP, repeat DOCX, recovered lease, worker restart.${keepArtifacts ? ` Artifacts: ${dataDir}` : ""}\n`
+    `Release gate passed: 10 personal DOCX + ZIP, repeat DOCX, repeat XLSX, recovered lease, worker restart.${keepArtifacts ? ` Artifacts: ${dataDir}` : ""}\n`
   );
 }
 

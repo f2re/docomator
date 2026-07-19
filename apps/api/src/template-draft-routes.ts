@@ -48,6 +48,11 @@ interface CreateFieldBody {
   decimalPlaces?: number;
   timeZone?: string;
   repeatRow?: boolean;
+  repeatArea?: {
+    selection: "used-row" | "range";
+    startElementId?: string;
+    endElementId?: string;
+  };
   textRange?: {
     startOffset: number;
     endOffset: number;
@@ -191,6 +196,11 @@ function bindingForElement(
     const sheetName = requiredString(element, "sheetName");
     const sheetPath = requiredString(element, "sheetPath");
     const address = requiredString(element, "address");
+    if (element.formula !== null && element.formula !== undefined) {
+      throw new TemplateDraftValidationError(
+        "Ячейку с формулой нельзя назначить полем. Выберите обычную ячейку в той же строке."
+      );
+    }
     const value = typeof element.value === "string" ? element.value : "";
     return {
       kind,
@@ -285,6 +295,149 @@ function fieldRepeatRow(
     tableIndex: binding.tableLocation.tableIndex ?? null,
     rowIndex: binding.tableLocation.rowIndex ?? null
   });
+}
+
+function structureElements(structure: JsonValue): Array<{ [key: string]: JsonValue }> {
+  if (!isJsonObject(structure) || !Array.isArray(structure.elements)) {
+    throw new TemplateDraftValidationError("Сохранённая структура документа повреждена.");
+  }
+  return structure.elements.filter(isJsonObject);
+}
+
+function xlsxCoordinate(addressValue: JsonValue | undefined): {
+  address: string;
+  column: number;
+  row: number;
+} | null {
+  if (typeof addressValue !== "string") return null;
+  const address = addressValue.toUpperCase();
+  const match = /^([A-Z]{1,3})([1-9][0-9]{0,6})$/u.exec(address);
+  if (match === null) return null;
+  let column = 0;
+  for (const character of match[1] ?? "") {
+    column = column * 26 + character.charCodeAt(0) - 64;
+  }
+  const row = Number(match[2]);
+  return column >= 1 && column <= 16_384 && row >= 1 && row <= 1_048_576
+    ? { address, column, row }
+    : null;
+}
+
+function xlsxRepeatBindingForArea(
+  structure: JsonValue,
+  selectedElement: { [key: string]: JsonValue },
+  area: NonNullable<CreateFieldBody["repeatArea"]>,
+  structureTruncated: boolean
+): JsonValue {
+  if (selectedElement.kind !== "cell") {
+    throw new TemplateDraftValidationError(
+      "Повторяемый диапазон XLSX можно задать только для поля в ячейке."
+    );
+  }
+  const selected = xlsxCoordinate(selectedElement.address);
+  const sheetName = requiredString(selectedElement, "sheetName");
+  const sheetPath = requiredString(selectedElement, "sheetPath");
+  if (selected === null) {
+    throw new TemplateDraftValidationError("Адрес выбранной ячейки XLSX недопустим.");
+  }
+  let start: { [key: string]: JsonValue };
+  let end: { [key: string]: JsonValue };
+  if (area.selection === "used-row") {
+    if (structureTruncated) {
+      throw new TemplateDraftValidationError(
+        "Структура XLSX усечена: нельзя надёжно выбрать всю используемую строку. Выберите меньший файл или непрерывный диапазон."
+      );
+    }
+    const row = structureElements(structure)
+      .filter(
+        (element) =>
+          element.kind === "cell" &&
+          element.sheetName === sheetName &&
+          element.sheetPath === sheetPath &&
+          xlsxCoordinate(element.address)?.row === selected.row
+      )
+      .sort(
+        (left, right) =>
+          (xlsxCoordinate(left.address)?.column ?? 0) -
+          (xlsxCoordinate(right.address)?.column ?? 0)
+      );
+    const first = row[0];
+    const last = row.at(-1);
+    if (first === undefined || last === undefined) {
+      throw new TemplateDraftValidationError(
+        "В сохранённой структуре не найдена используемая строка XLSX."
+      );
+    }
+    start = first;
+    end = last;
+  } else {
+    if (area.startElementId === undefined || area.endElementId === undefined) {
+      throw new TemplateDraftValidationError(
+        "Для непрерывного диапазона выберите начальную и конечную ячейки."
+      );
+    }
+    start = findElement(structure, area.startElementId);
+    end = findElement(structure, area.endElementId);
+  }
+  const startCoordinate = xlsxCoordinate(start.address);
+  const endCoordinate = xlsxCoordinate(end.address);
+  if (
+    start.kind !== "cell" ||
+    end.kind !== "cell" ||
+    start.sheetName !== sheetName ||
+    end.sheetName !== sheetName ||
+    start.sheetPath !== sheetPath ||
+    end.sheetPath !== sheetPath ||
+    startCoordinate === null ||
+    endCoordinate === null ||
+    startCoordinate.row !== selected.row ||
+    endCoordinate.row !== selected.row ||
+    startCoordinate.column > endCoordinate.column ||
+    selected.column < startCoordinate.column ||
+    selected.column > endCoordinate.column
+  ) {
+    throw new TemplateDraftValidationError(
+      "Повторяемый диапазон XLSX должен быть непрерывным, находиться в одной строке и включать выбранное поле."
+    );
+  }
+  return toJsonValue({
+    version: 1,
+    kind: "xlsx.repeat-row",
+    source: "audience.members",
+    selection: area.selection,
+    sheetName,
+    sheetPath,
+    rowNumber: selected.row,
+    startAddress: startCoordinate.address,
+    endAddress: endCoordinate.address,
+    startElementId: requiredString(start, "id"),
+    endElementId: requiredString(end, "id")
+  });
+}
+
+function fieldInsideRepeat(binding: JsonValue, repeatBinding: JsonValue): boolean {
+  if (!isJsonObject(repeatBinding) || !isJsonObject(binding)) return false;
+  if (repeatBinding.kind === "docx.repeat-row") {
+    const fieldRow = fieldRepeatRow(binding);
+    const repeatRow = repeatRowCoordinate(repeatBinding);
+    return fieldRow !== null && repeatRow !== null && sameRepeatRow(fieldRow, repeatRow);
+  }
+  if (repeatBinding.kind !== "xlsx.repeat-row" || binding.kind !== "xlsx.cell") {
+    return false;
+  }
+  const field = xlsxCoordinate(binding.address);
+  const start = xlsxCoordinate(repeatBinding.startAddress);
+  const end = xlsxCoordinate(repeatBinding.endAddress);
+  return (
+    field !== null &&
+    start !== null &&
+    end !== null &&
+    binding.sheetName === repeatBinding.sheetName &&
+    binding.sheetPath === repeatBinding.sheetPath &&
+    field.row === repeatBinding.rowNumber &&
+    field.column >= start.column &&
+    field.column <= end.column
+  );
 }
 
 function sameRepeatRow(
@@ -463,6 +616,27 @@ export function registerTemplateDraftRoutes(
               pattern: "^(?:UTC|[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+)+)$"
             },
             repeatRow: { type: "boolean", default: false },
+            repeatArea: {
+              type: "object",
+              additionalProperties: false,
+              required: ["selection"],
+              properties: {
+                selection: {
+                  type: "string",
+                  enum: ["used-row", "range"]
+                },
+                startElementId: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 160
+                },
+                endElementId: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 160
+                }
+              }
+            },
             textRange: {
               type: "object",
               additionalProperties: false,
@@ -491,32 +665,32 @@ export function registerTemplateDraftRoutes(
       );
       const element = findElement(draft.structure, request.body.elementId);
       const binding = bindingForElement(element, request.body.textRange);
-      const selectedRow = elementTableRow(element);
-      const currentRepeatRow =
-        draft.repeatBinding === null
-          ? null
-          : repeatRowCoordinate(draft.repeatBinding);
       if (
-        currentRepeatRow !== null &&
-        (selectedRow === null || !sameRepeatRow(currentRepeatRow, selectedRow))
+        draft.repeatBinding !== null &&
+        !fieldInsideRepeat(binding.binding, draft.repeatBinding)
       ) {
         throw new TemplateDraftValidationError(
-          "Все поля шаблона с повторяемой строкой должны находиться в одной выбранной строке таблицы."
+          "Все поля шаблона с повтором должны находиться внутри выбранной строки или диапазона."
+        );
+      }
+      if (request.body.repeatRow && request.body.repeatArea !== undefined) {
+        throw new TemplateDraftValidationError(
+          "Выберите один способ повтора: строку DOCX или диапазон XLSX."
         );
       }
       const repeatBinding = request.body.repeatRow
         ? repeatBindingForElement(element)
-        : undefined;
+        : request.body.repeatArea === undefined
+          ? undefined
+          : xlsxRepeatBindingForArea(
+              draft.structure,
+              element,
+              request.body.repeatArea,
+              draft.structureTruncated
+            );
       if (repeatBinding !== undefined) {
-        const wantedRow = repeatRowCoordinate(repeatBinding);
-        if (wantedRow === null) {
-          throw new TemplateDraftValidationError(
-            "Не удалось определить повторяемую строку таблицы DOCX."
-          );
-        }
         const outsideField = draft.fields.find((field) => {
-          const row = fieldRepeatRow(field.binding);
-          return row === null || !sameRepeatRow(row, wantedRow);
+          return !fieldInsideRepeat(field.binding, repeatBinding);
         });
         if (outsideField !== undefined) {
           throw new TemplateDraftValidationError(

@@ -281,19 +281,139 @@ function structureTextRangeControl(element) {
     </label>`;
 }
 
+function structureCellCoordinate(address) {
+  const match = /^([A-Z]{1,3})([1-9][0-9]{0,6})$/u.exec(
+    String(address || "").toUpperCase()
+  );
+  if (!match) return null;
+  let column = 0;
+  for (const character of match[1]) {
+    column = column * 26 + character.charCodeAt(0) - 64;
+  }
+  const row = Number(match[2]);
+  return column >= 1 && column <= 16384 && row >= 1 && row <= 1048576
+    ? { column, row }
+    : null;
+}
+
+function structureRowCells(element) {
+  const selected = structureCellCoordinate(element.address);
+  if (!selected || !Array.isArray(structureReport?.elements)) return [];
+  return structureReport.elements
+    .filter((candidate) => {
+      const coordinate = structureCellCoordinate(candidate.address);
+      return (
+        candidate.kind === "cell" &&
+        candidate.sheetName === element.sheetName &&
+        candidate.sheetPath === element.sheetPath &&
+        coordinate?.row === selected.row
+      );
+    })
+    .sort(
+      (left, right) =>
+        structureCellCoordinate(left.address).column -
+        structureCellCoordinate(right.address).column
+    );
+}
+
+function structureRowCellOptions(element, selectedId) {
+  return structureRowCells(element)
+    .map((cell, index) => {
+      const value = cell.formula
+        ? "формула с рассчитанным значением"
+        : cell.value || "пустая ячейка";
+      return `<option value="${structureEscape(cell.id)}"${cell.id === selectedId ? " selected" : ""}>Место ${index + 1}: ${structureEscape(value)}</option>`;
+    })
+    .join("");
+}
+
+function structureRepeatContainsElement(repeat, element) {
+  if (!repeat || element.kind !== "cell" || repeat.kind !== "xlsx.repeat-row") {
+    return false;
+  }
+  const field = structureCellCoordinate(element.address);
+  const start = structureCellCoordinate(repeat.startAddress);
+  const end = structureCellCoordinate(repeat.endAddress);
+  return Boolean(
+    field &&
+      start &&
+      end &&
+      element.sheetName === repeat.sheetName &&
+      element.sheetPath === repeat.sheetPath &&
+      field.row === repeat.rowNumber &&
+      field.column >= start.column &&
+      field.column <= end.column
+  );
+}
+
 function structureRepeatRowControl(element) {
-  if (element.kind !== "paragraph" || !element.tableLocation) return "";
   const current = structureDraft?.repeatBinding;
-  const selected =
-    current &&
-    current.part === element.part &&
-    current.tableIndex === element.tableLocation.tableIndex &&
-    current.rowIndex === element.tableLocation.rowIndex;
+  if (element.kind === "paragraph" && element.tableLocation) {
+    const selected =
+      current &&
+      current.part === element.part &&
+      current.tableIndex === element.tableLocation.tableIndex &&
+      current.rowIndex === element.tableLocation.rowIndex;
+    return `
+      <label class="structure-required-field">
+        <input id="documentFieldRepeatRow" type="checkbox"${selected ? " checked" : ""} />
+        <span><strong>Повторять эту строку для сотрудников</strong><small>В сводном документе строка будет скопирована по одному разу для каждого участника. Все изменяемые поля такого шаблона должны находиться в этой строке.</small></span>
+      </label>`;
+  }
+  if (element.kind !== "cell") return "";
+  if (current?.kind === "xlsx.repeat-row") {
+    const inside = structureRepeatContainsElement(current, element);
+    return `
+      <div class="structure-repeat-summary ${inside ? "is-ready" : "is-warning"}">
+        <strong>${inside ? "Повторяемый диапазон уже выбран" : "Эта ячейка вне повторяемого диапазона"}</strong>
+        <small>${inside ? "После сохранения поле будет повторяться для каждого сотрудника вместе с выбранной строкой." : "Выберите ячейку внутри ранее сохранённого диапазона. Текущий выбор сохранить нельзя."}</small>
+      </div>`;
+  }
+  const rowCells = structureRowCells(element);
+  const first = rowCells[0];
+  const last = rowCells.at(-1);
+  const usedRowUnavailable = Boolean(structureReport?.truncated);
   return `
-    <label class="structure-required-field">
-      <input id="documentFieldRepeatRow" type="checkbox"${selected ? " checked" : ""} />
-      <span><strong>Повторять эту строку для сотрудников</strong><small>В сводном документе строка будет скопирована по одному разу для каждого участника. Все изменяемые поля такого шаблона должны находиться в этой строке.</small></span>
-    </label>`;
+    <div class="structure-repeat-area">
+      <label class="structure-required-field">
+        <input id="documentFieldRepeatArea" type="checkbox" />
+        <span><strong>Создать один список сотрудников</strong><small>Выбранная строка будет заполнена по одному разу для каждого участника сводного документа.</small></span>
+      </label>
+      <fieldset id="documentFieldRepeatAreaOptions" hidden>
+        <legend>Что повторять в строке?</legend>
+        <label class="structure-choice-field">
+          <input type="radio" name="documentFieldRepeatSelection" value="used-row"${usedRowUnavailable ? " disabled" : " checked"} />
+          <span><strong>Всю используемую строку</strong><small>${usedRowUnavailable ? "Недоступно: показана только часть структуры. Выберите непрерывный диапазон." : "Система сама возьмёт все заполненные места этой строки."}</small></span>
+        </label>
+        <label class="structure-choice-field">
+          <input type="radio" name="documentFieldRepeatSelection" value="range"${usedRowUnavailable ? " checked" : ""} />
+          <span><strong>Непрерывный диапазон</strong><small>Подходит, если слева или справа в строке есть подпись, которую не нужно копировать.</small></span>
+        </label>
+        <div class="structure-repeat-range" id="documentFieldRepeatRange"${usedRowUnavailable ? "" : " hidden"}>
+          <label>
+            <span>Начало диапазона</span>
+            <select id="documentFieldRepeatStart">${structureRowCellOptions(element, first?.id || element.id)}</select>
+            <small>Первое место, которое будет повторяться.</small>
+          </label>
+          <label>
+            <span>Конец диапазона</span>
+            <select id="documentFieldRepeatEnd">${structureRowCellOptions(element, last?.id || element.id)}</select>
+            <small>Последнее место той же строки.</small>
+          </label>
+        </div>
+      </fieldset>
+    </div>`;
+}
+
+function renderStructureRepeatAreaFields() {
+  const enabled = Boolean(document.querySelector("#documentFieldRepeatArea")?.checked);
+  const options = document.querySelector("#documentFieldRepeatAreaOptions");
+  if (options) options.hidden = !enabled;
+  const selection = document.querySelector(
+    'input[name="documentFieldRepeatSelection"]:checked'
+  )?.value;
+  const range = document.querySelector("#documentFieldRepeatRange");
+  if (range) range.hidden = !enabled || selection !== "range";
 }
 
 function captureStructureTextRange() {
@@ -329,6 +449,18 @@ function renderStructureSelection(element) {
 
   const detail = document.querySelector("#documentStructureSelection");
   if (!detail) return;
+  const formulaUnavailable = element.kind === "cell" && Boolean(element.formula);
+  const outsideCurrentRepeat = Boolean(
+    element.kind === "cell" &&
+      structureDraft?.repeatBinding?.kind === "xlsx.repeat-row" &&
+      !structureRepeatContainsElement(structureDraft.repeatBinding, element)
+  );
+  const fieldUnavailable = formulaUnavailable || outsideCurrentRepeat;
+  const initialMessage = formulaUnavailable
+    ? "Эта ячейка содержит формулу. Она может повторяться как вычисляемая часть строки, но не может быть полем сотрудника."
+    : outsideCurrentRepeat
+      ? "Ячейка находится вне ранее сохранённого повторяемого диапазона. Выберите место внутри него."
+      : "Исходник должен быть сохранён в выбранном разделе данных.";
   detail.innerHTML = `
     <div class="structure-selection-content">
       <strong>${structureEscape(structureLocation(element))}</strong>
@@ -367,8 +499,8 @@ function renderStructureSelection(element) {
           <p>Координата: <code>${structureEscape(element.id)}</code>. Часть пакета: <code>${structureEscape(element.part || element.sheetName || "не указана")}</code>. Сервер повторно проверит её по сохранённой структуре.</p>
         </details>
         <div class="structure-field-actions">
-          <button class="primary-button" id="documentFieldSave" type="submit"${element.kind === "paragraph" ? " disabled" : ""}>Связать с документом</button>
-          <p id="documentFieldMessage">Исходник должен быть сохранён в выбранном разделе данных.</p>
+          <button class="primary-button" id="documentFieldSave" type="submit"${element.kind === "paragraph" || fieldUnavailable ? " disabled" : ""}>Связать с документом</button>
+          <p id="documentFieldMessage"${fieldUnavailable ? ' class="is-warning"' : ""}>${initialMessage}</p>
         </div>
       </form>
     </div>`;
@@ -379,11 +511,20 @@ function renderStructureSelection(element) {
   detail
     .querySelector("#documentFieldType")
     ?.addEventListener("change", renderStructureFormatterFields);
+  detail
+    .querySelector("#documentFieldRepeatArea")
+    ?.addEventListener("change", renderStructureRepeatAreaFields);
+  detail
+    .querySelectorAll('input[name="documentFieldRepeatSelection"]')
+    .forEach((control) =>
+      control.addEventListener("change", renderStructureRepeatAreaFields)
+    );
   const textRange = detail.querySelector("#documentFieldTextRange");
   for (const eventName of ["select", "mouseup", "keyup", "touchend"]) {
     textRange?.addEventListener(eventName, captureStructureTextRange);
   }
   renderNewStructurePropertyFields();
+  renderStructureRepeatAreaFields();
   detail.querySelector("#documentFieldForm")?.addEventListener("submit", saveSelectedField);
 }
 
@@ -421,6 +562,23 @@ async function loadStructureDraft() {
   return { spaceId, draft: structureDraft };
 }
 
+function selectedStructureRepeatArea(form) {
+  if (!form.querySelector("#documentFieldRepeatArea")?.checked) return null;
+  const selection = form.querySelector(
+    'input[name="documentFieldRepeatSelection"]:checked'
+  )?.value;
+  if (selection === "used-row") return { selection: "used-row" };
+  if (selection !== "range") {
+    throw { message: "Выберите, какую часть строки нужно повторять." };
+  }
+  const startElementId = form.querySelector("#documentFieldRepeatStart")?.value || "";
+  const endElementId = form.querySelector("#documentFieldRepeatEnd")?.value || "";
+  if (!startElementId || !endElementId) {
+    throw { message: "Выберите начало и конец повторяемого диапазона." };
+  }
+  return { selection: "range", startElementId, endElementId };
+}
+
 async function saveSelectedField(event) {
   event.preventDefault();
   if (fieldBusy || !selectedStructureElement || !structureReport) return;
@@ -435,6 +593,14 @@ async function saveSelectedField(event) {
   const valueType = form.querySelector("#documentFieldType")?.value || "string";
   const required = Boolean(form.querySelector("#documentFieldRequired")?.checked);
   const repeatRow = Boolean(form.querySelector("#documentFieldRepeatRow")?.checked);
+  let repeatArea;
+  try {
+    repeatArea = selectedStructureRepeatArea(form);
+  } catch (error) {
+    message.className = "is-error";
+    message.textContent = error?.message || "Проверьте границы повторяемого диапазона.";
+    return;
+  }
   const creatingProperty = propertyKey === "__new__";
   const propertyConfirmed = Boolean(form.querySelector("#documentPropertyConfirm")?.checked);
   if (
@@ -515,6 +681,7 @@ async function saveSelectedField(event) {
           required,
           elementId: selectedStructureElement.id,
           ...(repeatRow ? { repeatRow: true } : {}),
+          ...(repeatArea ? { repeatArea } : {}),
           ...(definition.valueType === "number" && decimalPlacesValue !== ""
             ? { decimalPlaces: Number(decimalPlacesValue) }
             : {}),

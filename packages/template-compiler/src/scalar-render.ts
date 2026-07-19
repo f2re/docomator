@@ -111,7 +111,7 @@ interface DecodedXml {
   bom: boolean;
 }
 
-interface NormalizedScalarValue {
+export interface NormalizedScalarValue {
   display: string;
   xlsxMode: "inline-string" | "number" | "boolean";
   xlsxValue: string;
@@ -215,7 +215,7 @@ function normalizeDateTime(value: unknown): string {
   return date.toISOString();
 }
 
-function normalizeScalarValue(
+export function normalizeScalarValueForRendering(
   valueType: ScalarValueType,
   value: unknown,
   formatterValue: unknown
@@ -1210,7 +1210,11 @@ export async function renderDocxRepeatRows(
       }
       const normalized: NormalizedScalarValue = missing
         ? { display: "", xlsxMode: "inline-string", xlsxValue: "" }
-        : normalizeScalarValue(field.valueType, value, field.formatter);
+        : normalizeScalarValueForRendering(
+            field.valueType,
+            value,
+            field.formatter
+          );
       const wordId = allocateRepeatWordId(
         field.fieldId,
         memberIndex,
@@ -1398,7 +1402,7 @@ export async function renderScalarValue(
 ): Promise<RenderScalarValueResult> {
   validateBindings(input.technicalBinding, input.fieldBinding);
   const compiled = Buffer.from(input.compiled);
-  const normalized = normalizeScalarValue(
+  const normalized = normalizeScalarValueForRendering(
     input.valueType,
     input.value,
     input.formatter

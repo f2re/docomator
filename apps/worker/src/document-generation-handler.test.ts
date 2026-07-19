@@ -72,6 +72,30 @@ function repeatTechnicalIdentifier(): string {
     .slice(0, 24)}`;
 }
 
+function xlsxFieldIdentifier(fieldId: string): string {
+  return `_DOCOMATOR_${createHash("sha256")
+    .update(fieldId)
+    .digest("hex")
+    .slice(0, 24)
+    .toUpperCase()}`;
+}
+
+function xlsxRepeatTechnicalIdentifier(): string {
+  return `_DOCOMATOR_REPEAT_${createHash("sha256")
+    .update("xl/worksheets/sheet1.xml")
+    .update("\u0000")
+    .update("2")
+    .update("\u0000")
+    .update("B2")
+    .update("\u0000")
+    .update("C2")
+    .update("\u0000")
+    .update("audience.members")
+    .digest("hex")
+    .slice(0, 24)
+    .toUpperCase()}`;
+}
+
 function repeatCompiledTemplate(fieldId: string): Buffer {
   const fieldIdentifier = `aifield:${fieldId}`;
   const repeatIdentifier = repeatTechnicalIdentifier();
@@ -99,7 +123,52 @@ function repeatCompiledTemplate(fieldId: string): Buffer {
   ]);
 }
 
-async function fixture(options: { repeat?: boolean } = {}) {
+function xlsxRepeatCompiledTemplate(fieldId: string): Buffer {
+  const fieldIdentifier = xlsxFieldIdentifier(fieldId);
+  const repeatIdentifier = xlsxRepeatTechnicalIdentifier();
+  return writeOoxmlPackage([
+    {
+      name: "[Content_Types].xml",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+      )
+    },
+    {
+      name: "_rels/.rels",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'
+      )
+    },
+    {
+      name: "xl/workbook.xml",
+      isDirectory: false,
+      content: Buffer.from(
+        `<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Сотрудники" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="${fieldIdentifier}">'Сотрудники'!$B$2</definedName><definedName name="${repeatIdentifier}">'Сотрудники'!$B$2:$C$2</definedName></definedNames></workbook>`
+      )
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'
+      )
+    },
+    {
+      name: "xl/worksheets/sheet1.xml",
+      isDirectory: false,
+      content: Buffer.from(
+        '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="B2:C2"/><sheetData><row r="2" ht="20" customHeight="1"><c r="B2" t="inlineStr"><is><t>____</t></is></c><c r="C2"><f>B2</f><v>0</v></c></row></sheetData></worksheet>'
+      )
+    }
+  ]);
+}
+
+async function fixture(
+  options: { repeat?: boolean; repeatFormat?: "docx" | "xlsx" } = {}
+) {
+  const format = options.repeatFormat ?? "docx";
   const dataDir = await fsPromises.mkdtemp(
     path.join(os.tmpdir(), "docomator-generation-handler-")
   );
@@ -120,10 +189,12 @@ async function fixture(options: { repeat?: boolean } = {}) {
   const source = await quarantine.saveAcceptedDocument(
     {
       spaceId: DEFAULT_SPACE_ID,
-      fileName: "Список участников.docx",
+      fileName: `Список участников.${format}`,
       mediaType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      format: "docx",
+        format === "docx"
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      format,
       decision: "accepted",
       buffer: Buffer.from("verified-source"),
       report: { decision: "accepted" }
@@ -135,10 +206,22 @@ async function fixture(options: { repeat?: boolean } = {}) {
       spaceId: DEFAULT_SPACE_ID,
       sourceRecordId: source.id,
       title: "Список участников",
-      format: "docx",
+      format,
       sourceSha256: source.sha256,
       structureSha256: STRUCTURE_SHA,
-      structure: { elements: [{ id: "paragraph-1", kind: "paragraph" }] },
+      structure: {
+        elements: [
+          format === "docx"
+            ? { id: "paragraph-1", kind: "paragraph" }
+            : {
+                id: "cell-b2",
+                kind: "cell",
+                sheetName: "Сотрудники",
+                sheetPath: "xl/worksheets/sheet1.xml",
+                address: "B2"
+              }
+        ]
+      },
       structureTruncated: false
     },
     context("corr-draft", 1)
@@ -151,35 +234,60 @@ async function fixture(options: { repeat?: boolean } = {}) {
       label: "ФИО участника",
       valueType: "string",
       required: true,
-      elementId: "paragraph-1",
-      elementKind: "paragraph",
-      binding: {
-        version: 1,
-        kind: "docx.paragraph",
-        elementId: "paragraph-1",
-        part: "word/document.xml",
-        index: options.repeat ? 2 : 0,
-        ...(options.repeat
+      elementId: format === "docx" ? "paragraph-1" : "cell-b2",
+      elementKind: format === "docx" ? "paragraph" : "cell",
+      binding:
+        format === "docx"
           ? {
-              tableLocation: {
-                tableIndex: 0,
-                rowIndex: 1,
-                columnIndex: 0
-              }
+              version: 1,
+              kind: "docx.paragraph",
+              elementId: "paragraph-1",
+              part: "word/document.xml",
+              index: options.repeat ? 2 : 0,
+              ...(options.repeat
+                ? {
+                    tableLocation: {
+                      tableIndex: 0,
+                      rowIndex: 1,
+                      columnIndex: 0
+                    }
+                  }
+                : {})
             }
-          : {})
-      },
+          : {
+              version: 1,
+              kind: "xlsx.cell",
+              elementId: "cell-b2",
+              sheetName: "Сотрудники",
+              sheetPath: "xl/worksheets/sheet1.xml",
+              address: "B2"
+            },
       ...(options.repeat
         ? {
-            repeatBinding: {
-              version: 1,
-              kind: "docx.repeat-row",
-              source: "audience.members",
-              anchorElementId: "paragraph-1",
-              part: "word/document.xml",
-              tableIndex: 0,
-              rowIndex: 1
-            }
+            repeatBinding:
+              format === "docx"
+                ? {
+                    version: 1,
+                    kind: "docx.repeat-row",
+                    source: "audience.members",
+                    anchorElementId: "paragraph-1",
+                    part: "word/document.xml",
+                    tableIndex: 0,
+                    rowIndex: 1
+                  }
+                : {
+                    version: 1,
+                    kind: "xlsx.repeat-row",
+                    source: "audience.members",
+                    selection: "used-row",
+                    sheetName: "Сотрудники",
+                    sheetPath: "xl/worksheets/sheet1.xml",
+                    rowNumber: 2,
+                    startAddress: "B2",
+                    endAddress: "C2",
+                    startElementId: "cell-b2",
+                    endElementId: "cell-c2"
+                  }
           }
         : {}),
       originalPreview: "ФИО участника",
@@ -188,33 +296,60 @@ async function fixture(options: { repeat?: boolean } = {}) {
     context("corr-field", 2)
   );
   const compiled = options.repeat
-    ? repeatCompiledTemplate(field.id)
+    ? format === "docx"
+      ? repeatCompiledTemplate(field.id)
+      : xlsxRepeatCompiledTemplate(field.id)
     : Buffer.from("compiled-template");
-  const repeatContract = {
-    version: 1,
-    kind: "docx.repeat-row-contract",
-    binding: {
-      version: 1,
-      kind: "docx.repeat-row",
-      source: "audience.members",
-      anchorElementId: "paragraph-1",
-      part: "word/document.xml",
-      tableIndex: 0,
-      rowIndex: 1
-    },
-    technicalBinding: {
-      kind: "docx.repeat-sdt",
-      identifier: repeatTechnicalIdentifier(),
-      part: "word/document.xml",
-      target: "таблица 1, строка 2"
-    }
-  } as const;
+  const repeatContract =
+    format === "docx"
+      ? {
+          version: 1 as const,
+          kind: "docx.repeat-row-contract" as const,
+          binding: {
+            version: 1 as const,
+            kind: "docx.repeat-row" as const,
+            source: "audience.members" as const,
+            anchorElementId: "paragraph-1",
+            part: "word/document.xml",
+            tableIndex: 0,
+            rowIndex: 1
+          },
+          technicalBinding: {
+            kind: "docx.repeat-sdt" as const,
+            identifier: repeatTechnicalIdentifier(),
+            part: "word/document.xml",
+            target: "таблица 1, строка 2"
+          }
+        }
+      : {
+          version: 1 as const,
+          kind: "xlsx.repeat-row-contract" as const,
+          binding: {
+            version: 1 as const,
+            kind: "xlsx.repeat-row" as const,
+            source: "audience.members" as const,
+            selection: "used-row" as const,
+            sheetName: "Сотрудники",
+            sheetPath: "xl/worksheets/sheet1.xml",
+            rowNumber: 2,
+            startAddress: "B2",
+            endAddress: "C2",
+            startElementId: "cell-b2",
+            endElementId: "cell-c2"
+          },
+          technicalBinding: {
+            kind: "xlsx.repeat-defined-name" as const,
+            identifier: xlsxRepeatTechnicalIdentifier(),
+            part: "xl/workbook.xml" as const,
+            target: "'Сотрудники'!$B$2:$C$2"
+          }
+        };
   const tested = options.repeat
     ? await multiTestedVersions.recordTestedVersion(
         {
           spaceId: DEFAULT_SPACE_ID,
           draftId: draft.id,
-          format: "docx",
+          format,
           compiledBuffer: compiled,
           trialBuffer: compiled,
           fields: [
@@ -226,12 +361,20 @@ async function fixture(options: { repeat?: boolean } = {}) {
               required: field.required,
               binding: field.binding,
               formatter: field.formatter,
-              technicalBinding: {
-                kind: "docx.sdt",
-                identifier: `aifield:${field.id}`,
-                part: "word/document.xml",
-                target: "таблица 1, строка 2, ячейка 1"
-              },
+              technicalBinding:
+                format === "docx"
+                  ? {
+                      kind: "docx.sdt",
+                      identifier: `aifield:${field.id}`,
+                      part: "word/document.xml",
+                      target: "таблица 1, строка 2, ячейка 1"
+                    }
+                  : {
+                      kind: "xlsx.defined-name",
+                      identifier: xlsxFieldIdentifier(field.id),
+                      part: "xl/workbook.xml",
+                      target: "'Сотрудники'!$B$2"
+                    },
               sampleValue: "Иванов Иван",
               renderedValue: "Иванов Иван",
               readBackValue: "Иванов Иван",
@@ -247,7 +390,7 @@ async function fixture(options: { repeat?: boolean } = {}) {
       spaceId: DEFAULT_SPACE_ID,
       draftId: draft.id,
       fieldId: field.id,
-      format: "docx",
+      format,
       compiledBuffer: compiled,
       trialBuffer: Buffer.from("trial-template"),
       technicalBinding: {
@@ -325,6 +468,7 @@ async function fixture(options: { repeat?: boolean } = {}) {
     release,
     snapshot: snapshot.snapshot,
     repeat: Boolean(options.repeat),
+    format,
     async cleanup() {
       store.close();
       await fsPromises.rm(dataDir, { recursive: true, force: true });
@@ -366,18 +510,34 @@ async function assertGeneratedDocument(
   const output = await setup.objectStore.getBuffer(outputSha256);
   assert.equal(output.subarray(0, 2).toString(), "PK");
   const entries = await readOoxmlPackage(output);
-  const documentXml = entries.find((entry) => entry.name === "word/document.xml");
-  assert.ok(documentXml);
-  const content = documentXml.content.toString("utf8");
-  assert.match(content, /Анна Алексеева/u);
-  assert.match(content, /Борис Борисов/u);
-  if (setup.repeat) {
-    assert.match(content, /Пользовательский заголовок/u);
-    assert.match(content, /Пользовательская подпись/u);
-    assert.equal((content.match(/<w:tr>/gu) ?? []).length, 3);
-    assert.equal((content.match(/<w:cantSplit\/>/gu) ?? []).length, 2);
-    assert.doesNotMatch(content, /Участников: 2/u);
+  if (setup.format === "xlsx") {
+    const worksheet = entries.find(
+      (entry) => entry.name === "xl/worksheets/sheet1.xml"
+    );
+    assert.ok(worksheet);
+    const content = worksheet.content.toString("utf8");
+    assert.match(content, /Анна Алексеева/u);
+    assert.match(content, /Борис Борисов/u);
+    assert.match(content, /<dimension ref="B2:C3"\/>/u);
+    assert.match(content, /<f>B2<\/f>/u);
+    assert.match(content, /<f>B3<\/f>/u);
     assert.doesNotMatch(content, /____/u);
+  } else {
+    const documentXml = entries.find(
+      (entry) => entry.name === "word/document.xml"
+    );
+    assert.ok(documentXml);
+    const content = documentXml.content.toString("utf8");
+    assert.match(content, /Анна Алексеева/u);
+    assert.match(content, /Борис Борисов/u);
+    if (setup.repeat) {
+      assert.match(content, /Пользовательский заголовок/u);
+      assert.match(content, /Пользовательская подпись/u);
+      assert.equal((content.match(/<w:tr>/gu) ?? []).length, 3);
+      assert.equal((content.match(/<w:cantSplit\/>/gu) ?? []).length, 2);
+      assert.doesNotMatch(content, /Участников: 2/u);
+      assert.doesNotMatch(content, /____/u);
+    }
   }
 
   const persisted = setup.store.execute((database) =>
@@ -540,6 +700,36 @@ test("aggregate generation uses the activated user DOCX repeat row", async () =>
       queue: setup.queue,
       handlers: handlers(setup, "worker-repeat", () => currentTime),
       workerId: "worker-repeat",
+      leaseDurationMs: 60_000,
+      retryBaseMs: 100,
+      retryMaxMs: 1_000,
+      signal: new AbortController().signal,
+      now: () => currentTime
+    });
+    assert.equal(result.status, "completed");
+    await assertGeneratedDocument(setup, created.id);
+  } finally {
+    await setup.cleanup();
+  }
+});
+
+test("aggregate generation uses the activated XLSX repeat row", async () => {
+  const setup = await fixture({ repeat: true, repeatFormat: "xlsx" });
+  try {
+    const created = setup.registry.createJob(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        activeReleaseId: setup.release.id,
+        snapshotId: setup.snapshot.id,
+        idempotencyKey: "generation-xlsx-repeat"
+      },
+      context("corr-xlsx-repeat-generate", 20)
+    ).job;
+    const currentTime = at(20);
+    const result = await processNextJob({
+      queue: setup.queue,
+      handlers: handlers(setup, "worker-xlsx-repeat", () => currentTime),
+      workerId: "worker-xlsx-repeat",
       leaseDurationMs: 60_000,
       retryBaseMs: 100,
       retryMaxMs: 1_000,

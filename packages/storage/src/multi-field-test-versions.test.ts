@@ -179,6 +179,27 @@ function repeatTechnicalIdentifier(binding: {
     .slice(0, 24)}`;
 }
 
+function xlsxRepeatTechnicalIdentifier(binding: {
+  sheetPath: string;
+  rowNumber: number;
+  startAddress: string;
+  endAddress: string;
+}): string {
+  return `_DOCOMATOR_REPEAT_${createHash("sha256")
+    .update(binding.sheetPath)
+    .update("\u0000")
+    .update(String(binding.rowNumber))
+    .update("\u0000")
+    .update(binding.startAddress)
+    .update("\u0000")
+    .update(binding.endAddress)
+    .update("\u0000")
+    .update("audience.members")
+    .digest("hex")
+    .slice(0, 24)
+    .toUpperCase()}`;
+}
+
 test("multi-field version stores ordered field rows, files, audit and event", async () => {
   const setup = await setupFixture();
   try {
@@ -447,5 +468,204 @@ test("repeat contract is frozen in multi-field version and release candidate", a
     );
   } finally {
     setup.fixture.cleanup();
+  }
+});
+
+test("XLSX repeat contract is validated and frozen with its draft", async () => {
+  const fixture = createMigratedTestStore();
+  const objectStore = new ContentAddressedObjectStore(
+    path.join(fixture.directory, "objects")
+  );
+  const quarantine = new DocumentQuarantineRegistry(fixture.store, objectStore);
+  const drafts = new TemplateDraftRegistry(fixture.store);
+  const versions = new MultiFieldTestVersionRegistry(fixture.store, objectStore);
+  try {
+    const source = await quarantine.saveAcceptedDocument(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        fileName: "Сотрудники.xlsx",
+        mediaType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        format: "xlsx",
+        decision: "accepted",
+        buffer: Buffer.from("verified-xlsx-source"),
+        report: { decision: "accepted" }
+      },
+      context("corr-xlsx-source")
+    );
+    const draft = drafts.createOrGetDraft(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        sourceRecordId: source.id,
+        title: "Сотрудники",
+        format: "xlsx",
+        sourceSha256: source.sha256,
+        structureSha256: STRUCTURE_SHA,
+        structure: { elements: [{ id: "cell-b2" }, { id: "cell-c2" }] },
+        structureTruncated: false
+      },
+      context("corr-xlsx-draft")
+    );
+    const repeatBinding = {
+      version: 1 as const,
+      kind: "xlsx.repeat-row" as const,
+      source: "audience.members" as const,
+      selection: "used-row" as const,
+      sheetName: "Сотрудники",
+      sheetPath: "xl/worksheets/sheet1.xml",
+      rowNumber: 2,
+      startAddress: "B2",
+      endAddress: "C2",
+      startElementId: "cell-b2",
+      endElementId: "cell-c2"
+    };
+    const field = drafts.createField(
+      DEFAULT_SPACE_ID,
+      draft.id,
+      {
+        key: "person.full_name",
+        label: "ФИО",
+        valueType: "string",
+        required: true,
+        elementId: "cell-b2",
+        elementKind: "cell",
+        binding: {
+          version: 1,
+          kind: "xlsx.cell",
+          elementId: "cell-b2",
+          sheetName: "Сотрудники",
+          sheetPath: "xl/worksheets/sheet1.xml",
+          address: "B2"
+        },
+        formatter: { version: 1, kind: "identity" },
+        repeatBinding,
+        originalPreview: "ФИО",
+        structureSha256: STRUCTURE_SHA
+      },
+      context("corr-xlsx-field")
+    );
+    const repeatContract = {
+      version: 1 as const,
+      kind: "xlsx.repeat-row-contract" as const,
+      binding: repeatBinding,
+      technicalBinding: {
+        kind: "xlsx.repeat-defined-name" as const,
+        identifier: xlsxRepeatTechnicalIdentifier(repeatBinding),
+        part: "xl/workbook.xml" as const,
+        target: "'Сотрудники'!$B$2:$C$2"
+      }
+    };
+    const record = () =>
+      versions.recordTestedVersion(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          draftId: draft.id,
+          format: "xlsx",
+          compiledBuffer: Buffer.from("xlsx-repeat-compiled"),
+          trialBuffer: Buffer.from("xlsx-repeat-trial"),
+          fields: [
+            {
+              fieldId: field.id,
+              fieldKey: field.key,
+              fieldLabel: field.label,
+              valueType: field.valueType,
+              required: field.required,
+              binding: field.binding,
+              formatter: field.formatter,
+              technicalBinding: {
+                kind: "xlsx.defined-name",
+                identifier: "_DOCOMATOR_FIELD"
+              },
+              sampleValue: "Иванов И.И.",
+              renderedValue: "Иванов И.И.",
+              readBackValue: "Иванов И.И.",
+              verification: { matched: true }
+            }
+          ],
+          repeatContract,
+          verification: { matched: true }
+        },
+        context("corr-xlsx-version")
+      );
+    const version = await record();
+    assert.deepEqual(version.repeatContract, repeatContract);
+
+    assert.throws(
+      () =>
+        fixture.store.execute((database) =>
+          database
+            .prepare(`
+              INSERT INTO template_multi_test_versions(
+                id, space_id, draft_id, version_number, format,
+                compiled_file_id, trial_file_id, compiled_sha256, trial_sha256,
+                sample_values_json, verification_json, field_count, status,
+                repeat_contract_json, created_by, correlation_id, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `)
+            .run(
+              "xlsx-repeat-sql-forged",
+              DEFAULT_SPACE_ID,
+              draft.id,
+              version.versionNumber + 1,
+              "xlsx",
+              version.compiledFileId,
+              version.trialFileId,
+              "a".repeat(64),
+              "b".repeat(64),
+              '{"person.full_name":"SQL"}',
+              '{"matched":true}',
+              1,
+              "tested",
+              JSON.stringify({
+                ...repeatContract,
+                kind: "docx.repeat-row-contract"
+              }),
+              "migration-test",
+              "corr-xlsx-sql-forged",
+              NOW
+            )
+        ),
+      /multi-field test version must match its draft and repeat binding/u
+    );
+
+    await assert.rejects(
+      versions.recordTestedVersion(
+        {
+          spaceId: DEFAULT_SPACE_ID,
+          draftId: draft.id,
+          format: "xlsx",
+          compiledBuffer: Buffer.from("xlsx-repeat-forged"),
+          trialBuffer: Buffer.from("xlsx-repeat-forged-trial"),
+          fields: [
+            {
+              fieldId: field.id,
+              fieldKey: field.key,
+              fieldLabel: field.label,
+              valueType: field.valueType,
+              required: field.required,
+              binding: field.binding,
+              formatter: field.formatter,
+              technicalBinding: { kind: "xlsx.defined-name" },
+              sampleValue: "Петров П.П.",
+              renderedValue: "Петров П.П.",
+              readBackValue: "Петров П.П.",
+              verification: { matched: true }
+            }
+          ],
+          repeatContract: {
+            ...repeatContract,
+            technicalBinding: {
+              ...repeatContract.technicalBinding,
+              target: "'Сотрудники'!$B$2:$D$2"
+            }
+          },
+          verification: { matched: true }
+        },
+        context("corr-xlsx-forged")
+      ),
+      /supported XLSX repeat row contract/u
+    );
+  } finally {
+    fixture.cleanup();
   }
 });

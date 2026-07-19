@@ -377,7 +377,7 @@ function jsonObject(
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function repeatIdentifier(binding: { [key: string]: JsonValue }): string {
+function docxRepeatIdentifier(binding: { [key: string]: JsonValue }): string {
   return `airepeat:${createHash("sha256")
     .update(String(binding.part))
     .update("\u0000")
@@ -390,38 +390,172 @@ function repeatIdentifier(binding: { [key: string]: JsonValue }): string {
     .slice(0, 24)}`;
 }
 
-function repeatBindingFromContract(contract: JsonValue): JsonValue {
+function xlsxRepeatIdentifier(binding: { [key: string]: JsonValue }): string {
+  return `_DOCOMATOR_REPEAT_${createHash("sha256")
+    .update(String(binding.sheetPath))
+    .update("\u0000")
+    .update(String(binding.rowNumber))
+    .update("\u0000")
+    .update(String(binding.startAddress))
+    .update("\u0000")
+    .update(String(binding.endAddress))
+    .update("\u0000")
+    .update("audience.members")
+    .digest("hex")
+    .slice(0, 24)
+    .toUpperCase()}`;
+}
+
+function exactJsonKeys(
+  value: { [key: string]: JsonValue },
+  expected: readonly string[]
+): boolean {
+  const actual = Object.keys(value).sort();
+  return (
+    actual.length === expected.length &&
+    actual.every((key, index) => key === [...expected].sort()[index])
+  );
+}
+
+function xlsxCellCoordinate(value: JsonValue | undefined): {
+  address: string;
+  column: number;
+  row: number;
+} | null {
+  if (typeof value !== "string") return null;
+  const address = value.toUpperCase();
+  const match = /^([A-Z]{1,3})([1-9][0-9]{0,6})$/u.exec(address);
+  if (match === null) return null;
+  let column = 0;
+  for (const character of match[1] ?? "") {
+    column = column * 26 + character.charCodeAt(0) - 64;
+  }
+  const row = Number(match[2]);
+  return column >= 1 && column <= 16_384 && row >= 1 && row <= 1_048_576
+    ? { address, column, row }
+    : null;
+}
+
+function xlsxRepeatTarget(binding: { [key: string]: JsonValue }): string | null {
+  const start = xlsxCellCoordinate(binding.startAddress);
+  const end = xlsxCellCoordinate(binding.endAddress);
+  if (start === null || end === null || typeof binding.sheetName !== "string") {
+    return null;
+  }
+  const sheetName = `'${binding.sheetName.replaceAll("'", "''")}'`;
+  const absolute = (address: string): string => {
+    const match = /^([A-Z]+)([0-9]+)$/u.exec(address);
+    return match === null ? address : `$${match[1]}$${match[2]}`;
+  };
+  return `${sheetName}!${absolute(start.address)}:${absolute(end.address)}`;
+}
+
+function repeatBindingFromContract(
+  contract: JsonValue,
+  format: MultiFieldTestVersionFormat
+): JsonValue {
+  if (!jsonObject(contract) || !jsonObject(contract.binding) || !jsonObject(contract.technicalBinding)) {
+    throw new MultiFieldTestVersionValidationError(
+      "repeatContract must contain a supported repeat row contract"
+    );
+  }
+  const binding = contract.binding;
+  const technical = contract.technicalBinding;
   if (
-    !jsonObject(contract) ||
-    contract.version !== 1 ||
-    contract.kind !== "docx.repeat-row-contract" ||
-    !jsonObject(contract.binding) ||
-    contract.binding.version !== 1 ||
-    contract.binding.kind !== "docx.repeat-row" ||
-    contract.binding.source !== "audience.members" ||
-    typeof contract.binding.anchorElementId !== "string" ||
-    contract.binding.anchorElementId.length === 0 ||
-    typeof contract.binding.part !== "string" ||
-    contract.binding.part.length === 0 ||
-    typeof contract.binding.tableIndex !== "number" ||
-    !Number.isInteger(contract.binding.tableIndex) ||
-    contract.binding.tableIndex < 0 ||
-    typeof contract.binding.rowIndex !== "number" ||
-    !Number.isInteger(contract.binding.rowIndex) ||
-    contract.binding.rowIndex < 0 ||
-    !jsonObject(contract.technicalBinding) ||
-    contract.technicalBinding.kind !== "docx.repeat-sdt" ||
-    contract.technicalBinding.identifier !==
-      repeatIdentifier(contract.binding) ||
-    contract.technicalBinding.part !== contract.binding.part ||
-    typeof contract.technicalBinding.target !== "string" ||
-    contract.technicalBinding.target.length === 0
+    format === "docx" &&
+    exactJsonKeys(contract, ["version", "kind", "binding", "technicalBinding"]) &&
+    exactJsonKeys(binding, [
+      "version",
+      "kind",
+      "source",
+      "anchorElementId",
+      "part",
+      "tableIndex",
+      "rowIndex"
+    ]) &&
+    exactJsonKeys(technical, ["kind", "identifier", "part", "target"]) &&
+    contract.version === 1 &&
+    contract.kind === "docx.repeat-row-contract" &&
+    binding.version === 1 &&
+    binding.kind === "docx.repeat-row" &&
+    binding.source === "audience.members" &&
+    typeof binding.anchorElementId === "string" &&
+    binding.anchorElementId.length > 0 &&
+    typeof binding.part === "string" &&
+    binding.part.length > 0 &&
+    typeof binding.tableIndex === "number" &&
+    Number.isInteger(binding.tableIndex) &&
+    binding.tableIndex >= 0 &&
+    typeof binding.rowIndex === "number" &&
+    Number.isInteger(binding.rowIndex) &&
+    binding.rowIndex >= 0 &&
+    technical.kind === "docx.repeat-sdt" &&
+    technical.identifier === docxRepeatIdentifier(binding) &&
+    technical.part === binding.part &&
+    typeof technical.target === "string" &&
+    technical.target.length > 0
   ) {
+    return toJsonValue(binding);
+  }
+  if (format === "docx") {
     throw new MultiFieldTestVersionValidationError(
       "repeatContract must contain a supported DOCX repeat row contract"
     );
   }
-  return toJsonValue(contract.binding);
+  const start = xlsxCellCoordinate(binding.startAddress);
+  const end = xlsxCellCoordinate(binding.endAddress);
+  const target = xlsxRepeatTarget(binding);
+  if (
+    format !== "xlsx" ||
+    !exactJsonKeys(contract, ["version", "kind", "binding", "technicalBinding"]) ||
+    !exactJsonKeys(binding, [
+      "version",
+      "kind",
+      "source",
+      "selection",
+      "sheetName",
+      "sheetPath",
+      "rowNumber",
+      "startAddress",
+      "endAddress",
+      "startElementId",
+      "endElementId"
+    ]) ||
+    !exactJsonKeys(technical, ["kind", "identifier", "part", "target"]) ||
+    contract.version !== 1 ||
+    contract.kind !== "xlsx.repeat-row-contract" ||
+    binding.version !== 1 ||
+    binding.kind !== "xlsx.repeat-row" ||
+    binding.source !== "audience.members" ||
+    (binding.selection !== "used-row" && binding.selection !== "range") ||
+    typeof binding.sheetName !== "string" ||
+    binding.sheetName.length === 0 ||
+    binding.sheetName.length > 255 ||
+    typeof binding.sheetPath !== "string" ||
+    binding.sheetPath.length === 0 ||
+    binding.sheetPath.length > 500 ||
+    typeof binding.rowNumber !== "number" ||
+    !Number.isInteger(binding.rowNumber) ||
+    start === null ||
+    end === null ||
+    start.row !== binding.rowNumber ||
+    end.row !== binding.rowNumber ||
+    start.column > end.column ||
+    typeof binding.startElementId !== "string" ||
+    binding.startElementId.length === 0 ||
+    typeof binding.endElementId !== "string" ||
+    binding.endElementId.length === 0 ||
+    technical.kind !== "xlsx.repeat-defined-name" ||
+    technical.identifier !== xlsxRepeatIdentifier(binding) ||
+    technical.part !== "xl/workbook.xml" ||
+    target === null ||
+    technical.target !== target
+  ) {
+    throw new MultiFieldTestVersionValidationError(
+      "repeatContract must contain a supported XLSX repeat row contract"
+    );
+  }
+  return toJsonValue(binding);
 }
 
 function versionRow(
@@ -555,7 +689,7 @@ export class MultiFieldTestVersionRegistry {
         (draft.repeat_binding_json !== null &&
           repeatContract !== null &&
           stringifyJson(parseJson(draft.repeat_binding_json)) !==
-            stringifyJson(repeatBindingFromContract(repeatContract)))
+            stringifyJson(repeatBindingFromContract(repeatContract, format)))
       ) {
         throw new MultiFieldTestVersionValidationError(
           "Repeat row contract does not match the template draft"

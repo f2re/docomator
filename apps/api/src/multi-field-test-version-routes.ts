@@ -119,7 +119,7 @@ export function registerMultiFieldTestVersionRoutes(
                 properties: {
                   fieldId: { type: "string", minLength: 1, maxLength: 160 },
                   value: {
-                    oneOf: [
+                    anyOf: [
                       { type: "string", maxLength: 20_000 },
                       { type: "number" },
                       { type: "boolean" }
@@ -187,7 +187,10 @@ export function registerMultiFieldTestVersionRoutes(
           ? null
           : toJsonValue({
               version: 1,
-              kind: "docx.repeat-row-contract",
+              kind:
+                compiled.repeat.binding.kind === "docx.repeat-row"
+                  ? "docx.repeat-row-contract"
+                  : "xlsx.repeat-row-contract",
               binding: compiled.repeat.binding,
               technicalBinding: compiled.repeat.technicalBinding
             });
