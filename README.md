@@ -296,6 +296,7 @@ sudo scripts/offline/collect-os-packages.sh --apt-update
 scripts/offline/prepare-bundle.sh \
   --llama-server /opt/build/llama.cpp/llama-server \
   --model /opt/build/models/model.gguf \
+  --with-preview \
   --os-packages-dir offline-bundles/os-packages
 ```
 
@@ -304,6 +305,10 @@ scripts/offline/prepare-bundle.sh \
 Проверка:
 
 ```bash
+sudo "$BUNDLE_ROOT/smoke-test.sh" "$BUNDLE_ROOT"
+"$BUNDLE_ROOT/target-release-gate.sh" \
+  --config /etc/docomator/docomator.env
+
 sudo /opt/docomator/current/first-run.sh \
   --config /etc/docomator/docomator.env \
   --check

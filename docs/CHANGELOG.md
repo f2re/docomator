@@ -1,5 +1,20 @@
 # Журнал изменений Docomator
 
+## 2026-07-19 — OFF-010/OFF-013: самодостаточный target bundle
+
+Добавлено:
+
+- обязательный явный профиль `--with-preview` или `--without-preview`; preview-сборка без проверенного набора LibreOffice Writer/Calc больше не создаётся;
+- точные `manifest.sha256`, `packages.tsv` и `source-os.env` для `.deb` с повторной сверкой checksum, имени, версии и архитектуры через `dpkg-deb`;
+- точное совпадение ID/версии/архитектуры target до package mutation, package-manager preflight замкнутости и запрет удаления либо сетевой загрузки пакетов;
+- профиль, путь converter, пределы и SHA package inventory в `release.json` с согласованием с шаблоном конфигурации;
+- root smoke, core/crash-worker/LibreOffice gates и единый `target-release-gate.sh` внутри production bundle без `npm ci`, registry и внешнего `curl`;
+- ранний отказ installer, если preview включён, а настроенный LibreOffice недоступен; установленный помощник теперь получает локальный healthcheck;
+- запрет совмещать обновление приложения с нетранзакционным обновлением пакетов ОС и защита `VERSION` от выхода за immutable releases root;
+- негативные проверки отсутствующего Calc и обязательного gate, а также положительные проверки обоих preview-профилей.
+
+Миграции и формат данных не менялись. Существующая конфигурация сохраняется; откат приложения выполняется предыдущим неизменяемым release-каталогом. P6 остаётся 🟡 до фактических актов чистых Debian/Astra/LibreOffice, Office-сохранённого корпуса, проверки восстановления, RC-версии и release notes.
+
 ## 2026-07-19 — AUD-003: единое скачивание результатов
 
 Добавлено:

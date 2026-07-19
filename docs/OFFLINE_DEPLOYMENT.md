@@ -25,8 +25,12 @@ docomator-<version>-linux-<arch>/
 ├── install.sh
 ├── update.sh
 ├── verify-bundle.sh
+├── smoke-test.sh
+├── target-release-gate.sh
 ├── lib.sh
 ├── healthcheck.mjs
+├── http-check.mjs
+├── verify-release.mjs
 └── payload/
     ├── app/
     │   ├── apps/*/dist
@@ -34,6 +38,7 @@ docomator-<version>-linux-<arch>/
     │   ├── node_modules
     │   ├── migrations
     │   ├── scripts/runtime
+    │   ├── scripts/ci/{release-gate,release-gate-crash-worker,libreoffice-release-gate}.mjs
     │   └── examples/
     │       ├── README.md
     │       ├── manifest.sha256
@@ -46,10 +51,14 @@ docomator-<version>-linux-<arch>/
     ├── models/*.gguf
     ├── deploy/systemd/
     ├── config/docomator.env.example
-    └── os-packages/*.deb
+    └── os-packages/
+        ├── manifest.sha256
+        ├── packages.tsv
+        ├── source-os.env
+        └── *.deb
 ```
 
-`manifest.sha256` покрывает все обычные файлы, кроме самого корневого manifest, включая вложенный manifest учебных примеров и manifest символических ссылок. `manifest.symlinks` фиксирует точный относительный target каждой разрешённой ссылки; ссылка наружу, добавленный файл или объект неподдерживаемого типа блокируют проверку.
+`manifest.sha256` покрывает все обычные файлы, кроме самого корневого manifest, включая вложенные manifests и manifest символических ссылок. `manifest.symlinks` фиксирует точный относительный target каждой разрешённой ссылки; ссылка наружу, добавленный файл или объект неподдерживаемого типа блокируют проверку. Для каждого `.deb` verifier дополнительно сверяет checksum, имя, версию и архитектуру через `dpkg-deb`; `release.json` связывает preview-профиль, пределы преобразования и SHA package inventory. Перед package-manager preflight installer требует точного совпадения `ID`, `VERSION_ID` и Debian-архитектуры target с `source-os.env`.
 
 ## Помощник первого запуска
 
@@ -80,7 +89,7 @@ sudo /opt/docomator/current/first-run.sh \
 sudo scripts/offline/collect-os-packages.sh --apt-update
 ```
 
-Список задаётся в [`config/os-packages.txt`](../config/os-packages.txt).
+Список задаётся в [`config/os-packages.txt`](../config/os-packages.txt). Сборщик создаёт точный `manifest.sha256`, `packages.tsv` с Debian metadata и `source-os.env` с выпуском reference VM и архитектурой. Набор с повтором имени пакета, другой архитектурой или несовпадающим metadata не принимается.
 
 Свой список:
 
@@ -102,6 +111,7 @@ sudo scripts/offline/collect-os-packages.sh \
 scripts/offline/prepare-bundle.sh \
   --llama-server /srv/build/llama.cpp/llama-server \
   --model /srv/models/qwen-or-phi-q4.gguf \
+  --with-preview \
   --os-packages-dir offline-bundles/os-packages
 ```
 
@@ -112,8 +122,8 @@ Script:
 3. выполняет `npm ci`, `npm run check` и отдельную обязательную проверку примеров даже при `--skip-tests`;
 4. собирает production workspaces;
 5. выполняет `npm ci --omit=dev` в payload;
-6. добавляет точный проверенный список учебных примеров, `llama-server`, модель и optional `.deb`;
-7. создаёт release metadata, SHA-256 manifest и manifest символических ссылок;
+6. добавляет точный проверенный список учебных примеров, `llama-server`, модель, целевые gate-скрипты и проверенный набор `.deb` выбранного профиля;
+7. создаёт release metadata с preview-профилем и SHA package inventory, общий SHA-256 manifest и manifest символических ссылок;
 8. повторно проверяет bundle;
 9. создаёт `.tar.gz`.
 
@@ -123,7 +133,9 @@ Script:
 scripts/offline/prepare-bundle.sh \
   --node-runtime-dir /srv/runtime/node-v24.18.0-linux-x64 \
   --llama-server /srv/runtime/llama-server \
-  --model /srv/models/model.gguf
+  --model /srv/models/model.gguf \
+  --with-preview \
+  --os-packages-dir /srv/docomator-os-packages
 ```
 
 ### Bundle с локальным Node archive
@@ -133,7 +145,9 @@ scripts/offline/prepare-bundle.sh \
   --node-archive /srv/cache/node-v24.18.0-linux-x64.tar.xz \
   --node-sha256 '<expected-sha256>' \
   --llama-server /srv/runtime/llama-server \
-  --model /srv/models/model.gguf
+  --model /srv/models/model.gguf \
+  --with-preview \
+  --os-packages-dir /srv/docomator-os-packages
 ```
 
 ### Явно без LLM
@@ -141,10 +155,10 @@ scripts/offline/prepare-bundle.sh \
 Для теста детерминированного ядра:
 
 ```bash
-scripts/offline/prepare-bundle.sh --without-llm
+scripts/offline/prepare-bundle.sh --without-llm --without-preview
 ```
 
-Script не создаёт молча неполный bundle: требуется либо пара `--llama-server`/`--model`, либо `--without-llm`.
+Script не создаёт молча неполный bundle: требуется либо пара `--llama-server`/`--model`, либо `--without-llm`, а также ровно один из профилей `--with-preview`/`--without-preview`. Preview-профиль требует `--os-packages-dir` и наличие `libreoffice-core`, `libreoffice-writer`, `libreoffice-calc`. Профиль без preview записывает `DOCOMATOR_PREVIEW_ENABLED=false` в новый шаблон и предназначен только для явно согласованного развёртывания без PDF-предпросмотра.
 
 ## 5. Перенос
 
@@ -205,7 +219,7 @@ BUNDLE_ROOT='<проверенный каталог из успешного со
 sudo "$BUNDLE_ROOT/install.sh" --install-os-packages
 ```
 
-Без установки `.deb`, если prerequisites уже установлены:
+Без установки `.deb` можно продолжить, только если настроенный LibreOffice уже доступен. При включённом preview и отсутствующем executable installer останавливается до установки приложения и предлагает `--install-os-packages`:
 
 ```bash
 sudo "$BUNDLE_ROOT/install.sh"
@@ -224,6 +238,10 @@ sudo "$BUNDLE_ROOT/install.sh" --no-systemd
 ```
 
 `--no-systemd` предназначен для smoke-теста и нестандартной интеграции с внешним service manager. В штатной Debian/Astra Linux установке используется systemd.
+
+`--install-os-packages` разрешён только при первой установке, когда прежнего application release ещё нет. Сначала `apt-get --simulate --no-remove` проверяет план: каждый устанавливаемый пакет должен присутствовать в подписанном inventory. Реальная команда использует `--no-download --no-remove`, поэтому не обращается к repository и не удаляет системные пакеты. Если package closure неполон, установка приложения не начинается.
+
+Системный package manager не является частью SQLite/application rollback. Поэтому первый прогон выполняется на чистой VM со snapshot до установки. Если maintainer script `.deb` аварийно завершится уже после начала package phase, VM возвращается к этому snapshot; повторный запуск поверх незавершённого состояния блокируется через `dpkg --audit`. Для действующей установки package phase через Docomator запрещена полностью.
 
 Custom paths:
 
@@ -287,7 +305,7 @@ sudo "$BUNDLE_ROOT/install.sh" \
   UPDATE_BUNDLE_ROOT="$(sudo realpath "$UPDATE_STAGE/$UPDATE_BUNDLE_NAME")"
   [[ "$UPDATE_BUNDLE_ROOT" == "$UPDATE_STAGE/$UPDATE_BUNDLE_NAME" ]] || exit 2
   sudo find "$UPDATE_BUNDLE_ROOT" ! -type l -exec chmod go-w {} +
-  sudo "$UPDATE_BUNDLE_ROOT/update.sh" --install-os-packages
+  sudo "$UPDATE_BUNDLE_ROOT/update.sh"
 )
 ```
 
@@ -306,6 +324,8 @@ Update:
 
 > [!NOTE]
 > Object storage не копируется перед каждым update, поскольку outputs immutable и обычно велики. Он должен входить в регулярную backup policy.
+
+Пакеты ОС не входят в транзакцию приложения и не обновляются через `update.sh`. Если согласованный выпуск LibreOffice меняется, оператор сначала создаёт snapshot/backup ОС и применяет новый замкнутый `.deb`-набор отдельной утверждённой процедурой, проверяет converter, и лишь затем запускает `update.sh` без `--install-os-packages`. Installer отказывает в совмещении этих операций, чтобы application rollback не оставлял старый код с неоткаченными системными пакетами.
 
 ## 9. Конфигурация LLM
 
@@ -376,14 +396,20 @@ DOCOMATOR_SMTP_SECURE=false
 
 ## 12. Проверка
 
-До переноса в закрытый контур рекомендуется выполнить полный network-free smoke test извлечённого bundle:
+На чистом target сначала установите пакетные prerequisites штатным `install.sh --install-os-packages` либо убедитесь, что согласованный LibreOffice уже доступен. Затем выполните полный network-free smoke test непосредственно из извлечённого bundle:
 
 ```bash
-sudo scripts/offline/smoke-test.sh \
-  "$BUNDLE_ROOT"
+sudo "$BUNDLE_ROOT/smoke-test.sh" "$BUNDLE_ROOT"
 ```
 
-Тест выполняет установку и обновление во временные каталоги, запускает встроенную службу API, проверяет `/readyz`, схему БД, интерфейс предварительного просмотра/активации, настройки LibreOffice, символическую ссылку, неизменяемые учебные примеры и резервную копию перед обновлением. Он не изменяет systemd и не запускает реальное преобразование Office-файла.
+Тест выполняет установку и обновление во временные каталоги, запускает встроенную службу API, проверяет `/readyz` встроенным Node.js без внешнего `curl`, схему БД, интерфейс предварительного просмотра/активации, доступность настроенного LibreOffice, символическую ссылку, неизменяемые учебные примеры и резервную копию перед обновлением. Он не изменяет systemd.
+
+Core gate и обязательное реальное преобразование DOCX/XLSX для preview-профиля также запускаются только файлами из bundle, без `npm ci` и registry:
+
+```bash
+"$BUNDLE_ROOT/target-release-gate.sh" \
+  --config /etc/docomator/docomator.env
+```
 
 Целевые сочетания ОС, glibc, Node.js и LibreOffice фиксируются в [матрице совместимости](SUPPORT_MATRIX.md). Пустая строка или статус `не проверено` не считаются заявлением о поддержке.
 

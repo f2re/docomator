@@ -28,6 +28,15 @@ const ROOT = path.resolve(
 const VERIFY = path.join(ROOT, "scripts/offline/verify-bundle.sh");
 const INSTALL = path.join(ROOT, "scripts/offline/install.sh");
 const UPDATE = path.join(ROOT, "scripts/offline/update.sh");
+const VERIFY_RELEASE = path.join(ROOT, "scripts/offline/verify-release.mjs");
+const TARGET_RELEASE_GATE = path.join(
+  ROOT,
+  "scripts/offline/target-release-gate.sh"
+);
+const COLLECT_OS_PACKAGES = path.join(
+  ROOT,
+  "scripts/offline/collect-os-packages.sh"
+);
 const EXAMPLE_FILES = [
   "README.md",
   "manifest.sha256",
@@ -80,6 +89,25 @@ fi
 `
 );
 await chmod(path.join(testTools, "stat"), 0o755);
+await writeFile(
+  path.join(testTools, "dpkg-deb"),
+  `#!/usr/bin/env bash
+set -Eeuo pipefail
+[[ "\${1:-}" == "-f" && -f "\${2:-}" ]] || exit 2
+filename="\$(basename "$2" .deb)"
+package="\${filename%%_*}"
+remainder="\${filename#*_}"
+version="\${remainder%%_*}"
+architecture="\${remainder##*_}"
+case "\${3:-}" in
+  Package) printf '%s\\n' "$package" ;;
+  Version) printf '%s\\n' "$version" ;;
+  Architecture) printf '%s\\n' "$architecture" ;;
+  *) exit 2 ;;
+esac
+`
+);
+await chmod(path.join(testTools, "dpkg-deb"), 0o755);
 const sha256sum = await executable("sha256sum");
 if (sha256sum === null) {
   const compatible = await executable("gsha256sum");
@@ -117,22 +145,135 @@ async function writeOuterManifest(bundle) {
   await writeFile(path.join(bundle, "manifest.sha256"), `${lines.join("\n")}\n`);
 }
 
+function releaseMetadata(overrides = {}) {
+  return {
+    name: "docomator",
+    version: "0.1.0-test",
+    builtAt: "2026-07-19T00:00:00Z",
+    gitCommit: "test",
+    targetArchitecture: process.arch === "arm64" ? "arm64" : "x64",
+    nodeVersion: process.version,
+    previewEnabled: false,
+    previewConverterPath: "/usr/bin/libreoffice",
+    previewTimeoutMs: 120_000,
+    previewMaxBytes: 134_217_728,
+    osPackagesIncluded: false,
+    osPackagesManifestSha256: "",
+    osPackagesInventorySha256: "",
+    osPackageSource: null,
+    llmIncluded: false,
+    llamaServerSha256: "",
+    modelFile: "",
+    modelSha256: "",
+    ...overrides
+  };
+}
+
+async function writeRelease(bundle, release = releaseMetadata()) {
+  await writeFile(
+    path.join(bundle, "release.json"),
+    `${JSON.stringify(release, null, 2)}\n`
+  );
+}
+
+async function enablePreview(bundle, packageNames = [
+  "libreoffice-core",
+  "libreoffice-writer",
+  "libreoffice-calc"
+]) {
+  const packageRoot = path.join(bundle, "payload/os-packages");
+  const debArchitecture = process.arch === "arm64" ? "arm64" : "amd64";
+  await mkdir(packageRoot, { recursive: true });
+  const manifestLines = [];
+  const inventoryLines = [
+    "sha256\tpackage\tversion\tarchitecture\tfilename"
+  ];
+  for (const packageName of [...packageNames].sort()) {
+    const filename = `${packageName}_1.0_${debArchitecture}.deb`;
+    const content = Buffer.from(`fixture ${packageName}\n`);
+    const digest = createHash("sha256").update(content).digest("hex");
+    await writeFile(path.join(packageRoot, filename), content);
+    manifestLines.push(`${digest}  ./${filename}`);
+    inventoryLines.push(
+      `${digest}\t${packageName}\t1.0\t${debArchitecture}\t${filename}`
+    );
+  }
+  const manifest = `${manifestLines.join("\n")}\n`;
+  const inventory = `${inventoryLines.join("\n")}\n`;
+  await Promise.all([
+    writeFile(path.join(packageRoot, "manifest.sha256"), manifest),
+    writeFile(path.join(packageRoot, "packages.tsv"), inventory),
+    writeFile(
+      path.join(packageRoot, "source-os.env"),
+      `OS_ID=debian\nOS_VERSION_ID=12\nDEB_ARCHITECTURE=${debArchitecture}\n`
+    ),
+    writeFile(
+      path.join(bundle, "payload/config/docomator.env.example"),
+      "DOCOMATOR_PREVIEW_ENABLED=true\n" +
+        "DOCOMATOR_LIBREOFFICE_BIN=/usr/bin/libreoffice\n" +
+        "DOCOMATOR_PREVIEW_TIMEOUT_MS=120000\n" +
+        "DOCOMATOR_PREVIEW_MAX_BYTES=134217728\n"
+    )
+  ]);
+  await writeRelease(
+    bundle,
+    releaseMetadata({
+      previewEnabled: true,
+      osPackagesIncluded: true,
+      osPackagesManifestSha256: createHash("sha256")
+        .update(manifest)
+        .digest("hex"),
+      osPackagesInventorySha256: createHash("sha256")
+        .update(inventory)
+        .digest("hex"),
+      osPackageSource: {
+        id: "debian",
+        versionId: "12",
+        architecture: debArchitecture
+      }
+    })
+  );
+  await writeOuterManifest(bundle);
+}
+
 async function fixture() {
   const bundle = await mkdtemp(path.join(os.tmpdir(), "docomator-bundle-verify-"));
   const required = [
+    "http-check.mjs",
+    "smoke-test.sh",
+    "target-release-gate.sh",
+    "payload/app/scripts/ci/release-gate.mjs",
+    "payload/app/scripts/ci/release-gate-crash-worker.mjs",
+    "payload/app/scripts/ci/libreoffice-release-gate.mjs",
     "payload/app/scripts/runtime/automatic-backup.mjs",
     "payload/app/scripts/runtime/pilot-readiness.mjs",
     "payload/app/scripts/runtime/pilot-check.sh",
     "payload/runtime/node/bin/node",
     "payload/deploy/systemd/docomator-backup.service.in",
-    "payload/deploy/systemd/docomator-backup.timer.in"
+    "payload/deploy/systemd/docomator-backup.timer.in",
+    "payload/config/docomator.env.example"
   ];
   for (const relative of required) {
     const target = path.join(bundle, relative);
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, `${relative}\n`);
   }
+  await writeFile(
+    path.join(bundle, "payload/runtime/node/bin/node"),
+    `#!/usr/bin/env bash\nexec ${JSON.stringify(process.execPath)} "$@"\n`
+  );
   await chmod(path.join(bundle, "payload/runtime/node/bin/node"), 0o755);
+  await chmod(path.join(bundle, "smoke-test.sh"), 0o755);
+  await chmod(path.join(bundle, "target-release-gate.sh"), 0o755);
+  await copyFile(VERIFY_RELEASE, path.join(bundle, "verify-release.mjs"));
+  await writeFile(
+    path.join(bundle, "payload/config/docomator.env.example"),
+    "DOCOMATOR_PREVIEW_ENABLED=false\n" +
+      "DOCOMATOR_LIBREOFFICE_BIN=/usr/bin/libreoffice\n" +
+      "DOCOMATOR_PREVIEW_TIMEOUT_MS=120000\n" +
+      "DOCOMATOR_PREVIEW_MAX_BYTES=134217728\n"
+  );
+  await mkdir(path.join(bundle, "payload/os-packages"), { recursive: true });
   for (const relative of EXAMPLE_FILES) {
     const target = path.join(bundle, "payload/app/examples", relative);
     await mkdir(path.dirname(target), { recursive: true });
@@ -140,7 +281,8 @@ async function fixture() {
   }
   await Promise.all([
     writeFile(path.join(bundle, "VERSION"), "0.1.0-test\n"),
-    writeFile(path.join(bundle, "manifest.symlinks"), "")
+    writeFile(path.join(bundle, "manifest.symlinks"), ""),
+    writeRelease(bundle)
   ]);
   await writeOuterManifest(bundle);
   return bundle;
@@ -183,12 +325,107 @@ function verifyTrust(bundle, extraEnvironment = {}) {
   );
 }
 
+function verifyTargetProfile(packageRoot, osReleaseFile, architecture) {
+  return runBash([
+    "-c",
+    'source "$1"; verify_target_os_package_profile "$2" "$3" "$4"',
+    "docomator-target-profile-test",
+    path.join(ROOT, "scripts/offline/lib.sh"),
+    packageRoot,
+    osReleaseFile,
+    architecture
+  ]);
+}
+
 test("offline verifier accepts the exact bundle inventory", async () => {
   const bundle = await fixture();
   try {
     const result = await verify(bundle);
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /комплект корректен/iu);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier accepts a preview profile with an exact LibreOffice set", async () => {
+  const bundle = await fixture();
+  try {
+    await enablePreview(bundle);
+    const result = await verify(bundle);
+    assert.equal(result.code, 0, result.output);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier rejects a preview profile without a required LibreOffice package", async () => {
+  const bundle = await fixture();
+  try {
+    await enablePreview(bundle, ["libreoffice-core", "libreoffice-writer"]);
+    const result = await verify(bundle);
+    assert.equal(result.code, 1);
+    assert.match(result.output, /libreoffice-calc/iu);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier rejects package metadata that does not match the deb", async () => {
+  const bundle = await fixture();
+  try {
+    await enablePreview(bundle);
+    const inventoryPath = path.join(
+      bundle,
+      "payload/os-packages/packages.tsv"
+    );
+    const inventory = (await readFile(inventoryPath, "utf8")).replace(
+      "\t1.0\t",
+      "\t2.0\t"
+    );
+    await writeFile(inventoryPath, inventory);
+    const release = JSON.parse(
+      await readFile(path.join(bundle, "release.json"), "utf8")
+    );
+    release.osPackagesInventorySha256 = createHash("sha256")
+      .update(inventory)
+      .digest("hex");
+    await writeRelease(bundle, release);
+    await writeOuterManifest(bundle);
+
+    const result = await verify(bundle);
+    assert.equal(result.code, 1);
+    assert.match(result.output, /метаданные Debian-пакета/iu);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier rejects a path-like release version", async () => {
+  const bundle = await fixture();
+  try {
+    await writeFile(path.join(bundle, "VERSION"), "../escape\n");
+    await writeRelease(
+      bundle,
+      releaseMetadata({ version: "../escape" })
+    );
+    await writeOuterManifest(bundle);
+    const result = await verify(bundle);
+    assert.equal(result.code, 1);
+    assert.match(result.output, /VERSION.*запрещённые/iu);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier rejects a bundle without a target gate", async () => {
+  const bundle = await fixture();
+  try {
+    await unlink(path.join(bundle, "payload/app/scripts/ci/release-gate.mjs"));
+    await writeOuterManifest(bundle);
+    const result = await verify(bundle);
+    assert.equal(result.code, 1);
+    assert.match(result.output, /core release-gate/iu);
   } finally {
     await rm(bundle, { recursive: true, force: true });
   }
@@ -334,6 +571,14 @@ test("install and update verify the bundle before target mutations", async () =>
   assert.ok(installVerification > installTrust);
   assert.ok(installMutation >= 0);
   assert.ok(installVerification < installMutation);
+  const versionValidation = installSource.indexOf(
+    '[[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]'
+  );
+  assert.ok(versionValidation > installVerification);
+  assert.ok(versionValidation < installMutation);
+  assert.doesNotMatch(installSource, /dpkg -i/u);
+  assert.match(installSource, /apt-get --simulate --no-remove/u);
+  assert.match(installSource, /apt-get --no-download --no-remove/u);
 
   const updateSource = await readFile(UPDATE, "utf8");
   const updateTrust = updateSource.indexOf(
@@ -349,6 +594,53 @@ test("install and update verify the bundle before target mutations", async () =>
   assert.ok(updateVerification > updateTrust);
   assert.ok(updateMutation >= 0);
   assert.ok(updateVerification < updateMutation);
+});
+
+test("target LibreOffice gate follows the immutable bundle profile", async () => {
+  const source = await readFile(TARGET_RELEASE_GATE, "utf8");
+  assert.match(
+    source,
+    /payload\/config\/docomator\.env\.example[\s\S]*DOCOMATOR_PREVIEW_ENABLED/u
+  );
+  assert.match(source, /CONFIG_PREVIEW_ENABLED/u);
+  assert.match(
+    source,
+    /CONFIG_PREVIEW_ENABLED" == "\$BUNDLE_PREVIEW_ENABLED/u
+  );
+  assert.match(source, /DOCOMATOR_REQUIRE_LIBREOFFICE=1/u);
+});
+
+test("target OS profile requires exact id, version and architecture", async () => {
+  const bundle = await fixture();
+  const osRelease = path.join(bundle, "target-os-release");
+  try {
+    await enablePreview(bundle);
+    const architecture = process.arch === "arm64" ? "arm64" : "amd64";
+    await writeFile(osRelease, 'ID=debian\nVERSION_ID="12"\n');
+    const accepted = await verifyTargetProfile(
+      path.join(bundle, "payload/os-packages"),
+      osRelease,
+      architecture
+    );
+    assert.equal(accepted.code, 0, accepted.output);
+
+    await writeFile(osRelease, 'ID=debian\nVERSION_ID="11"\n');
+    const rejected = await verifyTargetProfile(
+      path.join(bundle, "payload/os-packages"),
+      osRelease,
+      architecture
+    );
+    assert.equal(rejected.code, 1);
+    assert.match(rejected.output, /не совпадает с профилем пакетов/iu);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("OS package collector rejects option-like package specifications", async () => {
+  const source = await readFile(COLLECT_OS_PACKAGES, "utf8");
+  assert.ok(source.includes("^[a-z0-9][a-z0-9+.-]*$"));
+  assert.match(source, /install -- "\$\{packages\[@\]\}"/u);
 });
 
 test("trusted bundle guard rejects unsafe ownership, modes and ancestors", async () => {

@@ -16,6 +16,7 @@ LLAMA_SERVER=""
 MODEL_FILE=""
 OS_PACKAGES_DIR=""
 TARGET_ARCH="$(uname -m)"
+PREVIEW_PROFILE=""
 SKIP_TESTS=0
 INCLUDE_SOURCES=0
 WITHOUT_LLM=0
@@ -40,7 +41,9 @@ usage() {
   --llama-server FILE          Prebuilt target-compatible llama-server binary
   --model FILE                 GGUF model to include
   --without-llm                Explicitly create a bundle without LLM assets
-  --os-packages-dir DIR        Directory containing offline .deb packages
+  --with-preview               Include and require the verified LibreOffice package set
+  --without-preview            Explicitly create a bundle with PDF preview disabled
+  --os-packages-dir DIR        Verified directory produced by collect-os-packages.sh
   --include-sources            Keep TypeScript sources in the application payload
   --skip-tests                 Skip npm run check (not recommended)
   --force                      Replace an existing bundle for the same version
@@ -60,6 +63,16 @@ while (($# > 0)); do
     --llama-server) LLAMA_SERVER="$2"; shift 2 ;;
     --model) MODEL_FILE="$2"; shift 2 ;;
     --without-llm) WITHOUT_LLM=1; shift ;;
+    --with-preview)
+      [[ -z "$PREVIEW_PROFILE" ]] || die "Укажите только один preview-профиль"
+      PREVIEW_PROFILE="with"
+      shift
+      ;;
+    --without-preview)
+      [[ -z "$PREVIEW_PROFILE" ]] || die "Укажите только один preview-профиль"
+      PREVIEW_PROFILE="without"
+      shift
+      ;;
     --os-packages-dir) OS_PACKAGES_DIR="$2"; shift 2 ;;
     --include-sources) INCLUDE_SOURCES=1; shift ;;
     --skip-tests) SKIP_TESTS=1; shift ;;
@@ -76,17 +89,39 @@ require_command realpath
 require_command sort
 require_command xargs
 
+[[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || \
+  die "Версия содержит запрещённые символы: $VERSION"
+[[ -n "$PREVIEW_PROFILE" ]] || die \
+  "Укажите --with-preview или --without-preview; preview-профиль не выбирается неявно."
+
 case "$TARGET_ARCH" in
   x86_64|amd64) NODE_ARCH="x64" ;;
   aarch64|arm64) NODE_ARCH="arm64" ;;
   *) die "Неподдерживаемая целевая архитектура: $TARGET_ARCH" ;;
 esac
 
+if [[ "$PREVIEW_PROFILE" == "with" && -z "$OS_PACKAGES_DIR" ]]; then
+  die "Для --with-preview требуется --os-packages-dir с LibreOffice Writer/Calc."
+fi
+if [[ -n "$OS_PACKAGES_DIR" ]]; then
+  OS_PACKAGES_DIR="$(absolute_path "$OS_PACKAGES_DIR")"
+  verify_os_package_set \
+    "$OS_PACKAGES_DIR" \
+    "$([[ "$PREVIEW_PROFILE" == "with" ]] && printf 1 || printf 0)"
+  SOURCE_DEB_ARCHITECTURE="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" DEB_ARCHITECTURE)"
+  EXPECTED_DEB_ARCHITECTURE="$([[ "$NODE_ARCH" == "x64" ]] && printf amd64 || printf arm64)"
+  [[ "$SOURCE_DEB_ARCHITECTURE" == "$EXPECTED_DEB_ARCHITECTURE" ]] || \
+    die "Архитектура набора .deb не совпадает с --target-arch"
+fi
+
 if ((WITHOUT_LLM == 0)); then
   [[ -n "$LLAMA_SERVER" && -n "$MODEL_FILE" ]] || die \
     "Укажите одновременно --llama-server и --model либо явно используйте --without-llm."
   [[ -x "$LLAMA_SERVER" || -f "$LLAMA_SERVER" ]] || die "Не найден llama-server: $LLAMA_SERVER"
   [[ -f "$MODEL_FILE" ]] || die "Не найдена модель GGUF: $MODEL_FILE"
+  MODEL_BASENAME="$(basename "$MODEL_FILE")"
+  [[ "$MODEL_BASENAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || \
+    die "Имя файла модели содержит запрещённые символы: $MODEL_BASENAME"
 fi
 
 OUTPUT_DIR="$(mkdir -p "$OUTPUT_DIR" && absolute_path "$OUTPUT_DIR")"
@@ -166,6 +201,7 @@ mkdir -p \
   "$BUNDLE_DIR/payload/app/packages/document-intake" \
   "$BUNDLE_DIR/payload/app/packages/template-compiler" \
   "$BUNDLE_DIR/payload/app/scripts/runtime" \
+  "$BUNDLE_DIR/payload/app/scripts/ci" \
   "$BUNDLE_DIR/payload/app/examples" \
   "$BUNDLE_DIR/payload/runtime/node" \
   "$BUNDLE_DIR/payload/runtime/llama" \
@@ -178,6 +214,10 @@ cp "$ROOT_DIR/package.json" "$ROOT_DIR/package-lock.json" "$ROOT_DIR/VERSION" \
   "$BUNDLE_DIR/payload/app/"
 cp -a "$ROOT_DIR/migrations" "$BUNDLE_DIR/payload/app/"
 cp -a "$ROOT_DIR/scripts/runtime/." "$BUNDLE_DIR/payload/app/scripts/runtime/"
+cp "$ROOT_DIR/scripts/ci/release-gate.mjs" \
+  "$ROOT_DIR/scripts/ci/release-gate-crash-worker.mjs" \
+  "$ROOT_DIR/scripts/ci/libreoffice-release-gate.mjs" \
+  "$BUNDLE_DIR/payload/app/scripts/ci/"
 
 for workspace in apps/api apps/worker packages/config packages/contracts packages/storage packages/document-intake packages/template-compiler; do
   destination="$BUNDLE_DIR/payload/app/$workspace"
@@ -214,16 +254,25 @@ done
 cp -a "$NODE_STAGE/." "$BUNDLE_DIR/payload/runtime/node/"
 cp -a "$ROOT_DIR/deploy/systemd/." "$BUNDLE_DIR/payload/deploy/systemd/"
 cp "$ROOT_DIR/config/docomator.env.example" "$BUNDLE_DIR/payload/config/"
+replace_env_value \
+  "$BUNDLE_DIR/payload/config/docomator.env.example" \
+  DOCOMATOR_PREVIEW_ENABLED \
+  "$([[ "$PREVIEW_PROFILE" == "with" ]] && printf true || printf false)"
 
 if ((WITHOUT_LLM == 0)); then
   cp "$LLAMA_SERVER" "$BUNDLE_DIR/payload/runtime/llama/llama-server"
   chmod 0755 "$BUNDLE_DIR/payload/runtime/llama/llama-server"
-  cp "$MODEL_FILE" "$BUNDLE_DIR/payload/models/$(basename "$MODEL_FILE")"
+  cp "$MODEL_FILE" "$BUNDLE_DIR/payload/models/$MODEL_BASENAME"
 fi
 
 if [[ -n "$OS_PACKAGES_DIR" ]]; then
-  [[ -d "$OS_PACKAGES_DIR" ]] || die "OS packages directory not found: $OS_PACKAGES_DIR"
-  cp -a "$OS_PACKAGES_DIR/." "$BUNDLE_DIR/payload/os-packages/"
+  while IFS= read -r -d '' package_file; do
+    cp "$package_file" "$BUNDLE_DIR/payload/os-packages/"
+  done < <(
+    find "$OS_PACKAGES_DIR" -maxdepth 1 -type f \
+      \( -name '*.deb' -o -name 'manifest.sha256' -o -name 'packages.tsv' -o -name 'source-os.env' \) \
+      -print0 | LC_ALL=C sort -z
+  )
 fi
 
 info "Устанавливаем только рабочие зависимости npm в комплект"
@@ -242,8 +291,12 @@ cp "$SCRIPT_DIR/lib.sh" \
   "$SCRIPT_DIR/restore.sh" \
   "$SCRIPT_DIR/first-run.sh" \
   "$SCRIPT_DIR/healthcheck.mjs" \
+  "$SCRIPT_DIR/http-check.mjs" \
+  "$SCRIPT_DIR/smoke-test.sh" \
+  "$SCRIPT_DIR/target-release-gate.sh" \
+  "$SCRIPT_DIR/verify-release.mjs" \
   "$BUNDLE_DIR/"
-chmod 0755 "$BUNDLE_DIR"/*.sh "$BUNDLE_DIR/healthcheck.mjs"
+chmod 0755 "$BUNDLE_DIR"/*.sh "$BUNDLE_DIR"/*.mjs
 
 printf '%s\n' "$VERSION" > "$BUNDLE_DIR/VERSION"
 
@@ -256,9 +309,27 @@ MODEL_NAME=""
 MODEL_SHA256=""
 LLAMA_SHA256=""
 if ((WITHOUT_LLM == 0)); then
-  MODEL_NAME="$(basename "$MODEL_FILE")"
+  MODEL_NAME="$MODEL_BASENAME"
   MODEL_SHA256="$(sha256_of "$MODEL_FILE")"
   LLAMA_SHA256="$(sha256_of "$LLAMA_SERVER")"
+fi
+
+PREVIEW_ENABLED="$([[ "$PREVIEW_PROFILE" == "with" ]] && printf true || printf false)"
+PREVIEW_CONVERTER_PATH="$(read_env_value "$BUNDLE_DIR/payload/config/docomator.env.example" DOCOMATOR_LIBREOFFICE_BIN)"
+PREVIEW_TIMEOUT_MS="$(read_env_value "$BUNDLE_DIR/payload/config/docomator.env.example" DOCOMATOR_PREVIEW_TIMEOUT_MS)"
+PREVIEW_MAX_BYTES="$(read_env_value "$BUNDLE_DIR/payload/config/docomator.env.example" DOCOMATOR_PREVIEW_MAX_BYTES)"
+OS_PACKAGES_INCLUDED=false
+OS_PACKAGES_MANIFEST_SHA256=""
+OS_PACKAGES_INVENTORY_SHA256=""
+OS_PACKAGE_SOURCE_JSON="null"
+if [[ -n "$OS_PACKAGES_DIR" ]]; then
+  OS_PACKAGES_INCLUDED=true
+  OS_PACKAGES_MANIFEST_SHA256="$(sha256_of "$OS_PACKAGES_DIR/manifest.sha256")"
+  OS_PACKAGES_INVENTORY_SHA256="$(sha256_of "$OS_PACKAGES_DIR/packages.tsv")"
+  SOURCE_OS_ID="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" OS_ID)"
+  SOURCE_OS_VERSION_ID="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" OS_VERSION_ID)"
+  SOURCE_DEB_ARCHITECTURE="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" DEB_ARCHITECTURE)"
+  OS_PACKAGE_SOURCE_JSON="{\"id\":\"$SOURCE_OS_ID\",\"versionId\":\"$SOURCE_OS_VERSION_ID\",\"architecture\":\"$SOURCE_DEB_ARCHITECTURE\"}"
 fi
 
 cat > "$BUNDLE_DIR/release.json" <<EOF_JSON
@@ -269,6 +340,14 @@ cat > "$BUNDLE_DIR/release.json" <<EOF_JSON
   "gitCommit": "$GIT_COMMIT",
   "targetArchitecture": "$NODE_ARCH",
   "nodeVersion": "$ACTUAL_NODE_VERSION",
+  "previewEnabled": $PREVIEW_ENABLED,
+  "previewConverterPath": "$PREVIEW_CONVERTER_PATH",
+  "previewTimeoutMs": $PREVIEW_TIMEOUT_MS,
+  "previewMaxBytes": $PREVIEW_MAX_BYTES,
+  "osPackagesIncluded": $OS_PACKAGES_INCLUDED,
+  "osPackagesManifestSha256": "$OS_PACKAGES_MANIFEST_SHA256",
+  "osPackagesInventorySha256": "$OS_PACKAGES_INVENTORY_SHA256",
+  "osPackageSource": $OS_PACKAGE_SOURCE_JSON,
   "llmIncluded": $([[ $WITHOUT_LLM -eq 0 ]] && printf true || printf false),
   "llamaServerSha256": "$LLAMA_SHA256",
   "modelFile": "$MODEL_NAME",

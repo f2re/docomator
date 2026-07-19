@@ -131,6 +131,160 @@ replace_env_value() {
   fi
 }
 
+verify_os_package_set() (
+  set -Eeuo pipefail
+  local package_root="$1"
+  local require_libreoffice="${2:-0}"
+  local validation_dir line sha256 package version architecture filename extra
+  local actual_package actual_version actual_architecture source_os_id
+  local source_os_version_id source_deb_architecture
+
+  require_command cmp
+  require_command dpkg-deb
+  require_command find
+  require_command sed
+  require_command sha256sum
+  require_command sort
+
+  [[ -d "$package_root" ]] || die "Не найден каталог пакетов ОС: $package_root"
+  [[ -f "$package_root/manifest.sha256" && ! -L "$package_root/manifest.sha256" ]] || \
+    die "В наборе пакетов ОС отсутствует manifest.sha256"
+  [[ -f "$package_root/packages.tsv" && ! -L "$package_root/packages.tsv" ]] || \
+    die "В наборе пакетов ОС отсутствует packages.tsv"
+  [[ -f "$package_root/source-os.env" && ! -L "$package_root/source-os.env" ]] || \
+    die "В наборе пакетов ОС отсутствует source-os.env"
+
+  source_os_id="$(read_env_value "$package_root/source-os.env" OS_ID)"
+  source_os_version_id="$(read_env_value "$package_root/source-os.env" OS_VERSION_ID)"
+  source_deb_architecture="$(read_env_value "$package_root/source-os.env" DEB_ARCHITECTURE)"
+  [[ "$source_os_id" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || \
+    die "Некорректный OS_ID в source-os.env"
+  [[ "$source_os_version_id" =~ ^[A-Za-z0-9][A-Za-z0-9.+:~_-]*$ ]] || \
+    die "Некорректный OS_VERSION_ID в source-os.env"
+  [[ "$source_deb_architecture" =~ ^[a-z0-9][a-z0-9-]*$ ]] || \
+    die "Некорректный DEB_ARCHITECTURE в source-os.env"
+
+  if find "$package_root" -mindepth 1 ! -type d ! -type f -print -quit | grep -q .; then
+    die "В наборе пакетов ОС найден запрещённый объект"
+  fi
+  if find "$package_root" -mindepth 2 ! -type d -print -quit | grep -q .; then
+    die "Файлы пакетов ОС должны находиться непосредственно в корне набора"
+  fi
+
+  validation_dir="$(mktemp -d "/tmp/docomator-os-packages.XXXXXX")"
+  trap 'rm -rf "$validation_dir"' EXIT
+
+  (
+    cd "$package_root"
+    find . -maxdepth 1 -type f -print \
+      | LC_ALL=C sort > "$validation_dir/actual-files"
+    find . -maxdepth 1 -type f -name '*.deb' -print \
+      | LC_ALL=C sort > "$validation_dir/actual-debs"
+  )
+  [[ -s "$validation_dir/actual-debs" ]] || die "В наборе пакетов ОС нет файлов .deb"
+  {
+    printf '%s\n' './manifest.sha256' './packages.tsv' './source-os.env'
+    cat "$validation_dir/actual-debs"
+  } | LC_ALL=C sort > "$validation_dir/expected-files"
+  cmp -s "$validation_dir/expected-files" "$validation_dir/actual-files" || \
+    die "Состав набора пакетов ОС содержит лишние или неподдерживаемые файлы"
+
+  sed -E 's/^[a-f0-9]{64}  //' "$package_root/manifest.sha256" \
+    > "$validation_dir/manifest-debs"
+  cmp -s "$validation_dir/actual-debs" "$validation_dir/manifest-debs" || \
+    die "Пути в manifest пакетов ОС не совпадают с точным набором .deb"
+  (
+    cd "$package_root"
+    sha256sum --check --strict --quiet manifest.sha256
+  )
+
+  IFS= read -r line < "$package_root/packages.tsv" || true
+  [[ "$line" == $'sha256\tpackage\tversion\tarchitecture\tfilename' ]] || \
+    die "Некорректный заголовок packages.tsv"
+  : > "$validation_dir/inventory-debs"
+  : > "$validation_dir/package-names"
+  while IFS=$'\t' read -r sha256 package version architecture filename extra; do
+    [[ -n "$sha256$package$version$architecture$filename$extra" ]] || \
+      die "Пустая строка запрещена в packages.tsv"
+    [[ -z "$extra" && "$sha256" =~ ^[a-f0-9]{64}$ ]] || \
+      die "Некорректная строка packages.tsv"
+    [[ "$package" =~ ^[a-z0-9][a-z0-9+.-]*$ ]] || \
+      die "Некорректное имя пакета в packages.tsv: $package"
+    [[ "$version" != *$'\t'* && "$version" != *$'\n'* && -n "$version" ]] || \
+      die "Некорректная версия пакета в packages.tsv: $package"
+    [[ "$architecture" =~ ^[a-z0-9][a-z0-9-]*$ ]] || \
+      die "Некорректная архитектура пакета в packages.tsv: $package"
+    [[ "$filename" =~ ^[A-Za-z0-9][A-Za-z0-9.+:~_-]*\.deb$ ]] || \
+      die "Некорректное имя файла в packages.tsv: $filename"
+    [[ -f "$package_root/$filename" && ! -L "$package_root/$filename" ]] || \
+      die "Файл из packages.tsv отсутствует: $filename"
+    [[ "$(sha256_of "$package_root/$filename")" == "$sha256" ]] || \
+      die "Checksum packages.tsv не совпадает: $filename"
+
+    actual_package="$(dpkg-deb -f "$package_root/$filename" Package)" || \
+      die "Не удалось прочитать имя Debian-пакета: $filename"
+    actual_version="$(dpkg-deb -f "$package_root/$filename" Version)" || \
+      die "Не удалось прочитать версию Debian-пакета: $filename"
+    actual_architecture="$(dpkg-deb -f "$package_root/$filename" Architecture)" || \
+      die "Не удалось прочитать архитектуру Debian-пакета: $filename"
+    [[ "$actual_package" == "$package" && "$actual_version" == "$version" && \
+       "$actual_architecture" == "$architecture" ]] || \
+      die "Метаданные Debian-пакета не совпадают с packages.tsv: $filename"
+    [[ "$architecture" == "all" || "$architecture" == "$source_deb_architecture" ]] || \
+      die "Архитектура Debian-пакета не совпадает с source-os.env: $filename"
+    printf './%s\n' "$filename" >> "$validation_dir/inventory-debs"
+    printf '%s\n' "$package" >> "$validation_dir/package-names"
+  done < <(tail -n +2 "$package_root/packages.tsv")
+
+  cmp -s "$validation_dir/actual-debs" "$validation_dir/inventory-debs" || \
+    die "Inventory packages.tsv не совпадает с точным набором .deb"
+  if [[ "$(LC_ALL=C sort "$validation_dir/package-names" | uniq -d | head -n 1)" != "" ]]; then
+    die "В наборе пакетов ОС обнаружено несколько версий одного пакета"
+  fi
+
+  if ((require_libreoffice == 1)); then
+    for package in libreoffice-core libreoffice-writer libreoffice-calc; do
+      grep -Fx "$package" "$validation_dir/package-names" >/dev/null || \
+        die "Для preview-профиля отсутствует обязательный пакет: $package"
+    done
+  fi
+)
+
+verify_target_os_package_profile() (
+  set -Eeuo pipefail
+  local package_root="$1"
+  local os_release_file="${2:-/etc/os-release}"
+  local target_architecture="${3:-}"
+  local source_os_id source_os_version_id source_architecture
+  local target_os_id target_os_version_id
+
+  [[ -f "$package_root/source-os.env" ]] || \
+    die "В наборе пакетов ОС отсутствует source-os.env"
+  [[ -f "$os_release_file" ]] || \
+    die "Не найден доверенный файл сведений о целевой ОС: $os_release_file"
+
+  source_os_id="$(read_env_value "$package_root/source-os.env" OS_ID)"
+  source_os_version_id="$(read_env_value "$package_root/source-os.env" OS_VERSION_ID)"
+  source_architecture="$(read_env_value "$package_root/source-os.env" DEB_ARCHITECTURE)"
+  target_os_id="$(sed -n -E 's/^ID="?([^"[:space:]]+)"?$/\1/p' "$os_release_file" | head -n 1)"
+  target_os_version_id="$(sed -n -E 's/^VERSION_ID="?([^"[:space:]]+)"?$/\1/p' "$os_release_file" | head -n 1)"
+  if [[ -z "$target_architecture" ]]; then
+    require_command dpkg
+    target_architecture="$(dpkg --print-architecture)"
+  fi
+
+  [[ "$target_os_id" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || \
+    die "Некорректный ID целевой ОС"
+  [[ "$target_os_version_id" =~ ^[A-Za-z0-9][A-Za-z0-9.+:~_-]*$ ]] || \
+    die "Некорректный VERSION_ID целевой ОС"
+  [[ "$target_architecture" =~ ^[a-z0-9][a-z0-9-]*$ ]] || \
+    die "Некорректная архитектура целевой ОС"
+  [[ "$target_os_id" == "$source_os_id" && \
+     "$target_os_version_id" == "$source_os_version_id" && \
+     "$target_architecture" == "$source_architecture" ]] || \
+    die "Целевая ОС не совпадает с профилем пакетов: требуется ${source_os_id} ${source_os_version_id} ${source_architecture}, обнаружено ${target_os_id} ${target_os_version_id} ${target_architecture}"
+)
+
 render_template() {
   local source="$1"
   local destination="$2"

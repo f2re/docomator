@@ -21,11 +21,11 @@
 
 - точное название и update ОС, `uname -m`, версия glibc;
 - SHA-256 автономного архива и Git commit из `release.json`;
-- версия встроенного Node.js и SHA набора `.deb`;
+- версия встроенного Node.js, preview-профиль, SHA `manifest.sha256` и `packages.tsv` набора `.deb`;
 - версия LibreOffice Writer/Calc и путь converter;
 - физически отсутствующий сетевой маршрут у целевой машины во время установки;
-- успешные `verify-bundle.sh` и root `smoke-test.sh`;
-- успешный обычный release-gate и обязательный LibreOffice gate;
+- успешные встроенные `verify-bundle.sh` и root `smoke-test.sh`;
+- успешный встроенный `target-release-gate.sh`, включая обязательный LibreOffice gate без `SKIPPED`;
 - открытие, PDF-преобразование и обратное чтение зафиксированных DOCX/XLSX-примеров;
 - `pilot-check.sh --run-backup`, обновление и проверенный откат;
 - итог ручной UX-приёмки по `UX_ACCEPTANCE_PROTOCOL.md`.

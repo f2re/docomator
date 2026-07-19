@@ -21,7 +21,6 @@ if (($# != 1)); then
 fi
 
 require_root
-require_command curl
 require_command getent
 require_command sha256sum
 require_command stat
@@ -29,6 +28,13 @@ require_command stat
 BUNDLE_ROOT="$(absolute_path "$1")"
 [[ -x "$BUNDLE_ROOT/install.sh" ]] || die "В комплекте не найден исполняемый install.sh: $BUNDLE_ROOT"
 [[ -x "$BUNDLE_ROOT/update.sh" ]] || die "В комплекте не найден исполняемый update.sh: $BUNDLE_ROOT"
+[[ -f "$BUNDLE_ROOT/http-check.mjs" ]] || die "В комплекте не найден http-check.mjs: $BUNDLE_ROOT"
+BUNDLE_NODE="$BUNDLE_ROOT/payload/runtime/node/bin/node"
+[[ -x "$BUNDLE_NODE" ]] || die "В комплекте не найден встроенный Node.js"
+
+http_check() {
+  "$BUNDLE_NODE" "$BUNDLE_ROOT/http-check.mjs" "$1" "${2:-}"
+}
 
 if ! id nobody >/dev/null 2>&1; then
   die "Для проверки требуется стандартная учётная запись nobody"
@@ -65,8 +71,19 @@ info "Выполняем первую автономную установку"
 [[ -L "$INSTALL_ROOT/current" ]] || die "Не создана ссылка на текущую версию"
 [[ -f "$DATA_DIR/docomator.db" ]] || die "Не создана база данных"
 [[ -f "$CONFIG_DIR/docomator.env" ]] || die "Не создан файл настроек"
-grep -F 'DOCOMATOR_PREVIEW_ENABLED=true' "$CONFIG_DIR/docomator.env" >/dev/null
+BUNDLE_PREVIEW_ENABLED="$(read_env_value \
+  "$BUNDLE_ROOT/payload/config/docomator.env.example" \
+  DOCOMATOR_PREVIEW_ENABLED)"
+grep -F "DOCOMATOR_PREVIEW_ENABLED=$BUNDLE_PREVIEW_ENABLED" \
+  "$CONFIG_DIR/docomator.env" >/dev/null
 grep -F 'DOCOMATOR_LIBREOFFICE_BIN=' "$CONFIG_DIR/docomator.env" >/dev/null
+grep -F 'DOCOMATOR_PREVIEW_TIMEOUT_MS=' "$CONFIG_DIR/docomator.env" >/dev/null
+grep -F 'DOCOMATOR_PREVIEW_MAX_BYTES=' "$CONFIG_DIR/docomator.env" >/dev/null
+if [[ "$BUNDLE_PREVIEW_ENABLED" == "true" ]]; then
+  SMOKE_LIBREOFFICE_BIN="$(read_env_value "$CONFIG_DIR/docomator.env" DOCOMATOR_LIBREOFFICE_BIN)"
+  [[ -x "$SMOKE_LIBREOFFICE_BIN" ]] || \
+    die "Preview включён, но LibreOffice недоступен: $SMOKE_LIBREOFFICE_BIN"
+fi
 grep -F 'DOCOMATOR_BACKUP_ENABLED=true' "$CONFIG_DIR/docomator.env" >/dev/null
 grep -F 'DOCOMATOR_BACKUP_RETENTION=7' "$CONFIG_DIR/docomator.env" >/dev/null
 [[ -f "$INSTALL_ROOT/current/deploy/systemd/docomator-backup.service.in" ]] || \
@@ -120,8 +137,7 @@ API_PID=$!
 
 READY=0
 for _ in $(seq 1 30); do
-  if curl --fail --silent --show-error \
-    "http://127.0.0.1:${DOCOMATOR_PORT}/readyz" >/dev/null 2>&1; then
+  if http_check "http://127.0.0.1:${DOCOMATOR_PORT}/readyz" >/dev/null 2>&1; then
     READY=1
     break
   fi
@@ -132,54 +148,30 @@ done
   die "Встроенная служба не перешла в состояние готовности"
 }
 
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/" \
-  | grep -F 'Пространства' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces?limit=10" \
-  | grep -F 'Основное пространство' >/dev/null
-curl --fail --silent --show-error \
+http_check "http://127.0.0.1:${DOCOMATOR_PORT}/" 'Пространства'
+http_check "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces?limit=10" 'Основное пространство'
+http_check \
   "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces/00000000-0000-4000-8000-000000000001/active-templates" \
-  | grep -F '"data":[]' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
-  | grep -F 'Проверяем архивную структуру' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
-  | grep -F 'Читаем текст и координаты' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
-  | grep -F 'Сохранить поле' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
-  | grep -F 'Проверить заполнение' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
-  | grep -F 'Проверить все поля' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
-  | grep -F 'Создать предварительный просмотр' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" \
-  | grep -F 'Активировать версию' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
-  | grep -F '.structure-element-list' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
-  | grep -F '.structure-field-form' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
-  | grep -F '.trial-downloads' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
-  | grep -F '.multi-trial-check-list' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" \
-  | grep -F '.activation-preview-frame' >/dev/null
-curl --fail --silent --show-error \
-  "http://127.0.0.1:${DOCOMATOR_PORT}/" \
-  | grep -F 'Проверить документ' >/dev/null
+  '"data":[]'
+for expected in \
+  'Проверяем архивную структуру' \
+  'Читаем текст и координаты' \
+  'Сохранить поле' \
+  'Проверить заполнение' \
+  'Проверить все поля' \
+  'Создать предварительный просмотр' \
+  'Активировать версию'; do
+  http_check "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" "$expected"
+done
+for expected in \
+  '.structure-element-list' \
+  '.structure-field-form' \
+  '.trial-downloads' \
+  '.multi-trial-check-list' \
+  '.activation-preview-frame'; do
+  http_check "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" "$expected"
+done
+http_check "http://127.0.0.1:${DOCOMATOR_PORT}/" 'Проверить документ'
 "$INSTALL_ROOT/current/first-run.sh" \
   --url "http://127.0.0.1:${DOCOMATOR_PORT}" \
   --config "$CONFIG_DIR/docomator.env" \

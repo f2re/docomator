@@ -30,7 +30,7 @@ usage() {
   --config-dir DIR         Configuration directory (default: /etc/docomator)
   --user NAME              Service user (default: docomator)
   --group NAME             Service group (default: docomator)
-  --install-os-packages    Install bundled .deb packages before the application
+  --install-os-packages    Install bundled .deb packages during an initial installation
   --no-start               Install units and migrate, but do not enable/start services
   --no-systemd             Skip unit installation and service control (test/chroot mode)
   --upgrade                Internal flag used by update.sh
@@ -69,6 +69,14 @@ require_trusted_bundle "$SCRIPT_DIR"
 [[ "$BUNDLE_ROOT" == "$SCRIPT_DIR" ]] || require_trusted_bundle "$BUNDLE_ROOT"
 "$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
 VERSION="$(<"$BUNDLE_ROOT/VERSION")"
+[[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || \
+  die "VERSION автономного комплекта содержит запрещённые символы"
+mapfile -d '' BUNDLE_OS_DEBS < <(
+  find "$BUNDLE_ROOT/payload/os-packages" -maxdepth 1 -type f -name '*.deb' -print0
+)
+if ((${#BUNDLE_OS_DEBS[@]} > 0)); then
+  verify_target_os_package_profile "$BUNDLE_ROOT/payload/os-packages"
+fi
 INSTALL_ROOT="$(mkdir -p "$INSTALL_ROOT" && absolute_path "$INSTALL_ROOT")"
 mkdir -p "$DATA_DIR" "$CONFIG_DIR"
 DATA_DIR="$(absolute_path "$DATA_DIR")"
@@ -78,24 +86,80 @@ RELEASE_DIR="$RELEASES_DIR/$VERSION"
 CURRENT_LINK="$INSTALL_ROOT/current"
 CONFIG_FILE="$CONFIG_DIR/docomator.env"
 DATABASE_PATH="$DATA_DIR/docomator.db"
+EFFECTIVE_CONFIG_FILE="$BUNDLE_ROOT/payload/config/docomator.env.example"
+[[ -f "$CONFIG_FILE" ]] && EFFECTIVE_CONFIG_FILE="$CONFIG_FILE"
+BUNDLE_PREVIEW_ENABLED="$(read_env_value \
+  "$BUNDLE_ROOT/payload/config/docomator.env.example" \
+  DOCOMATOR_PREVIEW_ENABLED)"
+PREVIEW_ENABLED="$(read_env_value "$EFFECTIVE_CONFIG_FILE" DOCOMATOR_PREVIEW_ENABLED)"
+LIBREOFFICE_BIN="$(read_env_value "$EFFECTIVE_CONFIG_FILE" DOCOMATOR_LIBREOFFICE_BIN)"
+[[ -n "$PREVIEW_ENABLED" ]] || PREVIEW_ENABLED="true"
+[[ -n "$LIBREOFFICE_BIN" ]] || LIBREOFFICE_BIN="/usr/bin/libreoffice"
+[[ "$PREVIEW_ENABLED" == "true" || "$PREVIEW_ENABLED" == "false" ]] || \
+  die "DOCOMATOR_PREVIEW_ENABLED должен быть true или false"
+[[ "$PREVIEW_ENABLED" == "$BUNDLE_PREVIEW_ENABLED" ]] || \
+  die "Preview-профиль существующей конфигурации не совпадает с автономным комплектом. Сначала согласуйте DOCOMATOR_PREVIEW_ENABLED с выбранным профилем."
+[[ "$LIBREOFFICE_BIN" == /* ]] || \
+  die "DOCOMATOR_LIBREOFFICE_BIN должен быть абсолютным путём"
+
+if [[ "$PREVIEW_ENABLED" == "true" && $INSTALL_OS_PACKAGES -eq 0 && ! -x "$LIBREOFFICE_BIN" ]]; then
+  die "LibreOffice недоступен: $LIBREOFFICE_BIN. Установите пакеты из комплекта через --install-os-packages либо отключите preview в существующей конфигурации."
+fi
 
 if ((UPGRADE == 1)) && [[ ! -L "$CURRENT_LINK" ]]; then
   die "Не найдена существующая установка Docomator: $CURRENT_LINK"
 fi
+if ((INSTALL_OS_PACKAGES == 1)) && [[ -L "$CURRENT_LINK" ]]; then
+  die "Обновление пакетов ОС не входит в транзакцию приложения. Обновите их отдельно по утверждённой процедуре со снимком ОС, затем повторите update.sh без --install-os-packages."
+fi
 
 if ((INSTALL_OS_PACKAGES == 1)); then
-  mapfile -d '' debs < <(find "$BUNDLE_ROOT/payload/os-packages" -maxdepth 1 -type f -name '*.deb' -print0 | sort -z)
-  ((${#debs[@]} > 0)) || die "В комплекте нет пакетов .deb"
+  ((${#BUNDLE_OS_DEBS[@]} > 0)) || die "В комплекте нет пакетов .deb"
+  require_command apt-get
+  require_command comm
+  require_command cut
   require_command dpkg
-  info "Устанавливаем пакеты ОС из комплекта: ${#debs[@]}"
-  if ! dpkg -i "${debs[@]}"; then
-    require_command apt-get
-    APT_CACHE="$(mktemp -d "/tmp/docomator-apt.XXXXXX")"
-    trap 'rm -rf "${APT_CACHE:-}"' EXIT
-    mkdir -p "$APT_CACHE/partial"
-    cp "${debs[@]}" "$APT_CACHE/"
-    apt-get -o "Dir::Cache::archives=$APT_CACHE" --no-download --fix-broken install -y
-  fi
+  DPKG_AUDIT="$(dpkg --audit)"
+  [[ -z "$DPKG_AUDIT" ]] || {
+    die "Состояние пакетной базы требует исправления до установки Docomator"
+  }
+  APT_CACHE="$(mktemp -d "/tmp/docomator-apt.XXXXXX")"
+  trap 'rm -rf "${APT_CACHE:-}"' EXIT
+  cp "${BUNDLE_OS_DEBS[@]}" "$APT_CACHE/"
+  mapfile -d '' local_debs < <(
+    find "$APT_CACHE" -maxdepth 1 -type f -name '*.deb' -print0 | LC_ALL=C sort -z
+  )
+  for index in "${!local_debs[@]}"; do
+    local_debs[$index]="./$(basename "${local_debs[$index]}")"
+  done
+  info "Предварительно проверяем замкнутость и безопасный план пакетов ОС"
+  (
+    cd "$APT_CACHE"
+    LC_ALL=C apt-get --simulate --no-remove install -- "${local_debs[@]}" \
+      > package-plan.txt
+    cat package-plan.txt
+    cut -f2 "$BUNDLE_ROOT/payload/os-packages/packages.tsv" \
+      | tail -n +2 \
+      | LC_ALL=C sort -u > included-packages.txt
+    sed -n -E 's/^Inst ([^ ]+).*/\1/p' package-plan.txt \
+      | sed -E 's/:[a-z0-9-]+$//' \
+      | LC_ALL=C sort -u > planned-packages.txt
+    comm -23 planned-packages.txt included-packages.txt > missing-packages.txt
+    [[ ! -s missing-packages.txt ]] || {
+      cat missing-packages.txt >&2
+      die "План установки требует пакеты, отсутствующие в автономном комплекте"
+    }
+  )
+  info "Устанавливаем пакеты ОС из комплекта: ${#local_debs[@]}"
+  (
+    cd "$APT_CACHE"
+    DEBIAN_FRONTEND=noninteractive \
+      apt-get --no-download --no-remove install --yes -- "${local_debs[@]}"
+  )
+fi
+
+if [[ "$PREVIEW_ENABLED" == "true" && ! -x "$LIBREOFFICE_BIN" ]]; then
+  die "После установки пакетов LibreOffice недоступен: $LIBREOFFICE_BIN"
 fi
 
 if ! getent group "$DOCOMATOR_GROUP" >/dev/null 2>&1; then
@@ -226,6 +290,10 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
   if [[ -x "$BUNDLE_ROOT/first-run.sh" ]]; then
     cp "$BUNDLE_ROOT/first-run.sh" "$TEMP_RELEASE/first-run.sh"
     chmod 0755 "$TEMP_RELEASE/first-run.sh"
+  fi
+  if [[ -f "$BUNDLE_ROOT/healthcheck.mjs" ]]; then
+    cp "$BUNDLE_ROOT/healthcheck.mjs" "$TEMP_RELEASE/healthcheck.mjs"
+    chmod 0755 "$TEMP_RELEASE/healthcheck.mjs"
   fi
   chown -R root:root "$TEMP_RELEASE"
   chmod -R go-w "$TEMP_RELEASE"
