@@ -5,6 +5,7 @@ import {
   ContentAddressedObjectStore,
   DocumentGenerationConflictError,
   DocumentGenerationRegistry,
+  type DocumentResultRecord,
   documentResultRegistryFromGenerationRegistry,
   objectCleanupRegistryFromGenerationRegistry,
   runtimeStatusRegistryFromGenerationRegistry,
@@ -68,15 +69,20 @@ function officeMediaType(format: "docx" | "xlsx"): string {
     : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 }
 
-function jobPayload(job: ReturnType<DocumentGenerationRegistry["getJob"]>) {
-  const ready = job.state === "completed" || job.state === "partial";
+function jobPayload(
+  job: ReturnType<DocumentGenerationRegistry["getJob"]>,
+  result: DocumentResultRecord | null
+) {
+  const resultUrl =
+    result === null
+      ? null
+      : `/api/v1/document-results/${encodeURIComponent(result.id)}`;
   return {
     job,
+    resultId: result?.id ?? null,
+    resultUrl,
     statusUrl: `/api/v1/spaces/${encodeURIComponent(job.spaceId)}/document-jobs/${encodeURIComponent(job.id)}`,
-    downloadUrl:
-      ready && job.generatedCount > 0
-        ? `/api/v1/spaces/${encodeURIComponent(job.spaceId)}/document-jobs/${encodeURIComponent(job.id)}/download`
-        : null
+    downloadUrl: resultUrl === null ? null : `${resultUrl}/download`
   };
 }
 
@@ -85,10 +91,11 @@ export function registerDocumentGenerationRoutes(
   objectStore: ContentAddressedObjectStore,
   registry: DocumentGenerationRegistry
 ): void {
+  const resultRegistry = documentResultRegistryFromGenerationRegistry(registry);
   registerDocumentResultRoutes(
     app,
     objectStore,
-    documentResultRegistryFromGenerationRegistry(registry)
+    resultRegistry
   );
   registerObjectCleanupRoutes(
     app,
@@ -147,8 +154,12 @@ export function registerDocumentGenerationRoutes(
       reply
         .code(result.created ? 201 : 200)
         .header("cache-control", "no-store");
+      const documentResult = resultRegistry.findByDocumentJob(
+        result.job.spaceId,
+        result.job.id
+      );
       return responseEnvelope(request, {
-        ...jobPayload(result.job),
+        ...jobPayload(result.job, documentResult),
         created: result.created
       });
     }
@@ -173,13 +184,20 @@ export function registerDocumentGenerationRoutes(
         }
       }
     },
-    async (request) =>
-      responseEnvelope(
+    async (request) => {
+      const jobs = registry.listJobs(
+        request.params.spaceId,
+        request.query.limit ?? 50
+      );
+      const results = resultRegistry.findByDocumentJobs(
+        request.params.spaceId,
+        jobs.map((job) => job.id)
+      );
+      return responseEnvelope(
         request,
-        registry
-          .listJobs(request.params.spaceId, request.query.limit ?? 50)
-          .map(jobPayload)
-      )
+        jobs.map((job) => jobPayload(job, results.get(job.id) ?? null))
+      );
+    }
   );
 
   app.get<{ Params: JobParams }>(
@@ -187,8 +205,9 @@ export function registerDocumentGenerationRoutes(
     { schema: { params: jobParamsSchema } },
     async (request, reply) => {
       const job = registry.getJob(request.params.spaceId, request.params.jobId);
+      const result = resultRegistry.findByDocumentJob(job.spaceId, job.id);
       reply.header("cache-control", "no-store");
-      return responseEnvelope(request, jobPayload(job));
+      return responseEnvelope(request, jobPayload(job, result));
     }
   );
 
@@ -205,39 +224,20 @@ export function registerDocumentGenerationRoutes(
           "Document generation output is not ready"
         );
       }
-      if (job.archiveSha256 !== null) {
-        const content = await objectStore.getBuffer(job.archiveSha256);
-        return reply
-          .type("application/zip")
-          .header("cache-control", "private, no-store")
-          .header(
-            "content-disposition",
-            attachment(`комплект-${job.templateTitle}.zip`)
-          )
-          .header("x-content-type-options", "nosniff")
-          .send(content);
-      }
-      const unit = job.units.find(
-        (candidate) =>
-          candidate.state === "completed" && candidate.outputSha256 !== null
-      );
-      if (unit?.outputSha256 === null || unit === undefined) {
+      const result = resultRegistry.findByDocumentJob(job.spaceId, job.id);
+      if (result === null) {
         throw new DocumentGenerationConflictError(
-          "Document generation output file was not found"
+          "Document generation result is no longer available"
         );
       }
-      const content = await objectStore.getBuffer(unit.outputSha256);
       return reply
-        .type(officeMediaType(job.format))
+        .code(307)
         .header("cache-control", "private, no-store")
         .header(
-          "content-disposition",
-          attachment(
-            unit.outputName ?? `${job.templateTitle}.${job.format}`
-          )
+          "location",
+          `/api/v1/document-results/${encodeURIComponent(result.id)}/download`
         )
-        .header("x-content-type-options", "nosniff")
-        .send(content);
+        .send();
     }
   );
 
@@ -272,6 +272,17 @@ export function registerDocumentGenerationRoutes(
         );
       }
       const content = await objectStore.getBuffer(unit.outputSha256);
+      const result = resultRegistry.findByDocumentJob(job.spaceId, job.id);
+      if (result === null) {
+        throw new DocumentGenerationConflictError(
+          "Document generation result is no longer available"
+        );
+      }
+      resultRegistry.markCollected(
+        result.id,
+        mutationContextFromRequest(request),
+        { kind: "unit", unitId: unit.id }
+      );
       return reply
         .type(officeMediaType(job.format))
         .header("cache-control", "private, no-store")

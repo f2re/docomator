@@ -12,6 +12,7 @@ let generationPollTimer = null;
 let generationPollToken = 0;
 let generationReloadTimer = null;
 let generationReloadMarker = "";
+let generationAutoOpenJobId = null;
 
 function generationEscape(value) {
   return String(value ?? "").replace(
@@ -471,17 +472,32 @@ async function pollGenerationJob(jobId, token = null) {
     const body = await generationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-jobs/${encodeURIComponent(jobId)}`
     );
+    if (pollToken !== generationPollToken) return;
     renderGenerationJob(body.data);
     const state = body.data.job.state;
     if (["completed", "partial", "failed"].includes(state)) {
+      const autoOpenResult = generationAutoOpenJobId === jobId;
+      if (autoOpenResult) generationAutoOpenJobId = null;
       clearGenerationPolling();
       await loadGenerationHistory();
+      if (
+        autoOpenResult &&
+        ["completed", "partial"].includes(state) &&
+        body.data.resultId
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("docomator:open-document-result", {
+            detail: { resultId: body.data.resultId }
+          })
+        );
+      }
       return;
     }
     generationPollTimer = setTimeout(() => {
       if (pollToken === generationPollToken) void pollGenerationJob(jobId, pollToken);
     }, 1_500);
   } catch (error) {
+    if (pollToken !== generationPollToken) return;
     clearGenerationPolling();
     const holder = document.querySelector("#documentGenerationStatus");
     if (holder) {

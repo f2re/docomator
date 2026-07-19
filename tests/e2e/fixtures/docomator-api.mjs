@@ -52,6 +52,7 @@ function createSpaceState(employeeCount = 0, activeTemplate = false) {
     trialVersions: [],
     previewRequest: null,
     generationCreated: false,
+    resultCollected: false,
     operations: []
   };
 }
@@ -79,7 +80,9 @@ function generationPayload(space) {
       archiveSha256: "e2e-archive-sha256",
       createdAt: "2026-07-15T09:00:00.000Z"
     },
-    downloadUrl: `/api/v1/spaces/${E2E_SPACE_ID}/document-jobs/document-job-e2e/download`
+    resultId: "document-result-e2e",
+    resultUrl: "/api/v1/document-results/document-result-e2e",
+    downloadUrl: "/api/v1/document-results/document-result-e2e/download"
   };
 }
 
@@ -92,7 +95,7 @@ function sharedResultFixture(space) {
     targetMode: "one_per_member",
     generatedCount: space.entities.length,
     failedCount: 0,
-    state: "new",
+    state: space.resultCollected ? "collected" : "new",
     format: space.activeTemplates[0]?.format || "docx",
     archiveSha256: "e2e-archive-sha256",
     availableAt: "2026-07-15T09:00:00.000Z"
@@ -222,6 +225,10 @@ export function createDocomatorScenario(options = {}) {
     operationRequests: [],
     importBodies: [],
     importRuns: [],
+    resultDownloadPaths: [],
+    resultListDelayMs: Number(options.resultListDelayOnceMs || 0),
+    resultListDelayRemaining: options.resultListDelayOnceMs ? 1 : 0,
+    resultListRequests: 0,
     directAnalyzeCalls: 0,
     draftRequests: [],
     fieldRequests: [],
@@ -745,19 +752,44 @@ export async function installDocomatorApiMock(page, options = {}) {
       return;
     } else if (/\/document-jobs\/[^/]+$/.test(path) && method === "GET") {
       data = generationPayload(space);
+    } else if (/\/document-results\/[^/]+\/download$/.test(path) && method === "GET") {
+      state.resultDownloadPaths.push(path);
+      state.primary.resultCollected = true;
+      await route.fulfill({
+        status: 200,
+        headers: {
+          "cache-control": "no-store",
+          "content-disposition": 'attachment; filename="docomator-e2e.zip"',
+          "content-type": "application/zip"
+        },
+        body: "PK\u0003\u0004e2e-zip"
+      });
+      return;
     } else if (path === "/api/v1/document-results/summary") {
-      const count = state.primary.generationCreated ? 1 : 0;
+      const available = state.primary.generationCreated && !state.primary.resultCollected;
       data = {
-        newCount: count,
-        availableCount: count,
-        collectedCount: 0,
+        newCount: available ? 1 : 0,
+        availableCount: available ? 1 : 0,
+        collectedCount: state.primary.resultCollected ? 1 : 0,
         automaticNewCount: 0,
-        latestAvailableAt: count ? "2026-07-15T09:00:00.000Z" : null
+        latestAvailableAt: state.primary.generationCreated
+          ? "2026-07-15T09:00:00.000Z"
+          : null
       };
     } else if (path === "/api/v1/document-results") {
-      data = state.primary.generationCreated
+      state.resultListRequests += 1;
+      const filter = url.searchParams.get("state") || "available";
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "collected" && state.primary.resultCollected) ||
+        (["available", "new"].includes(filter) && !state.primary.resultCollected);
+      data = state.primary.generationCreated && matchesFilter
         ? [sharedResultFixture(state.primary)]
         : [];
+      if (state.resultListDelayRemaining > 0) {
+        state.resultListDelayRemaining -= 1;
+        await new Promise((resolve) => setTimeout(resolve, state.resultListDelayMs));
+      }
     }
 
     if (data === undefined) {

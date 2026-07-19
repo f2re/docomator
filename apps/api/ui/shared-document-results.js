@@ -6,6 +6,8 @@ let sharedDocumentBusy = false;
 let sharedDocumentPollTimer = null;
 let sharedDocumentInitialized = false;
 let sharedDocumentLastNewCount = null;
+let sharedDocumentTargetId = null;
+let sharedDocumentReloadRequested = false;
 
 function sharedDocumentEscape(value) {
   return String(value ?? "").replace(
@@ -156,6 +158,17 @@ function renderSharedDocumentItems() {
         </article>`
     )
     .join("");
+  if (sharedDocumentTargetId !== null) {
+    const target = [...root.querySelectorAll("[data-shared-result-id]")].find(
+      (item) => item.dataset.sharedResultId === sharedDocumentTargetId
+    );
+    if (target) {
+      target.tabIndex = -1;
+      target.focus();
+      target.scrollIntoView({ block: "center" });
+      sharedDocumentTargetId = null;
+    }
+  }
 }
 
 function renderSharedDocumentFilters() {
@@ -296,7 +309,11 @@ async function loadSharedDocumentSummary(showNotification = true) {
 
 async function loadSharedDocuments(showMessage) {
   initializeSharedDocumentsView();
-  if (!sharedDocumentsView || sharedDocumentBusy) return;
+  if (!sharedDocumentsView) return;
+  if (sharedDocumentBusy) {
+    sharedDocumentReloadRequested = true;
+    return;
+  }
   sharedDocumentBusy = true;
   const root = document.querySelector("#sharedDocumentList");
   const message = document.querySelector("#sharedDocumentMessage");
@@ -325,6 +342,10 @@ async function loadSharedDocuments(showMessage) {
   } finally {
     sharedDocumentBusy = false;
     if (root) root.setAttribute("aria-busy", "false");
+    if (sharedDocumentReloadRequested) {
+      sharedDocumentReloadRequested = false;
+      void loadSharedDocuments(false);
+    }
   }
 }
 
@@ -394,6 +415,13 @@ function scheduleSharedDocumentPolling() {
 }
 
 if (sharedDocumentsView) {
+  window.addEventListener("docomator:open-document-result", (event) => {
+    const resultId = event.detail?.resultId;
+    sharedDocumentTargetId = typeof resultId === "string" ? resultId : null;
+    sharedDocumentFilter = "available";
+    renderSharedDocumentFilters();
+    document.querySelector('[data-view-target="documents"]')?.click();
+  });
   initializeSharedDocumentsView();
   initializeSharedDocumentNavigation();
   void loadSharedDocumentSummary(true);

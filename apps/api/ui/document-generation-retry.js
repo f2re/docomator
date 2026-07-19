@@ -20,6 +20,7 @@ async function retryFailedGeneration(job) {
     );
     const repeated = body.data.job;
     holder.innerHTML = `<div class="generation-state is-pending"><span aria-hidden="true">⏳</span><div><strong>Повторное задание создано</strong><p>Проблемных результатов: ${body.data.retriedUnitCount}. Отслеживаем новое задание отдельно от исходного.</p></div></div>`;
+    generationAutoOpenJobId = repeated.id;
     await pollGenerationJob(repeated.id);
   } catch (error) {
     document.querySelector("#generationRetryProgress")?.remove();

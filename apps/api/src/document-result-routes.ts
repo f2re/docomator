@@ -178,13 +178,14 @@ export function registerDocumentResultRoutes(
         );
       }
       const content = await objectStore.getBuffer(sha256);
+      const isArchive = result.archiveSha256 !== null;
       resultOperation(() =>
         registry.markCollected(
           request.params.resultId,
-          mutationContextFromRequest(request)
+          mutationContextFromRequest(request),
+          { kind: isArchive ? "archive" : "single" }
         )
       );
-      const isArchive = result.archiveSha256 !== null;
       const fileName = isArchive
         ? `${safeFileName(result.templateTitle, "документы")}-комплект.zip`
         : result.singleOutputName ??

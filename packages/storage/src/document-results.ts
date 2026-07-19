@@ -52,6 +52,11 @@ export interface ListDocumentResultsOptions {
   limit?: number;
 }
 
+export interface DocumentResultDownloadDetails {
+  kind: "archive" | "single" | "unit";
+  unitId?: string;
+}
+
 interface ResultRow {
   id: string;
   document_job_id: string;
@@ -237,6 +242,27 @@ function resultRow(
     .get(resultId) as ResultRow | undefined;
 }
 
+function resultRowsByDocumentJobs(
+  connection: SqliteExecutor,
+  spaceIdentity: string,
+  documentJobIds: string[]
+): ResultRow[] {
+  if (documentJobIds.length === 0) return [];
+  const placeholders = documentJobIds.map(() => "?").join(", ");
+  return connection
+    .prepare(`
+      ${selectResults()}
+      WHERE (j.space_id = ? OR sp.key = ?)
+        AND ri.document_job_id IN (${placeholders})
+        AND ri.state <> 'deleted'
+    `)
+    .all(
+      spaceIdentity,
+      spaceIdentity.toLowerCase(),
+      ...documentJobIds
+    ) as unknown as ResultRow[];
+}
+
 function normalizedLimit(value: number | undefined): number {
   const limit = value ?? 100;
   if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
@@ -339,6 +365,44 @@ export class DocumentResultRegistry {
     });
   }
 
+  findByDocumentJobs(
+    spaceIdValue: string,
+    documentJobIdValues: string[]
+  ): Map<string, DocumentResultRecord> {
+    const spaceIdentity = requiredText(spaceIdValue, "spaceId");
+    if (documentJobIdValues.length > 500) {
+      throw new DocumentResultValidationError(
+        "documentJobIds must not contain more than 500 values"
+      );
+    }
+    const documentJobIds = [
+      ...new Set(
+        documentJobIdValues.map((value) => requiredText(value, "documentJobId"))
+      )
+    ];
+    return this.store.execute((connection) => {
+      const rows = resultRowsByDocumentJobs(
+        connection,
+        spaceIdentity,
+        documentJobIds
+      );
+      return new Map(
+        rows.map((row) => {
+          const result = mapResult(row);
+          return [result.documentJobId, result] as const;
+        })
+      );
+    });
+  }
+
+  findByDocumentJob(
+    spaceIdValue: string,
+    documentJobIdValue: string
+  ): DocumentResultRecord | null {
+    const documentJobId = requiredText(documentJobIdValue, "documentJobId");
+    return this.findByDocumentJobs(spaceIdValue, [documentJobId]).get(documentJobId) ?? null;
+  }
+
   markViewed(resultIdValue: string, contextInput: MutationContext): DocumentResultRecord {
     const resultId = requiredText(resultIdValue, "resultId");
     const context = contextValue(contextInput);
@@ -394,10 +458,24 @@ export class DocumentResultRegistry {
 
   markCollected(
     resultIdValue: string,
-    contextInput: MutationContext
+    contextInput: MutationContext,
+    downloadDetails: DocumentResultDownloadDetails
   ): DocumentResultRecord {
     const resultId = requiredText(resultIdValue, "resultId");
     const context = contextValue(contextInput);
+    const kind = downloadDetails.kind;
+    if (!["archive", "single", "unit"].includes(kind)) {
+      throw new DocumentResultValidationError("Unsupported document result download kind");
+    }
+    const unitId =
+      downloadDetails.unitId === undefined
+        ? null
+        : requiredText(downloadDetails.unitId, "unitId");
+    if ((kind === "unit") !== (unitId !== null)) {
+      throw new DocumentResultValidationError(
+        "unitId must be provided only for a unit download"
+      );
+    }
     return this.store.transaction((connection) => {
       const current = resultRow(connection, resultId);
       if (current === undefined) {
@@ -407,6 +485,33 @@ export class DocumentResultRegistry {
         throw new DocumentResultConflictError(
           "Document result no longer contains a downloadable file"
         );
+      }
+      if (kind === "archive" && current.archive_sha256 === null) {
+        throw new DocumentResultConflictError(
+          "Document result does not contain a downloadable archive"
+        );
+      }
+      if (kind === "single" && current.archive_sha256 !== null) {
+        throw new DocumentResultConflictError(
+          "Document result must be downloaded as an archive"
+        );
+      }
+      if (unitId !== null) {
+        const unit = connection
+          .prepare(`
+            SELECT id
+            FROM document_generation_units
+            WHERE id = ?
+              AND job_id = ?
+              AND state = 'completed'
+              AND output_sha256 IS NOT NULL
+          `)
+          .get(unitId, current.document_job_id) as { id: string } | undefined;
+        if (unit === undefined) {
+          throw new DocumentResultConflictError(
+            "Document generation unit is not downloadable"
+          );
+        }
       }
       connection
         .prepare(`
@@ -427,6 +532,24 @@ export class DocumentResultRegistry {
           payload: { id: resultId, documentJobId: current.document_job_id },
           dedupeKey: `document.result.collected:${resultId}:v1`,
           now: context.now
+        },
+        connection
+      );
+      this.audit.record(
+        {
+          occurredAt: context.now,
+          actorType: context.actorType,
+          actorId: context.actorId,
+          action: "download",
+          objectType: "document_result",
+          objectId: resultId,
+          correlationId: context.correlationId,
+          details: {
+            documentJobId: current.document_job_id,
+            stateBefore: current.result_state,
+            kind,
+            ...(unitId === null ? {} : { unitId })
+          }
         },
         connection
       );

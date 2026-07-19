@@ -135,6 +135,7 @@ async function startPreparedGeneration() {
     }
     const jobId = body.data.job.id;
     generationPreparedRun = null;
+    generationAutoOpenJobId = jobId;
     await pollGenerationJob(jobId);
   } catch (error) {
     if (message) {
