@@ -20,7 +20,8 @@ backup-YYYYMMDDTHHMMSSZ/
 - SQLite snapshot создаётся штатной командой `VACUUM INTO`, поэтому обычный online backup не требует остановки API и worker;
 - backup-копия проходит `PRAGMA integrity_check` и `PRAGMA foreign_key_check`;
 - object storage копируется как набор immutable regular files; symbolic links и специальные файлы отклоняются;
-- все файлы, включая `manifest.json`, защищены `manifest.sha256`;
+- `manifest.sha256` обязан содержать каждый payload regular file ровно один раз, включая `manifest.json` и исключая себя; лишний файл, пропуск, повтор, неканонический путь, symbolic link или специальный файл внутри backup отклоняет всю копию до восстановления;
+- схема `manifest.json`, заявленный размер БД, число объектов и наличие конфигурации сверяются с фактическим деревом;
 - каталог сначала формируется под временным именем, затем атомарно переименовывается;
 - retention удаляет только каталоги с заданным backup prefix;
 - backup не выполняет сетевых запросов.
@@ -75,10 +76,12 @@ sudo /opt/docomator/current/restore.sh \
 1. проверяет SHA-256 и SQLite целостность целевого backup;
 2. создаёт `pre-restore-*` backup текущего состояния;
 3. останавливает runtime services;
-4. атомарно заменяет БД, object storage и, при наличии, конфигурацию;
+4. копирует входной backup в staging, повторно проверяет staging-копию и только затем заменяет БД, object storage и, при наличии, конфигурацию атомарным переименованием каждого компонента с компенсирующим откатом;
 5. запускает migration текущего release;
 6. запускает services и проверяет `/readyz`;
 7. при ошибке возвращает pre-restore состояние.
+
+После успешной фиксации временные staging/rollback-артефакты и restore-lock удаляются отдельно. Если filesystem не позволяет удалить их, установленное состояние не откатывается и `restore.mjs` печатает явное предупреждение с оставшимся путём для ручной очистки. При внутреннем откате вместе с основным файлом SQLite возвращаются существовавшие `-wal`/`-shm` sidecar-файлы.
 
 ## Ограничения
 
@@ -90,6 +93,7 @@ sudo /opt/docomator/current/restore.sh \
 ## Критерий успешного recovery drill
 
 - checksum verification завершилась без ошибок;
+- фактический состав regular files в точности совпал с `manifest.sha256`;
 - `integrity_check` вернул `ok`;
 - `foreign_key_check` не вернул строк;
 - migration checksums совпали;

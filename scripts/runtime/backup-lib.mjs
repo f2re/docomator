@@ -5,6 +5,10 @@ import { DatabaseSync } from "node:sqlite";
 
 const BACKUP_FORMAT = "docomator-backup";
 const BACKUP_VERSION = 1;
+const BACKUP_DATABASE_PATH = "database/docomator.db";
+const BACKUP_OBJECTS_PATH = "objects";
+const BACKUP_CONFIG_PATH = "config/docomator.env";
+const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
 function safeTimestamp(date) {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -18,8 +22,18 @@ function sqlString(value) {
 }
 
 function assertSafeRelative(relativePath) {
-  const normalized = path.posix.normalize(relativePath.replaceAll("\\", "/"));
   if (
+    relativePath.length === 0 ||
+    relativePath.includes("\\") ||
+    relativePath.includes("\0") ||
+    relativePath.includes("\n") ||
+    relativePath.includes("\r")
+  ) {
+    throw new Error(`Unsafe backup path: ${relativePath}`);
+  }
+  const normalized = path.posix.normalize(relativePath);
+  if (
+    normalized !== relativePath ||
     normalized === "." ||
     normalized.startsWith("../") ||
     normalized === ".." ||
@@ -28,6 +42,98 @@ function assertSafeRelative(relativePath) {
     throw new Error(`Unsafe backup path: ${relativePath}`);
   }
   return normalized;
+}
+
+function assertExactObject(value, expectedKeys, label) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid backup manifest ${label}`);
+  }
+  const actualKeys = Object.keys(value).sort();
+  const sortedExpectedKeys = [...expectedKeys].sort();
+  if (
+    actualKeys.length !== sortedExpectedKeys.length ||
+    actualKeys.some((key, index) => key !== sortedExpectedKeys[index])
+  ) {
+    throw new Error(`Invalid backup manifest ${label} keys`);
+  }
+  return value;
+}
+
+function assertBackupManifest(value) {
+  const manifest = assertExactObject(
+    value,
+    [
+      "format",
+      "version",
+      "createdAt",
+      "releaseVersion",
+      "source",
+      "database",
+      "objects",
+      "config"
+    ],
+    "root"
+  );
+  if (manifest.format !== BACKUP_FORMAT || manifest.version !== BACKUP_VERSION) {
+    throw new Error("Unsupported Docomator backup format or version");
+  }
+  if (
+    typeof manifest.createdAt !== "string" ||
+    Number.isNaN(Date.parse(manifest.createdAt)) ||
+    new Date(manifest.createdAt).toISOString() !== manifest.createdAt
+  ) {
+    throw new Error("Invalid backup manifest createdAt");
+  }
+  if (manifest.releaseVersion !== null && typeof manifest.releaseVersion !== "string") {
+    throw new Error("Invalid backup manifest releaseVersion");
+  }
+
+  const source = assertExactObject(
+    manifest.source,
+    ["dataDirectory", "databaseFile"],
+    "source"
+  );
+  if (
+    typeof source.dataDirectory !== "string" ||
+    !path.isAbsolute(source.dataDirectory) ||
+    typeof source.databaseFile !== "string" ||
+    source.databaseFile.length === 0 ||
+    path.basename(source.databaseFile) !== source.databaseFile
+  ) {
+    throw new Error("Invalid backup manifest source values");
+  }
+
+  const database = assertExactObject(
+    manifest.database,
+    ["path", "sizeBytes", "sha256"],
+    "database"
+  );
+  if (
+    database.path !== BACKUP_DATABASE_PATH ||
+    !Number.isSafeInteger(database.sizeBytes) ||
+    database.sizeBytes < 0 ||
+    typeof database.sha256 !== "string" ||
+    !SHA256_PATTERN.test(database.sha256)
+  ) {
+    throw new Error("Invalid backup manifest database values");
+  }
+
+  const objects = assertExactObject(manifest.objects, ["path", "count"], "objects");
+  if (
+    objects.path !== BACKUP_OBJECTS_PATH ||
+    !Number.isSafeInteger(objects.count) ||
+    objects.count < 0
+  ) {
+    throw new Error("Invalid backup manifest objects values");
+  }
+
+  if (manifest.config !== null) {
+    const config = assertExactObject(manifest.config, ["path"], "config");
+    if (config.path !== BACKUP_CONFIG_PATH) {
+      throw new Error("Invalid backup manifest config path");
+    }
+  }
+  return manifest;
 }
 
 async function pathExists(target) {
@@ -53,8 +159,20 @@ async function sha256File(filePath) {
 }
 
 async function listRegularFiles(rootDirectory) {
-  if (!(await pathExists(rootDirectory))) {
-    return [];
+  let rootStat;
+  try {
+    rootStat = await fs.lstat(rootDirectory);
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+  if (rootStat.isSymbolicLink()) {
+    throw new Error(`Symbolic links are not allowed in backup input: ${rootDirectory}`);
+  }
+  if (!rootStat.isDirectory()) {
+    throw new Error(`Backup input is not a directory: ${rootDirectory}`);
   }
 
   const files = [];
@@ -121,6 +239,7 @@ function verifyDatabase(databasePath) {
 async function writeChecksumManifest(backupDirectory) {
   const relativeFiles = (await listRegularFiles(backupDirectory))
     .filter((relativePath) => relativePath !== "manifest.sha256")
+    .map(assertSafeRelative)
     .sort();
   const lines = [];
   for (const relativePath of relativeFiles) {
@@ -274,16 +393,20 @@ export async function verifyBackup(backupDirectoryInput) {
   const backupDirectory = path.resolve(backupDirectoryInput);
   const manifestPath = path.join(backupDirectory, "manifest.json");
   const checksumPath = path.join(backupDirectory, "manifest.sha256");
-  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-  if (manifest.format !== BACKUP_FORMAT || manifest.version !== BACKUP_VERSION) {
-    throw new Error("Unsupported Docomator backup format or version");
-  }
+  const actualFiles = (await listRegularFiles(backupDirectory))
+    .filter((relativePath) => relativePath !== "manifest.sha256")
+    .map(assertSafeRelative)
+    .sort();
+  const manifest = assertBackupManifest(
+    JSON.parse(await fs.readFile(manifestPath, "utf8"))
+  );
 
   const checksumText = await fs.readFile(checksumPath, "utf8");
   const lines = checksumText.split("\n").filter((line) => line.trim() !== "");
   if (lines.length === 0) {
     throw new Error("Backup checksum manifest is empty");
   }
+  const checksumEntries = new Map();
   for (const line of lines) {
     const match = /^([a-f0-9]{64})  (.+)$/.exec(line);
     if (match === null) {
@@ -291,6 +414,54 @@ export async function verifyBackup(backupDirectoryInput) {
     }
     const expected = match[1];
     const relativePath = assertSafeRelative(match[2]);
+    if (checksumEntries.has(relativePath)) {
+      throw new Error(`Duplicate backup checksum entry: ${relativePath}`);
+    }
+    checksumEntries.set(relativePath, expected);
+  }
+
+  const checksummedFiles = [...checksumEntries.keys()].sort();
+  const actualFileSet = new Set(actualFiles);
+  const checksummedFileSet = new Set(checksummedFiles);
+  const withoutChecksum = actualFiles.filter(
+    (relativePath) => !checksummedFileSet.has(relativePath)
+  );
+  const withoutFile = checksummedFiles.filter(
+    (relativePath) => !actualFileSet.has(relativePath)
+  );
+  if (withoutChecksum.length > 0 || withoutFile.length > 0) {
+    throw new Error(
+      `Backup checksum inventory mismatch: without checksum [${withoutChecksum.join(", ")}], without file [${withoutFile.join(", ")}]`
+    );
+  }
+
+  const objectFiles = actualFiles.filter((relativePath) =>
+    relativePath.startsWith(`${BACKUP_OBJECTS_PATH}/`)
+  );
+  const allowedFiles = new Set([
+    "manifest.json",
+    BACKUP_DATABASE_PATH,
+    ...objectFiles
+  ]);
+  if (manifest.config !== null) {
+    allowedFiles.add(BACKUP_CONFIG_PATH);
+  }
+  const unsupportedFiles = actualFiles.filter(
+    (relativePath) => !allowedFiles.has(relativePath)
+  );
+  if (unsupportedFiles.length > 0 || allowedFiles.size !== actualFiles.length) {
+    throw new Error(
+      `Backup file inventory does not match format version ${BACKUP_VERSION}: [${unsupportedFiles.join(", ")}]`
+    );
+  }
+  if (objectFiles.length !== manifest.objects.count) {
+    throw new Error(
+      `Backup object count mismatch: expected ${manifest.objects.count}, actual ${objectFiles.length}`
+    );
+  }
+
+  for (const relativePath of checksummedFiles) {
+    const expected = checksumEntries.get(relativePath);
     const target = path.resolve(backupDirectory, relativePath);
     if (!target.startsWith(`${backupDirectory}${path.sep}`)) {
       throw new Error(`Backup path escapes root: ${relativePath}`);
@@ -301,7 +472,11 @@ export async function verifyBackup(backupDirectoryInput) {
     }
   }
 
-  const databasePath = path.join(backupDirectory, "database", "docomator.db");
+  const databasePath = path.join(backupDirectory, ...BACKUP_DATABASE_PATH.split("/"));
+  const databaseStat = await fs.stat(databasePath);
+  if (databaseStat.size !== manifest.database.sizeBytes) {
+    throw new Error("Backup database size does not match manifest.json");
+  }
   verifyDatabase(databasePath);
   const databaseChecksum = await sha256File(databasePath);
   if (databaseChecksum !== manifest.database.sha256) {
@@ -317,11 +492,29 @@ async function acquireRestoreLock(dataDirectory) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const handle = await fs.open(lockPath, "wx", 0o600);
-      await handle.writeFile(`${process.pid}\n`, "utf8");
+      try {
+        await handle.writeFile(`${process.pid}\n`, "utf8");
+      } catch (error) {
+        await handle.close().catch(() => undefined);
+        await fs.rm(lockPath, { force: true }).catch(() => undefined);
+        throw error;
+      }
       return {
         async release() {
-          await handle.close();
-          await fs.rm(lockPath, { force: true });
+          const warnings = [];
+          try {
+            await handle.close();
+          } catch (error) {
+            warnings.push(formatCleanupWarning("файл блокировки восстановления", lockPath, error));
+          }
+          warnings.push(...await cleanupRestoreArtifacts([
+            {
+              path: lockPath,
+              options: { force: true },
+              label: "файл блокировки восстановления"
+            }
+          ]));
+          return warnings;
         }
       };
     } catch (error) {
@@ -339,10 +532,35 @@ async function acquireRestoreLock(dataDirectory) {
   throw new Error(`Unable to acquire restore lock: ${lockPath}`);
 }
 
+function formatCleanupWarning(label, target, error) {
+  const code = error && typeof error === "object" && typeof error.code === "string"
+    ? error.code
+    : "неизвестная ошибка";
+  return `Не удалось удалить ${label}: ${target} (${code}).`;
+}
+
+async function cleanupRestoreArtifacts(artifacts) {
+  const warnings = [];
+  for (const artifact of artifacts) {
+    if (artifact.path === undefined) {
+      continue;
+    }
+    try {
+      await fs.rm(artifact.path, artifact.options);
+    } catch (error) {
+      warnings.push(formatCleanupWarning(artifact.label, artifact.path, error));
+    }
+  }
+  return warnings;
+}
+
 export async function restoreBackup(options) {
   const backupDirectory = path.resolve(options.backupDirectory);
   const dataDirectory = path.resolve(options.dataDirectory);
   const manifest = await verifyBackup(backupDirectory);
+  const checksumManifest = await fs.readFile(
+    path.join(backupDirectory, "manifest.sha256")
+  );
   const lock = await acquireRestoreLock(dataDirectory);
   const operationId = crypto.randomUUID();
   const stageDirectory = path.join(dataDirectory, `.restore-stage-${operationId}`);
@@ -351,89 +569,189 @@ export async function restoreBackup(options) {
   const objectsPath = path.join(dataDirectory, "objects");
   const restoredDatabasePath = path.join(stageDirectory, "docomator.db");
   const restoredObjectsPath = path.join(stageDirectory, "objects");
+  const stagedBackupPath = path.join(stageDirectory, "verified-backup");
   let databaseMoved = false;
   let objectsMoved = false;
   let newDatabaseInstalled = false;
   let newObjectsInstalled = false;
   let configRollbackPath;
+  let configTemporaryPath;
   let configInstalled = false;
-
-  await fs.mkdir(stageDirectory, { recursive: true, mode: 0o750 });
-  await fs.mkdir(rollbackDirectory, { recursive: true, mode: 0o750 });
+  const databaseSidecarsMoved = [];
+  const postCommitWarnings = [];
 
   try {
-    await fs.copyFile(
-      path.join(backupDirectory, "database", "docomator.db"),
-      restoredDatabasePath
-    );
-    await copyTree(path.join(backupDirectory, "objects"), restoredObjectsPath);
-    verifyDatabase(restoredDatabasePath);
-
-    for (const suffix of ["-wal", "-shm"]) {
-      await fs.rm(`${databasePath}${suffix}`, { force: true });
-    }
-    if (await pathExists(databasePath)) {
-      await fs.rename(databasePath, path.join(rollbackDirectory, "docomator.db"));
-      databaseMoved = true;
-    }
-    if (await pathExists(objectsPath)) {
-      await fs.rename(objectsPath, path.join(rollbackDirectory, "objects"));
-      objectsMoved = true;
-    }
-
-    await fs.rename(restoredDatabasePath, databasePath);
-    newDatabaseInstalled = true;
-    await fs.rename(restoredObjectsPath, objectsPath);
-    newObjectsInstalled = true;
-
-    if (options.configFile !== undefined && manifest.config !== null) {
-      const configFile = path.resolve(options.configFile);
-      await fs.mkdir(path.dirname(configFile), { recursive: true, mode: 0o750 });
-      const configTemporaryPath = `${configFile}.restore-${operationId}.tmp`;
-      configRollbackPath = `${configFile}.restore-${operationId}.rollback`;
-      await fs.copyFile(
-        path.join(backupDirectory, "config", "docomator.env"),
-        configTemporaryPath
+    let stagedManifest;
+    try {
+      await fs.mkdir(stageDirectory, { recursive: true, mode: 0o750 });
+      await fs.mkdir(rollbackDirectory, { recursive: true, mode: 0o750 });
+      await copyTree(backupDirectory, stagedBackupPath);
+      stagedManifest = await verifyBackup(stagedBackupPath);
+      const stagedChecksumManifest = await fs.readFile(
+        path.join(stagedBackupPath, "manifest.sha256")
       );
-      await fs.chmod(configTemporaryPath, 0o640);
-      if (await pathExists(configFile)) {
-        await fs.copyFile(configFile, configRollbackPath);
+      if (
+        JSON.stringify(stagedManifest) !== JSON.stringify(manifest) ||
+        !stagedChecksumManifest.equals(checksumManifest)
+      ) {
+        throw new Error("Backup changed while creating verified restore staging");
       }
-      await fs.rename(configTemporaryPath, configFile);
-      configInstalled = true;
+      await fs.copyFile(
+        path.join(stagedBackupPath, "database", "docomator.db"),
+        restoredDatabasePath
+      );
+      await copyTree(path.join(stagedBackupPath, "objects"), restoredObjectsPath);
+      verifyDatabase(restoredDatabasePath);
+
+      for (const suffix of ["-wal", "-shm"]) {
+        const sidecarPath = `${databasePath}${suffix}`;
+        if (await pathExists(sidecarPath)) {
+          await fs.rename(
+            sidecarPath,
+            path.join(rollbackDirectory, `docomator.db${suffix}`)
+          );
+          databaseSidecarsMoved.push(suffix);
+        }
+      }
+      if (await pathExists(databasePath)) {
+        await fs.rename(databasePath, path.join(rollbackDirectory, "docomator.db"));
+        databaseMoved = true;
+      }
+      if (await pathExists(objectsPath)) {
+        await fs.rename(objectsPath, path.join(rollbackDirectory, "objects"));
+        objectsMoved = true;
+      }
+
+      await fs.rename(restoredDatabasePath, databasePath);
+      newDatabaseInstalled = true;
+      await fs.rename(restoredObjectsPath, objectsPath);
+      newObjectsInstalled = true;
+
+      if (options.configFile !== undefined && stagedManifest.config !== null) {
+        const configFile = path.resolve(options.configFile);
+        await fs.mkdir(path.dirname(configFile), { recursive: true, mode: 0o750 });
+        configTemporaryPath = `${configFile}.restore-${operationId}.tmp`;
+        configRollbackPath = `${configFile}.restore-${operationId}.rollback`;
+        await fs.copyFile(
+          path.join(stagedBackupPath, "config", "docomator.env"),
+          configTemporaryPath
+        );
+        await fs.chmod(configTemporaryPath, 0o640);
+        if (await pathExists(configFile)) {
+          await fs.copyFile(configFile, configRollbackPath);
+        }
+        await fs.rename(configTemporaryPath, configFile);
+        configInstalled = true;
+      }
+
+      verifyDatabase(databasePath);
+    } catch (error) {
+      const rollbackErrors = [];
+      const attemptRollback = async (label, action) => {
+        try {
+          await action();
+        } catch (rollbackError) {
+          rollbackErrors.push(new Error(label, { cause: rollbackError }));
+        }
+      };
+
+      if (configInstalled && options.configFile !== undefined) {
+        await attemptRollback("Не удалось откатить конфигурацию", async () => {
+          const configFile = path.resolve(options.configFile);
+          await fs.rm(configFile, { force: true });
+          if (configRollbackPath !== undefined && (await pathExists(configRollbackPath))) {
+            await fs.rename(configRollbackPath, configFile);
+          }
+        });
+      }
+      if (newObjectsInstalled || objectsMoved) {
+        await attemptRollback("Не удалось откатить хранилище объектов", async () => {
+          if (newObjectsInstalled) {
+            await fs.rm(objectsPath, { recursive: true, force: true });
+          }
+          if (objectsMoved) {
+            await fs.rename(path.join(rollbackDirectory, "objects"), objectsPath);
+          }
+        });
+      }
+      if (
+        newDatabaseInstalled ||
+        databaseMoved ||
+        databaseSidecarsMoved.length > 0
+      ) {
+        await attemptRollback("Не удалось откатить базу данных", async () => {
+          if (newDatabaseInstalled) {
+            await fs.rm(databasePath, { force: true });
+          }
+          for (const suffix of ["-wal", "-shm"]) {
+            await fs.rm(`${databasePath}${suffix}`, { force: true });
+          }
+          if (databaseMoved) {
+            await fs.rename(path.join(rollbackDirectory, "docomator.db"), databasePath);
+          }
+          for (const suffix of databaseSidecarsMoved) {
+            await fs.rename(
+              path.join(rollbackDirectory, `docomator.db${suffix}`),
+              `${databasePath}${suffix}`
+            );
+          }
+        });
+      }
+
+      if (rollbackErrors.length > 0) {
+        throw new AggregateError(
+          [error, ...rollbackErrors],
+          "Восстановление завершилось ошибкой, автоматический откат выполнен не полностью"
+        );
+      }
+      await cleanupRestoreArtifacts([
+        {
+          path: configTemporaryPath,
+          options: { force: true },
+          label: "временный файл конфигурации"
+        },
+        {
+          path: configRollbackPath,
+          options: { force: true },
+          label: "резервный файл конфигурации"
+        },
+        {
+          path: stageDirectory,
+          options: { recursive: true, force: true },
+          label: "staging-каталог восстановления"
+        },
+        {
+          path: rollbackDirectory,
+          options: { recursive: true, force: true },
+          label: "каталог отката восстановления"
+        }
+      ]);
+      throw error;
     }
 
-    verifyDatabase(databasePath);
-    await fs.rm(rollbackDirectory, { recursive: true, force: true });
-    await fs.rm(stageDirectory, { recursive: true, force: true });
-    if (configRollbackPath !== undefined) {
-      await fs.rm(configRollbackPath, { force: true });
-    }
-    return { manifest, dataDirectory };
-  } catch (error) {
-    if (newDatabaseInstalled) {
-      await fs.rm(databasePath, { force: true });
-    }
-    if (databaseMoved) {
-      await fs.rename(path.join(rollbackDirectory, "docomator.db"), databasePath);
-    }
-    if (newObjectsInstalled) {
-      await fs.rm(objectsPath, { recursive: true, force: true });
-    }
-    if (objectsMoved) {
-      await fs.rename(path.join(rollbackDirectory, "objects"), objectsPath);
-    }
-    if (configInstalled && options.configFile !== undefined) {
-      const configFile = path.resolve(options.configFile);
-      await fs.rm(configFile, { force: true });
-      if (configRollbackPath !== undefined && (await pathExists(configRollbackPath))) {
-        await fs.rename(configRollbackPath, configFile);
+    postCommitWarnings.push(...await cleanupRestoreArtifacts([
+      {
+        path: stageDirectory,
+        options: { recursive: true, force: true },
+        label: "staging-каталог восстановления"
+      },
+      {
+        path: configRollbackPath,
+        options: { force: true },
+        label: "резервный файл конфигурации"
+      },
+      {
+        path: rollbackDirectory,
+        options: { recursive: true, force: true },
+        label: "каталог отката восстановления"
       }
-    }
-    await fs.rm(stageDirectory, { recursive: true, force: true });
-    await fs.rm(rollbackDirectory, { recursive: true, force: true });
-    throw error;
+    ]));
+    return {
+      manifest: stagedManifest,
+      dataDirectory,
+      cleanupWarnings: postCommitWarnings
+    };
   } finally {
-    await lock.release();
+    postCommitWarnings.push(...await lock.release());
   }
 }

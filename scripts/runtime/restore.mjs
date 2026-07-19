@@ -42,5 +42,8 @@ if (verifyOnly) {
   process.stdout.write(`${JSON.stringify({ status: "ok", verified: options.backupDirectory, manifest })}\n`);
 } else {
   const result = await restoreBackup(options);
-  process.stdout.write(`${JSON.stringify({ status: "ok", restored: options.backupDirectory, dataDirectory: result.dataDirectory, manifest: result.manifest })}\n`);
+  for (const warning of result.cleanupWarnings) {
+    process.stderr.write(`Предупреждение восстановления: ${warning}\n`);
+  }
+  process.stdout.write(`${JSON.stringify({ status: "ok", restored: options.backupDirectory, dataDirectory: result.dataDirectory, manifest: result.manifest, cleanupWarnings: result.cleanupWarnings })}\n`);
 }
