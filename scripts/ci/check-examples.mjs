@@ -9,6 +9,7 @@ import {
 } from "@docomator/document-intake";
 import {
   compileScalarFields,
+  renderDocxRepeatRows,
   renderScalarValues,
   renderXlsxRepeatRows
 } from "@docomator/template-compiler";
@@ -126,7 +127,20 @@ const registerTemplate = EXAMPLE_ASSETS.find(
 const registerFilled = EXAMPLE_ASSETS.find(
   (asset) => asset.kind === "xlsx-filled"
 );
-assert.ok(personalTemplate && personalFilled && registerTemplate && registerFilled);
+const docxRegisterTemplate = EXAMPLE_ASSETS.find(
+  (asset) => asset.kind === "docx-repeat-template"
+);
+const docxRegisterFilled = EXAMPLE_ASSETS.find(
+  (asset) => asset.kind === "docx-repeat-filled"
+);
+assert.ok(
+  personalTemplate &&
+  personalFilled &&
+  registerTemplate &&
+  registerFilled &&
+  docxRegisterTemplate &&
+  docxRegisterFilled
+);
 
 const personalTemplateStructure = await analyzeOoxmlBuffer({
   buffer: personalTemplate.content,
@@ -219,6 +233,176 @@ assert.deepEqual(
   [...personalValues].sort()
 );
 
+const registerMembers = [
+  ["1", "Иванов Алексей Сергеевич", "Инженер", "Производственный отдел"],
+  ["2", "Петрова Анна Викторовна", "Бухгалтер", "Финансовый отдел"],
+  ["3", "Сидоров Максим Олегович", "Специалист", "Отдел снабжения"]
+];
+
+const docxRegisterStructure = await analyzeOoxmlBuffer({
+  buffer: docxRegisterTemplate.content,
+  fileName: path.basename(docxRegisterTemplate.path)
+});
+const docxRegisterSpecs = [
+  ["docx-register-number", "subject.position", "Номер", "Номер сотрудника"],
+  ["docx-register-name", "person.full_name", "ФИО", "ФИО сотрудника"],
+  [
+    "docx-register-position",
+    "person.position",
+    "Должность",
+    "Должность сотрудника"
+  ],
+  [
+    "docx-register-department",
+    "person.department",
+    "Подразделение",
+    "Подразделение сотрудника"
+  ]
+];
+const docxRegisterDefinitions = docxRegisterSpecs.map(
+  ([id, key, label, selectedText]) => {
+    const element = docxRegisterStructure.elements.find(
+      (candidate) =>
+        candidate.kind === "paragraph" &&
+        candidate.text === selectedText &&
+        candidate.tableLocation?.tableIndex === 0 &&
+        candidate.tableLocation.rowIndex === 1
+    );
+    assert.ok(element && element.kind === "paragraph" && element.tableLocation);
+    return {
+      id,
+      key,
+      label,
+      elementId: element.id,
+      binding: {
+        version: 1,
+        kind: "docx.text-range",
+        elementId: element.id,
+        part: element.part,
+        index: element.index,
+        startOffset: 0,
+        endOffset: selectedText.length,
+        selectedText,
+        tableLocation: element.tableLocation
+      }
+    };
+  }
+);
+const docxRegisterAnchor = docxRegisterStructure.elements.find(
+  (candidate) =>
+    candidate.kind === "paragraph" &&
+    candidate.text === "Номер сотрудника" &&
+    candidate.tableLocation?.tableIndex === 0 &&
+    candidate.tableLocation.rowIndex === 1
+);
+assert.ok(
+  docxRegisterAnchor &&
+  docxRegisterAnchor.kind === "paragraph" &&
+  docxRegisterAnchor.tableLocation
+);
+const docxRegisterRepeatBinding = {
+  version: 1,
+  kind: "docx.repeat-row",
+  source: "audience.members",
+  anchorElementId: docxRegisterAnchor.id,
+  part: docxRegisterAnchor.part,
+  tableIndex: docxRegisterAnchor.tableLocation.tableIndex,
+  rowIndex: docxRegisterAnchor.tableLocation.rowIndex
+};
+const compiledDocxRegister = await compileScalarFields({
+  source: docxRegisterTemplate.content,
+  fileName: path.basename(docxRegisterTemplate.path),
+  expectedSourceSha256: docxRegisterStructure.sourceSha256,
+  expectedStructureSha256: docxRegisterStructure.structureSha256,
+  fields: docxRegisterDefinitions,
+  repeatBinding: docxRegisterRepeatBinding
+});
+assert.ok(compiledDocxRegister.repeat?.binding.kind === "docx.repeat-row");
+const renderedDocxRegister = await renderDocxRepeatRows({
+  compiled: compiledDocxRegister.output,
+  binding: compiledDocxRegister.repeat.binding,
+  technicalBinding: compiledDocxRegister.repeat.technicalBinding,
+  fields: docxRegisterDefinitions.map((field) => {
+    const compiled = compiledDocxRegister.fields.find(
+      (candidate) => candidate.fieldId === field.id
+    );
+    assert.ok(compiled);
+    return {
+      fieldId: field.id,
+      fieldKey: field.key,
+      required: true,
+      technicalBinding: compiled.technicalBinding,
+      fieldBinding: field.binding,
+      valueType: "string"
+    };
+  }),
+  members: registerMembers.map((values, index) => ({
+    memberId: `member-${index + 1}`,
+    values
+  }))
+});
+assert.equal(renderedDocxRegister.rowCount, 3);
+assert.equal(renderedDocxRegister.verification.checkedValues, 12);
+const renderedDocxRegisterStructure = await analyzeOoxmlBuffer({
+  buffer: renderedDocxRegister.output,
+  fileName: "rendered-team-register.docx"
+});
+const renderedDocxText = paragraphs(renderedDocxRegisterStructure).map(
+  (paragraph) => paragraph.text
+);
+for (const value of registerMembers.flat()) {
+  assert.equal(renderedDocxText.includes(value), true);
+}
+for (const heading of ["№", "ФИО", "Должность", "Подразделение"]) {
+  assert.equal(renderedDocxText.includes(heading), true);
+}
+for (const placeholder of docxRegisterSpecs.map((spec) => spec[3])) {
+  assert.equal(renderedDocxText.includes(placeholder), false);
+}
+assert.equal(renderedDocxText.includes("Реестр сотрудников"), true);
+assert.equal(
+  renderedDocxText.includes("Все имена и сведения в примере вымышлены."),
+  true
+);
+assert.deepEqual(
+  [...new Set(
+    paragraphs(renderedDocxRegisterStructure)
+      .filter((paragraph) => paragraph.tableLocation?.tableIndex === 0)
+      .map((paragraph) => paragraph.tableLocation.rowIndex)
+  )].sort((left, right) => left - right),
+  [0, 1, 2, 3]
+);
+
+const docxRegisterFilledStructure = await analyzeOoxmlBuffer({
+  buffer: docxRegisterFilled.content,
+  fileName: path.basename(docxRegisterFilled.path)
+});
+const docxRegisterFilledText = paragraphs(docxRegisterFilledStructure).map(
+  (paragraph) => paragraph.text
+);
+for (const value of registerMembers.flat()) {
+  assert.equal(docxRegisterFilledText.includes(value), true);
+}
+for (const heading of ["№", "ФИО", "Должность", "Подразделение"]) {
+  assert.equal(docxRegisterFilledText.includes(heading), true);
+}
+for (const placeholder of docxRegisterSpecs.map((spec) => spec[3])) {
+  assert.equal(docxRegisterFilledText.includes(placeholder), false);
+}
+assert.equal(docxRegisterFilledText.includes("Реестр сотрудников"), true);
+assert.equal(
+  docxRegisterFilledText.includes("Все имена и сведения в примере вымышлены."),
+  true
+);
+assert.deepEqual(
+  [...new Set(
+    paragraphs(docxRegisterFilledStructure)
+      .filter((paragraph) => paragraph.tableLocation?.tableIndex === 0)
+      .map((paragraph) => paragraph.tableLocation.rowIndex)
+  )].sort((left, right) => left - right),
+  [0, 1, 2, 3]
+);
+
 const registerTemplateStructure = await analyzeOoxmlBuffer({
   buffer: registerTemplate.content,
   fileName: path.basename(registerTemplate.path)
@@ -286,11 +470,6 @@ const compiledRegister = await compileScalarFields({
   repeatBinding: registerRepeatBinding
 });
 assert.ok(compiledRegister.repeat?.binding.kind === "xlsx.repeat-row");
-const registerMembers = [
-  ["1", "Иванов Алексей Сергеевич", "Инженер", "Производственный отдел"],
-  ["2", "Петрова Анна Викторовна", "Бухгалтер", "Финансовый отдел"],
-  ["3", "Сидоров Максим Олегович", "Специалист", "Отдел снабжения"]
-];
 const renderedRegister = await renderXlsxRepeatRows({
   compiled: compiledRegister.output,
   binding: compiledRegister.repeat.binding,

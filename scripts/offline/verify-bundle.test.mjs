@@ -33,8 +33,10 @@ const EXAMPLE_FILES = [
   "manifest.sha256",
   "data/employees.csv",
   "expected/personal-card-filled.docx",
+  "expected/team-register-filled.docx",
   "expected/team-register-filled.xlsx",
   "templates/personal-card.docx",
+  "templates/team-register.docx",
   "templates/team-register.xlsx"
 ];
 

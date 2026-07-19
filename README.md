@@ -298,13 +298,7 @@ scripts/offline/prepare-bundle.sh \
   --os-packages-dir offline-bundles/os-packages
 ```
 
-Установка:
-
-```bash
-tar -xzf docomator-*.tar.gz
-cd docomator-*/
-sudo ./install.sh --install-os-packages
-```
+Архив нельзя распаковывать через `sudo` сразу после переноса. Установка выполняется только по [fail-fast процедуре автономного развёртывания](docs/OFFLINE_DEPLOYMENT.md): сверка закреплённого SHA-256 из подписанного организационного manifest, непривилегированный preflight, копирование тех же байтов в уникальный root-owned staging-каталог и повторная проверка перед `install.sh`.
 
 Проверка:
 

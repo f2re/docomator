@@ -70,7 +70,7 @@ function docxDocument(values) {
 </w:document>`;
 }
 
-function docxBuffer(values) {
+function docxPackage(document, title, application) {
   return writeOoxmlPackage(
     packageEntries([
       {
@@ -96,13 +96,13 @@ function docxBuffer(values) {
       },
       {
         name: "docProps/core.xml",
-        content: coreProperties("Личная карточка сотрудника")
+        content: coreProperties(title)
       },
       {
         name: "docProps/app.xml",
-        content: appProperties("Docomator DOCX example")
+        content: appProperties(application)
       },
-      { name: "word/document.xml", content: docxDocument(values) },
+      { name: "word/document.xml", content: document },
       {
         name: "word/styles.xml",
         content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -120,6 +120,54 @@ function docxBuffer(values) {
 </Relationships>`
       }
     ])
+  );
+}
+
+function docxBuffer(values) {
+  return docxPackage(
+    docxDocument(values),
+    "Личная карточка сотрудника",
+    "Docomator DOCX example"
+  );
+}
+
+function docxRegisterRow(values, header = false) {
+  const widths = [900, 3500, 2400, 2400];
+  return `<w:tr>${values
+    .map(
+      (value, index) =>
+        `<w:tc><w:tcPr><w:tcW w:w="${widths[index]}" w:type="dxa"/></w:tcPr><w:p><w:r>${header ? "<w:rPr><w:b/></w:rPr>" : ""}<w:t>${xmlEscape(value)}</w:t></w:r></w:p></w:tc>`
+    )
+    .join("")}</w:tr>`;
+}
+
+function docxRegisterDocument(rows) {
+  const header = docxRegisterRow(
+    ["№", "ФИО", "Должность", "Подразделение"],
+    true
+  );
+  const dataRows = rows.map((row) => docxRegisterRow(row)).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Реестр сотрудников</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Учебный сводный шаблон Docomator. Сопоставьте значения строки-образца и включите повтор по участникам аудитории.</w:t></w:r></w:p>
+    <w:tbl>
+      <w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="9200" w:type="dxa"/></w:tblPr>
+      <w:tblGrid><w:gridCol w:w="900"/><w:gridCol w:w="3500"/><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid>
+      ${header}${dataRows}
+    </w:tbl>
+    <w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Все имена и сведения в примере вымышлены.</w:t></w:r></w:p>
+    <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="850" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>
+  </w:body>
+</w:document>`;
+}
+
+function docxRegisterBuffer(rows) {
+  return docxPackage(
+    docxRegisterDocument(rows),
+    "Реестр сотрудников",
+    "Docomator aggregate DOCX example"
   );
 }
 
@@ -267,6 +315,11 @@ export function createExampleAssets() {
       content: xlsxBuffer(registerTemplateRows)
     },
     {
+      path: "templates/team-register.docx",
+      kind: "docx-repeat-template",
+      content: docxRegisterBuffer(registerTemplateRows)
+    },
+    {
       path: "expected/personal-card-filled.docx",
       kind: "docx-filled",
       content: docxBuffer(personalFilledValues)
@@ -275,6 +328,11 @@ export function createExampleAssets() {
       path: "expected/team-register-filled.xlsx",
       kind: "xlsx-filled",
       content: xlsxBuffer(registerFilledRows)
+    },
+    {
+      path: "expected/team-register-filled.docx",
+      kind: "docx-repeat-filled",
+      content: docxRegisterBuffer(registerFilledRows)
     }
   ];
 }

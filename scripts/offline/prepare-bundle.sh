@@ -196,8 +196,10 @@ EXAMPLE_FILES=(
   "manifest.sha256"
   "data/employees.csv"
   "templates/personal-card.docx"
+  "templates/team-register.docx"
   "templates/team-register.xlsx"
   "expected/personal-card-filled.docx"
+  "expected/team-register-filled.docx"
   "expected/team-register-filled.xlsx"
 )
 for relative in "${EXAMPLE_FILES[@]}"; do

@@ -75,16 +75,20 @@ EXAMPLE_FILES=(
   "README.md"
   "data/employees.csv"
   "expected/personal-card-filled.docx"
+  "expected/team-register-filled.docx"
   "expected/team-register-filled.xlsx"
   "manifest.sha256"
   "templates/personal-card.docx"
+  "templates/team-register.docx"
   "templates/team-register.xlsx"
 )
 EXAMPLE_HASHED_FILES=(
   "data/employees.csv"
   "expected/personal-card-filled.docx"
+  "expected/team-register-filled.docx"
   "expected/team-register-filled.xlsx"
   "templates/personal-card.docx"
+  "templates/team-register.docx"
   "templates/team-register.xlsx"
 )
 printf '%s\n' "${EXAMPLE_FILES[@]}" \
