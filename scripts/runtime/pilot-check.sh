@@ -4,7 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 NODE="$CURRENT_ROOT/runtime/node/bin/node"
-PILOT_SCRIPT="$SCRIPT_DIR/pilot-readiness.mjs"
+PILOT_SCRIPT="$SCRIPT_DIR/pilot-check.mjs"
 CONFIG_FILE="/etc/docomator/docomator.env"
 RUN_BACKUP=0
 
@@ -12,8 +12,8 @@ usage() {
   cat <<'USAGE'
 Использование: sudo bash pilot-check.sh [параметры]
 
-Проводит фактическую пилотную проверку установленного Docomator и создаёт
-машинно-читаемый JSON и акт приёмки Markdown.
+Проводит фактическую пилотную проверку установленного Docomator, подтверждает
+идентичность работающего релиза и создаёт машинно-читаемый JSON и акт Markdown.
 
 Параметры:
   --config ФАЙЛ       файл настроек Docomator
