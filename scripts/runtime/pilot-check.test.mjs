@@ -99,6 +99,10 @@ async function fixture(releaseSource) {
     import fs from "node:fs/promises";
     import path from "node:path";
     const argumentsList = process.argv.slice(2);
+    if (argumentsList.includes("--help") || argumentsList.includes("-h")) {
+      process.stdout.write("Использование: pilot-readiness.mjs\\n");
+      process.exit(0);
+    }
     const outputIndex = argumentsList.indexOf("--output");
     const outputDirectory = path.resolve(argumentsList[outputIndex + 1]);
     await fs.mkdir(outputDirectory, { recursive: true });
@@ -178,6 +182,23 @@ test("development identity publishes a blocking report", async () => {
       "pilot-20260719T200000Z.json",
       "pilot-20260719T200000Z.md"
     ]);
+  } finally {
+    await current.close();
+  }
+});
+
+test("pilot check delegates help without creating report files", async () => {
+  const current = await fixture("installed");
+  try {
+    const result = await runNode(current.script, [
+      "--help",
+      "--output",
+      current.output
+    ]);
+    assert.equal(result.signal, null);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Использование/u);
+    await assert.rejects(() => fs.readdir(current.output), { code: "ENOENT" });
   } finally {
     await current.close();
   }
