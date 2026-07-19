@@ -242,6 +242,7 @@ async function enablePreview(bundle, packageNames = [
 async function fixture() {
   const bundle = await mkdtemp(path.join(os.tmpdir(), "docomator-bundle-verify-"));
   const required = [
+    "RELEASE_NOTES.md",
     "http-check.mjs",
     "smoke-test.sh",
     "target-release-gate.sh",
@@ -429,6 +430,30 @@ test("offline verifier rejects a bundle without a target gate", async () => {
     const result = await verify(bundle);
     assert.equal(result.code, 1);
     assert.match(result.output, /core release-gate/iu);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier rejects a bundle without release notes", async () => {
+  const bundle = await fixture();
+  try {
+    await unlink(path.join(bundle, "RELEASE_NOTES.md"));
+    await writeOuterManifest(bundle);
+    const result = await verify(bundle);
+    assert.equal(result.code, 1);
+    assert.match(result.output, /примечания к выпуску/iu);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier rejects changed release notes", async () => {
+  const bundle = await fixture();
+  try {
+    await writeFile(path.join(bundle, "RELEASE_NOTES.md"), "changed\n");
+    const result = await verify(bundle);
+    assert.equal(result.code, 1);
   } finally {
     await rm(bundle, { recursive: true, force: true });
   }

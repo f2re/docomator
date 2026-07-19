@@ -19,6 +19,7 @@ Reference host должен совпадать с target по:
 ```text
 docomator-<version>-linux-<arch>/
 ├── VERSION
+├── RELEASE_NOTES.md
 ├── release.json
 ├── manifest.sha256
 ├── manifest.symlinks
@@ -58,7 +59,7 @@ docomator-<version>-linux-<arch>/
         └── *.deb
 ```
 
-`manifest.sha256` покрывает все обычные файлы, кроме самого корневого manifest, включая вложенные manifests и manifest символических ссылок. `manifest.symlinks` фиксирует точный относительный target каждой разрешённой ссылки; ссылка наружу, добавленный файл или объект неподдерживаемого типа блокируют проверку. Для каждого `.deb` verifier дополнительно сверяет checksum, имя, версию и архитектуру через `dpkg-deb`; `release.json` связывает preview-профиль, пределы преобразования и SHA package inventory. Перед package-manager preflight installer требует точного совпадения `ID`, `VERSION_ID` и Debian-архитектуры target с `source-os.env`.
+`RELEASE_NOTES.md` содержит тот же честный перечень реализованного объёма и незакрытых ограничений, который опубликован в репозитории; verifier требует его наличия и точной контрольной суммы. `manifest.sha256` покрывает все обычные файлы, кроме самого корневого manifest, включая вложенные manifests и manifest символических ссылок. `manifest.symlinks` фиксирует точный относительный target каждой разрешённой ссылки; ссылка наружу, добавленный файл или объект неподдерживаемого типа блокируют проверку. Для каждого `.deb` verifier дополнительно сверяет checksum, имя, версию и архитектуру через `dpkg-deb`; `release.json` связывает preview-профиль, пределы преобразования и SHA package inventory. Перед package-manager preflight installer требует точного совпадения `ID`, `VERSION_ID` и Debian-архитектуры target с `source-os.env`.
 
 ## Помощник первого запуска
 
