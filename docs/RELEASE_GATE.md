@@ -43,7 +43,7 @@ Core gate использует уже проверенный PDF-объект с
 npm run test:release-gate:libreoffice
 ```
 
-Если локальный executable найден, `scripts/ci/libreoffice-release-gate.mjs` преобразует настоящие DOCX и XLSX через production `convertOfficeToPdf`, проверяет `%PDF-`, ограниченный размер, metadata преобразователя, отдельный профиль и очистку временного каталога каждого преобразования.
+Если локальный executable найден, `scripts/ci/libreoffice-release-gate.mjs` проверяет SHA-256 по `examples/manifest.sha256` и преобразует через production `convertOfficeToPdf` пять фиксированных файлов: личный DOCX, DOCX с верхним колонтитулом, repeat-DOCX, scalar-XLSX и repeat-XLSX. Для каждого результата проверяются `%PDF-`, ограниченный размер, metadata преобразователя, отдельный профиль и очистка временного каталога. Символические ссылки и несовпавшие контрольные суммы закрывают gate до запуска converter.
 
 Если LibreOffice отсутствует, команда явно печатает `SKIPPED`. На эталонном Debian/Astra-стенде отсутствие превращается в ошибку:
 
