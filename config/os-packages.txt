@@ -1,5 +1,6 @@
 # Collect these packages on a connected reference host with the same OS release.
 ca-certificates
+chromium
 fontconfig
 fonts-liberation
 libreoffice-core

@@ -58,6 +58,57 @@ function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
 }
 
+function sameSet(actual, expected) {
+  return (
+    actual.length === expected.length &&
+    new Set(actual).size === actual.length &&
+    expected.every((item) => actual.includes(item))
+  );
+}
+
+async function exactRegularFiles(root, prefix = "") {
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    fail(`Не удалось прочитать каталог ${root}.`);
+  }
+  const files = [];
+  for (const entry of entries) {
+    const relative = path.posix.join(prefix, entry.name);
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await exactRegularFiles(target, relative)));
+    } else if (entry.isFile()) {
+      files.push(relative);
+    } else {
+      fail(`В UX acceptance-наборе запрещён объект: ${relative}.`);
+    }
+  }
+  return files.sort();
+}
+
+async function packageVersion(packageRoot, packageName) {
+  try {
+    const metadata = object(
+      JSON.parse(
+        await readFile(path.join(packageRoot, packageName, "package.json"), "utf8")
+      ),
+      `package.json ${packageName}`
+    );
+    return string(
+      metadata.version,
+      `package.json ${packageName} version`,
+      /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/u
+    );
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      fail(`Пакет ${packageName} содержит некорректный package.json.`);
+    }
+    throw error;
+  }
+}
+
 const bundleArgument = process.argv[2];
 if (bundleArgument === undefined || process.argv.length !== 3) {
   fail("Использование: verify-release.mjs КАТАЛОГ_КОМПЛЕКТА");
@@ -124,6 +175,34 @@ const inventorySha256 = string(
   release.osPackagesInventorySha256,
   "release.json osPackagesInventorySha256",
   /^(?:|[a-f0-9]{64})$/u
+);
+if (typeof release.uxAcceptanceIncluded !== "boolean") {
+  fail("release.json uxAcceptanceIncluded должен быть логическим значением.");
+}
+const uxChromiumPackage = string(
+  release.uxChromiumPackage,
+  "release.json uxChromiumPackage",
+  /^(?:|[a-z0-9][a-z0-9+.-]*)$/u
+);
+const uxChromiumPackageVersion = string(
+  release.uxChromiumPackageVersion,
+  "release.json uxChromiumPackageVersion",
+  /^(?:|[A-Za-z0-9][A-Za-z0-9.+:~_-]*)$/u
+);
+const uxChromiumPath = string(
+  release.uxChromiumPath,
+  "release.json uxChromiumPath",
+  /^(?:|\/[A-Za-z0-9._/+:-]+)$/u
+);
+const uxPlaywrightVersion = string(
+  release.uxPlaywrightVersion,
+  "release.json uxPlaywrightVersion",
+  /^(?:|\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)$/u
+);
+const uxAxePlaywrightVersion = string(
+  release.uxAxePlaywrightVersion,
+  "release.json uxAxePlaywrightVersion",
+  /^(?:|\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)$/u
 );
 
 const config = parseEnvironment(configSource, "docomator.env.example");
@@ -228,6 +307,162 @@ if (release.osPackagesIncluded) {
     packageFiles.length !== 0
   ) {
     fail("Пустой набор пакетов ОС содержит лишние метаданные.");
+  }
+}
+
+const acceptanceRoot = path.join(bundleRoot, "payload/acceptance/ux");
+if (release.uxAcceptanceIncluded) {
+  if (!release.osPackagesIncluded) {
+    fail("UX acceptance-профиль обязан содержать проверенный набор пакетов ОС.");
+  }
+  if (
+    !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(release.gitCommit ?? "") ||
+    uxChromiumPackage === "" ||
+    uxChromiumPackageVersion === "" ||
+    uxChromiumPath === "" ||
+    uxPlaywrightVersion === "" ||
+    uxAxePlaywrightVersion === ""
+  ) {
+    fail("UX acceptance-профиль содержит неполные метаданные выпуска.");
+  }
+
+  let acceptanceEntries;
+  try {
+    acceptanceEntries = await readdir(acceptanceRoot, { withFileTypes: true });
+  } catch {
+    fail("UX acceptance-профиль не содержит отдельный acceptance payload.");
+  }
+  if (
+    !sameSet(
+      acceptanceEntries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name),
+      ["node_modules", "tests"]
+    ) ||
+    acceptanceEntries.some((entry) => !entry.isDirectory())
+  ) {
+    fail("Корень UX acceptance payload содержит лишние объекты.");
+  }
+  await exactRegularFiles(acceptanceRoot);
+  const testFiles = await exactRegularFiles(path.join(acceptanceRoot, "tests/e2e"));
+  const expectedTestFiles = [
+    "README.md",
+    "accessibility-audit.spec.mjs",
+    "bulk-import.spec.mjs",
+    "employee-card.spec.mjs",
+    "fixtures/docomator-api.mjs",
+    "fixtures/test.mjs",
+    "navigation-and-accessibility.spec.mjs",
+    "operation-center.spec.mjs",
+    "pages/docomator-page.mjs",
+    "playwright.config.mjs",
+    "reporters/axe-json-reporter.mjs",
+    "template-and-generation.spec.mjs",
+    "visual-artifacts.spec.mjs"
+  ];
+  if (!sameSet(testFiles, expectedTestFiles)) {
+    fail("Состав E2E-файлов UX acceptance-набора не совпадает с обязательным списком.");
+  }
+
+  let nodeModuleEntries;
+  let playwrightScopeEntries;
+  let axeScopeEntries;
+  try {
+    [nodeModuleEntries, playwrightScopeEntries, axeScopeEntries] = await Promise.all([
+      readdir(path.join(acceptanceRoot, "node_modules"), { withFileTypes: true }),
+      readdir(path.join(acceptanceRoot, "node_modules/@playwright"), {
+        withFileTypes: true
+      }),
+      readdir(path.join(acceptanceRoot, "node_modules/@axe-core"), {
+        withFileTypes: true
+      })
+    ]);
+  } catch {
+    fail("UX acceptance-набор не содержит закреплённые Node.js-пакеты.");
+  }
+  const directoryNames = (entries, label) => {
+    if (entries.some((entry) => !entry.isDirectory())) {
+      fail(`${label}: разрешены только каталоги закреплённых пакетов.`);
+    }
+    return entries.map((entry) => entry.name);
+  };
+  if (
+    !sameSet(directoryNames(nodeModuleEntries, "node_modules"), [
+      "@axe-core",
+      "@playwright",
+      "axe-core",
+      "playwright",
+      "playwright-core"
+    ]) ||
+    !sameSet(directoryNames(playwrightScopeEntries, "@playwright"), ["test"]) ||
+    !sameSet(directoryNames(axeScopeEntries, "@axe-core"), ["playwright"])
+  ) {
+    fail("Состав Node.js-пакетов UX acceptance-набора не совпадает с разрешённым списком.");
+  }
+  const packageRoot = path.join(acceptanceRoot, "node_modules");
+  try {
+    await readFile(path.join(packageRoot, "playwright/cli.js"));
+  } catch {
+    fail("UX acceptance-набор не содержит запуск Playwright.");
+  }
+  const [playwrightTest, playwright, playwrightCore, axePlaywright, axeCore] =
+    await Promise.all([
+      packageVersion(packageRoot, "@playwright/test"),
+      packageVersion(packageRoot, "playwright"),
+      packageVersion(packageRoot, "playwright-core"),
+      packageVersion(packageRoot, "@axe-core/playwright"),
+      packageVersion(packageRoot, "axe-core")
+    ]);
+  if (
+    playwrightTest !== uxPlaywrightVersion ||
+    playwright !== uxPlaywrightVersion ||
+    playwrightCore !== uxPlaywrightVersion ||
+    axePlaywright !== uxAxePlaywrightVersion ||
+    axeCore !== uxAxePlaywrightVersion
+  ) {
+    fail("Версии Node.js-пакетов UX acceptance-набора не совпадают с release.json.");
+  }
+  try {
+    const inventory = await readFile(
+      path.join(bundleRoot, "payload/os-packages/packages.tsv"),
+      "utf8"
+    );
+    const rows = inventory
+      .split(/\r?\n/u)
+      .slice(1)
+      .filter((line) => line.length > 0)
+      .map((line) => line.split("\t"));
+    const browserRows = rows.filter((columns) => columns[1] === uxChromiumPackage);
+    if (
+      browserRows.length !== 1 ||
+      browserRows[0]?.[2] !== uxChromiumPackageVersion
+    ) {
+      fail("Пакет Chromium UX acceptance-профиля не совпадает с packages.tsv.");
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("Chromium")) throw error;
+    fail("Не удалось проверить пакет Chromium UX acceptance-профиля.");
+  }
+} else {
+  if (
+    uxChromiumPackage !== "" ||
+    uxChromiumPackageVersion !== "" ||
+    uxChromiumPath !== "" ||
+    uxPlaywrightVersion !== "" ||
+    uxAxePlaywrightVersion !== ""
+  ) {
+    fail("Без UX acceptance-профиля его метаданные должны быть пустыми.");
+  }
+  try {
+    await readdir(acceptanceRoot);
+    fail("Комплект без UX acceptance-профиля содержит лишний acceptance payload.");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("лишний acceptance")) {
+      throw error;
+    }
+    if (error === null || typeof error !== "object" || error.code !== "ENOENT") {
+      fail("Не удалось проверить отсутствие UX acceptance payload.");
+    }
   }
 }
 

@@ -281,14 +281,14 @@ npm run start:worker
 
 Интерфейс: `http://127.0.0.1:8080/`.
 
-Браузерная проверка после однократной установки Chromium на подключённом стенде:
+Быстрая браузерная проверка исходного дерева после однократной установки Chromium на подключённом стенде:
 
 ```bash
 npx playwright install chromium
 DOCOMATOR_E2E_BASE_URL=http://127.0.0.1:8080 npm run test:e2e
 ```
 
-Playwright используется только для разработки и не входит в runtime-зависимости автономной установки.
+Эта команда используется только для разработки; её отчёты помечены `development` и не являются актом P5. Playwright не входит в runtime-зависимости автономной установки. Канонический network-free P5-прогон выполняется отдельным `ux-acceptance-gate.sh` из bundle с `--with-ux-acceptance`.
 
 ## 📦 Автономная поставка
 
@@ -299,6 +299,7 @@ scripts/offline/prepare-bundle.sh \
   --llama-server /opt/build/llama.cpp/llama-server \
   --model /opt/build/models/model.gguf \
   --with-preview \
+  --with-ux-acceptance \
   --os-packages-dir offline-bundles/os-packages
 ```
 
@@ -311,10 +312,17 @@ sudo "$BUNDLE_ROOT/smoke-test.sh" "$BUNDLE_ROOT"
 "$BUNDLE_ROOT/target-release-gate.sh" \
   --config /etc/docomator/docomator.env
 
+install -d -m 0700 "$HOME/docomator-p5"
+"$BUNDLE_ROOT/ux-acceptance-gate.sh" \
+  --base-url http://127.0.0.1:8080/ \
+  --output "$HOME/docomator-p5/automation-01"
+
 sudo /opt/docomator/current/first-run.sh \
   --config /etc/docomator/docomator.env \
   --check
 ```
+
+UX-gate принимает только точное совпадение профиля ОС/архитектуры, установленного Debian-пакета Chromium и идентичности работающего релиза с проверенным bundle. Значения `commitSha`, `bundleManifestSha256`, `releaseMetadataSha256`, `browserVersion` из `run-metadata.json` переносятся в акт P5.
 
 ## 🧱 Ближайшие продуктовые этапы
 

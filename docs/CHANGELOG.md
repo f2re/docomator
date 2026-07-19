@@ -1,5 +1,19 @@
 # Журнал изменений Docomator
 
+## 2026-07-19 — P5/OFF-010: автономный UX acceptance gate
+
+Добавлено:
+
+- обязательный явный профиль `--with-ux-acceptance` или `--without-ux-acceptance` при подготовке bundle;
+- отдельный `payload/acceptance/ux`, который содержит точные E2E-файлы и пять закреплённых Playwright/axe-пакетов, но не копируется в production release;
+- target-specific Chromium из проверенного `.deb` inventory с закреплёнными package name/version/path и без browser download на закрытом стенде;
+- непривилегированный `ux-acceptance-gate.sh`, разрешающий только loopback origin и новый защищённый внешний каталог результатов;
+- preflight точного target OS profile, владельца/версии Chromium и идентичности реально запущенного release через локальный API;
+- привязка Playwright/axe JSON к Git commit, SHA-256 внутреннего manifest, SHA-256 release metadata и фактической версии браузера; отчёты исходного дерева `development` больше не могут быть приняты как P5;
+- точный verifier acceptance payload и отрицательные тесты отсутствующих/лишних E2E-файлов, дрейфа npm/Chromium metadata, отключённого профиля и небезопасного запуска.
+
+Версия остаётся `0.1.0-alpha.0`: автоматический P5-инструмент теперь автономен, но фактическая ручная доступность, Linux-эталоны и две пользовательские сессии ещё не выполнены.
+
 ## 2026-07-19 — P0/P5: пользовательские тексты без IAM-семантики
 
 Исправлено:

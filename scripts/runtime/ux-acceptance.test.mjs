@@ -28,6 +28,10 @@ import {
 } from "./ux-acceptance-report-contracts.mjs";
 
 const NOW = new Date(Date.now() - 60_000).toISOString();
+const COMMIT_SHA = "a".repeat(40);
+const BUNDLE_MANIFEST_SHA256 = "b".repeat(64);
+const RELEASE_METADATA_SHA256 = "c".repeat(64);
+const BROWSER_VERSION = "Chromium 1228";
 const CLI_PATH = fileURLToPath(new URL("./ux-acceptance.mjs", import.meta.url));
 
 function runCli(arguments_) {
@@ -55,9 +59,11 @@ function completedAct() {
   act.environment = {
     platform: "linux",
     operatingSystem: "Ubuntu 24.04",
-    browserVersion: "Chromium 1228",
+    browserVersion: BROWSER_VERSION,
     screenReader: "Orca 46",
-    commitSha: "a".repeat(40),
+    commitSha: COMMIT_SHA,
+    bundleManifestSha256: BUNDLE_MANIFEST_SHA256,
+    releaseMetadataSha256: RELEASE_METADATA_SHA256,
     testedAt: NOW
   };
   act.manualChecks = UX_ACCEPTANCE_MANUAL_CHECKS.map((id) => ({
@@ -131,7 +137,11 @@ function playwrightEvidenceFixture() {
   return {
     config: {
       metadata: {
-        docomatorEvidenceContractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION
+        docomatorEvidenceContractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION,
+        docomatorCommitSha: COMMIT_SHA,
+        docomatorBundleManifestSha256: BUNDLE_MANIFEST_SHA256,
+        docomatorReleaseMetadataSha256: RELEASE_METADATA_SHA256,
+        docomatorBrowserVersion: BROWSER_VERSION
       },
       projects: UX_E2E_PROJECTS.map((name) => ({ name }))
     },
@@ -199,6 +209,12 @@ function axeEvidenceFixture() {
     version: 1,
     kind: "docomator.axe-report",
     contractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION,
+    binding: {
+      commitSha: COMMIT_SHA,
+      bundleManifestSha256: BUNDLE_MANIFEST_SHA256,
+      releaseMetadataSha256: RELEASE_METADATA_SHA256,
+      browserVersion: BROWSER_VERSION
+    },
     generatedAt: NOW,
     runStatus: "passed",
     summary: { checks: results.length, violations: 0, incomplete: 0 },

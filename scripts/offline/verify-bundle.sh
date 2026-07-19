@@ -28,6 +28,10 @@ require_command sort
 [[ -x "$BUNDLE_ROOT/smoke-test.sh" ]] || die "В комплекте отсутствует root smoke-test.sh"
 [[ -x "$BUNDLE_ROOT/target-release-gate.sh" ]] || \
   die "В комплекте отсутствует целевой target-release-gate.sh"
+[[ -x "$BUNDLE_ROOT/ux-acceptance-gate.sh" ]] || \
+  die "В комплекте отсутствует offline UX acceptance-gate"
+[[ -f "$BUNDLE_ROOT/ux-acceptance-gate.mjs" ]] || \
+  die "В комплекте отсутствует запуск offline UX acceptance-gate"
 [[ -f "$BUNDLE_ROOT/http-check.mjs" ]] || die "В комплекте отсутствует локальная HTTP-проверка"
 [[ -f "$BUNDLE_ROOT/verify-release.mjs" ]] || die "В комплекте отсутствует проверка release metadata"
 [[ -f "$BUNDLE_ROOT/payload/config/docomator.env.example" ]] || \

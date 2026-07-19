@@ -66,6 +66,18 @@ Bundle содержит production-pruned зависимости, оба gate и
 
 Сценарий сначала повторно проверяет полный bundle, требует точного совпадения target ОС/версии/архитектуры с package profile и совпадения preview-профиля target config с bundle. Затем он запускает core gate встроенным Node.js и, если preview включён, принудительно задаёт `DOCOMATOR_REQUIRE_LIBREOFFICE=1`. Поэтому отсутствие converter не превращается в `SKIPPED`. Профиль `--without-preview` явно сообщает, что LibreOffice gate к нему неприменим и не может служить актом поддержки preview.
 
+## Gate автоматической UX-приёмки
+
+Кандидатный bundle с `--with-ux-acceptance` дополнительно содержит отдельный QA payload. Он не устанавливается в production-каталог и запускается обычным пользователем после target gate:
+
+```bash
+"$BUNDLE_ROOT/ux-acceptance-gate.sh" \
+  --base-url http://127.0.0.1:8080/ \
+  --output "$HOME/docomator-p5/automation-01"
+```
+
+Сценарий повторно проверяет bundle и target OS profile, запрещает удалённый origin и запуск от root, через `dpkg-query` сверяет владельца/версию Chromium и подтверждает идентичность запущенного релиза через локальный API. Playwright/axe JSON связаны с release commit, SHA-256 внутреннего manifest, SHA-256 release metadata и фактической версией браузера. Это автоматическая часть P5; ручную доступность, Linux-эталоны и две независимые пользовательские сессии она не заменяет.
+
 ## Безопасность и очистка
 
 - дочерние процессы получают whitelist окружения и явные выключатели SMTP, LLM и preview;

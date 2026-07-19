@@ -91,6 +91,8 @@ export function createUxAcceptanceTemplate() {
       browserVersion: "",
       screenReader: "",
       commitSha: "",
+      bundleManifestSha256: "",
+      releaseMetadataSha256: "",
       testedAt: null
     },
     manualChecks: MANUAL_CHECKS.map((id) => ({
@@ -183,6 +185,8 @@ export function validateUxAcceptance(value) {
         "browserVersion",
         "screenReader",
         "commitSha",
+        "bundleManifestSha256",
+        "releaseMetadataSha256",
         "testedAt"
       ],
       "environment",
@@ -198,6 +202,14 @@ export function validateUxAcceptance(value) {
     }
     if (!COMMIT_PATTERN.test(value.environment.commitSha ?? "")) {
       missing.push("environment.commitSha");
+    }
+    for (const field of [
+      "bundleManifestSha256",
+      "releaseMetadataSha256"
+    ]) {
+      if (!SHA256_PATTERN.test(value.environment[field] ?? "")) {
+        missing.push(`environment.${field}`);
+      }
     }
     if (!timestamp(value.environment.testedAt)) {
       missing.push("environment.testedAt");
@@ -533,6 +545,7 @@ export async function validateUxAcceptanceFiles(value, actPath) {
   if (result.state === "invalid" || result.state === "failed") return result;
   const errors = [...result.errors];
   let root;
+  let automationBundleManifestSha256 = null;
   try {
     root = await realpath(path.dirname(path.resolve(actPath)));
   } catch {
@@ -585,7 +598,25 @@ export async function validateUxAcceptanceFiles(value, actPath) {
         }
         try {
           const parsed = JSON.parse(content.toString("utf8"));
-          const contract = validateUxAutomationReport(record.id, parsed);
+          const contract = validateUxAutomationReport(record.id, parsed, {
+            commitSha: value.environment?.commitSha,
+            bundleManifestSha256:
+              value.environment?.bundleManifestSha256,
+            releaseMetadataSha256:
+              value.environment?.releaseMetadataSha256,
+            browserVersion: value.environment?.browserVersion
+          });
+          if (
+            automationBundleManifestSha256 !== null &&
+            automationBundleManifestSha256 !==
+              contract.binding.bundleManifestSha256
+          ) {
+            throw new EvidenceValidationError(
+              "Playwright и axe созданы из разных автономных комплектов"
+            );
+          }
+          automationBundleManifestSha256 =
+            contract.binding.bundleManifestSha256;
           if (record.completedAt !== contract.completedAt) {
             throw new EvidenceValidationError(
               "время свидетельства не совпадает с отчётом"

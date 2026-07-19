@@ -3,21 +3,33 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
-const artifactDirectory = path.join(testDirectory, ".tmp");
-const evidenceContractVersion = 1;
+const artifactDirectory = process.env.DOCOMATOR_E2E_ARTIFACT_DIR
+  ? path.resolve(process.env.DOCOMATOR_E2E_ARTIFACT_DIR)
+  : path.join(testDirectory, ".tmp");
+const evidenceContractVersion = 2;
+const chromiumExecutable = process.env.DOCOMATOR_E2E_CHROMIUM_BIN;
+const acceptanceRun = process.env.DOCOMATOR_E2E_ACCEPTANCE === "1";
 
 const baseURL =
   process.env.DOCOMATOR_E2E_BASE_URL || "http://127.0.0.1:18080";
 
 export default defineConfig({
   metadata: {
-    docomatorEvidenceContractVersion: evidenceContractVersion
+    docomatorEvidenceContractVersion: evidenceContractVersion,
+    docomatorCommitSha:
+      process.env.DOCOMATOR_E2E_COMMIT_SHA || "development",
+    docomatorBundleManifestSha256:
+      process.env.DOCOMATOR_E2E_BUNDLE_MANIFEST_SHA256 || "development",
+    docomatorReleaseMetadataSha256:
+      process.env.DOCOMATOR_E2E_RELEASE_METADATA_SHA256 || "development",
+    docomatorBrowserVersion:
+      process.env.DOCOMATOR_E2E_BROWSER_VERSION || "development"
   },
   testDir: ".",
   testMatch: "**/*.spec.mjs",
   fullyParallel: false,
-  forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0,
+  forbidOnly: acceptanceRun || Boolean(process.env.CI),
+  retries: acceptanceRun ? 0 : process.env.CI ? 1 : 0,
   workers: 1,
   timeout: 30_000,
   expect: {
@@ -54,7 +66,8 @@ export default defineConfig({
     screenshot: "only-on-failure",
     timezoneId: "Europe/Moscow",
     trace: "retain-on-failure",
-    video: "off"
+    video: "off",
+    ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {})
   },
   projects: [
     {

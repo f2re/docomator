@@ -32,7 +32,7 @@ function validatedRecord(value, status) {
     !object(value) ||
     value.version !== 1 ||
     value.kind !== "docomator.axe-result" ||
-    value.contractVersion !== 1 ||
+    value.contractVersion !== 2 ||
     !text(value.project) ||
     !text(value.title) ||
     !text(value.label) ||
@@ -87,9 +87,18 @@ export default class AxeJsonReporter {
     );
     this.records = [];
     this.errors = [];
+    this.binding = null;
   }
 
-  async onBegin() {
+  async onBegin(config = { metadata: {} }) {
+    this.binding = {
+      commitSha: config.metadata?.docomatorCommitSha,
+      bundleManifestSha256:
+        config.metadata?.docomatorBundleManifestSha256,
+      releaseMetadataSha256:
+        config.metadata?.docomatorReleaseMetadataSha256,
+      browserVersion: config.metadata?.docomatorBrowserVersion
+    };
     await unlink(this.outputFile).catch((error) => {
       if (!object(error) || error.code !== "ENOENT") throw error;
     });
@@ -137,7 +146,8 @@ export default class AxeJsonReporter {
     const report = {
       version: 1,
       kind: "docomator.axe-report",
-      contractVersion: 1,
+      contractVersion: 2,
+      binding: this.binding,
       generatedAt: new Date().toISOString(),
       runStatus: result.status,
       summary: {

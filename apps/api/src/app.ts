@@ -5,6 +5,7 @@ import type { ApiConfig } from "@docomator/config";
 import type {
   HealthResponse,
   ReadinessResponse,
+  ReleaseIdentityResponse,
   SystemInfoResponse
 } from "@docomator/contracts";
 import { DocumentIntakeError } from "@docomator/document-intake";
@@ -86,6 +87,7 @@ import { registerEmployeeRoutes } from "./employee-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { registerMultiFieldTestVersionRoutes } from "./multi-field-test-version-routes.js";
 import { registerOperationCenterRoutes } from "./operation-center-routes.js";
+import { loadReleaseIdentity } from "./release-identity.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
 import { registerTemplateDraftRoutes } from "./template-draft-routes.js";
@@ -512,6 +514,30 @@ export function buildApp(
         database: databaseReady ? "ok" : "error"
       }
     };
+  });
+
+  let releaseIdentityPromise: Promise<ReleaseIdentityResponse> | undefined;
+  app.get("/api/v1/system/release", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    try {
+      releaseIdentityPromise ??= loadReleaseIdentity(
+        config.releaseMetadataPath,
+        config.version
+      );
+      return await releaseIdentityPromise;
+    } catch (error) {
+      request.log.error(
+        { err: error, correlationId: correlationId(request) },
+        "не удалось прочитать идентичность установленного релиза"
+      );
+      return reply.code(503).send({
+        error: {
+          code: "release_identity_unavailable",
+          message: "Не удалось подтвердить идентичность установленной версии."
+        },
+        correlationId: correlationId(request)
+      });
+    }
   });
 
   app.get("/api/v1/system/info", async (): Promise<SystemInfoResponse> => ({

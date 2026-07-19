@@ -31,6 +31,7 @@ export interface SmtpWorkerConfig extends SmtpPublicConfig {
 export interface ApiConfig extends CommonConfig {
   host: string;
   port: number;
+  releaseMetadataPath: string | null;
   networkDeliveryRoot: string | null;
   smtp: SmtpPublicConfig;
 }
@@ -227,10 +228,15 @@ function common(env: NodeJS.ProcessEnv): CommonConfig {
 
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const networkDeliveryRoot = env.DOCOMATOR_NETWORK_DELIVERY_ROOT?.trim();
+  const releaseMetadataPath = env.DOCOMATOR_RELEASE_METADATA_PATH?.trim();
   return {
     ...common(env),
     host: env.DOCOMATOR_HOST ?? "127.0.0.1",
     port: parseInteger("DOCOMATOR_PORT", env.DOCOMATOR_PORT, 8080, 0, 65535),
+    releaseMetadataPath:
+      releaseMetadataPath === undefined || releaseMetadataPath.length === 0
+        ? null
+        : path.resolve(releaseMetadataPath),
     networkDeliveryRoot:
       networkDeliveryRoot === undefined || networkDeliveryRoot.length === 0
         ? null

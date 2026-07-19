@@ -11,7 +11,7 @@ const WCAG_TAGS = [
   "wcag21aa",
   "wcag22aa"
 ];
-const EVIDENCE_CONTRACT_VERSION = 1;
+const EVIDENCE_CONTRACT_VERSION = 2;
 
 const primaryViews = [
   ["overview", "Главная"],

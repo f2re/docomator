@@ -37,6 +37,15 @@ const COLLECT_OS_PACKAGES = path.join(
   ROOT,
   "scripts/offline/collect-os-packages.sh"
 );
+const PREPARE_BUNDLE = path.join(ROOT, "scripts/offline/prepare-bundle.sh");
+const UX_ACCEPTANCE_GATE = path.join(
+  ROOT,
+  "scripts/offline/ux-acceptance-gate.sh"
+);
+const API_SYSTEMD_UNIT = path.join(
+  ROOT,
+  "deploy/systemd/docomator-api.service.in"
+);
 const EXAMPLE_FILES = [
   "README.md",
   "manifest.sha256",
@@ -51,6 +60,41 @@ const EXAMPLE_FILES = [
   "templates/team-register.docx",
   "templates/team-register.xlsx"
 ];
+const UX_E2E_FILES = [
+  "README.md",
+  "accessibility-audit.spec.mjs",
+  "bulk-import.spec.mjs",
+  "employee-card.spec.mjs",
+  "fixtures/docomator-api.mjs",
+  "fixtures/test.mjs",
+  "navigation-and-accessibility.spec.mjs",
+  "operation-center.spec.mjs",
+  "pages/docomator-page.mjs",
+  "playwright.config.mjs",
+  "reporters/axe-json-reporter.mjs",
+  "template-and-generation.spec.mjs",
+  "visual-artifacts.spec.mjs"
+];
+
+test("UX gate binds the target profile and installed release identity", async () => {
+  const [gate, unit, prepare] = await Promise.all([
+    readFile(UX_ACCEPTANCE_GATE, "utf8"),
+    readFile(API_SYSTEMD_UNIT, "utf8"),
+    readFile(PREPARE_BUNDLE, "utf8")
+  ]);
+  assert.match(
+    gate,
+    /verify_target_os_package_profile "\$SCRIPT_DIR\/payload\/os-packages"/u
+  );
+  assert.match(
+    unit,
+    /DOCOMATOR_RELEASE_METADATA_PATH=@DOCOMATOR_INSTALL_ROOT@\/current\/release\.json/u
+  );
+  assert.match(
+    prepare,
+    /Сборка или lifecycle-скрипт изменили Git checkout/u
+  );
+});
 
 async function executable(name) {
   for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
@@ -164,6 +208,12 @@ function releaseMetadata(overrides = {}) {
     osPackagesManifestSha256: "",
     osPackagesInventorySha256: "",
     osPackageSource: null,
+    uxAcceptanceIncluded: false,
+    uxChromiumPackage: "",
+    uxChromiumPackageVersion: "",
+    uxChromiumPath: "",
+    uxPlaywrightVersion: "",
+    uxAxePlaywrightVersion: "",
     llmIncluded: false,
     llamaServerSha256: "",
     modelFile: "",
@@ -239,6 +289,58 @@ async function enablePreview(bundle, packageNames = [
   await writeOuterManifest(bundle);
 }
 
+async function enableUxAcceptance(bundle) {
+  await enablePreview(bundle, [
+    "chromium",
+    "libreoffice-core",
+    "libreoffice-writer",
+    "libreoffice-calc"
+  ]);
+  const acceptanceRoot = path.join(bundle, "payload/acceptance/ux");
+  for (const relative of UX_E2E_FILES) {
+    const target = path.join(acceptanceRoot, "tests/e2e", relative);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, `${relative}\n`);
+  }
+  const packages = [
+    ["@playwright/test", "1.61.1"],
+    ["playwright", "1.61.1"],
+    ["playwright-core", "1.61.1"],
+    ["@axe-core/playwright", "4.12.1"],
+    ["axe-core", "4.12.1"]
+  ];
+  for (const [packageName, version] of packages) {
+    const packageDirectory = path.join(
+      acceptanceRoot,
+      "node_modules",
+      packageName
+    );
+    await mkdir(packageDirectory, { recursive: true });
+    await writeFile(
+      path.join(packageDirectory, "package.json"),
+      `${JSON.stringify({ name: packageName, version })}\n`
+    );
+  }
+  await writeFile(
+    path.join(acceptanceRoot, "node_modules/playwright/cli.js"),
+    "#!/usr/bin/env node\n"
+  );
+  const release = JSON.parse(
+    await readFile(path.join(bundle, "release.json"), "utf8")
+  );
+  await writeRelease(bundle, {
+    ...release,
+    gitCommit: "a".repeat(40),
+    uxAcceptanceIncluded: true,
+    uxChromiumPackage: "chromium",
+    uxChromiumPackageVersion: "1.0",
+    uxChromiumPath: "/usr/bin/chromium",
+    uxPlaywrightVersion: "1.61.1",
+    uxAxePlaywrightVersion: "4.12.1"
+  });
+  await writeOuterManifest(bundle);
+}
+
 async function fixture() {
   const bundle = await mkdtemp(path.join(os.tmpdir(), "docomator-bundle-verify-"));
   const required = [
@@ -247,6 +349,8 @@ async function fixture() {
     "http-check.mjs",
     "smoke-test.sh",
     "target-release-gate.sh",
+    "ux-acceptance-gate.sh",
+    "ux-acceptance-gate.mjs",
     "payload/app/scripts/ci/release-gate.mjs",
     "payload/app/scripts/ci/release-gate-crash-worker.mjs",
     "payload/app/scripts/ci/libreoffice-release-gate.mjs",
@@ -270,6 +374,7 @@ async function fixture() {
   await chmod(path.join(bundle, "payload/runtime/node/bin/node"), 0o755);
   await chmod(path.join(bundle, "smoke-test.sh"), 0o755);
   await chmod(path.join(bundle, "target-release-gate.sh"), 0o755);
+  await chmod(path.join(bundle, "ux-acceptance-gate.sh"), 0o755);
   await copyFile(VERIFY_RELEASE, path.join(bundle, "verify-release.mjs"));
   await writeFile(
     path.join(bundle, "payload/config/docomator.env.example"),
@@ -359,6 +464,81 @@ test("offline verifier accepts a preview profile with an exact LibreOffice set",
     await enablePreview(bundle);
     const result = await verify(bundle);
     assert.equal(result.code, 0, result.output);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier accepts the separate offline UX acceptance profile", async () => {
+  const bundle = await fixture();
+  try {
+    await enableUxAcceptance(bundle);
+    const result = await verify(bundle);
+    assert.equal(result.code, 0, result.output);
+  } finally {
+    await rm(bundle, { recursive: true, force: true });
+  }
+});
+
+test("offline verifier rejects a missing or extra UX E2E file", async () => {
+  for (const mutation of ["missing", "extra"]) {
+    const bundle = await fixture();
+    try {
+      await enableUxAcceptance(bundle);
+      const testRoot = path.join(bundle, "payload/acceptance/ux/tests/e2e");
+      if (mutation === "missing") {
+        await unlink(path.join(testRoot, "bulk-import.spec.mjs"));
+      } else {
+        await writeFile(path.join(testRoot, "unreviewed.spec.mjs"), "extra\n");
+      }
+      await writeOuterManifest(bundle);
+      const result = await verify(bundle);
+      assert.equal(result.code, 1);
+      assert.match(result.output, /состав E2E-файлов/iu);
+    } finally {
+      await rm(bundle, { recursive: true, force: true });
+    }
+  }
+});
+
+test("offline verifier rejects UX package and Chromium metadata drift", async () => {
+  for (const mutation of ["playwright", "chromium"]) {
+    const bundle = await fixture();
+    try {
+      await enableUxAcceptance(bundle);
+      if (mutation === "playwright") {
+        await writeFile(
+          path.join(
+            bundle,
+            "payload/acceptance/ux/node_modules/playwright/package.json"
+          ),
+          `${JSON.stringify({ name: "playwright", version: "1.60.0" })}\n`
+        );
+      } else {
+        const release = JSON.parse(
+          await readFile(path.join(bundle, "release.json"), "utf8")
+        );
+        release.uxChromiumPackageVersion = "2.0";
+        await writeRelease(bundle, release);
+      }
+      await writeOuterManifest(bundle);
+      const result = await verify(bundle);
+      assert.equal(result.code, 1);
+      assert.match(result.output, /верс|Chromium/iu);
+    } finally {
+      await rm(bundle, { recursive: true, force: true });
+    }
+  }
+});
+
+test("offline verifier rejects acceptance payload when its profile is disabled", async () => {
+  const bundle = await fixture();
+  try {
+    await mkdir(path.join(bundle, "payload/acceptance/ux"), { recursive: true });
+    await writeOuterManifest(bundle);
+    const result = await verify(bundle);
+    assert.equal(result.code, 1);
+    assert.match(result.output, /без UX acceptance-профиля/iu);
   } finally {
     await rm(bundle, { recursive: true, force: true });
   }

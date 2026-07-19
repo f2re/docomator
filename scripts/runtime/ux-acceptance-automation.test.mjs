@@ -32,6 +32,10 @@ import {
 } from "./ux-acceptance-report-contracts.mjs";
 
 const NOW = new Date(Date.now() - 60_000).toISOString();
+const COMMIT_SHA = "a".repeat(40);
+const BUNDLE_MANIFEST_SHA256 = "b".repeat(64);
+const RELEASE_METADATA_SHA256 = "c".repeat(64);
+const BROWSER_VERSION = "Chromium 1228";
 const PROJECTS = [...UX_E2E_PROJECTS];
 const AXE_PROJECTS = [
   ["chromium-320", "light", 320],
@@ -73,7 +77,11 @@ function playwrightReport(overrides = {}) {
   return {
     config: {
       metadata: {
-        docomatorEvidenceContractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION
+        docomatorEvidenceContractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION,
+        docomatorCommitSha: COMMIT_SHA,
+        docomatorBundleManifestSha256: BUNDLE_MANIFEST_SHA256,
+        docomatorReleaseMetadataSha256: RELEASE_METADATA_SHA256,
+        docomatorBrowserVersion: BROWSER_VERSION
       },
       projects: PROJECTS.map((name) => ({ name }))
     },
@@ -141,6 +149,12 @@ function axeReport(results = null) {
     version: 1,
     kind: "docomator.axe-report",
     contractVersion: UX_E2E_EVIDENCE_CONTRACT_VERSION,
+    binding: {
+      commitSha: COMMIT_SHA,
+      bundleManifestSha256: BUNDLE_MANIFEST_SHA256,
+      releaseMetadataSha256: RELEASE_METADATA_SHA256,
+      browserVersion: BROWSER_VERSION
+    },
     generatedAt: NOW,
     runStatus: "passed",
     summary: {
@@ -187,6 +201,10 @@ async function fixtureDirectory() {
   const playwrightPath = path.join(directory, "playwright.json");
   const axePath = path.join(directory, "axe.json");
   const act = createUxAcceptanceTemplate();
+  act.environment.commitSha = COMMIT_SHA;
+  act.environment.bundleManifestSha256 = BUNDLE_MANIFEST_SHA256;
+  act.environment.releaseMetadataSha256 = RELEASE_METADATA_SHA256;
+  act.environment.browserVersion = BROWSER_VERSION;
   await Promise.all([
     writeFile(actPath, `${JSON.stringify(act, null, 2)}\n`, { mode: 0o600 }),
     writeFile(playwrightPath, JSON.stringify(playwrightReport()), { mode: 0o600 }),
@@ -539,6 +557,21 @@ test("automation collector fails closed and leaves the act unchanged", async () 
       (() => {
         const report = axeReport();
         report.results[0].axe.violations.push({ id: "color-contrast" });
+        return report;
+      })(),
+      (() => {
+        const report = axeReport();
+        report.binding.commitSha = "c".repeat(40);
+        return report;
+      })(),
+      (() => {
+        const report = axeReport();
+        report.binding.bundleManifestSha256 = "d".repeat(64);
+        return report;
+      })(),
+      (() => {
+        const report = axeReport();
+        report.binding.releaseMetadataSha256 = "d".repeat(64);
         return report;
       })()
     ];

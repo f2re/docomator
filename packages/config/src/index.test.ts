@@ -8,7 +8,16 @@ test("api config applies safe defaults", () => {
   assert.equal(config.host, "127.0.0.1");
   assert.equal(config.port, 8080);
   assert.equal(config.llmEnabled, false);
+  assert.equal(config.releaseMetadataPath, null);
   assert.match(config.dataDir, /tmp-data$/);
+});
+
+test("api config resolves installed release metadata path", () => {
+  const config = loadApiConfig({
+    DOCOMATOR_DATA_DIR: "./tmp-data",
+    DOCOMATOR_RELEASE_METADATA_PATH: "./release.json"
+  });
+  assert.match(config.releaseMetadataPath ?? "", /release\.json$/u);
 });
 
 test("invalid ports are rejected", () => {

@@ -8,6 +8,7 @@ Type=simple
 User=@DOCOMATOR_USER@
 Group=@DOCOMATOR_GROUP@
 EnvironmentFile=@DOCOMATOR_CONFIG_DIR@/docomator.env
+Environment=DOCOMATOR_RELEASE_METADATA_PATH=@DOCOMATOR_INSTALL_ROOT@/current/release.json
 WorkingDirectory=@DOCOMATOR_INSTALL_ROOT@/current/app
 ExecStartPre=@DOCOMATOR_INSTALL_ROOT@/current/runtime/node/bin/node @DOCOMATOR_INSTALL_ROOT@/current/app/scripts/runtime/migrate.mjs
 ExecStart=@DOCOMATOR_INSTALL_ROOT@/current/runtime/node/bin/node @DOCOMATOR_INSTALL_ROOT@/current/app/apps/api/dist/server.js

@@ -15,6 +15,14 @@ export interface ReadinessResponse extends HealthResponse {
   checks: Record<string, "ok" | "error">;
 }
 
+export interface ReleaseIdentityResponse {
+  name: "docomator";
+  version: string;
+  gitCommit: string | null;
+  releaseMetadataSha256: string | null;
+  source: "development" | "installed";
+}
+
 export interface SystemInfoResponse {
   name: "docomator";
   version: string;

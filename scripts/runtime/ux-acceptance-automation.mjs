@@ -299,15 +299,33 @@ export async function collectUxAutomationEvidence({
   ]);
   let playwrightContract;
   let axeContract;
+  const expectedBinding = {
+    commitSha: act.environment?.commitSha,
+    bundleManifestSha256: act.environment?.bundleManifestSha256,
+    releaseMetadataSha256: act.environment?.releaseMetadataSha256,
+    browserVersion: act.environment?.browserVersion
+  };
   try {
     playwrightContract = validateUxAutomationReport(
       "playwright-json-report",
-      parseJson(playwrightContent, "Playwright-отчёт")
+      parseJson(playwrightContent, "Playwright-отчёт"),
+      expectedBinding
     );
     axeContract = validateUxAutomationReport(
       "axe-json-report",
-      parseJson(axeContent, "Axe-отчёт")
+      parseJson(axeContent, "Axe-отчёт"),
+      expectedBinding
     );
+    if (
+      playwrightContract.binding.bundleManifestSha256 !==
+        axeContract.binding.bundleManifestSha256 ||
+      playwrightContract.binding.releaseMetadataSha256 !==
+        axeContract.binding.releaseMetadataSha256
+    ) {
+      throw new UxAutomationEvidenceError(
+        "Playwright и axe созданы для разных установленных выпусков."
+      );
+    }
   } catch (error) {
     throw new UxAutomationEvidenceError(
       error instanceof Error

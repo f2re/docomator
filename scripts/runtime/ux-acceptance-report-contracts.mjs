@@ -63,7 +63,7 @@ const WCAG_TAGS = Object.freeze([
 const REPORT_IDS = new Set(["playwright-json-report", "axe-json-report"]);
 const RULE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,127}$/u;
 
-export const UX_E2E_EVIDENCE_CONTRACT_VERSION = 1;
+export const UX_E2E_EVIDENCE_CONTRACT_VERSION = 2;
 
 export class UxAutomationReportError extends Error {}
 
@@ -85,6 +85,38 @@ function sameSet(actual, expected) {
     new Set(actual).size === actual.length &&
     expected.every((item) => actual.includes(item))
   );
+}
+
+function validateEvidenceBinding(binding, expected) {
+  if (
+    !object(binding) ||
+    !sameSet(Object.keys(binding), [
+      "commitSha",
+      "bundleManifestSha256",
+      "releaseMetadataSha256",
+      "browserVersion"
+    ]) ||
+    !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(binding.commitSha ?? "") ||
+    !/^[a-f0-9]{64}$/u.test(binding.bundleManifestSha256 ?? "") ||
+    !/^[a-f0-9]{64}$/u.test(binding.releaseMetadataSha256 ?? "") ||
+    !text(binding.browserVersion, 200)
+  ) {
+    throw new UxAutomationReportError(
+      "Автоматический отчёт не связан с проверенным выпуском и Chromium."
+    );
+  }
+  if (
+    !object(expected) ||
+    binding.commitSha !== expected.commitSha ||
+    binding.browserVersion !== expected.browserVersion ||
+    binding.bundleManifestSha256 !== expected.bundleManifestSha256 ||
+    binding.releaseMetadataSha256 !== expected.releaseMetadataSha256
+  ) {
+    throw new UxAutomationReportError(
+      "Автоматический отчёт создан для другого выпуска или Chromium."
+    );
+  }
+  return binding;
 }
 
 function utcTimestamp(value) {
@@ -118,7 +150,7 @@ function expectedPlaywrightExecutions() {
   );
 }
 
-function validatePlaywrightReport(report) {
+function validatePlaywrightReport(report, expectedBinding) {
   const projects = Array.isArray(report?.config?.projects)
     ? report.config.projects.map((project) => project?.name)
     : [];
@@ -131,6 +163,17 @@ function validatePlaywrightReport(report) {
       "Playwright-отчёт не соответствует версии обязательной E2E-матрицы."
     );
   }
+  const binding = validateEvidenceBinding(
+    {
+      commitSha: report.config.metadata.docomatorCommitSha,
+      bundleManifestSha256:
+        report.config.metadata.docomatorBundleManifestSha256,
+      releaseMetadataSha256:
+        report.config.metadata.docomatorReleaseMetadataSha256,
+      browserVersion: report.config.metadata.docomatorBrowserVersion
+    },
+    expectedBinding
+  );
   if (
     !object(report.stats) ||
     !Number.isInteger(report.stats.expected) ||
@@ -230,6 +273,7 @@ function validatePlaywrightReport(report) {
     );
   }
   return {
+    binding,
     completedAt,
     reviewRequirements: []
   };
@@ -239,7 +283,7 @@ export function uxAutomationReviewKey(review) {
   return `${review.project}\u0000${review.label}\u0000${review.ruleId}`;
 }
 
-function validateAxeReport(report) {
+function validateAxeReport(report, expectedBinding) {
   if (
     !object(report) ||
     report.version !== 1 ||
@@ -253,6 +297,7 @@ function validateAxeReport(report) {
       "Axe-отчёт не подтверждает успешную обязательную матрицу."
     );
   }
+  const binding = validateEvidenceBinding(report.binding, expectedBinding);
   const expectedCoordinates = [...AXE_PROJECTS].flatMap(([project]) =>
     AXE_LABELS.map((label) => `${project}\u0000${label}`)
   );
@@ -343,6 +388,7 @@ function validateAxeReport(report) {
     );
   }
   return {
+    binding,
     completedAt: generatedAt,
     reviewRequirements: reviewRequirements.sort((left, right) => {
       const leftKey = uxAutomationReviewKey(left);
@@ -352,15 +398,15 @@ function validateAxeReport(report) {
   };
 }
 
-export function validateUxAutomationReport(evidenceId, report) {
+export function validateUxAutomationReport(evidenceId, report, expectedBinding) {
   if (!REPORT_IDS.has(evidenceId)) {
     throw new UxAutomationReportError(
       "Неизвестный вид автоматического UX-свидетельства."
     );
   }
   return evidenceId === "playwright-json-report"
-    ? validatePlaywrightReport(report)
-    : validateAxeReport(report);
+    ? validatePlaywrightReport(report, expectedBinding)
+    : validateAxeReport(report, expectedBinding);
 }
 
 export const UX_E2E_TEST_TITLES = TEST_TITLES;
