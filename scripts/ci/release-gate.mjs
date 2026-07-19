@@ -12,13 +12,10 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
-import { analyzeOoxmlBuffer } from "@docomator/document-intake";
 import {
   ContentAddressedObjectStore,
   DEFAULT_SPACE_ID,
-  DocumentQuarantineRegistry,
   MultiFieldTestVersionRegistry,
-  SpaceRegistry,
   SqliteStore,
   TemplateDraftRegistry,
   TemplateReleaseRegistry,
@@ -197,30 +194,12 @@ async function activateCandidate(releases, queue, tested, versionKind, label) {
   );
 }
 
-async function seedPersonalRelease(registries) {
-  const sourceBuffer = personalSource();
-  const structure = await analyzeOoxmlBuffer({
-    buffer: sourceBuffer,
-    fileName: "Личная карточка.docx",
-    maxElements: 2_000
-  });
+async function seedPersonalRelease(registries, preparedSource) {
+  const { sourceBuffer, structure, source } = preparedSource;
   const paragraph = structure.elements.find(
     (element) => element.kind === "paragraph" && element.text.includes("____")
   );
   assert.ok(paragraph);
-  const source = await registries.quarantine.saveAcceptedDocument(
-    {
-      spaceId: DEFAULT_SPACE_ID,
-      fileName: "Личная карточка.docx",
-      mediaType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      format: "docx",
-      decision: "accepted",
-      buffer: sourceBuffer,
-      report: toJsonValue({ decision: "accepted", gate: "P4" })
-    },
-    context("personal-source")
-  );
   const draft = registries.drafts.createOrGetDraft(
     {
       spaceId: DEFAULT_SPACE_ID,
@@ -310,13 +289,8 @@ async function seedPersonalRelease(registries) {
   );
 }
 
-async function seedRepeatRelease(registries) {
-  const sourceBuffer = repeatSource();
-  const structure = await analyzeOoxmlBuffer({
-    buffer: sourceBuffer,
-    fileName: "Реестр.docx",
-    maxElements: 2_000
-  });
+async function seedRepeatRelease(registries, preparedSource) {
+  const { sourceBuffer, structure, source } = preparedSource;
   const paragraph = structure.elements.find(
     (element) =>
       element.kind === "paragraph" &&
@@ -325,19 +299,6 @@ async function seedRepeatRelease(registries) {
       element.tableLocation.rowIndex === 1
   );
   assert.ok(paragraph?.tableLocation);
-  const source = await registries.quarantine.saveAcceptedDocument(
-    {
-      spaceId: DEFAULT_SPACE_ID,
-      fileName: "Реестр.docx",
-      mediaType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      format: "docx",
-      decision: "accepted",
-      buffer: sourceBuffer,
-      report: toJsonValue({ decision: "accepted", gate: "P4" })
-    },
-    context("repeat-source")
-  );
   const draft = registries.drafts.createOrGetDraft(
     {
       spaceId: DEFAULT_SPACE_ID,
@@ -461,13 +422,8 @@ async function seedRepeatRelease(registries) {
   );
 }
 
-async function seedXlsxRepeatRelease(registries) {
-  const sourceBuffer = repeatXlsxSource();
-  const structure = await analyzeOoxmlBuffer({
-    buffer: sourceBuffer,
-    fileName: "Реестр.xlsx",
-    maxElements: 2_000
-  });
+async function seedXlsxRepeatRelease(registries, preparedSource) {
+  const { sourceBuffer, structure, source } = preparedSource;
   const fieldCell = structure.elements.find(
     (element) => element.kind === "cell" && element.address === "B2"
   );
@@ -476,19 +432,6 @@ async function seedXlsxRepeatRelease(registries) {
   );
   assert.ok(fieldCell);
   assert.ok(formulaCell);
-  const source = await registries.quarantine.saveAcceptedDocument(
-    {
-      spaceId: DEFAULT_SPACE_ID,
-      fileName: "Реестр.xlsx",
-      mediaType:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      format: "xlsx",
-      decision: "accepted",
-      buffer: sourceBuffer,
-      report: toJsonValue({ decision: "accepted", gate: "P4" })
-    },
-    context("xlsx-repeat-source")
-  );
   const draft = registries.drafts.createOrGetDraft(
     {
       spaceId: DEFAULT_SPACE_ID,
@@ -786,6 +729,113 @@ async function apiJson(baseUrl, pathname, options = {}) {
   return { status: response.status, data: body?.data };
 }
 
+async function prepareTemplateSource(baseUrl, input) {
+  const query = new URLSearchParams({ fileName: input.fileName }).toString();
+  const requestOptions = {
+    method: "POST",
+    body: input.sourceBuffer,
+    headers: { "content-type": input.mediaType }
+  };
+  const inspection = await apiJson(
+    baseUrl,
+    `/api/v1/document-intake/inspect?${query}`,
+    requestOptions
+  );
+  assert.equal(inspection.data.decision, "accepted");
+  const analysis = await apiJson(
+    baseUrl,
+    `/api/v1/document-intake/analyze?${query}&limit=2000`,
+    requestOptions
+  );
+  const quarantined = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/quarantine?${query}`,
+    requestOptions
+  );
+  assert.equal(quarantined.status, 201);
+  assert.equal(quarantined.data.sha256, analysis.data.sourceSha256);
+  assert.equal(quarantined.data.decision, "accepted");
+  return {
+    sourceBuffer: input.sourceBuffer,
+    structure: analysis.data,
+    source: quarantined.data
+  };
+}
+
+async function importReleaseGateMembers(baseUrl) {
+  const csv = Buffer.from(
+    `Табельный номер,ФИО\n${Array.from({ length: 10 }, (_, index) => {
+      const position = String(index + 1).padStart(2, "0");
+      return `${position},Сотрудник ${position}`;
+    }).join("\n")}\n`,
+    "utf8"
+  );
+  const query = new URLSearchParams({
+    fileName: "сотрудники-release-gate.csv"
+  }).toString();
+  const previewResponse = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/data-import/preview?${query}`,
+    {
+      method: "POST",
+      body: csv,
+      headers: { "content-type": "application/octet-stream" }
+    }
+  );
+  const preview = previewResponse.data;
+  assert.equal(preview.rowCount, 10);
+  assert.deepEqual(preview.headers, ["Табельный номер", "ФИО"]);
+  const payload = {
+    fileName: preview.fileName,
+    fileFormat: preview.fileFormat,
+    sourceSha256: preview.sourceSha256,
+    previewToken: preview.previewToken,
+    identityColumn: "Табельный номер",
+    displayNameColumn: "ФИО",
+    headers: preview.headers,
+    rows: preview.rows,
+    mappings: []
+  };
+  const plan = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/data-import/plan`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+  assert.deepEqual(
+    {
+      createdCount: plan.data.createdCount,
+      updatedCount: plan.data.updatedCount,
+      failedCount: plan.data.failedCount
+    },
+    { createdCount: 10, updatedCount: 0, failedCount: 0 }
+  );
+  const beforeExecute = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/entities?entityTypeKey=person&limit=20`
+  );
+  assert.equal(beforeExecute.data.length, 0);
+  const imported = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/data-import/execute`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+  assert.equal(imported.status, 201);
+  assert.equal(imported.data.createdCount, 10);
+  const entities = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/entities?entityTypeKey=person&limit=20`
+  );
+  assert.equal(entities.data.length, 10);
+  for (const [index, entity] of entities.data.entries()) {
+    assert.equal(
+      entity.displayName,
+      `Сотрудник ${String(index + 1).padStart(2, "0")}`
+    );
+    assert.ok(entity.entityId);
+  }
+  return entities.data;
+}
+
 async function jobCompleted(baseUrl, jobId) {
   return waitFor(`document job ${jobId}`, async () => {
     const response = await apiJson(
@@ -947,33 +997,6 @@ async function main() {
     migration.stderr || migration.stdout || "migration failed"
   );
 
-  const store = new SqliteStore({ databasePath });
-  const objectStore = new ContentAddressedObjectStore(objectRoot);
-  const queue = new WorkerQueue(store);
-  const registries = {
-    queue,
-    quarantine: new DocumentQuarantineRegistry(store, objectStore),
-    drafts: new TemplateDraftRegistry(store),
-    singleVersions: new TemplateTestVersionRegistry(store, objectStore),
-    multiVersions: new MultiFieldTestVersionRegistry(store, objectStore),
-    releases: new TemplateReleaseRegistry(store, objectStore, { queue })
-  };
-  const personalRelease = await seedPersonalRelease(registries);
-  const repeatRelease = await seedRepeatRelease(registries);
-  const xlsxRepeatRelease = await seedXlsxRepeatRelease(registries);
-  const spaces = new SpaceRegistry(store);
-  const members = Array.from({ length: 10 }, (_, index) =>
-    spaces.createEntity(
-      DEFAULT_SPACE_ID,
-      {
-        entityTypeKey: "person",
-        displayName: `Сотрудник ${String(index + 1).padStart(2, "0")}`
-      },
-      context(`member-${index + 1}`)
-    )
-  );
-  store.close();
-
   const commonEnv = {
     DOCOMATOR_DATA_DIR: dataDir,
     HOME: path.join(dataDir, "runtime-home"),
@@ -1008,6 +1031,65 @@ async function main() {
     const response = await fetch(`${baseUrl}/readyz`);
     return response.ok;
   }, 15_000);
+
+  const members = await importReleaseGateMembers(baseUrl);
+  const docxMediaType =
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  const [personalPrepared, repeatPrepared, xlsxRepeatPrepared] =
+    await Promise.all([
+      prepareTemplateSource(baseUrl, {
+        fileName: "Личная карточка.docx",
+        mediaType: docxMediaType,
+        sourceBuffer: personalSource()
+      }),
+      prepareTemplateSource(baseUrl, {
+        fileName: "Реестр.docx",
+        mediaType: docxMediaType,
+        sourceBuffer: repeatSource()
+      }),
+      prepareTemplateSource(baseUrl, {
+        fileName: "Реестр.xlsx",
+        mediaType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        sourceBuffer: repeatXlsxSource()
+      })
+    ]);
+  const sourceCatalog = await apiJson(
+    baseUrl,
+    `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources?limit=10`
+  );
+  assert.equal(sourceCatalog.data.length, 3);
+  assert.deepEqual(
+    new Set(sourceCatalog.data.map((source) => source.id)),
+    new Set([
+      personalPrepared.source.id,
+      repeatPrepared.source.id,
+      xlsxRepeatPrepared.source.id
+    ])
+  );
+  const store = new SqliteStore({ databasePath });
+  let personalRelease;
+  let repeatRelease;
+  let xlsxRepeatRelease;
+  try {
+    const objectStore = new ContentAddressedObjectStore(objectRoot);
+    const queue = new WorkerQueue(store);
+    const registries = {
+      queue,
+      drafts: new TemplateDraftRegistry(store),
+      singleVersions: new TemplateTestVersionRegistry(store, objectStore),
+      multiVersions: new MultiFieldTestVersionRegistry(store, objectStore),
+      releases: new TemplateReleaseRegistry(store, objectStore, { queue })
+    };
+    personalRelease = await seedPersonalRelease(registries, personalPrepared);
+    repeatRelease = await seedRepeatRelease(registries, repeatPrepared);
+    xlsxRepeatRelease = await seedXlsxRepeatRelease(
+      registries,
+      xlsxRepeatPrepared
+    );
+  } finally {
+    store.close();
+  }
 
   const selected = {
     kind: "selected",
@@ -1336,7 +1418,7 @@ async function main() {
   await stopProcess(workerTwo);
   await stopProcess(api);
   process.stdout.write(
-    `Release gate passed: 10 personal DOCX + ZIP, repeat DOCX, repeat XLSX, recovered lease, worker restart.${keepArtifacts ? ` Artifacts: ${dataDir}` : ""}\n`
+    `Release gate passed: HTTP import/intake, 10 personal DOCX + ZIP, repeat DOCX, repeat XLSX, recovered lease, worker restart.${keepArtifacts ? ` Artifacts: ${dataDir}` : ""}\n`
   );
 }
 

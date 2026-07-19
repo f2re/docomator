@@ -1,5 +1,16 @@
 # Журнал изменений Docomator
 
+## 2026-07-19 — P4.3: HTTP-вход обязательного release-gate
+
+Добавлено:
+
+- загрузка CSV через настоящий HTTP endpoint, серверный preview, план без записи и keyless-импорт 10 сотрудников с последующим чтением записей из API;
+- отдельные HTTP inspection, structure и quarantine для личного DOCX, repeat-DOCX и repeat-XLSX вместо прямой пометки исходников как принятых;
+- проверка точного каталога трёх неизменяемых исходников до компиляции;
+- сохранение прежнего production compiler/SQLite/object store, crash-worker, восстановления аренды, ZIP, repeat-DOCX/XLSX и reverse-read в том же обязательном gate.
+
+PDF остаётся отдельной фазой LibreOffice: локальное отсутствие converter по-прежнему даёт явный `SKIPPED`, а target gate preview-комплекта запрещает такой пропуск.
+
 ## 2026-07-19 — P4.2: минимальный OOXML fixture-корпус
 
 Добавлено:
