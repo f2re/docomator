@@ -14,6 +14,7 @@ import {
 const MAXIMUM_COLLECTOR_OUTPUT_BYTES = 1024 * 1024;
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const collectorPath = path.join(scriptDirectory, "pilot-readiness.mjs");
+const OPTIONS_WITH_VALUE = new Set(["--config", "--url", "--output"]);
 
 function parseEnv(text) {
   const values = {};
@@ -36,6 +37,18 @@ function parseEnv(text) {
   return values;
 }
 
+function hasFlag(argumentsList, expected) {
+  for (let index = 0; index < argumentsList.length; index += 1) {
+    const argument = argumentsList[index];
+    if (OPTIONS_WITH_VALUE.has(argument)) {
+      index += 1;
+      continue;
+    }
+    if (expected.has(argument)) return true;
+  }
+  return false;
+}
+
 function optionValue(argumentsList, name, fallback = null) {
   let value = fallback;
   for (let index = 0; index < argumentsList.length; index += 1) {
@@ -49,7 +62,7 @@ function optionValue(argumentsList, name, fallback = null) {
   return value;
 }
 
-function collectorArguments(argumentsList, stagingDirectory) {
+function collectorArguments(argumentsList, stagingDirectory, jsonOnly) {
   const result = [];
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
@@ -63,7 +76,7 @@ function collectorArguments(argumentsList, stagingDirectory) {
     result.push(argument);
   }
   result.push("--output", stagingDirectory);
-  if (!result.includes("--json-only")) result.push("--json-only");
+  if (!jsonOnly) result.push("--json-only");
   return result;
 }
 
@@ -185,18 +198,36 @@ function exitCode(status) {
 }
 
 const originalArguments = process.argv.slice(2);
-const jsonOnly = originalArguments.includes("--json-only");
+const jsonOnly = hasFlag(originalArguments, new Set(["--json-only"]));
+const helpRequested = hasFlag(originalArguments, new Set(["-h", "--help"]));
 let stagingDirectory = null;
 let completed = false;
 
-try {
+if (helpRequested) {
+  try {
+    const collected = await runCollector(originalArguments);
+    if (collected.stdout !== "") process.stdout.write(collected.stdout);
+    if (collected.stderr !== "") process.stderr.write(collected.stderr);
+    if (collected.signal !== null) {
+      throw new Error(`Справка остановлена сигналом ${collected.signal}.`);
+    }
+    process.exitCode = collected.code;
+  } catch (error) {
+    process.stderr.write(
+      `Не удалось показать справку пилотной проверки: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`
+    );
+    process.exitCode = 2;
+  }
+} else try {
   const outputDirectory = await finalOutputDirectory(originalArguments);
   await fs.mkdir(outputDirectory, { recursive: true, mode: 0o750 });
   stagingDirectory = await fs.mkdtemp(path.join(outputDirectory, ".pilot-staging-"));
   await fs.chmod(stagingDirectory, 0o700);
 
   const collected = await runCollector(
-    collectorArguments(originalArguments, stagingDirectory)
+    collectorArguments(originalArguments, stagingDirectory, jsonOnly)
   );
   if (collected.stderr !== "") process.stderr.write(collected.stderr);
   if (collected.signal !== null) {
