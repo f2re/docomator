@@ -72,6 +72,7 @@ done
 require_command tar
 require_command sha256sum
 require_command find
+require_command realpath
 require_command sort
 require_command xargs
 
@@ -140,13 +141,20 @@ info "Installing dependencies and building with $ACTUAL_NODE_VERSION"
   fi
 )
 
+info "Проверяем воспроизводимость и безопасность учебных примеров"
+(
+  cd "$ROOT_DIR"
+  PATH="$NODE_STAGE/bin:$PATH" "$BUNDLED_NPM" run check:examples
+)
+
 BUNDLE_NAME="docomator-${VERSION}-linux-${NODE_ARCH}"
 BUNDLE_DIR="$OUTPUT_DIR/$BUNDLE_NAME"
 ARCHIVE_PATH="$OUTPUT_DIR/${BUNDLE_NAME}.tar.gz"
+ARCHIVE_CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
 
-if [[ -e "$BUNDLE_DIR" || -e "$ARCHIVE_PATH" ]]; then
+if [[ -e "$BUNDLE_DIR" || -e "$ARCHIVE_PATH" || -e "$ARCHIVE_CHECKSUM_PATH" ]]; then
   ((FORCE == 1)) || die "Bundle already exists; pass --force to replace it"
-  rm -rf "$BUNDLE_DIR" "$ARCHIVE_PATH"
+  rm -rf "$BUNDLE_DIR" "$ARCHIVE_PATH" "$ARCHIVE_CHECKSUM_PATH"
 fi
 
 mkdir -p \
@@ -158,6 +166,7 @@ mkdir -p \
   "$BUNDLE_DIR/payload/app/packages/document-intake" \
   "$BUNDLE_DIR/payload/app/packages/template-compiler" \
   "$BUNDLE_DIR/payload/app/scripts/runtime" \
+  "$BUNDLE_DIR/payload/app/examples" \
   "$BUNDLE_DIR/payload/runtime/node" \
   "$BUNDLE_DIR/payload/runtime/llama" \
   "$BUNDLE_DIR/payload/models" \
@@ -181,6 +190,24 @@ for workspace in apps/api apps/worker packages/config packages/contracts package
 done
 
 cp -a "$ROOT_DIR/apps/api/ui" "$BUNDLE_DIR/payload/app/apps/api/"
+
+EXAMPLE_FILES=(
+  "README.md"
+  "manifest.sha256"
+  "data/employees.csv"
+  "templates/personal-card.docx"
+  "templates/team-register.xlsx"
+  "expected/personal-card-filled.docx"
+  "expected/team-register-filled.xlsx"
+)
+for relative in "${EXAMPLE_FILES[@]}"; do
+  source_file="$ROOT_DIR/examples/$relative"
+  [[ -f "$source_file" && ! -L "$source_file" ]] || \
+    die "Учебный пример отсутствует или является ссылкой: $relative"
+  destination="$BUNDLE_DIR/payload/app/examples/$relative"
+  mkdir -p "$(dirname "$destination")"
+  cp "$source_file" "$destination"
+done
 
 cp -a "$NODE_STAGE/." "$BUNDLE_DIR/payload/runtime/node/"
 cp -a "$ROOT_DIR/deploy/systemd/." "$BUNDLE_DIR/payload/deploy/systemd/"
@@ -247,9 +274,11 @@ cat > "$BUNDLE_DIR/release.json" <<EOF_JSON
 }
 EOF_JSON
 
+write_symlink_manifest "$BUNDLE_DIR" "$BUNDLE_DIR/manifest.symlinks"
+
 (
   cd "$BUNDLE_DIR"
-  find . -type f ! -name manifest.sha256 -print0 \
+  find . -type f ! -path './manifest.sha256' -print0 \
     | sort -z \
     | xargs -0 sha256sum > manifest.sha256
 )
@@ -257,4 +286,9 @@ EOF_JSON
 "$BUNDLE_DIR/verify-bundle.sh" "$BUNDLE_DIR"
 
 tar -czf "$ARCHIVE_PATH" -C "$OUTPUT_DIR" "$BUNDLE_NAME"
+(
+  cd "$OUTPUT_DIR"
+  sha256sum "$(basename "$ARCHIVE_PATH")" > "$(basename "$ARCHIVE_CHECKSUM_PATH")"
+)
 info "Автономный комплект создан: $ARCHIVE_PATH"
+info "Контрольная сумма архива создана: $ARCHIVE_CHECKSUM_PATH"

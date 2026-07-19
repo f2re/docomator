@@ -21,6 +21,7 @@ docomator-<version>-linux-<arch>/
 ├── VERSION
 ├── release.json
 ├── manifest.sha256
+├── manifest.symlinks
 ├── install.sh
 ├── update.sh
 ├── verify-bundle.sh
@@ -32,7 +33,13 @@ docomator-<version>-linux-<arch>/
     │   ├── packages/*/dist
     │   ├── node_modules
     │   ├── migrations
-    │   └── scripts/runtime
+    │   ├── scripts/runtime
+    │   └── examples/
+    │       ├── README.md
+    │       ├── manifest.sha256
+    │       ├── data
+    │       ├── templates
+    │       └── expected
     ├── runtime/
     │   ├── node/
     │   └── llama/llama-server
@@ -42,7 +49,7 @@ docomator-<version>-linux-<arch>/
     └── os-packages/*.deb
 ```
 
-`manifest.sha256` покрывает все файлы, кроме самого manifest.
+`manifest.sha256` покрывает все обычные файлы, кроме самого корневого manifest, включая вложенный manifest учебных примеров и manifest символических ссылок. `manifest.symlinks` фиксирует точный относительный target каждой разрешённой ссылки; ссылка наружу, добавленный файл или объект неподдерживаемого типа блокируют проверку.
 
 ## Помощник первого запуска
 
@@ -53,7 +60,7 @@ docomator-<version>-linux-<arch>/
 → поле → пробное заполнение → PDF → активация
 ```
 
-Помощник не обращается в Интернет и не изменяет бизнес-данные. Повторный запуск:
+Помощник также показывает путь `/opt/docomator/current/app/examples` с вымышленными данными, безопасными шаблонами и заполненными вариантами. Он не обращается в Интернет и не изменяет бизнес-данные. Повторный запуск:
 
 ```bash
 sudo /opt/docomator/current/first-run.sh \
@@ -102,11 +109,11 @@ Script:
 
 1. загружает официальный Node.js, указанный в `.node-version`, либо использует переданный runtime;
 2. проверяет checksum Node archive;
-3. выполняет `npm ci` и `npm run check`;
+3. выполняет `npm ci`, `npm run check` и отдельную обязательную проверку примеров даже при `--skip-tests`;
 4. собирает production workspaces;
 5. выполняет `npm ci --omit=dev` в payload;
-6. добавляет `llama-server`, модель и optional `.deb`;
-7. создаёт release metadata и SHA-256 manifest;
+6. добавляет точный проверенный список учебных примеров, `llama-server`, модель и optional `.deb`;
+7. создаёт release metadata, SHA-256 manifest и manifest символических ссылок;
 8. повторно проверяет bundle;
 9. создаёт `.tar.gz`.
 
@@ -150,36 +157,70 @@ bundle tar.gz
 акт антивирусной/контрольной проверки
 ```
 
-После извлечения:
+`prepare-bundle.sh` создаёт файл `<archive>.sha256`, но соседний checksum сам по себе не является источником доверия. До любой команды `sudo` оператор обязан получить ожидаемый SHA-256 из проверенного подписанного release manifest организации по независимому каналу. Несовпадение останавливает установку.
+
+До привилегированной распаковки выполните preflight обычным пользователем в новом временном каталоге. GNU tar не получает root-права, а внутренний verifier проверяет точный inventory, типы объектов, checksum и цели ссылок. Только затем те же байты копируются в новый root-owned каталог, их зафиксированный SHA-256 проверяется повторно и распаковывается защищённая копия. Вся процедура находится в одном fail-fast subshell: ошибка любого шага делает последующие привилегированные команды недостижимыми. Уникальный каталог нельзя переиспользовать между попытками.
 
 ```bash
-./verify-bundle.sh
+(
+  set -Eeuo pipefail
+  BUNDLE_NAME='docomator-<version>-linux-<arch>'
+  [[ "$BUNDLE_NAME" =~ ^docomator-[A-Za-z0-9._-]+-linux-(x64|arm64)$ ]] || exit 2
+  ARCHIVE="${BUNDLE_NAME}.tar.gz"
+  EXPECTED_SHA256='<SHA-256 из проверенного подписанного release manifest>'
+  [[ "$EXPECTED_SHA256" =~ ^[a-f0-9]{64}$ ]] || exit 2
+  PREFLIGHT_DIR="$(mktemp -d)"
+  cleanup() { rm -rf "$PREFLIGHT_DIR"; }
+  trap cleanup EXIT
+
+  printf '%s  %s\n' "$EXPECTED_SHA256" "$ARCHIVE" \
+    | sha256sum --check --strict -
+  tar --no-same-owner --no-same-permissions -xzf "$ARCHIVE" \
+    -C "$PREFLIGHT_DIR"
+  "$PREFLIGHT_DIR/$BUNDLE_NAME/verify-bundle.sh" \
+    "$PREFLIGHT_DIR/$BUNDLE_NAME"
+
+  STAGE="$(sudo mktemp -d /var/tmp/docomator-install.XXXXXX)"
+  sudo install -o root -g root -m 0600 \
+    "$ARCHIVE" "$STAGE/bundle.tar.gz"
+  printf '%s  %s\n' "$EXPECTED_SHA256" "$STAGE/bundle.tar.gz" \
+    | sudo sha256sum --check --strict -
+  sudo tar --no-same-owner --no-same-permissions \
+    -xzf "$STAGE/bundle.tar.gz" -C "$STAGE"
+  BUNDLE_ROOT="$(sudo realpath "$STAGE/$BUNDLE_NAME")"
+  [[ "$BUNDLE_ROOT" == "$STAGE/$BUNDLE_NAME" ]] || exit 2
+  sudo find "$BUNDLE_ROOT" ! -type l -exec chmod go-w {} +
+  sudo "$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
+  printf 'Проверенный каталог комплекта: %s\n' "$BUNDLE_ROOT"
+)
 ```
+
+Installer повторно проверяет владельца и режим каждого объекта, всю цепочку родительских каталогов и внутренние manifests.
 
 ## 6. Новая установка
 
 ```bash
-tar -xzf docomator-0.1.0-alpha.0-linux-x64.tar.gz
-cd docomator-0.1.0-alpha.0-linux-x64
-sudo ./install.sh --install-os-packages
+set -Eeuo pipefail
+BUNDLE_ROOT='<проверенный каталог из успешного сообщения подготовки>'
+sudo "$BUNDLE_ROOT/install.sh" --install-os-packages
 ```
 
 Без установки `.deb`, если prerequisites уже установлены:
 
 ```bash
-sudo ./install.sh
+sudo "$BUNDLE_ROOT/install.sh"
 ```
 
 Установить unit-файлы и выполнить миграции, но не запускать services:
 
 ```bash
-sudo ./install.sh --no-start
+sudo "$BUNDLE_ROOT/install.sh" --no-start
 ```
 
 Для проверочного chroot/container-сценария без установки unit-файлов:
 
 ```bash
-sudo ./install.sh --no-systemd
+sudo "$BUNDLE_ROOT/install.sh" --no-systemd
 ```
 
 `--no-systemd` предназначен для smoke-теста и нестандартной интеграции с внешним service manager. В штатной Debian/Astra Linux установке используется systemd.
@@ -187,7 +228,7 @@ sudo ./install.sh --no-systemd
 Custom paths:
 
 ```bash
-sudo ./install.sh \
+sudo "$BUNDLE_ROOT/install.sh" \
   --install-root /opt/docomator \
   --data-dir /srv/docomator \
   --config-dir /etc/docomator
@@ -215,10 +256,39 @@ sudo ./install.sh \
 
 ## 8. Обновление
 
+Для нового архива обязательны та же проверка SHA-256 из подписанного manifest, непривилегированный preflight и повторная проверка root-owned копии. Не используйте каталог предыдущей установки:
+
 ```bash
-tar -xzf docomator-NEW-linux-x64.tar.gz
-cd docomator-NEW-linux-x64
-sudo ./update.sh --install-os-packages
+(
+  set -Eeuo pipefail
+  UPDATE_BUNDLE_NAME='docomator-NEW-linux-x64'
+  [[ "$UPDATE_BUNDLE_NAME" =~ ^docomator-[A-Za-z0-9._-]+-linux-(x64|arm64)$ ]] || exit 2
+  UPDATE_ARCHIVE="${UPDATE_BUNDLE_NAME}.tar.gz"
+  UPDATE_SHA256='<SHA-256 из проверенного подписанного release manifest>'
+  [[ "$UPDATE_SHA256" =~ ^[a-f0-9]{64}$ ]] || exit 2
+  UPDATE_PREFLIGHT="$(mktemp -d)"
+  cleanup() { rm -rf "$UPDATE_PREFLIGHT"; }
+  trap cleanup EXIT
+
+  printf '%s  %s\n' "$UPDATE_SHA256" "$UPDATE_ARCHIVE" \
+    | sha256sum --check --strict -
+  tar --no-same-owner --no-same-permissions -xzf "$UPDATE_ARCHIVE" \
+    -C "$UPDATE_PREFLIGHT"
+  "$UPDATE_PREFLIGHT/$UPDATE_BUNDLE_NAME/verify-bundle.sh" \
+    "$UPDATE_PREFLIGHT/$UPDATE_BUNDLE_NAME"
+
+  UPDATE_STAGE="$(sudo mktemp -d /var/tmp/docomator-update.XXXXXX)"
+  sudo install -o root -g root -m 0600 \
+    "$UPDATE_ARCHIVE" "$UPDATE_STAGE/bundle.tar.gz"
+  printf '%s  %s\n' "$UPDATE_SHA256" "$UPDATE_STAGE/bundle.tar.gz" \
+    | sudo sha256sum --check --strict -
+  sudo tar --no-same-owner --no-same-permissions \
+    -xzf "$UPDATE_STAGE/bundle.tar.gz" -C "$UPDATE_STAGE"
+  UPDATE_BUNDLE_ROOT="$(sudo realpath "$UPDATE_STAGE/$UPDATE_BUNDLE_NAME")"
+  [[ "$UPDATE_BUNDLE_ROOT" == "$UPDATE_STAGE/$UPDATE_BUNDLE_NAME" ]] || exit 2
+  sudo find "$UPDATE_BUNDLE_ROOT" ! -type l -exec chmod go-w {} +
+  sudo "$UPDATE_BUNDLE_ROOT/update.sh" --install-os-packages
+)
 ```
 
 Update:
@@ -310,10 +380,12 @@ DOCOMATOR_SMTP_SECURE=false
 
 ```bash
 sudo scripts/offline/smoke-test.sh \
-  offline-bundles/docomator-<version>-linux-<arch>
+  "$BUNDLE_ROOT"
 ```
 
-Тест выполняет установку и обновление во временные каталоги, запускает встроенную службу API, проверяет `/readyz`, схему БД, интерфейс предварительного просмотра/активации, настройки LibreOffice, символическую ссылку и резервную копию перед обновлением. Он не изменяет systemd и не запускает реальное преобразование Office-файла.
+Тест выполняет установку и обновление во временные каталоги, запускает встроенную службу API, проверяет `/readyz`, схему БД, интерфейс предварительного просмотра/активации, настройки LibreOffice, символическую ссылку, неизменяемые учебные примеры и резервную копию перед обновлением. Он не изменяет systemd и не запускает реальное преобразование Office-файла.
+
+Целевые сочетания ОС, glibc, Node.js и LibreOffice фиксируются в [матрице совместимости](SUPPORT_MATRIX.md). Пустая строка или статус `не проверено` не считаются заявлением о поддержке.
 
 Проверка штатной установки:
 

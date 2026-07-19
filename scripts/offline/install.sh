@@ -62,15 +62,17 @@ require_command cp
 require_command mv
 require_command ln
 require_command cmp
+require_command stat
 
 BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
+require_trusted_bundle "$SCRIPT_DIR"
+[[ "$BUNDLE_ROOT" == "$SCRIPT_DIR" ]] || require_trusted_bundle "$BUNDLE_ROOT"
+"$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
+VERSION="$(<"$BUNDLE_ROOT/VERSION")"
 INSTALL_ROOT="$(mkdir -p "$INSTALL_ROOT" && absolute_path "$INSTALL_ROOT")"
 mkdir -p "$DATA_DIR" "$CONFIG_DIR"
 DATA_DIR="$(absolute_path "$DATA_DIR")"
 CONFIG_DIR="$(absolute_path "$CONFIG_DIR")"
-
-"$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
-VERSION="$(<"$BUNDLE_ROOT/VERSION")"
 RELEASES_DIR="$INSTALL_ROOT/releases"
 RELEASE_DIR="$RELEASES_DIR/$VERSION"
 CURRENT_LINK="$INSTALL_ROOT/current"
@@ -88,7 +90,7 @@ if ((INSTALL_OS_PACKAGES == 1)); then
   info "Устанавливаем пакеты ОС из комплекта: ${#debs[@]}"
   if ! dpkg -i "${debs[@]}"; then
     require_command apt-get
-    APT_CACHE="$(mktemp -d "${TMPDIR:-/tmp}/docomator-apt.XXXXXX")"
+    APT_CACHE="$(mktemp -d "/tmp/docomator-apt.XXXXXX")"
     trap 'rm -rf "${APT_CACHE:-}"' EXIT
     mkdir -p "$APT_CACHE/partial"
     cp "${debs[@]}" "$APT_CACHE/"

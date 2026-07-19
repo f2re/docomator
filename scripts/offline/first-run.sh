@@ -134,11 +134,23 @@ if ((RUN_CHECK == 1)); then
   printf '\n'
 fi
 
+EXAMPLES_DIR=""
+for candidate in \
+  "$SCRIPT_DIR/app/examples" \
+  "$SCRIPT_DIR/payload/app/examples" \
+  /opt/docomator/current/app/examples; do
+  [[ -f "$candidate/README.md" ]] && EXAMPLES_DIR="$candidate" && break
+done
+[[ -n "$EXAMPLES_DIR" ]] || EXAMPLES_DIR="примеры не найдены в текущем комплекте"
+
 cat <<EOF
 🧩 Docomator установлен
 
 Откройте общий корпоративный интерфейс:
   $UI_URL/
+
+Учебные данные, шаблоны и заполненные варианты:
+  $EXAMPLES_DIR
 
 Модель работы:
   • авторизация и персональные кабинеты не требуются;

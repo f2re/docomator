@@ -87,7 +87,7 @@ LibreOffice проверяется отдельной командой `npm run 
 
 ### P6. Release candidate
 
-Добавить настоящие примеры CSV/DOCX/XLSX и включить их в offline bundle, зафиксировать матрицу Debian/Astra/LibreOffice, выполнить release-gate и подготовить честные release notes. Версия `0.1.0-rc.1` допустима только после P1—P5; обычная `0.1.0` — только после фактических актов Debian/Astra и успешного восстановления копии.
+Безопасные воспроизводимые учебные CSV/DOCX/XLSX уже проходят production intake/structure, compile/render/reverse-read, имеют SHA-256 manifest и включаются в offline bundle точным списком. [Кандидатные строки матрицы](SUPPORT_MATRIX.md) зафиксированы со статусом `не проверено`. Остаются настоящие Office-сохранённые примеры с происхождением, фактические акты Debian/Astra/LibreOffice, полный target release-gate и честные release notes. Версия `0.1.0-rc.1` допустима только после P1—P5; обычная `0.1.0` — только после фактических актов Debian/Astra и успешного восстановления копии.
 
 ## Приращение R — пилотная эксплуатация
 

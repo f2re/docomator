@@ -23,6 +23,8 @@ fi
 require_root
 require_command curl
 require_command getent
+require_command sha256sum
+require_command stat
 
 BUNDLE_ROOT="$(absolute_path "$1")"
 [[ -x "$BUNDLE_ROOT/install.sh" ]] || die "В комплекте не найден исполняемый install.sh: $BUNDLE_ROOT"
@@ -32,7 +34,7 @@ if ! id nobody >/dev/null 2>&1; then
   die "Для проверки требуется стандартная учётная запись nobody"
 fi
 TEST_GROUP="$(id -gn nobody)"
-TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/docomator-install-smoke.XXXXXX")"
+TEST_ROOT="$(mktemp -d "/tmp/docomator-install-smoke.XXXXXX")"
 INSTALL_ROOT="$TEST_ROOT/opt/docomator"
 DATA_DIR="$TEST_ROOT/var/lib/docomator"
 CONFIG_DIR="$TEST_ROOT/etc/docomator"
@@ -71,6 +73,23 @@ grep -F 'DOCOMATOR_BACKUP_RETENTION=7' "$CONFIG_DIR/docomator.env" >/dev/null
   die "Не установлен шаблон службы резервирования"
 [[ -f "$INSTALL_ROOT/current/deploy/systemd/docomator-backup.timer.in" ]] || \
   die "Не установлен шаблон таймера резервирования"
+EXAMPLES_DIR="$INSTALL_ROOT/current/app/examples"
+[[ -f "$EXAMPLES_DIR/manifest.sha256" ]] || \
+  die "Не установлены проверяемые учебные примеры"
+(
+  cd "$EXAMPLES_DIR"
+  sha256sum --check --strict --quiet manifest.sha256
+)
+if find "$EXAMPLES_DIR" -type l -print -quit | grep -q .; then
+  die "Установленные учебные примеры содержат символическую ссылку"
+fi
+if find "$EXAMPLES_DIR" -type f -perm /022 -print -quit | grep -q .; then
+  die "Установленные учебные примеры доступны для записи группе или остальным"
+fi
+while IFS= read -r -d '' example; do
+  [[ "$(stat -c '%U:%G' "$example")" == "root:root" ]] || \
+    die "Учебный пример должен принадлежать root:root: $example"
+done < <(find "$EXAMPLES_DIR" -type f -print0)
 
 set -a
 # Созданный файл содержит только простые присваивания КЛЮЧ=ЗНАЧЕНИЕ.
