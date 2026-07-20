@@ -1,0 +1,56 @@
+name: Replace Astra marker
+
+on:
+  push:
+    paths:
+      - .github/workflows/replace-astra-marker.yml
+
+permissions:
+  contents: write
+
+jobs:
+  replace:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Replace marker everywhere
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -d '' files < <(git grep -Ilz '🟨 Astra Linux' -- . || true)
+          ((${#files[@]} > 0)) || {
+            echo 'Жёлтый маркер Astra Linux не найден.' >&2
+            exit 1
+          }
+          python3 - "${files[@]}" <<'PY'
+          from pathlib import Path
+          import sys
+
+          old = "🟨 Astra Linux"
+          new = "🟥 Astra Linux"
+          for raw in sys.argv[1:]:
+              path = Path(raw)
+              source = path.read_text(encoding="utf-8")
+              if old not in source:
+                  raise SystemExit(f"Ожидаемый маркер не найден: {path}")
+              path.write_text(source.replace(old, new), encoding="utf-8")
+          PY
+          rm -f .github/workflows/replace-astra-marker.yml
+          ! git grep -n '🟨 Astra Linux' -- .
+          git grep -n '🟥 Astra Linux' -- .
+
+      - name: Commit directly to main
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Использовать красный маркер Astra Linux'
+          git push origin HEAD:main
