@@ -14,13 +14,15 @@ npm ci
 npm run check
 ```
 
+`npm run check` включает обязательные сборку, тесты, release-gates и статические проверки, но не запускает браузерный E2E. Ручной запуск API/worker и проверка `/readyz` описаны в [основном README](README.md#ручная-проверка-с-реальным-api-и-sqlite), а команды Playwright — в [описании E2E-контура](tests/e2e/README.md).
+
 Для migration:
 
 ```bash
 DOCOMATOR_DATA_DIR="$PWD/.tmp/test-data" npm run migrate
 ```
 
-Для offline scripts:
+Для автономных shell-скриптов:
 
 ```bash
 bash scripts/ci/validate-shell.sh

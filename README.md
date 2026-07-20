@@ -252,43 +252,79 @@ flowchart TB
 
 Проект остаётся модульным монолитом. Redis, RabbitMQ, Kafka, Kubernetes и отдельная векторная база не требуются.
 
-## 🚀 Запуск для разработки
+## 🚀 Локальный запуск и тестирование интерфейса
+
+Для исходного дерева нужны Node.js не ниже `24.18.0` и npm не ниже `11`. Проверьте среду до установки зависимостей:
 
 ```bash
+node --version
+npm --version
 npm ci
-npm run check
-
-# Отдельный запуск обязательного процессного gate
-npm run test:release-gate
-npm run test:release-gate:libreoffice
-
-# Создать или проверить акт ручной UX-приёмки
-npm run acceptance:ux -- init ux-acceptance.json
-npm run acceptance:ux -- validate ux-acceptance.json
-
-export DOCOMATOR_DATA_DIR="$PWD/.tmp/data"
-npm run migrate
 npm run build
-npm run start:api
 ```
 
-Во втором терминале:
+`start:api` и `start:worker` запускают собранные файлы из `dist`, поэтому после первого клонирования или изменения TypeScript нужен `npm run build`.
+
+### Ручная проверка с реальным API и SQLite
+
+В первом терминале примените миграции и запустите API:
 
 ```bash
-export DOCOMATOR_DATA_DIR="$PWD/.tmp/data"
-npm run start:worker
+DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run migrate
+DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run start:api
 ```
 
-Интерфейс: `http://127.0.0.1:8080/`.
+Во втором терминале запустите фоновый обработчик с тем же каталогом данных:
 
-Быстрая браузерная проверка исходного дерева после однократной установки Chromium на подключённом стенде:
+```bash
+DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run start:worker
+```
+
+В третьем терминале проверьте процесс и готовность схемы, затем откройте `http://127.0.0.1:8080/`:
+
+```bash
+curl --fail --silent --show-error http://127.0.0.1:8080/healthz
+curl --fail --silent --show-error http://127.0.0.1:8080/readyz
+```
+
+Оба запроса должны вернуть HTTP 200, а `/readyz` — состояние `"status":"ok"`. API достаточно для загрузки оболочки и обычных операций с данными; worker выполняет PDF-предпросмотр, формирование, расписания и доставку. Остановите оба процесса сочетанием `Ctrl+C`; данные в `.tmp/data` сохранятся.
+
+PDF-предпросмотр включён по умолчанию и ожидает LibreOffice по пути `/usr/bin/libreoffice`. Если executable расположен иначе, перед запуском API и worker задайте `DOCOMATOR_LIBREOFFICE_BIN`. Без LibreOffice интерфейс и операции с данными доступны, но задания предпросмотра завершатся явной ошибкой. Локальная модель по умолчанию выключена и для детерминированного пути не нужна.
+
+### Если оболочка показывает код 503
+
+Загруженная страница означает, что процесс API уже работает. Код 503 от `/readyz` означает, что сервер не может использовать `DOCOMATOR_DATA_DIR` или база не содержит все текущие миграции. Посмотрите поля `checks.dataDirectory` и `checks.database`:
+
+```bash
+curl --include http://127.0.0.1:8080/readyz
+```
+
+Если `database` имеет значение `error`, остановите API и worker, примените миграции и снова запустите оба процесса с одним и тем же `DOCOMATOR_DATA_DIR`:
+
+```bash
+DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run migrate
+```
+
+Если `dataDirectory` имеет значение `error`, проверьте путь и права записи. Если `apps/api/dist/server.js` отсутствует, выполните `npm run build`. Дополнительная диагностика описана в [руководстве по эксплуатации](docs/OPERATIONS.md).
+
+### Автоматическая проверка клиентской оболочки
+
+Playwright не запускает сервер автоматически. Оставьте API из ручного сценария работающим; worker для этой проверки не нужен. На подключённом стенде один раз установите Chromium, затем запустите сценарии:
 
 ```bash
 npx playwright install chromium
 DOCOMATOR_E2E_BASE_URL=http://127.0.0.1:8080 npm run test:e2e
 ```
 
-Эта команда используется только для разработки; её отчёты помечены `development` и не являются актом P5. Playwright не входит в runtime-зависимости автономной установки. Канонический network-free P5-прогон выполняется отдельным `ux-acceptance-gate.sh` из bundle с `--with-ux-acceptance`.
+Эти тесты проверяют клиентскую оболочку, адаптивность и доступность: внутри браузера они подменяют `/readyz` и `/api/v1/**`, поэтому не проверяют реальную SQLite, миграции или worker. Полная инструкция и дополнительные команды находятся в [описании локального E2E-контура](tests/e2e/README.md).
+
+### Полная проверка перед PR
+
+```bash
+npm run check
+```
+
+Команда уже включает сборку, модульные и интеграционные тесты, core release-gate, LibreOffice gate, проверки shell-скриптов, документации, UI и русского языка. Браузерные E2E запускаются отдельно. Формальная P5-приёмка выполняется только из проверенного offline bundle по [протоколу UX-приёмки](docs/UX_ACCEPTANCE_PROTOCOL.md); локальные Playwright-отчёты помечены `development` и актом P5 не являются.
 
 ## 📦 Автономная поставка
 

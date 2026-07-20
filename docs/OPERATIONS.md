@@ -1,6 +1,6 @@
 # Эксплуатация Docomator
 
-## Health endpoints
+## Проверка процесса и готовности
 
 | Endpoint | Назначение |
 |---|---|
@@ -8,9 +8,9 @@
 | `/readyz` | data directory и migrated SQLite database доступны |
 | `/api/v1/system/info` | версия, runtime и включённые базовые features |
 
-`healthz` не означает готовность dependent services. Для load balancer используется `readyz`.
+`healthz` не означает готовность зависимых компонентов. Для балансировщика нагрузки используется `readyz`.
 
-## Services
+## Службы
 
 ```bash
 systemctl status docomator-api
@@ -28,7 +28,7 @@ docomator-worker
 
 API не должен падать при недоступной LLM; соответствующие операции переходят в fallback/review.
 
-## Logs
+## Журналы
 
 ```bash
 journalctl -u docomator-api -f
@@ -38,7 +38,7 @@ journalctl -u docomator-llm -f
 
 Логи должны быть JSON/структурированными, иметь correlation ID и не содержать secrets/restricted values.
 
-## Backup
+## Резервное копирование
 
 Online backup не требует остановки API/worker:
 
@@ -59,7 +59,7 @@ sudo /opt/docomator/current/backup.sh
 
 Подробный контракт: [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
 
-## Restore
+## Восстановление
 
 ```bash
 sudo /opt/docomator/current/restore.sh \
@@ -68,7 +68,7 @@ sudo /opt/docomator/current/restore.sh \
 
 Restore создаёт отдельный pre-restore backup, останавливает services, атомарно заменяет БД/object storage/config, применяет migration текущего release и проверяет readiness. При ошибке migration или readiness прежнее состояние восстанавливается автоматически.
 
-## Restore drill
+## Проверка восстановления
 
 Не реже принятого эксплуатационного периода:
 
@@ -81,7 +81,7 @@ Restore создаёт отдельный pre-restore backup, останавли
 7. выполнить dry-run automation без доставки после появления Automation Engine;
 8. зафиксировать фактические RPO/RTO и найденные отклонения.
 
-## Capacity
+## Ресурсы и ёмкость
 
 Контролировать:
 
@@ -102,7 +102,28 @@ Restore создаёт отдельный pre-restore backup, останавли
 - после update проверять `/readyz`, migration history и sample render;
 - хранить предыдущую release до завершения acceptance window.
 
-## Incident: LLM unavailable
+## Инцидент: `/readyz` возвращает 503
+
+Ответ 503 означает, что процесс API запущен, но каталог данных или схема SQLite не готовы. Сначала прочитайте точное состояние:
+
+```bash
+curl --include http://127.0.0.1:8080/readyz
+```
+
+- `checks.dataDirectory: "error"` — проверить значение `DOCOMATOR_DATA_DIR`, существование каталога и права службы;
+- `checks.database: "error"` — остановить API и worker, применить все миграции и запустить службы снова с тем же `DOCOMATOR_DATA_DIR`;
+- ошибка только в фоновых операциях при успешном `/readyz` — проверить worker и совпадение его `DOCOMATOR_DATA_DIR` с API.
+
+Для локального исходного дерева:
+
+```bash
+DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run migrate
+DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run start:api
+```
+
+Для установленной системы используйте конфигурацию `/etc/docomator/docomator.env`, штатную процедуру обновления/миграции и журналы systemd. Не создавайте новую пустую базу вместо восстановления рабочего каталога.
+
+## Инцидент: локальная модель недоступна
 
 1. проверить `docomator-llm` и model path;
 2. проверить CPU/RAM и journal;
@@ -110,13 +131,13 @@ Restore создаёт отдельный pre-restore backup, останавли
 4. manual form workflows должны продолжать работу;
 5. LLM-dependent jobs переводятся в retry/review согласно policy.
 
-## Incident: network share unavailable
+## Инцидент: сетевая папка недоступна
 
 1. не создавать вручную обычную директорию на месте mount;
 2. проверить `.mount/.automount`, network и sentinel;
 3. после восстановления повторить только failed delivery;
 4. не перегенерировать document без изменения данных.
 
-## Incident: SMTP result unknown
+## Инцидент: результат SMTP неизвестен
 
 Не выполнять бесконтрольный автоматический retry: сообщение могло быть принято до разрыва соединения. Проверить relay logs, Message-ID и применить configured `unknown` policy.
