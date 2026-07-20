@@ -69,7 +69,7 @@ test("full bundle commands select exact target profiles", async () => {
 
   assert.match(readme, /### 🟦 Debian/u);
   assert.match(readme, /npm run bundle:offline:debian/u);
-  assert.match(readme, /### 🟨 Astra Linux/u);
+  assert.match(readme, /### 🟥 Astra Linux/u);
   assert.match(readme, /npm run bundle:offline:astra/u);
   assert.match(readme, /Debian и Astra Linux собираются как разные target-профили/u);
 });

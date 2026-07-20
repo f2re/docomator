@@ -317,7 +317,7 @@ offline-bundles/targets/debian-<VERSION_ID>-<deb-arch>/
     └── docomator-<version>-linux-<arch>.tar.gz.sha256
 ```
 
-### 🟨 Astra Linux
+### 🟥 Astra Linux
 
 > [!WARNING]
 > На Astra Linux пакет и executable Chromium зависят от редакции, update и подключённых репозиториев. Их нельзя угадывать или наследовать из Debian-профиля: сначала подтвердите фактические значения на той же эталонной VM.
