@@ -6,6 +6,7 @@ import process from "node:process";
 import { promisify } from "node:util";
 
 import { verifyBackup } from "./backup-lib.mjs";
+import { evaluateControlBackup } from "./pilot-backup-evidence.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -330,24 +331,15 @@ async function latestVerifiedBackup(dataDirectory) {
 async function backupChecks(config, options, dataDirectory) {
   const backupEnabled = booleanValue(config.DOCOMATOR_BACKUP_ENABLED, true);
   const checks = [];
+  let controlStartedAt = null;
+  let controlCommand = null;
+
   if (options.runBackup) {
-    const started = await runCommand(
+    controlStartedAt = new Date().toISOString();
+    controlCommand = await runCommand(
       "systemctl",
       ["start", "docomator-backup.service"],
       6 * 60 * 60 * 1000
-    );
-    checks.push(
-      check({
-        id: "backup_run",
-        title: "Контрольный запуск резервирования",
-        state: started.ok ? "ok" : "error",
-        required: true,
-        summary: started.ok
-          ? "Контрольная резервная копия создана"
-          : "Контрольное резервирование завершилось ошибкой",
-        detail: started.stdout || started.stderr || started.error,
-        remediation: "Проверьте journalctl -u docomator-backup.service."
-      })
     );
   }
 
@@ -366,6 +358,33 @@ async function backupChecks(config, options, dataDirectory) {
   }
 
   const latest = await latestVerifiedBackup(dataDirectory);
+
+  if (options.runBackup) {
+    const controlEvidence = evaluateControlBackup({
+      commandOk: controlCommand?.ok === true,
+      commandDetail:
+        controlCommand?.stdout ||
+        controlCommand?.stderr ||
+        controlCommand?.error ||
+        null,
+      startedAt: controlStartedAt,
+      backup: latest.ok ? latest.backup : null,
+      expectedReleaseVersion: config.DOCOMATOR_VERSION || null
+    });
+    checks.push(
+      check({
+        id: "backup_run",
+        title: "Контрольный запуск резервирования",
+        state: controlEvidence.ok ? "ok" : "error",
+        required: true,
+        summary: controlEvidence.summary,
+        detail: controlEvidence.detail,
+        remediation: controlEvidence.remediation,
+        data: controlEvidence.data
+      })
+    );
+  }
+
   const ageHours = latest.ok
     ? (Date.now() - Date.parse(latest.backup.createdAt)) / 3_600_000
     : Number.POSITIVE_INFINITY;
