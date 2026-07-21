@@ -1,0 +1,166 @@
+name: Финализировать проверку контрольной резервной копии
+
+on:
+  push:
+    paths:
+      - .github/workflows/finalize-backup-evidence.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Получить main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Настроить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Подключить fail-closed проверку
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          pilot = Path('scripts/runtime/pilot-readiness.mjs')
+          source = pilot.read_text(encoding='utf-8')
+          import_line = 'import { verifyBackup } from "./backup-lib.mjs";\n'
+          replacement = import_line + 'import { evaluateControlBackup } from "./pilot-backup-evidence.mjs";\n'
+          if replacement not in source:
+              if import_line not in source:
+                  raise SystemExit('Не найден импорт backup-lib в pilot-readiness.mjs')
+              source = source.replace(import_line, replacement, 1)
+
+          start = source.index('async function backupChecks(config, options, dataDirectory) {')
+          end = source.index('\nfunction importServerChecks', start)
+          new_function = '''async function backupChecks(config, options, dataDirectory) {
+            const backupEnabled = booleanValue(config.DOCOMATOR_BACKUP_ENABLED, true);
+            const checks = [];
+            let controlStartedAt = null;
+            let controlCommand = null;
+
+            if (options.runBackup) {
+              controlStartedAt = new Date().toISOString();
+              controlCommand = await runCommand(
+                "systemctl",
+                ["start", "docomator-backup.service"],
+                6 * 60 * 60 * 1000
+              );
+            }
+
+            if (!backupEnabled && !options.runBackup) {
+              checks.push(
+                check({
+                  id: "backup_verified",
+                  title: "Восстановимая резервная копия",
+                  state: "disabled",
+                  required: false,
+                  summary: "Автоматическое резервирование отключено",
+                  remediation: "Включите резервирование перед рабочей эксплуатацией."
+                })
+              );
+              return checks;
+            }
+
+            const latest = await latestVerifiedBackup(dataDirectory);
+
+            if (options.runBackup) {
+              const controlEvidence = evaluateControlBackup({
+                commandOk: controlCommand?.ok === true,
+                commandDetail:
+                  controlCommand?.stdout ||
+                  controlCommand?.stderr ||
+                  controlCommand?.error ||
+                  null,
+                startedAt: controlStartedAt,
+                backup: latest.ok ? latest.backup : null,
+                expectedReleaseVersion: config.DOCOMATOR_VERSION || null
+              });
+              checks.push(
+                check({
+                  id: "backup_run",
+                  title: "Контрольный запуск резервирования",
+                  state: controlEvidence.ok ? "ok" : "error",
+                  required: true,
+                  summary: controlEvidence.summary,
+                  detail: controlEvidence.detail,
+                  remediation: controlEvidence.remediation,
+                  data: controlEvidence.data
+                })
+              );
+            }
+
+            const ageHours = latest.ok
+              ? (Date.now() - Date.parse(latest.backup.createdAt)) / 3_600_000
+              : Number.POSITIVE_INFINITY;
+            const fresh = latest.ok && Number.isFinite(ageHours) && ageHours <= 48;
+            checks.push(
+              check({
+                id: "backup_verified",
+                title: "Восстановимая резервная копия",
+                state: !latest.ok ? "error" : fresh ? "ok" : "warning",
+                required: backupEnabled,
+                summary: !latest.ok
+                  ? "Проверенная копия не найдена"
+                  : fresh
+                    ? "Недавняя копия полностью проверена"
+                    : "Проверенная копия старше 48 часов",
+                detail: latest.ok
+                  ? `${latest.backup.createdAt}; ${latest.backup.directory}`
+                  : latest.error,
+                remediation: latest.ok && fresh
+                  ? "На отдельном стенде выполните пробное восстановление этой копии."
+                  : "Запустите systemctl start docomator-backup.service и повторите проверку.",
+                data: latest.backup ?? {}
+              })
+            );
+            return checks;
+          }
+          '''
+          source = source[:start] + new_function + source[end:]
+          pilot.write_text(source, encoding='utf-8')
+
+          package = Path('package.json')
+          package_source = package.read_text(encoding='utf-8')
+          old = 'node --check scripts/runtime/automatic-backup.mjs && node --check scripts/runtime/pilot-check.mjs'
+          new = 'node --check scripts/runtime/automatic-backup.mjs && node --check scripts/runtime/pilot-backup-evidence.mjs && node --check scripts/runtime/pilot-check.mjs'
+          if new not in package_source:
+              if old not in package_source:
+                  raise SystemExit('Не найден check:runtime в package.json')
+              package_source = package_source.replace(old, new, 1)
+          package.write_text(package_source, encoding='utf-8')
+          PY
+
+      - name: Установить зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить изменение
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node --check scripts/runtime/pilot-backup-evidence.mjs
+          node --check scripts/runtime/pilot-readiness.mjs
+          node --test scripts/runtime/pilot-backup-evidence.test.mjs
+          npm run check
+
+      - name: Зафиксировать в main
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f .github/workflows/finalize-backup-evidence.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Блокировать пилот без новой резервной копии'
+          git push origin HEAD:main
