@@ -62,6 +62,7 @@ async function preflightBundle() {
     "payload/runtime/node/bin/node",
     "smoke-test.sh",
     "target-release-gate.sh",
+    "target-acceptance.sh",
     "ux-acceptance-gate.sh"
   ];
   for (const relative of [...regularFiles, ...executableFiles]) {
