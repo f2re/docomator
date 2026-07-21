@@ -1,0 +1,125 @@
+name: Применить интеграцию целевого акта
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-target-acceptance.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Применить изменение
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def add_after(name, marker, addition):
+              path = Path(name)
+              source = path.read_text(encoding='utf-8')
+              if addition in source:
+                  return
+              if marker not in source:
+                  raise SystemExit(f'Не найден маркер: {name}')
+              path.write_text(source.replace(marker, marker + addition, 1), encoding='utf-8')
+
+          add_after(
+              'package.json',
+              '    "acceptance:ux": "node scripts/runtime/ux-acceptance.mjs",\n',
+              '    "acceptance:target": "bash scripts/offline/target-acceptance.sh",\n'
+          )
+          add_after(
+              'scripts/offline/prepare-bundle.sh',
+              '  "$SCRIPT_DIR/target-release-gate.sh" \\\n',
+              '  "$SCRIPT_DIR/target-acceptance.sh" \\\n'
+          )
+          add_after(
+              'scripts/offline/verify-bundle.sh',
+              '[[ -f "$BUNDLE_ROOT/http-check.mjs" ]] || die "В комплекте отсутствует локальная HTTP-проверка"\n',
+              '[[ -x "$BUNDLE_ROOT/target-acceptance.sh" ]] || die "В комплекте отсутствует единый сценарий целевой приёмки"\n'
+          )
+          add_after(
+              'scripts/offline/verify-bundle.test.mjs',
+              '    "target-release-gate.sh",\n',
+              '    "target-acceptance.sh",\n'
+          )
+          add_after(
+              'scripts/offline/verify-bundle.test.mjs',
+              '  await chmod(path.join(bundle, "target-release-gate.sh"), 0o755);\n',
+              '  await chmod(path.join(bundle, "target-acceptance.sh"), 0o755);\n'
+          )
+
+          readme = Path('README.md')
+          source = readme.read_text(encoding='utf-8')
+          if '### Единый целевой акт' not in source:
+              section = '''### Единый целевой акт
+
+После установки того же проверенного bundle выполните одной командой обычного пользователя:
+
+```bash
+install -d -m 0700 "$HOME/docomator-target-acts"
+"$BUNDLE_ROOT/target-acceptance.sh" \\
+  --config /etc/docomator/docomator.env \\
+  --base-url http://127.0.0.1:8080/ \\
+  --output "$HOME/docomator-target-acts/debian-01"
+```
+
+Для строгого 🟥 Astra Linux-контура добавьте `--require-network --require-smtp`. Сценарий связывает verifier, root smoke, настоящий LibreOffice gate, новую контрольную резервную копию, release-bound пилотный акт и offline Playwright/axe; результат получает `target-acceptance.json` и `manifest.sha256`.
+
+'''
+              marker = 'Проверка:\n\n```bash\n'
+              readme.write_text(source.replace(marker, section + marker, 1), encoding='utf-8')
+
+          deployment = Path('docs/OFFLINE_DEPLOYMENT.md')
+          source = deployment.read_text(encoding='utf-8')
+          if '## 4.1. Единый прогон целевой приёмки' not in source:
+              section = '''## 4.1. Единый прогон целевой приёмки
+
+```bash
+install -d -m 0700 "$HOME/docomator-target-acts"
+"$BUNDLE_ROOT/target-acceptance.sh" \\
+  --config /etc/docomator/docomator.env \\
+  --base-url http://127.0.0.1:8080/ \\
+  --output "$HOME/docomator-target-acts/target-01"
+```
+
+Для обязательных интеграций добавьте `--require-network --require-smtp`. Команда fail-closed выполняет проверку bundle, root smoke, core/LibreOffice gate, установленный `pilot-check.sh --run-backup` и offline Playwright/axe, затем создаёт связанный `target-acceptance.json`, журналы и checksum manifest.
+
+'''
+              deployment.write_text(source.replace('## 5. Перенос\n', section + '## 5. Перенос\n', 1), encoding='utf-8')
+
+          pilot = Path('docs/PILOT_ACCEPTANCE.md')
+          source = pilot.read_text(encoding='utf-8')
+          if '## Единый автоматизированный прогон' not in source:
+              section = '''## Единый автоматизированный прогон
+
+На чистом Debian/🟥 Astra Linux-стенде используйте `target-acceptance.sh` из проверенного bundle. Он собирает все машинные доказательства одной командой; ручную P5-приёмку и восстановление на отдельном стенде выполняют дополнительно.
+
+'''
+              pilot.write_text(source.replace('## Запуск\n', section + '## Запуск\n', 1), encoding='utf-8')
+          PY
+          bash -n scripts/offline/target-acceptance.sh
+          node --test scripts/offline/target-acceptance.test.mjs scripts/runtime/pilot-backup-evidence.test.mjs
+      - name: Зафиксировать main
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f .github/workflows/apply-target-acceptance.yml
+          rm -f .github/workflows/finalize-target-acceptance.yml
+          rm -f .github/workflows/finalize-target-acceptance-v2.yml
+          rm -f .github/workflows/finalize-multi-field-version-pr.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Собрать единый целевой акт приёмки'
+          git push origin HEAD:main
