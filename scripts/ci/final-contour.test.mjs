@@ -63,7 +63,7 @@ test("final documentation uses the red Astra marker and strict gate", async () =
   assert.match(readme, /🟥 Astra Linux/u);
   assert.doesNotMatch(readme, /🟨 Astra Linux/u);
   assert.match(readme, /release:evidence/u);
-  assert.match(finalization, /20 DOCX \+ 20 XLSX/u);
+  assert.match(finalization, /20 уникальных DOCX и 20 уникальных XLSX/u);
   assert.match(finalization, /отдельном чистом стенде/u);
 });
 
