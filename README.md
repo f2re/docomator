@@ -388,6 +388,20 @@ npm run bundle:offline:debian -- \
 
 Архив нельзя распаковывать через `sudo` сразу после переноса. Установка выполняется только по [fail-fast процедуре автономного развёртывания](docs/OFFLINE_DEPLOYMENT.md): сверка закреплённого SHA-256 из подписанного организационного manifest, непривилегированный preflight, копирование тех же байтов в уникальный root-owned staging-каталог и повторная проверка перед `install.sh`.
 
+### Единый целевой акт
+
+После автономной установки того же проверенного bundle выполните одной командой обычного пользователя:
+
+```bash
+install -d -m 0700 "$HOME/docomator-target-acts"
+"$BUNDLE_ROOT/target-acceptance.sh" \
+  --config /etc/docomator/docomator.env \
+  --base-url http://127.0.0.1:8080/ \
+  --output "$HOME/docomator-target-acts/debian-01"
+```
+
+Для строгого 🟥 Astra Linux-контура добавьте `--require-network --require-smtp`. Сценарий связывает verifier, root smoke, настоящий LibreOffice gate, новую контрольную резервную копию, release-bound пилотный акт и offline Playwright/axe; результат получает `target-acceptance.json` и `manifest.sha256`.
+
 Проверка:
 
 ```bash
@@ -406,6 +420,20 @@ sudo /opt/docomator/current/first-run.sh \
 ```
 
 UX-gate принимает только точное совпадение профиля ОС/архитектуры, установленного Debian-пакета Chromium и идентичности работающего релиза с проверенным bundle. Значения `commitSha`, `bundleManifestSha256`, `releaseMetadataSha256`, `browserVersion` из `run-metadata.json` переносятся в акт P5.
+
+## ✅ Финализация release candidate
+
+Версия остаётся `0.1.0-alpha.0`, пока не собраны фактические Debian/🟥 Astra Linux-акты, ручной P5, восстановление и Office-корпус. Строгий порядок и форматы: [финализация первого выпуска](docs/FINALIZATION.md).
+
+```bash
+npm run release:evidence:init -- /srv/docomator-release-evidence
+npm run release:evidence -- \
+  /srv/docomator-release-evidence \
+  --expected-commit '<полный Git SHA>' \
+  --expected-version '0.1.0-alpha.0'
+```
+
+Gate fail-closed блокирует RC при несовпадении commit/SHA-256, неполном target/P5/recovery/Office-свидетельстве или открытом блокирующем дефекте.
 
 ## 🧱 Ближайшие продуктовые этапы
 

@@ -33,6 +33,8 @@ require_command sort
 [[ -f "$BUNDLE_ROOT/ux-acceptance-gate.mjs" ]] || \
   die "В комплекте отсутствует запуск offline UX acceptance-gate"
 [[ -f "$BUNDLE_ROOT/http-check.mjs" ]] || die "В комплекте отсутствует локальная HTTP-проверка"
+[[ -x "$BUNDLE_ROOT/target-acceptance.sh" ]] || \
+  die "В комплекте отсутствует единый сценарий целевой приёмки"
 [[ -f "$BUNDLE_ROOT/verify-release.mjs" ]] || die "В комплекте отсутствует проверка release metadata"
 [[ -f "$BUNDLE_ROOT/payload/config/docomator.env.example" ]] || \
   die "В комплекте отсутствует шаблон настроек"

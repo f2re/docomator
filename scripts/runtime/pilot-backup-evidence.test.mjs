@@ -7,6 +7,7 @@ const startedAt = "2026-07-21T10:00:00.000Z";
 const currentBackup = {
   createdAt: "2026-07-21T10:00:02.000Z",
   releaseVersion: "0.1.0-alpha.0",
+  manifestSha256: "c".repeat(64),
   directory: "/var/lib/docomator/backups/backup-20260721T100002Z"
 };
 
@@ -22,6 +23,7 @@ test("control backup accepts only a new verified backup of the current release",
   assert.match(result.summary, /создана и проверена/u);
   assert.equal(result.data.backupCreatedAt, currentBackup.createdAt);
   assert.equal(result.data.releaseVersion, "0.1.0-alpha.0");
+  assert.equal(result.data.manifestSha256, currentBackup.manifestSha256);
 });
 
 test("control backup rejects an old backup even when systemctl returned success", () => {
@@ -64,6 +66,18 @@ test("control backup rejects missing evidence after a successful service start",
 
   assert.equal(result.ok, false);
   assert.match(result.summary, /не найдена/u);
+});
+
+test("control backup rejects evidence without exact manifest SHA-256", () => {
+  const result = evaluateControlBackup({
+    commandOk: true,
+    startedAt,
+    backup: { ...currentBackup, manifestSha256: null },
+    expectedReleaseVersion: "0.1.0-alpha.0"
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.summary, /идентичность/u);
 });
 
 test("control backup preserves the systemd failure as a blocking result", () => {

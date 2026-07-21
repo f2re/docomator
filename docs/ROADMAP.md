@@ -36,6 +36,7 @@
 - [x] миграции SQLite с контрольными суммами;
 - [x] systemd-службы;
 - [x] автономный комплект;
+- [x] единый fail-closed target-acceptance прогон с release-bound актами и checksum manifest;
 - [x] явные preview-профили, точный Debian package inventory и встроенные target smoke/release gates;
 - [x] установка, обновление и откат;
 - [x] резервное копирование и восстановление с точным checksum inventory и автоматическим откатом;
@@ -213,6 +214,8 @@
 - [ ] повторяемые списки, несколько строк и несколько независимых областей.
 
 ## M10 — пилот и выпуск
+
+- [x] строгий release-evidence gate для Debian, 🟥 Astra Linux, P5, recovery, Office-корпуса и блокеров;
 
 Критерии кандидата:
 

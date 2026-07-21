@@ -402,6 +402,7 @@ cp "$SCRIPT_DIR/lib.sh" \
   "$SCRIPT_DIR/http-check.mjs" \
   "$SCRIPT_DIR/smoke-test.sh" \
   "$SCRIPT_DIR/target-release-gate.sh" \
+  "$SCRIPT_DIR/target-acceptance.sh" \
   "$SCRIPT_DIR/ux-acceptance-gate.sh" \
   "$SCRIPT_DIR/ux-acceptance-gate.mjs" \
   "$SCRIPT_DIR/verify-release.mjs" \
