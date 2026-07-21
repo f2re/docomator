@@ -1,4 +1,5 @@
 const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 
 function timestamp(value, label) {
   if (typeof value !== "string" || !ISO_TIMESTAMP_PATTERN.test(value)) {
@@ -34,7 +35,12 @@ export function evaluateControlBackup({
       summary: "Контрольное резервирование завершилось ошибкой",
       detail: text(commandDetail) ?? "systemd-служба не подтвердила успешный запуск",
       remediation: "Проверьте journalctl -u docomator-backup.service.",
-      data: { startedAt, backupCreatedAt: null, releaseVersion: null }
+      data: {
+        startedAt,
+        backupCreatedAt: null,
+        releaseVersion: null,
+        manifestSha256: null
+      }
     };
   }
 
@@ -45,13 +51,30 @@ export function evaluateControlBackup({
       detail: text(commandDetail) ?? "Служба завершилась без нового проверяемого каталога backup-*.",
       remediation:
         "Проверьте журнал службы, свободное место и права каталога резервных копий, затем повторите пилотную проверку.",
-      data: { startedAt, backupCreatedAt: null, releaseVersion: null }
+      data: {
+        startedAt,
+        backupCreatedAt: null,
+        releaseVersion: null,
+        manifestSha256: null
+      }
     };
   }
 
   const backupCreatedAtMs = timestamp(backup.createdAt, "backup.createdAt");
   const backupCreatedAt = backup.createdAt;
   const releaseVersion = backup.releaseVersion ?? null;
+  const manifestSha256 = backup.manifestSha256 ?? null;
+
+  if (!SHA256_PATTERN.test(manifestSha256 ?? "")) {
+    return {
+      ok: false,
+      summary: "Не подтверждена идентичность резервной копии",
+      detail: "SHA-256 manifest.sha256 резервной копии отсутствует или некорректен.",
+      remediation:
+        "Проверьте целостность каталога backup-* и повторите контрольное резервирование.",
+      data: { startedAt, backupCreatedAt, releaseVersion, manifestSha256: null }
+    };
+  }
 
   if (backupCreatedAtMs + clockSkewMs < startedAtMs) {
     return {
@@ -60,7 +83,7 @@ export function evaluateControlBackup({
       detail: `Последняя проверенная копия создана ${backupCreatedAt}, запуск начат ${startedAt}.`,
       remediation:
         "Не используйте прежнюю копию как свидетельство текущего прогона. Проверьте службу резервирования и повторите запуск.",
-      data: { startedAt, backupCreatedAt, releaseVersion }
+      data: { startedAt, backupCreatedAt, releaseVersion, manifestSha256 }
     };
   }
 
@@ -72,19 +95,26 @@ export function evaluateControlBackup({
       detail: `Ожидалась версия ${expectedVersion}, в manifest указана ${releaseVersion ?? "не указана"}.`,
       remediation:
         "Проверьте DOCOMATOR_VERSION в systemd-окружении и повторите создание резервной копии текущего релиза.",
-      data: { startedAt, backupCreatedAt, releaseVersion, expectedReleaseVersion: expectedVersion }
+      data: {
+        startedAt,
+        backupCreatedAt,
+        releaseVersion,
+        manifestSha256,
+        expectedReleaseVersion: expectedVersion
+      }
     };
   }
 
   return {
     ok: true,
     summary: "Новая контрольная резервная копия создана и проверена",
-    detail: `${backupCreatedAt}; ${backup.directory ?? "каталог не указан"}`,
+    detail: `${backupCreatedAt}; ${backup.directory ?? "каталог не указан"}; manifest ${manifestSha256}`,
     remediation: "На отдельном стенде выполните пробное восстановление этой копии.",
     data: {
       startedAt,
       backupCreatedAt,
       releaseVersion,
+      manifestSha256,
       directory: backup.directory ?? null
     }
   };

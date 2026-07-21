@@ -175,6 +175,18 @@ scripts/offline/prepare-bundle.sh \
 
 Script не создаёт молча неполный bundle: требуется либо пара `--llama-server`/`--model`, либо `--without-llm`, ровно один из профилей `--with-preview`/`--without-preview` и ровно один из `--with-ux-acceptance`/`--without-ux-acceptance`. Preview-профиль требует `--os-packages-dir` и наличие `libreoffice-core`, `libreoffice-writer`, `libreoffice-calc`. UX-профиль требует чистый зафиксированный Git checkout, проверенный `.deb`-набор и единственный указанный Chromium package; по умолчанию это `chromium` и `/usr/bin/chromium`, для Astra задаются `--ux-chromium-package` и `--ux-chromium-bin`. Профиль без preview записывает `DOCOMATOR_PREVIEW_ENABLED=false` в новый шаблон и предназначен только для явно согласованного развёртывания без PDF-предпросмотра. Bundle без UX-профиля пригоден для технических проверок, но не может создать обязательные P5 Playwright/axe-свидетельства.
 
+## 4.1. Единый прогон целевой приёмки
+
+```bash
+install -d -m 0700 "$HOME/docomator-target-acts"
+"$BUNDLE_ROOT/target-acceptance.sh" \
+  --config /etc/docomator/docomator.env \
+  --base-url http://127.0.0.1:8080/ \
+  --output "$HOME/docomator-target-acts/target-01"
+```
+
+Для обязательных интеграций добавьте `--require-network --require-smtp`. Команда fail-closed выполняет проверку bundle, root smoke, core/LibreOffice gate, установленный `pilot-check.sh --run-backup` и offline Playwright/axe, затем создаёт связанный `target-acceptance.json`, отдельные журналы и checksum manifest всех свидетельств.
+
 ## 5. Перенос
 
 Рекомендуется переносить:

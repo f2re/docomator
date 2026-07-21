@@ -349,6 +349,7 @@ async function fixture() {
     "http-check.mjs",
     "smoke-test.sh",
     "target-release-gate.sh",
+    "target-acceptance.sh",
     "ux-acceptance-gate.sh",
     "ux-acceptance-gate.mjs",
     "payload/app/scripts/ci/release-gate.mjs",
@@ -374,6 +375,7 @@ async function fixture() {
   await chmod(path.join(bundle, "payload/runtime/node/bin/node"), 0o755);
   await chmod(path.join(bundle, "smoke-test.sh"), 0o755);
   await chmod(path.join(bundle, "target-release-gate.sh"), 0o755);
+  await chmod(path.join(bundle, "target-acceptance.sh"), 0o755);
   await chmod(path.join(bundle, "ux-acceptance-gate.sh"), 0o755);
   await copyFile(VERIFY_RELEASE, path.join(bundle, "verify-release.mjs"));
   await writeFile(

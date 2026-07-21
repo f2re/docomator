@@ -1,5 +1,16 @@
 # Журнал изменений Docomator
 
+## 2026-07-21 — финальный release-evidence gate
+
+Добавлено:
+
+- единый `target-acceptance.sh` с verifier, root smoke, настоящим LibreOffice, новой контрольной копией и Playwright/axe;
+- SHA-256 точного backup manifest в release-bound пилотном акте;
+- `release-evidence-gate.mjs`, принимающий только два target-акта, завершённый P5, recovery на отдельном стенде, 20 DOCX + 20 XLSX и пустой blocker register;
+- `docs/FINALIZATION.md` с единственным порядком перехода к `0.1.0-rc.1`.
+
+Версия намеренно остаётся `0.1.0-alpha.0`: внешние доказательства нельзя сгенерировать без реальных Debian/🟥 Astra Linux, пользователей, LibreOffice/Microsoft Office и отдельного recovery-стенда.
+
 ## 2026-07-19 — P5/OFF-010: автономный UX acceptance gate
 
 Добавлено:

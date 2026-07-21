@@ -96,6 +96,7 @@ require_command realpath
 require_command sha256sum
 require_command sort
 require_command tee
+require_command xargs
 
 BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
 CONFIG_FILE="$(realpath "$CONFIG_FILE")"

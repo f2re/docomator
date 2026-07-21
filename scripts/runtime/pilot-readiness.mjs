@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -305,12 +306,16 @@ async function latestVerifiedBackup(dataDirectory) {
   for (const candidate of candidates) {
     try {
       const manifest = await verifyBackup(candidate.directory);
+      const manifestSha256 = createHash("sha256")
+        .update(await fs.readFile(path.join(candidate.directory, "manifest.sha256")))
+        .digest("hex");
       return {
         ok: true,
         backup: {
           directory: candidate.directory,
           createdAt: manifest.createdAt,
           releaseVersion: manifest.releaseVersion,
+          manifestSha256,
           databaseBytes: manifest.database?.sizeBytes ?? null,
           objectCount: manifest.objects?.count ?? null,
           configIncluded: manifest.config !== null
