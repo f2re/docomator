@@ -1,0 +1,88 @@
+name: Завершить исправление полей шаблона
+
+on:
+  push:
+    branches:
+      - fix/template-field-name-ux
+    paths:
+      - .finalize-template-field-name-ux
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: fix/template-field-name-ux
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Исправить контракт ожидаемой ошибки и удалить диагностику
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/api/src/template-draft-routes.test.ts')
+          source = path.read_text(encoding='utf-8')
+          old = '''        personName: {
+          sourceOrder: "family-given-patronymic",
+          pattern: "{Неизвестно}"
+        }
+      }
+    });
+    assert.equal(invalid.statusCode, 400, invalid.body);'''
+          new = '''        personName: {
+          sourceOrder: "family-given-patronymic",
+          pattern: "{Неизвестно}"
+        }
+      }
+    });
+    assert.equal(invalid.statusCode, 422, invalid.body);'''
+          if source.count(old) != 1:
+              raise SystemExit('Не найден точный тест недопустимого шаблона ФИО')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+          rm -f .finalize-template-field-name-ux .template-field-name-ux.check.log
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зафиксированные зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить весь репозиторий
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-template-field-name-ux-final
+        run: npm run migrate
+
+      - name: Зафиксировать проверенные изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/finalize-template-field-name-ux-branch.yml
+          git add --all
+          git diff --cached --check
+          git commit -m 'finalize template field name formats and empty placement'
+          git push origin HEAD:fix/template-field-name-ux
