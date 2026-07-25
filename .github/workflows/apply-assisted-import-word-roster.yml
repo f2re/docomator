@@ -1,0 +1,128 @@
+name: Применить расширенный импорт и списки Word
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'feature/assisted-import-word-roster'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: feature/assisted-import-word-roster
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Определить необходимость применения
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f scripts/ci/apply-assisted-import-word-roster.py ]]; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+            echo 'Изменения уже применены.'
+          fi
+
+      - name: Применить интеграцию
+        if: steps.detect.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          python3 scripts/ci/apply-assisted-import-word-roster.py > /tmp/assisted-import.log 2>&1
+          status=$?
+          set -e
+          if [[ $status -ne 0 ]]; then
+            cp /tmp/assisted-import.log .assisted-import.error.log
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .assisted-import.error.log
+            git commit --no-verify -m 'capture assisted import diagnostics' || true
+            git push origin HEAD:feature/assisted-import-word-roster || true
+            cat /tmp/assisted-import.log
+            exit "$status"
+          fi
+          cat /tmp/assisted-import.log
+          git diff --check
+
+      - name: Определить версию Node.js
+        if: steps.detect.outputs.apply == 'true'
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        if: steps.detect.outputs.apply == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зависимости
+        if: steps.detect.outputs.apply == 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить репозиторий
+        if: steps.detect.outputs.apply == 'true'
+        run: npm run check
+
+      - name: Проверить миграции
+        if: steps.detect.outputs.apply == 'true'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-assisted-import
+        run: npm run migrate
+
+      - name: Установить Chromium
+        if: steps.detect.outputs.apply == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Проверить пользовательские сценарии
+        if: steps.detect.outputs.apply == 'true'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-assisted-import-browser
+          DOCOMATOR_PORT: 18080
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run migrate
+          npm run start:api > "$RUNNER_TEMP/docomator-assisted-import-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              npm run test:e2e
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-assisted-import-api.log"
+          exit 1
+
+      - name: Зафиксировать проверенные изменения
+        if: steps.detect.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f scripts/ci/apply-assisted-import-word-roster.py .assisted-import.error.log
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'feat assisted people import and Word roster tables'
+          git push origin HEAD:feature/assisted-import-word-roster
