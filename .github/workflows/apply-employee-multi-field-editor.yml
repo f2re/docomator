@@ -31,7 +31,7 @@ jobs:
         id: detect
         shell: bash
         run: |
-          if [[ -f scripts/ci/apply-employee-multi-field-editor.py ]]; then
+          if [[ -f .apply-employee-multi-field-editor.py.gz.b64 ]]; then
             echo 'apply=true' >> "$GITHUB_OUTPUT"
           else
             echo 'apply=false' >> "$GITHUB_OUTPUT"
@@ -43,7 +43,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 scripts/ci/apply-employee-multi-field-editor.py
+          base64 --decode .apply-employee-multi-field-editor.py.gz.b64 | gzip -dc > /tmp/apply-employee-multi-field-editor.py
+          python3 /tmp/apply-employee-multi-field-editor.py
           git diff --check
 
       - name: Определить версию Node.js
@@ -79,8 +80,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           rm -f \
-            .apply-employee-multi-field-editor \
-            scripts/ci/apply-employee-multi-field-editor.py \
+            .apply-employee-multi-field-editor.py.gz.b64 \
             .github/workflows/apply-employee-multi-field-editor.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
