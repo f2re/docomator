@@ -36,6 +36,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-email-delivery.css",
       "email-recipients.css",
       "document-schedules.css",
+      "document-schedules-v2.css",
+      "operator-workflows.css",
       "shared-document-results.css",
       "storage-maintenance.css",
       "bulk-data-import.css",
@@ -47,6 +49,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
   },
   "/ui/app.js": {
     fileName: "app.js",
+    appendFileNames: ["operator-workflows.js"],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "private, max-age=3600"
   },
@@ -66,6 +69,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "email-recipients.js",
       "document-schedules.js",
       "document-schedule-network.js",
+      "document-schedules-v2.js",
       "shared-document-results.js",
       "shared-document-view-labels.js",
       "shared-corporate-mode.js",
