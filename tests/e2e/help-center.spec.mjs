@@ -57,3 +57,38 @@ test("контекстная помощь содержит переход к п�
     "page"
   );
 });
+
+test("полный каталог Markdown-документов открывается и отображается локально", async ({
+  page
+}) => {
+  await installDocomatorApiMock(page);
+  const app = new DocomatorPage(page);
+  await app.open();
+  await page.locator("#helpCenterNavButton").click();
+
+  await expect(page.locator("#helpProjectDocumentsEntry")).toBeVisible();
+  await page.locator("[data-help-project-open]").click();
+  await expect(page.locator("#helpProjectHeading")).toHaveText(
+    "Все документы проекта"
+  );
+  await expect(page.locator("#helpProjectStatus")).toContainText(
+    "Доступно документов: 2"
+  );
+
+  await page.locator("#helpProjectSearch").fill("руководство оператора");
+  const guide = page
+    .locator("[data-help-project-document]")
+    .filter({ hasText: "Руководство оператора Docomator" });
+  await expect(guide).toHaveCount(1);
+  await guide.click();
+
+  await expect(page.locator(".help-project-markdown")).toContainText(
+    "Массовый импорт"
+  );
+  await expect(page.locator(".help-project-markdown")).toContainText(
+    "Проверьте сопоставление"
+  );
+  await expect(page.locator(".help-project-markdown")).not.toContainText(
+    "/home/"
+  );
+});
