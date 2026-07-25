@@ -11,6 +11,7 @@ export type TemplateDraftStatus = "draft" | "archived";
 export type TemplateFieldValueType =
   | "string"
   | "text"
+  | "enum"
   | "number"
   | "integer"
   | "boolean"
@@ -189,6 +190,7 @@ function fieldValueType(value: string): TemplateFieldValueType {
   if (
     value === "string" ||
     value === "text" ||
+    value === "enum" ||
     value === "number" ||
     value === "integer" ||
     value === "boolean" ||

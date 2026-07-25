@@ -129,6 +129,7 @@ function valueType(value: string): DocumentGenerationValueType {
   if (
     value === "string" ||
     value === "text" ||
+    value === "enum" ||
     value === "number" ||
     value === "integer" ||
     value === "boolean" ||

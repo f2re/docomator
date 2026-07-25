@@ -1,13 +1,13 @@
 import {
+  AssistedDataImportRegistry,
   DataImportConflictError,
-  DataImportRegistry,
   DataImportValidationError,
   SpaceConflictError,
   SpaceRegistry,
   SpaceValidationError,
-  dataImportRegistryFromSpaceRegistry,
+  assistedDataImportRegistryFromSpaceRegistry,
   validateExistingImportIdentityProperty,
-  type DataImportPropertyMapping
+  type AssistedDataImportPropertyMapping
 } from "@docomator/storage";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
@@ -45,7 +45,7 @@ interface ExecuteImportBody {
   identityPropertyKey?: string;
   headers: string[];
   rows: Array<Record<string, string>>;
-  mappings: DataImportPropertyMapping[];
+  mappings: AssistedDataImportPropertyMapping[];
   group?: ImportGroupBody | null;
 }
 
@@ -170,6 +170,7 @@ function importResultForClient<T extends {
   sourceSha256: string;
   identityPropertyKey: string;
   groupId: string | null;
+  mappingResolutions?: unknown;
 }>(result: T, includeTechnicalDetails: boolean) {
   if (includeTechnicalDetails) return result;
   const {
@@ -179,6 +180,7 @@ function importResultForClient<T extends {
     sourceSha256: _sourceSha256,
     identityPropertyKey: _identityPropertyKey,
     groupId: _groupId,
+    mappingResolutions: _mappingResolutions,
     ...publicResult
   } = result;
   return publicResult;
@@ -247,7 +249,24 @@ const executeImportBodySchema = {
               "date-time",
               "enum"
             ]
-          }
+          },
+          sensitivity: {
+            type: "string",
+            enum: ["public", "internal", "personal", "restricted"]
+          },
+          aliases: {
+            type: "array",
+            maxItems: 100,
+            uniqueItems: true,
+            items: { type: "string", minLength: 1, maxLength: 160 }
+          },
+          enumValues: {
+            type: "array",
+            maxItems: 500,
+            uniqueItems: true,
+            items: { type: "string", minLength: 1, maxLength: 160 }
+          },
+          allowCustom: { type: "boolean" }
         }
       }
     },
@@ -272,7 +291,7 @@ const executeImportBodySchema = {
 export function registerDataImportRoutes(
   app: FastifyInstance,
   spaces: SpaceRegistry,
-  registry: DataImportRegistry = dataImportRegistryFromSpaceRegistry(spaces)
+  registry: AssistedDataImportRegistry = assistedDataImportRegistryFromSpaceRegistry(spaces)
 ): void {
   app.post<{ Params: SpaceParams; Querystring: PreviewQuery; Body: Buffer }>(
     "/api/v1/spaces/:spaceId/data-import/preview",
@@ -333,8 +352,9 @@ export function registerDataImportRoutes(
           mutationContextFromRequest(request)
         )
       );
+      const { mappingResolutions: _mappingResolutions, ...publicPlan } = plan;
       reply.header("cache-control", "no-store");
-      return responseEnvelope(request, plan);
+      return responseEnvelope(request, publicPlan);
     }
   );
 

@@ -102,7 +102,7 @@ function sharedResultFixture(space) {
   };
 }
 
-function structureReport(fileName, repeatTemplate = false) {
+function structureReport(fileName, repeatTemplate = false, studentRosterTemplate = false) {
   const format = fileName.toLowerCase().endsWith(".xlsx") ? "xlsx" : "docx";
   const common = {
     fileName,
@@ -111,6 +111,40 @@ function structureReport(fileName, repeatTemplate = false) {
     structureSha256: `e2e-${format}-structure-sha256`,
     truncated: false
   };
+  if (format === "docx" && studentRosterTemplate) {
+    const labels = ["ФИО студента", "Тема научной работы", "Научный руководитель"];
+    const elements = [
+      ...labels.map((text, columnIndex) => ({
+        id: `word/document.xml#paragraph:header-${columnIndex + 1}`,
+        kind: "paragraph",
+        part: "word/document.xml",
+        index: columnIndex,
+        text,
+        runsTruncated: false,
+        tableLocation: { tableIndex: 0, rowIndex: 0, columnIndex }
+      })),
+      ...labels.map((_text, columnIndex) => ({
+        id: `word/document.xml#paragraph:data-${columnIndex + 1}`,
+        kind: "paragraph",
+        part: "word/document.xml",
+        index: labels.length + columnIndex,
+        text: "",
+        runsTruncated: false,
+        tableLocation: { tableIndex: 0, rowIndex: 1, columnIndex }
+      }))
+    ];
+    return {
+      ...common,
+      summary: {
+        paragraphs: elements.length,
+        runs: elements.length,
+        partsRead: 1,
+        shownElements: elements.length,
+        totalElements: elements.length
+      },
+      elements
+    };
+  }
   if (format === "xlsx") {
     return {
       ...common,
@@ -234,7 +268,8 @@ export function createDocomatorScenario(options = {}) {
     fieldRequests: [],
     inspectedFileName: "Личная карточка.docx",
     format: "docx",
-    repeatTemplate: Boolean(options.repeatTemplate)
+    repeatTemplate: Boolean(options.repeatTemplate),
+    studentRosterTemplate: Boolean(options.studentRosterTemplate)
   };
 }
 
@@ -530,7 +565,8 @@ export async function installDocomatorApiMock(page, options = {}) {
       state.directAnalyzeCalls += 1;
       data = structureReport(
         url.searchParams.get("fileName") || state.inspectedFileName,
-        state.repeatTemplate
+        state.repeatTemplate,
+        state.studentRosterTemplate
       );
     } else if (/\/document-sources\/quarantine$/.test(path) && method === "POST") {
       const fileName = url.searchParams.get("fileName") || state.inspectedFileName;
@@ -558,7 +594,8 @@ export async function installDocomatorApiMock(page, options = {}) {
       });
       const sourceStructure = structureReport(
         source?.fileName || state.inspectedFileName,
-        state.repeatTemplate
+        state.repeatTemplate,
+        state.studentRosterTemplate
       );
       let draft = space.drafts[0];
       if (!draft) {

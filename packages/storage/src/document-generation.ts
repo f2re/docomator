@@ -27,6 +27,7 @@ export type DocumentGenerationFormat = "docx" | "xlsx";
 export type DocumentGenerationValueType =
   | "string"
   | "text"
+  | "enum"
   | "number"
   | "integer"
   | "boolean"
@@ -329,6 +330,7 @@ function valueType(value: string): DocumentGenerationValueType {
   if (
     value === "string" ||
     value === "text" ||
+    value === "enum" ||
     value === "number" ||
     value === "integer" ||
     value === "boolean" ||

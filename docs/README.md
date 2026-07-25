@@ -4,6 +4,7 @@
 |---|---|
 | [REQUIREMENTS.md](REQUIREMENTS.md) | нормативные функциональные и нефункциональные требования |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | компоненты, потоки, границы и модель данных |
+| [IMPORT_AND_WORD_ROSTERS.md](IMPORT_AND_WORD_ROSTERS.md) | импорт людей и полей, вставка таблиц, группы и повторяемые строки Word |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | последовательность реализации и Definition of Done |
 | [ROADMAP.md](ROADMAP.md) | состояние milestones и ближайший backlog |
 | [OFFLINE_DEPLOYMENT.md](OFFLINE_DEPLOYMENT.md) | подготовка, установка, обновление и rollback |
