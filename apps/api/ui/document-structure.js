@@ -190,16 +190,67 @@ function structureFieldTypeLabel(valueType) {
   );
 }
 
+const structureSystemPropertyDefinitions = [
+  {
+    key: "__system_display_name__",
+    label: "ФИО сотрудника",
+    valueType: "string",
+    systemSource: "display-name",
+    appliesTo: ["person"]
+  }
+];
+
+const structureNamePatterns = {
+  identity: null,
+  full: "{Фамилия} {Имя} {Отчество}",
+  "family-initials": "{Фамилия} {И}.{О}.",
+  "initials-family": "{И}.{О}. {Фамилия}",
+  family: "{Фамилия}",
+  "family-given": "{Фамилия} {Имя}",
+  "given-family": "{Имя} {Фамилия}",
+  "given-patronymic": "{Имя} {Отчество}"
+};
+
+function structureSelectedDefinition(propertyKey = document.querySelector("#documentFieldProperty")?.value || "") {
+  return (
+    structureSystemPropertyDefinitions.find((definition) => definition.key === propertyKey) ||
+    structurePropertyDefinitions.find((definition) => definition.key === propertyKey)
+  );
+}
+
+function structureStableToken(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < String(value).length; index += 1) {
+    hash ^= String(value).charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function structureEffectiveDefinition(definition, element) {
+  if (definition?.systemSource !== "display-name") return definition;
+  return {
+    ...definition,
+    key: `subject.name_${structureStableToken(element.id)}.display_name`
+  };
+}
+
 function structurePropertyOptions() {
   const applicable = structurePropertyDefinitions.filter((definition) => {
     const appliesTo = Array.isArray(definition.appliesTo) ? definition.appliesTo : [];
     return appliesTo.length === 0 || appliesTo.includes("person");
   });
-  return [
-    ...applicable.map(
+  const cardOptions = applicable
+    .map(
       (definition) =>
         `<option value="${structureEscape(definition.key)}">${structureEscape(definition.label)} · ${structureEscape(structureFieldTypeLabel(definition.valueType))}</option>`
-    ),
+    )
+    .join("");
+  return [
+    '<optgroup label="Основные сведения">',
+    '<option value="__system_display_name__">ФИО сотрудника · с выбором варианта записи</option>',
+    "</optgroup>",
+    ...(cardOptions ? ['<optgroup label="Поля карточки">', cardOptions, "</optgroup>"] : []),
     '<option value="__new__">Добавить новое поле сотрудника…</option>'
   ].join("");
 }
@@ -217,6 +268,7 @@ function renderNewStructurePropertyFields() {
   if (!select || !fields) return;
   fields.hidden = select.value !== "__new__";
   renderStructureFormatterFields();
+  updateStructureFieldReadiness();
 }
 
 function selectedStructureValueType() {
@@ -224,10 +276,94 @@ function selectedStructureValueType() {
   if (propertyKey === "__new__") {
     return document.querySelector("#documentFieldType")?.value || "string";
   }
-  return (
-    structurePropertyDefinitions.find((definition) => definition.key === propertyKey)
-      ?.valueType || "string"
-  );
+  return structureSelectedDefinition(propertyKey)?.valueType || "string";
+}
+
+function structureNamePatternError(pattern) {
+  const text = String(pattern || "").normalize("NFKC").trim();
+  if (!text || text.length > 160 || /[\u0000-\u001f\u007f]/u.test(text)) {
+    return "Укажите безопасный шаблон длиной до 160 знаков.";
+  }
+  const allowed = new Set(["Фамилия", "Имя", "Отчество", "Ф", "И", "О"]);
+  let count = 0;
+  const rest = text.replace(/\{([^{}]+)\}/gu, (_match, token) => {
+    count += 1;
+    return allowed.has(token) ? "" : `{${token}}`;
+  });
+  if (count === 0 || rest.includes("{") || rest.includes("}")) {
+    return "Используйте части {Фамилия}, {Имя}, {Отчество}, {Ф}, {И} или {О}.";
+  }
+  return "";
+}
+
+function structureSelectedPersonName(form = document) {
+  const presentation = form.querySelector("#documentFieldTextPresentation")?.value || "identity";
+  if (presentation === "identity") return null;
+  const pattern =
+    presentation === "custom"
+      ? form.querySelector("#documentFieldNamePattern")?.value?.trim() || ""
+      : structureNamePatterns[presentation];
+  const error = structureNamePatternError(pattern);
+  if (error) throw { message: error };
+  return {
+    sourceOrder:
+      form.querySelector("#documentFieldNameSourceOrder")?.value ||
+      "family-given-patronymic",
+    pattern
+  };
+}
+
+function structureNamePreview() {
+  const presentation = document.querySelector("#documentFieldTextPresentation")?.value || "identity";
+  const options = document.querySelector("#documentFieldNameOptions");
+  const custom = document.querySelector("#documentFieldNamePatternField");
+  const preview = document.querySelector("#documentFieldNamePreview");
+  if (options) options.hidden = presentation === "identity";
+  if (custom) custom.hidden = presentation !== "custom";
+  if (!preview || presentation === "identity") {
+    updateStructureFieldReadiness();
+    return;
+  }
+  const pattern =
+    presentation === "custom"
+      ? document.querySelector("#documentFieldNamePattern")?.value || ""
+      : structureNamePatterns[presentation] || "";
+  const error = structureNamePatternError(pattern);
+  if (error) {
+    preview.className = "structure-name-preview is-error";
+    preview.textContent = error;
+    updateStructureFieldReadiness();
+    return;
+  }
+  const sourceOrder =
+    document.querySelector("#documentFieldNameSourceOrder")?.value ||
+    "family-given-patronymic";
+  const source =
+    sourceOrder === "given-patronymic-family"
+      ? "Иван Иванович Иванов"
+      : sourceOrder === "given-family"
+        ? "Иван Иванов"
+        : sourceOrder === "family-given"
+          ? "Иванов Иван"
+          : "Иванов Иван Иванович";
+  const values = {
+    Фамилия: "Иванов",
+    Имя: "Иван",
+    Отчество: sourceOrder === "family-given" || sourceOrder === "given-family" ? "" : "Иванович",
+    Ф: "И",
+    И: "И",
+    О: sourceOrder === "family-given" || sourceOrder === "given-family" ? "" : "И"
+  };
+  const result = pattern
+    .replace(/\{([^{}]+)\}/gu, (_match, token) => values[token] || "")
+    .replace(/\s+/gu, " ")
+    .replace(/\s+([,.;:])/gu, "$1")
+    .replace(/([,.;:])(?:\s*\1)+/gu, "$1")
+    .replace(/\s+[,.;:]+$/gu, "")
+    .trim();
+  preview.className = "structure-name-preview";
+  preview.textContent = `Пример: «${source}» → «${result}».`;
+  updateStructureFieldReadiness();
 }
 
 function renderStructureFormatterFields() {
@@ -242,43 +378,119 @@ function renderStructureFormatterFields() {
         (_, digits) => `<option value="${digits}">${digits}</option>`
       )
     ].join("");
+    container.hidden = false;
     container.innerHTML = `
       <label>
         <span>Знаков после запятой</span>
         <select id="documentFieldDecimalPlaces">${options}</select>
         <small>В документе используется запятая. Без фиксации лишние нули не добавляются.</small>
       </label>`;
+    updateStructureFieldReadiness();
     return;
   }
   if (valueType === "date-time") {
     const detectedTimeZone =
       Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow";
+    container.hidden = false;
     container.innerHTML = `
       <label>
         <span>Часовой пояс документа</span>
         <input id="documentFieldTimeZone" type="text" maxlength="100" value="${structureEscape(detectedTimeZone)}" placeholder="Europe/Moscow" />
         <small>Дата и время будут зафиксированы в этом часовом поясе, например 16.07.2026 12:30.</small>
       </label>`;
+    updateStructureFieldReadiness();
+    return;
+  }
+  if (valueType === "string" || valueType === "text") {
+    const systemName = structureSelectedDefinition()?.systemSource === "display-name";
+    container.hidden = false;
+    container.innerHTML = `
+      <div class="structure-name-format">
+        <label>
+          <span>Как записать текст в документе?</span>
+          <select id="documentFieldTextPresentation">
+            <option value="identity"${systemName ? "" : " selected"}>Без изменений</option>
+            <optgroup label="Варианты ФИО">
+              <option value="full"${systemName ? " selected" : ""}>Фамилия Имя Отчество</option>
+              <option value="family-initials">Фамилия И.О.</option>
+              <option value="initials-family">И.О. Фамилия</option>
+              <option value="family">Только фамилия</option>
+              <option value="family-given">Фамилия Имя</option>
+              <option value="given-family">Имя Фамилия</option>
+              <option value="given-patronymic">Имя Отчество</option>
+              <option value="custom">Свой шаблон…</option>
+            </optgroup>
+          </select>
+          <small>Варианты ФИО применяйте к полю, где хранится полное имя сотрудника.</small>
+        </label>
+        <div id="documentFieldNameOptions" class="structure-name-options" hidden>
+          <label>
+            <span>Как ФИО записано в карточке?</span>
+            <select id="documentFieldNameSourceOrder">
+              <option value="family-given-patronymic">Фамилия Имя Отчество</option>
+              <option value="given-patronymic-family">Имя Отчество Фамилия</option>
+              <option value="family-given">Фамилия Имя</option>
+              <option value="given-family">Имя Фамилия</option>
+            </select>
+            <small>Это нужно, чтобы система правильно определила фамилию и инициалы.</small>
+          </label>
+          <label id="documentFieldNamePatternField" hidden>
+            <span>Свой шаблон записи</span>
+            <input id="documentFieldNamePattern" type="text" maxlength="160" value="{Фамилия} {И}.{О}." />
+            <small>Доступны {Фамилия}, {Имя}, {Отчество}, {Ф}, {И}, {О}.</small>
+          </label>
+          <output id="documentFieldNamePreview" class="structure-name-preview"></output>
+        </div>
+      </div>`;
+    container
+      .querySelector("#documentFieldTextPresentation")
+      ?.addEventListener("change", structureNamePreview);
+    container
+      .querySelector("#documentFieldNameSourceOrder")
+      ?.addEventListener("change", structureNamePreview);
+    container
+      .querySelector("#documentFieldNamePattern")
+      ?.addEventListener("input", structureNamePreview);
+    structureNamePreview();
     return;
   }
   container.innerHTML = "";
+  container.hidden = true;
+  updateStructureFieldReadiness();
 }
 
 function structureTextRangeControl(element) {
   if (element.kind !== "paragraph") return "";
-  const unavailable = element.runsTruncated || !element.text;
+  if (!element.text) {
+    return `
+      <div class="structure-placement-card is-ready">
+        <input id="documentFieldParagraphMode" type="hidden" value="whole" />
+        <strong>Пустое место готово к заполнению</strong>
+        <small>Значение будет вставлено в этот абзац или ячейку таблицы. Выделять текст не нужно.</small>
+      </div>`;
+  }
+  const rangeUnavailable = Boolean(element.runsTruncated);
   return `
-    <label class="structure-text-range-field" for="documentFieldTextRange">
-      <span>Какой текст заменить значением?</span>
-      <textarea id="documentFieldTextRange" readonly${unavailable ? " disabled" : ""}>${structureEscape(element.text || "")}</textarea>
-      <small id="documentFieldTextRangeMessage">${
-        element.runsTruncated
-          ? "В этом абзаце слишком много фрагментов для безопасного выделения. Выберите другой абзац."
-          : element.text
-            ? "Выделите плейсхолдер или другой изменяемый текст. Подпись до и после выделения останется без изменений."
-            : "В пустом абзаце нельзя выделить место для поля. Выберите абзац с текстом."
-      }</small>
-    </label>`;
+    <fieldset class="structure-placement-field">
+      <legend>Что заменить в этом абзаце?</legend>
+      <label class="structure-choice-field">
+        <input type="radio" name="documentFieldParagraphMode" value="range"${rangeUnavailable ? " disabled" : " checked"} />
+        <span><strong>Только выделенный текст</strong><small>Подпись до и после выделения останется без изменений.</small></span>
+      </label>
+      <label class="structure-choice-field">
+        <input type="radio" name="documentFieldParagraphMode" value="whole"${rangeUnavailable ? " checked" : ""} />
+        <span><strong>Весь абзац</strong><small>Всё содержимое выбранного абзаца будет заменено значением поля.</small></span>
+      </label>
+      <label class="structure-text-range-field" for="documentFieldTextRange">
+        <span>Выделите заменяемый фрагмент</span>
+        <textarea id="documentFieldTextRange" readonly${rangeUnavailable ? " disabled" : ""}>${structureEscape(element.text)}</textarea>
+        <small id="documentFieldTextRangeMessage">${
+          rangeUnavailable
+            ? "В абзаце слишком много текстовых фрагментов для точного выделения. Доступна замена всего абзаца."
+            : "Выделите плейсхолдер или другой изменяемый текст."
+        }</small>
+      </label>
+    </fieldset>`;
 }
 
 function structureCellCoordinate(address) {
@@ -416,24 +628,128 @@ function renderStructureRepeatAreaFields() {
   if (range) range.hidden = !enabled || selection !== "range";
 }
 
+function selectedStructureParagraphMode(form = document) {
+  return (
+    form.querySelector("#documentFieldParagraphMode")?.value ||
+    form.querySelector('input[name="documentFieldParagraphMode"]:checked')?.value ||
+    "range"
+  );
+}
+
 function captureStructureTextRange() {
   const control = document.querySelector("#documentFieldTextRange");
   const message = document.querySelector("#documentFieldTextRangeMessage");
-  const save = document.querySelector("#documentFieldSave");
-  if (!control || !message || !selectedStructureElement) return;
+  if (
+    !control ||
+    !message ||
+    !selectedStructureElement ||
+    selectedStructureParagraphMode() !== "range"
+  ) {
+    updateStructureFieldReadiness();
+    return;
+  }
   const startOffset = control.selectionStart;
   const endOffset = control.selectionEnd;
   if (endOffset <= startOffset) {
     selectedStructureTextRange = null;
-    if (save) save.disabled = true;
     message.textContent =
       "Выделите плейсхолдер или другой изменяемый текст. Подпись до и после выделения останется без изменений.";
+    updateStructureFieldReadiness();
     return;
   }
   selectedStructureTextRange = { startOffset, endOffset };
-  if (save) save.disabled = false;
   const selected = selectedStructureElement.text.slice(startOffset, endOffset);
   message.textContent = `Будет заменён только фрагмент «${selected}». Остальной текст абзаца сохранится.`;
+  updateStructureFieldReadiness();
+}
+
+function renderStructureParagraphMode() {
+  const mode = selectedStructureParagraphMode();
+  const control = document.querySelector("#documentFieldTextRange");
+  const message = document.querySelector("#documentFieldTextRangeMessage");
+  if (mode === "whole") {
+    selectedStructureTextRange = null;
+    if (control) control.disabled = true;
+    if (message) {
+      message.textContent =
+        "Будет заменён весь абзац. Используйте этот режим только когда его текущий текст не нужно сохранять.";
+    }
+  } else {
+    if (control) control.disabled = false;
+    if (message && selectedStructureTextRange === null) {
+      message.textContent =
+        "Выделите плейсхолдер или другой изменяемый текст. Подпись до и после выделения останется без изменений.";
+    }
+  }
+  updateStructureFieldReadiness();
+}
+
+function structureFieldBlockReason(form) {
+  if (!selectedStructureElement) return "Сначала выберите место в документе.";
+  if (selectedStructureElement.kind === "cell" && selectedStructureElement.formula) {
+    return "Эта ячейка содержит формулу и не может быть полем сотрудника.";
+  }
+  if (
+    selectedStructureElement.kind === "cell" &&
+    structureDraft?.repeatBinding?.kind === "xlsx.repeat-row" &&
+    !structureRepeatContainsElement(structureDraft.repeatBinding, selectedStructureElement)
+  ) {
+    return "Ячейка находится вне ранее сохранённого повторяемого диапазона.";
+  }
+  const propertyKey = form.querySelector("#documentFieldProperty")?.value || "";
+  if (!propertyKey) return "Выберите поле сотрудника.";
+  if (propertyKey === "__new__") {
+    const label = form.querySelector("#documentFieldLabel")?.value?.trim() || "";
+    const confirmed = Boolean(form.querySelector("#documentPropertyConfirm")?.checked);
+    if (!label || !confirmed) {
+      return "Укажите название нового поля и подтвердите его добавление карточкам сотрудников.";
+    }
+  }
+  if (selectedStructureElement.kind === "paragraph") {
+    const mode = selectedStructureParagraphMode(form);
+    if (mode === "range" && selectedStructureTextRange === null) {
+      return "Выделите в абзаце текст, который нужно заменить, либо выберите замену всего абзаца.";
+    }
+  }
+  try {
+    structureSelectedPersonName(form);
+  } catch (error) {
+    return error?.message || "Проверьте вариант записи ФИО.";
+  }
+  return "";
+}
+
+function structureFieldReadyMessage(form) {
+  const definition = structureSelectedDefinition(
+    form.querySelector("#documentFieldProperty")?.value || ""
+  );
+  const fieldLabel =
+    definition?.label || form.querySelector("#documentFieldLabel")?.value?.trim() || "поле";
+  if (selectedStructureElement?.kind === "cell") {
+    return `Готово: «${fieldLabel}» будет записано в выбранную ячейку.`;
+  }
+  if (!selectedStructureElement?.text) {
+    return `Готово: «${fieldLabel}» будет вставлено в пустое место. Нажмите «Связать с документом».`;
+  }
+  if (selectedStructureParagraphMode(form) === "whole") {
+    return `Готово: «${fieldLabel}» заменит весь выбранный абзац.`;
+  }
+  const range = selectedStructureTextRange;
+  const selected = range
+    ? selectedStructureElement.text.slice(range.startOffset, range.endOffset)
+    : "";
+  return `Готово: «${fieldLabel}» заменит только фрагмент «${selected}».`;
+}
+
+function updateStructureFieldReadiness() {
+  const form = document.querySelector("#documentFieldForm");
+  const button = form?.querySelector("#documentFieldSave");
+  const message = form?.querySelector("#documentFieldMessage");
+  if (!form || !button || !message || fieldBusy) return;
+  const reason = structureFieldBlockReason(form);
+  button.disabled = Boolean(reason);
+  message.className = reason ? "is-warning" : "is-ready";
+  message.textContent = reason || structureFieldReadyMessage(form);
 }
 
 function renderStructureSelection(element) {
@@ -456,11 +772,6 @@ function renderStructureSelection(element) {
       !structureRepeatContainsElement(structureDraft.repeatBinding, element)
   );
   const fieldUnavailable = formulaUnavailable || outsideCurrentRepeat;
-  const initialMessage = formulaUnavailable
-    ? "Эта ячейка содержит формулу. Она может повторяться как вычисляемая часть строки, но не может быть полем сотрудника."
-    : outsideCurrentRepeat
-      ? "Ячейка находится вне ранее сохранённого повторяемого диапазона. Выберите место внутри него."
-      : "Исходник должен быть сохранён в выбранном разделе данных.";
   detail.innerHTML = `
     <div class="structure-selection-content">
       <strong>${structureEscape(structureLocation(element))}</strong>
@@ -472,7 +783,7 @@ function renderStructureSelection(element) {
           <label>
             <span>Какое поле сотрудника поставить сюда?</span>
             <select id="documentFieldProperty" name="propertyKey">${structurePropertyOptions()}</select>
-            <small>Выберите понятное поле карточки. Техническую связь система создаст сама.</small>
+            <small>Для ФИО доступны полная запись, фамилия, инициалы и собственный безопасный шаблон.</small>
           </label>
           <div id="documentNewPropertyFields" class="structure-new-property" hidden>
             <label>
@@ -488,7 +799,7 @@ function renderStructureSelection(element) {
               <span><strong>Добавить поле всем сотрудникам</strong><small>Поле появится в карточках и будет доступно другим шаблонам.</small></span>
             </label>
           </div>
-          <div id="documentFieldFormatter" class="structure-new-property"></div>
+          <div id="documentFieldFormatter" class="structure-new-property" hidden></div>
           <label class="structure-required-field">
             <input id="documentFieldRequired" name="required" type="checkbox" />
             <span><strong>Обязательное поле</strong><small>Без значения документ нельзя будет завершить.</small></span>
@@ -499,8 +810,8 @@ function renderStructureSelection(element) {
           <p>Координата: <code>${structureEscape(element.id)}</code>. Часть пакета: <code>${structureEscape(element.part || element.sheetName || "не указана")}</code>. Сервер повторно проверит её по сохранённой структуре.</p>
         </details>
         <div class="structure-field-actions">
-          <button class="primary-button" id="documentFieldSave" type="submit"${element.kind === "paragraph" || fieldUnavailable ? " disabled" : ""}>Связать с документом</button>
-          <p id="documentFieldMessage"${fieldUnavailable ? ' class="is-warning"' : ""}>${initialMessage}</p>
+          <button class="primary-button" id="documentFieldSave" type="submit" disabled>Связать с документом</button>
+          <p id="documentFieldMessage"${fieldUnavailable ? ' class="is-warning"' : ""}></p>
         </div>
       </form>
     </div>`;
@@ -519,13 +830,21 @@ function renderStructureSelection(element) {
     .forEach((control) =>
       control.addEventListener("change", renderStructureRepeatAreaFields)
     );
+  detail
+    .querySelectorAll('input[name="documentFieldParagraphMode"]')
+    .forEach((control) => control.addEventListener("change", renderStructureParagraphMode));
   const textRange = detail.querySelector("#documentFieldTextRange");
   for (const eventName of ["select", "mouseup", "keyup", "touchend"]) {
     textRange?.addEventListener(eventName, captureStructureTextRange);
   }
+  const form = detail.querySelector("#documentFieldForm");
+  form?.addEventListener("input", updateStructureFieldReadiness);
+  form?.addEventListener("change", updateStructureFieldReadiness);
+  form?.addEventListener("submit", saveSelectedField);
   renderNewStructurePropertyFields();
   renderStructureRepeatAreaFields();
-  detail.querySelector("#documentFieldForm")?.addEventListener("submit", saveSelectedField);
+  renderStructureParagraphMode();
+  updateStructureFieldReadiness();
 }
 
 async function loadStructureDraft() {
@@ -586,30 +905,28 @@ async function saveSelectedField(event) {
   const button = form.querySelector("#documentFieldSave");
   const message = form.querySelector("#documentFieldMessage");
   const propertyKey = form.querySelector("#documentFieldProperty")?.value || "";
-  let definition = structurePropertyDefinitions.find(
-    (candidate) => candidate.key === propertyKey
-  );
+  let definition = structureSelectedDefinition(propertyKey);
   const label = form.querySelector("#documentFieldLabel")?.value?.trim() || "";
   const valueType = form.querySelector("#documentFieldType")?.value || "string";
   const required = Boolean(form.querySelector("#documentFieldRequired")?.checked);
   const repeatRow = Boolean(form.querySelector("#documentFieldRepeatRow")?.checked);
-  let repeatArea;
-  try {
-    repeatArea = selectedStructureRepeatArea(form);
-  } catch (error) {
-    message.className = "is-error";
-    message.textContent = error?.message || "Проверьте границы повторяемого диапазона.";
-    return;
-  }
+  const paragraphMode = selectedStructureParagraphMode(form);
   const creatingProperty = propertyKey === "__new__";
   const propertyConfirmed = Boolean(form.querySelector("#documentPropertyConfirm")?.checked);
-  if (
-    selectedStructureElement.kind === "paragraph" &&
-    selectedStructureTextRange === null
-  ) {
+  const blockReason = structureFieldBlockReason(form);
+  if (blockReason) {
     message.className = "is-error";
-    message.textContent =
-      "Выделите в абзаце плейсхолдер или другой текст, который нужно заменять.";
+    message.textContent = blockReason;
+    return;
+  }
+  let repeatArea;
+  let personName;
+  try {
+    repeatArea = selectedStructureRepeatArea(form);
+    personName = structureSelectedPersonName(form);
+  } catch (error) {
+    message.className = "is-error";
+    message.textContent = error?.message || "Проверьте настройки поля.";
     return;
   }
   if (!propertyKey || (creatingProperty && (!label || !propertyConfirmed))) {
@@ -624,7 +941,7 @@ async function saveSelectedField(event) {
   button.disabled = true;
   message.className = "is-loading";
   message.textContent =
-    "Проверяем сохранённый исходник, заново строим структуру и сверяем выбранную координату.";
+    "Проверяем сохранённый исходник, координату и выбранный вариант записи значения.";
 
   try {
     const { spaceId, draft } = await loadStructureDraft();
@@ -665,6 +982,7 @@ async function saveSelectedField(event) {
       }
     }
     if (!definition) throw { message: "Выбранное поле сотрудника не найдено." };
+    definition = structureEffectiveDefinition(definition, selectedStructureElement);
     const decimalPlacesValue =
       form.querySelector("#documentFieldDecimalPlaces")?.value ?? "";
     const timeZone =
@@ -682,13 +1000,14 @@ async function saveSelectedField(event) {
           elementId: selectedStructureElement.id,
           ...(repeatRow ? { repeatRow: true } : {}),
           ...(repeatArea ? { repeatArea } : {}),
+          ...(personName ? { personName } : {}),
           ...(definition.valueType === "number" && decimalPlacesValue !== ""
             ? { decimalPlaces: Number(decimalPlacesValue) }
             : {}),
           ...(definition.valueType === "date-time" && timeZone
             ? { timeZone }
             : {}),
-          ...(selectedStructureElement.kind === "paragraph"
+          ...(selectedStructureElement.kind === "paragraph" && paragraphMode === "range"
             ? { textRange: selectedStructureTextRange }
             : {})
         })
@@ -703,7 +1022,7 @@ async function saveSelectedField(event) {
       ...(Array.isArray(structureDraft.fields) ? structureDraft.fields : []),
       fieldBody.data.field
     ];
-    form.querySelectorAll("input, select").forEach((control) => {
+    form.querySelectorAll("input, select, textarea").forEach((control) => {
       control.disabled = true;
     });
     const actions = form.querySelector(".structure-field-actions");
@@ -783,7 +1102,7 @@ function renderStructure(report, operationId) {
   result.innerHTML = `
     <article class="structure-report">
       <header>
-        <div><p class="eyebrow">Поля документа</p><h3>${structureEscape(report.fileName)}</h3><p>В DOCX выберите абзац, затем выделите только изменяемый текст. В XLSX выберите нужную ячейку.</p></div>
+        <div><p class="eyebrow">Поля документа</p><h3>${structureEscape(report.fileName)}</h3><p>В DOCX пустой абзац можно заполнить сразу; в абзаце с текстом выберите фрагмент или замену всего абзаца. В XLSX выберите нужную ячейку.</p></div>
         <span class="pill pill-success">Готово</span>
       </header>
       <div class="structure-metrics">${metrics

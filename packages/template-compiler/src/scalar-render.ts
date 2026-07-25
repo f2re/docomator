@@ -231,11 +231,13 @@ export function normalizeScalarValueForRendering(
 ): NormalizedScalarValue {
   if (valueType === "string") {
     const text = requiredText(value, "пробное значение", 4_000);
-    return { display: text, xlsxMode: "inline-string", xlsxValue: text };
+    const display = formatScalarDisplay(valueType, text, formatterValue);
+    return { display, xlsxMode: "inline-string", xlsxValue: display };
   }
   if (valueType === "text") {
     const text = requiredText(value, "пробное значение", 20_000);
-    return { display: text, xlsxMode: "inline-string", xlsxValue: text };
+    const display = formatScalarDisplay(valueType, text, formatterValue);
+    return { display, xlsxMode: "inline-string", xlsxValue: display };
   }
   if (valueType === "number" || valueType === "integer") {
     const number = normalizeNumber(value, valueType === "integer");
