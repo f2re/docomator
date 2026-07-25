@@ -1,6 +1,11 @@
 name: Применить расширенный импорт и списки Word
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-assisted-import-word-roster.yml
   pull_request_target:
     branches:
       - main
@@ -15,7 +20,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.pull_request.head.ref == 'feature/assisted-import-word-roster'
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'feature/assisted-import-word-roster'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
 
