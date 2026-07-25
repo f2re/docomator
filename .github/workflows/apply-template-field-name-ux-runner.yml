@@ -1,7 +1,7 @@
 name: Финализировать исправление полей шаблона
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
     types:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   finalize:
-    if: github.head_ref == 'fix/template-field-name-ux'
+    if: github.event.pull_request.head.ref == 'fix/template-field-name-ux'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -53,9 +53,15 @@ jobs:
           path.write_text(source.replace(old, new, 1), encoding='utf-8')
           PY
           rm -f \
+            .apply-template-field-name-ux \
             .finalize-template-field-name-ux \
             .template-field-name-ux.check.log \
+            .template-field-name-ux.error.log \
+            .template-field-name-ux.py \
+            .template-field-name-ux.py.gz.b64 \
+            .github/workflows/apply-template-field-name-ux.yml \
             .github/workflows/finalize-template-field-name-ux-branch.yml
+          git show 6a90b71ca25dface072d6c6972c65e16aa5ecf3d:.github/workflows/ci.yml > .github/workflows/ci.yml
           git diff --check
 
       - name: Определить версию Node.js
