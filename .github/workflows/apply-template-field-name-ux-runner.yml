@@ -45,6 +45,16 @@ jobs:
         run: |
           set -Eeuo pipefail
           base64 --decode .template-field-name-ux.py.gz.b64 | gzip -dc > /tmp/apply-template-field-name-ux.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/apply-template-field-name-ux.py')
+          source = path.read_text(encoding='utf-8')
+          old = '    updated, count = pattern.subn(replacement.rstrip() + "\\n\\n", content, count=1)'
+          new = '    updated, count = pattern.subn(lambda _match: replacement.rstrip() + "\\n\\n", content, count=1)'
+          if source.count(old) != 1:
+              raise SystemExit('Не найдено место исправления безопасной подстановки')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
           set +e
           python3 /tmp/apply-template-field-name-ux.py > /tmp/apply-template-field-name-ux.log 2>&1
           status=$?
