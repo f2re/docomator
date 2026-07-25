@@ -22,6 +22,8 @@ export * from "./network-folder-files.js";
 export * from "./object-cleanup-access.js";
 export * from "./object-cleanup.js";
 export * from "./operation-center.js";
+export * from "./operator-assist-access.js";
+export * from "./operator-assist.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
 export * from "./repeat-contract.js";
