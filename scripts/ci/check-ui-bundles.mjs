@@ -5,6 +5,7 @@ import path from "node:path";
 
 const projectRoot = path.resolve(import.meta.dirname, "../..");
 const uiDirectory = path.join(projectRoot, "apps/api/ui");
+const scheduleV2FileName = "document-schedules-v2.js";
 const bundles = {
   "app.js": ["app.js", "operator-workflows.js"],
   "document-intake.js": [
@@ -33,6 +34,21 @@ const bundles = {
   ]
 };
 
+function isolateUiExtension(fileName, body) {
+  if (fileName !== scheduleV2FileName) return body;
+  return Buffer.concat([
+    Buffer.from("const __docomatorScheduleV2Bridge = {};\n{\n"),
+    body,
+    Buffer.from(
+      "\n__docomatorScheduleV2Bridge.render = renderScheduleWorkspace;\n" +
+        "__docomatorScheduleV2Bridge.load = loadScheduleWorkspace;\n" +
+        "}\n" +
+        "renderScheduleWorkspace = __docomatorScheduleV2Bridge.render;\n" +
+        "loadScheduleWorkspace = __docomatorScheduleV2Bridge.load;\n"
+    )
+  ]);
+}
+
 const temporaryDirectory = await fs.mkdtemp(
   path.join(os.tmpdir(), "docomator-ui-check-")
 );
@@ -40,7 +56,9 @@ const temporaryDirectory = await fs.mkdtemp(
 try {
   for (const [bundleName, fileNames] of Object.entries(bundles)) {
     const parts = await Promise.all(
-      fileNames.map((fileName) => fs.readFile(path.join(uiDirectory, fileName)))
+      fileNames.map(async (fileName) =>
+        isolateUiExtension(fileName, await fs.readFile(path.join(uiDirectory, fileName)))
+      )
     );
     const bundlePath = path.join(temporaryDirectory, bundleName);
     await fs.writeFile(
