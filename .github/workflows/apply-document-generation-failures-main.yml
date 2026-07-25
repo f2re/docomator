@@ -1,17 +1,21 @@
 name: Применить исправление формирования документов
 
 on:
-  push:
+  pull_request_target:
     branches:
       - main
-    paths:
-      - .trigger-document-generation-fix
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.event.pull_request.head.ref == 'fix/document-generation-failures'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
 
@@ -23,7 +27,19 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
+      - name: Определить необходимость применения
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f scripts/ci/apply-document-generation-failures.py ]]; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+            echo 'Исправление уже применено.'
+          fi
+
       - name: Применить исправления
+        if: steps.detect.outputs.apply == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -31,28 +47,34 @@ jobs:
           git diff --check
 
       - name: Определить версию Node.js
+        if: steps.detect.outputs.apply == 'true'
         id: node
         shell: bash
         run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
 
       - name: Установить Node.js
+        if: steps.detect.outputs.apply == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
 
       - name: Установить зависимости
+        if: steps.detect.outputs.apply == 'true'
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Проверить репозиторий
+        if: steps.detect.outputs.apply == 'true'
         run: npm run check
 
       - name: Проверить миграции
+        if: steps.detect.outputs.apply == 'true'
         env:
           DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-generation-fix
         run: npm run migrate
 
       - name: Зафиксировать проверенные изменения
+        if: steps.detect.outputs.apply == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
