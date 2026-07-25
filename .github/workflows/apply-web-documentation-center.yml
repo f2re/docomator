@@ -1,0 +1,47 @@
+name: Применить веб-центр документации
+
+on:
+  push:
+    branches:
+      - feature/web-documentation-center
+    paths:
+      - .github/workflows/apply-web-documentation-center.yml
+      - scripts/ci/apply-web-documentation-center.py
+      - scripts/docs/build-web-docs.mjs
+      - docs/**
+      - apps/api/ui/documentation-center.js
+      - apps/api/ui/documentation-center.css
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/web-documentation-center
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить интеграцию
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-web-documentation-center.py
+          node scripts/docs/build-web-docs.mjs
+          node scripts/docs/build-web-docs.mjs --check
+          node --check apps/api/ui/generated-documentation.js
+          node --check apps/api/ui/documentation-center.js
+          rm -f \
+            scripts/ci/apply-web-documentation-center.py \
+            .github/workflows/apply-web-documentation-center.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'feat add offline web documentation center'
+          git push origin HEAD:feature/web-documentation-center
