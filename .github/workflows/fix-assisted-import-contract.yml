@@ -1,0 +1,36 @@
+name: Исправить публичный контракт расширенного импорта
+
+on:
+  push:
+    branches:
+      - feature/assisted-import-word-roster
+    paths:
+      - .github/workflows/fix-assisted-import-contract.yml
+      - scripts/ci/fix-assisted-import-contract.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/assisted-import-word-roster
+          fetch-depth: 0
+          show-progress: false
+      - name: Применить исправление
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/fix-assisted-import-contract.py
+          rm -f scripts/ci/fix-assisted-import-contract.py .github/workflows/fix-assisted-import-contract.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'fix assisted import public contract'
+          git push origin HEAD:feature/assisted-import-word-roster
