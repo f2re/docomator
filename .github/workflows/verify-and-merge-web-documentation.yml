@@ -1,0 +1,129 @@
+name: Проверить и слить веб-центр документации
+
+on:
+  push:
+    branches:
+      - feature/web-documentation-center
+    paths:
+      - .github/workflows/verify-and-merge-web-documentation.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  verify-and-merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-web-documentation
+      DOCOMATOR_PORT: 18080
+      DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/web-documentation-center
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Завершить интеграцию при необходимости
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -f scripts/ci/apply-web-documentation-center.py && -f docs/QUICK_START_NEW.md ]]; then
+            python3 scripts/ci/apply-web-documentation-center.py
+          fi
+          if [[ -f docs/QUICK_START_NEW.md ]]; then
+            mv -f docs/QUICK_START_NEW.md docs/QUICK_START.md
+          fi
+          rm -f docs/.documentation-work-in-progress
+          node scripts/docs/build-web-docs.mjs
+          node scripts/docs/build-web-docs.mjs --check
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить репозиторий и миграции
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run check
+          npm run migrate
+
+      - name: Установить Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Проверить пользовательские сценарии
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run start:api > "$RUNNER_TEMP/docomator-web-documentation-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              npm run test:e2e
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-web-documentation-api.log"
+          exit 1
+
+      - name: Удалить временный контур и зафиксировать итог
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            scripts/ci/apply-web-documentation-center.py \
+            .github/workflows/apply-web-documentation-center.yml \
+            .github/workflows/verify-and-merge-web-documentation.yml \
+            docs/.documentation-work-in-progress \
+            docs/QUICK_START_NEW.md
+          node scripts/docs/build-web-docs.mjs
+          node scripts/docs/build-web-docs.mjs --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'verify and finalize offline documentation center'
+            git push origin HEAD:feature/web-documentation-center
+          fi
+
+      - name: Слить проверенный PR
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pr_number=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --head feature/web-documentation-center \
+            --base main \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+          if [[ -z "$pr_number" || "$pr_number" == "null" ]]; then
+            echo 'Открытый PR рабочей ветки не найден.' >&2
+            exit 1
+          fi
+          gh pr merge "$pr_number" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --admin \
+            --delete-branch \
+            --subject 'Добавить полное руководство и встроенный центр документации' \
+            --body 'Вся Markdown-документация проекта доступна в автономном веб-интерфейсе. Добавлены быстрый старт, руководство оператора, каталог потоков, поиск, категории, внутренние ссылки, F1 и детерминированная CI-проверяемая сборка.'
