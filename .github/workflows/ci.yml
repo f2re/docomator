@@ -14,6 +14,84 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  apply-document-generation-fix:
+    name: Apply document generation fix
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 39 && github.head_ref == 'fix/document-generation-failures'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/document-generation-failures
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Detect unapplied package
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f scripts/ci/apply-document-generation-failures.py ]]; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+            echo 'Document generation fix is already applied.'
+          fi
+
+      - name: Apply changes
+        if: steps.detect.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-document-generation-failures.py
+          git diff --check
+
+      - name: Read Node.js version
+        if: steps.detect.outputs.apply == 'true'
+        id: apply-node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: steps.detect.outputs.apply == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.apply-node.outputs.version }}
+          cache: npm
+
+      - name: Install locked dependencies
+        if: steps.detect.outputs.apply == 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify patched repository
+        if: steps.detect.outputs.apply == 'true'
+        run: npm run check
+
+      - name: Smoke-test migration
+        if: steps.detect.outputs.apply == 'true'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-generation-fix
+        run: npm run migrate
+
+      - name: Commit verified implementation
+        if: steps.detect.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            .apply-document-generation-failures \
+            .github/workflows/apply-document-generation-failures.yml \
+            scripts/ci/apply-document-generation-failures.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'fix document generation failures and diagnostics'
+          git push origin HEAD:fix/document-generation-failures
+
   verify:
     name: Build, test, docs, and shell
     runs-on: ubuntu-24.04
