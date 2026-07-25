@@ -16,7 +16,7 @@ concurrency:
 jobs:
   finalize-template-field-name-ux:
     name: Finalize template field name UX
-    if: github.event_name == 'pull_request' && github.event.pull_request.number == 37 && github.head_ref == 'fix/template-field-name-ux'
+    if: github.event_name == 'push'
     permissions:
       contents: write
     runs-on: ubuntu-24.04
