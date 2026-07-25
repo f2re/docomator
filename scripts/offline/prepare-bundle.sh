@@ -283,6 +283,7 @@ fi
 cp "$ROOT_DIR/package.json" "$ROOT_DIR/package-lock.json" "$ROOT_DIR/VERSION" \
   "$BUNDLE_DIR/payload/app/"
 cp -a "$ROOT_DIR/migrations" "$BUNDLE_DIR/payload/app/"
+cp -a "$ROOT_DIR/docs" "$BUNDLE_DIR/payload/app/"
 cp -a "$ROOT_DIR/scripts/runtime/." "$BUNDLE_DIR/payload/app/scripts/runtime/"
 cp "$ROOT_DIR/scripts/ci/release-gate.mjs" \
   "$ROOT_DIR/scripts/ci/release-gate-crash-worker.mjs" \
@@ -307,6 +308,7 @@ if [[ "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
     "accessibility-audit.spec.mjs"
     "bulk-import.spec.mjs"
     "employee-card.spec.mjs"
+    "help-center.spec.mjs"
     "fixtures/docomator-api.mjs"
     "fixtures/test.mjs"
     "navigation-and-accessibility.spec.mjs"

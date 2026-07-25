@@ -1,5 +1,6 @@
 export const E2E_SPACE_ID = "00000000-0000-4000-8000-000000000001";
 export const E2E_SECOND_SPACE_ID = "00000000-0000-4000-8000-000000000002";
+export const E2E_HELP_DOCUMENT_ID = "aaaaaaaaaaaaaaaaaaaaaaaa";
 
 const JSON_HEADERS = {
   "cache-control": "no-store",
@@ -301,7 +302,37 @@ export async function installDocomatorApiMock(page, options = {}) {
     const space = spaceId === E2E_SECOND_SPACE_ID ? state.secondary : state.primary;
     let data;
 
-    if (/\/operations$/.test(path) && method === "GET") {
+    if (path === "/api/v1/help/documents" && method === "GET") {
+      data = [
+        {
+          id: E2E_HELP_DOCUMENT_ID,
+          path: "USER_GUIDE.md",
+          title: "Руководство оператора Docomator",
+          category: "Руководства и примеры",
+          sizeBytes: 2048
+        },
+        {
+          id: "bbbbbbbbbbbbbbbbbbbbbbbb",
+          path: "adr/0001-local-first.md",
+          title: "Автономная работа",
+          category: "Архитектурные решения",
+          sizeBytes: 1024
+        }
+      ];
+    } else if (
+      path === `/api/v1/help/documents/${E2E_HELP_DOCUMENT_ID}` &&
+      method === "GET"
+    ) {
+      data = {
+        id: E2E_HELP_DOCUMENT_ID,
+        path: "USER_GUIDE.md",
+        title: "Руководство оператора Docomator",
+        category: "Руководства и примеры",
+        sizeBytes: 2048,
+        content:
+          "# Руководство оператора Docomator\n\n## Массовый импорт\n\n1. Выберите XLSX.\n2. Проверьте сопоставление.\n\n[Каталог кейсов](USE_CASES.md)."
+      };
+    } else if (/\/operations$/.test(path) && method === "GET") {
       state.operationRequests.push({ method, path, spaceId });
       if (state.failOperationsRemaining > 0) {
         state.failOperationsRemaining -= 1;

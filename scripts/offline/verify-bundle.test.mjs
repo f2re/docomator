@@ -65,6 +65,7 @@ const UX_E2E_FILES = [
   "accessibility-audit.spec.mjs",
   "bulk-import.spec.mjs",
   "employee-card.spec.mjs",
+  "help-center.spec.mjs",
   "fixtures/docomator-api.mjs",
   "fixtures/test.mjs",
   "navigation-and-accessibility.spec.mjs",
@@ -94,6 +95,11 @@ test("UX gate binds the target profile and installed release identity", async ()
     prepare,
     /Сборка или lifecycle-скрипт изменили Git checkout/u
   );
+  assert.match(
+    prepare,
+    /cp -a "\$ROOT_DIR\/docs" "\$BUNDLE_DIR\/payload\/app\/"/u
+  );
+  assert.match(prepare, /"help-center\.spec\.mjs"/u);
 });
 
 async function executable(name) {
