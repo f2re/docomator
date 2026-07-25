@@ -45,7 +45,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "bulk-data-import.css",
       "bulk-data-import-v2.css",
       "operation-center.css",
-      "operations-readiness.css"
+      "operations-readiness.css",
+      "help-center.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "no-store"
@@ -54,7 +55,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "app.js",
     appendFileNames: [
       "operator-workflows.js",
-      "operator-workflows-recovery.js"
+      "operator-workflows-recovery.js",
+      "help-center.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "no-store"
