@@ -9,8 +9,7 @@ import {
   DocumentScheduleRegistry,
   DocumentScheduleValidationError,
   type DocumentScheduleDelivery,
-  type DocumentScheduleRecord,
-  type DocumentScheduleRecurrence
+  type DocumentScheduleRecord
 } from "./document-schedules.js";
 import { parseJson, stringifyJson, toJsonValue, type JsonValue } from "./json.js";
 import {
@@ -27,7 +26,8 @@ import {
   initialScheduleRunAt,
   normalizeLocalDate,
   normalizeLocalTime,
-  normalizeTimeZone
+  normalizeTimeZone,
+  type DocumentScheduleRecurrence
 } from "./schedule-time.js";
 import {
   SpaceNotFoundError,
