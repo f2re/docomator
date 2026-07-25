@@ -1,17 +1,19 @@
 name: Финализировать исправление полей шаблона
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-    paths:
-      - .trigger-template-field-name-ux-finalize
+    types:
+      - reopened
+      - synchronize
 
 permissions:
   contents: write
 
 jobs:
   finalize:
+    if: github.head_ref == 'fix/template-field-name-ux'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
