@@ -1,4 +1,4 @@
-name: Применить исправление полей шаблона
+name: Финализировать исправление полей шаблона
 
 on:
   pull_request:
@@ -9,13 +9,13 @@ on:
       - reopened
       - synchronize
     paths:
-      - .apply-template-field-name-ux
+      - .finalize-template-field-name-ux
 
 permissions:
   contents: write
 
 jobs:
-  apply:
+  finalize:
     if: github.head_ref == 'fix/template-field-name-ux'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -28,103 +28,59 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
-      - name: Проверить необходимость применения
-        id: marker
-        shell: bash
-        run: |
-          if [[ -f .apply-template-field-name-ux && -f .template-field-name-ux.py.gz.b64 ]]; then
-            echo 'apply=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'apply=false' >> "$GITHUB_OUTPUT"
-            echo 'Пакет уже применён или временные файлы удалены.'
-          fi
-
-      - name: Применить исправления полей шаблона
-        if: steps.marker.outputs.apply == 'true'
+      - name: Исправить контракт ожидаемой ошибки и удалить диагностику
         shell: bash
         run: |
           set -Eeuo pipefail
-          base64 --decode .template-field-name-ux.py.gz.b64 | gzip -dc > /tmp/apply-template-field-name-ux.py
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('/tmp/apply-template-field-name-ux.py')
+
+          path = Path('apps/api/src/template-draft-routes.test.ts')
           source = path.read_text(encoding='utf-8')
-          old = '    updated, count = pattern.subn(replacement.rstrip() + "\\n\\n", content, count=1)'
-          new = '    updated, count = pattern.subn(lambda _match: replacement.rstrip() + "\\n\\n", content, count=1)'
+          old = '''        personName: {
+          sourceOrder: "family-given-patronymic",
+          pattern: "{Неизвестно}"
+        }
+      }
+    });
+    assert.equal(invalid.statusCode, 400, invalid.body);'''
+          new = '''        personName: {
+          sourceOrder: "family-given-patronymic",
+          pattern: "{Неизвестно}"
+        }
+      }
+    });
+    assert.equal(invalid.statusCode, 422, invalid.body);'''
           if source.count(old) != 1:
-              raise SystemExit('Не найдено место исправления безопасной подстановки')
+              raise SystemExit('Не найден точный тест недопустимого шаблона ФИО')
           path.write_text(source.replace(old, new, 1), encoding='utf-8')
           PY
-          set +e
-          python3 /tmp/apply-template-field-name-ux.py > /tmp/apply-template-field-name-ux.log 2>&1
-          status=$?
-          set -e
-          if [[ $status -ne 0 ]]; then
-            cp /tmp/apply-template-field-name-ux.py .template-field-name-ux.py
-            cp /tmp/apply-template-field-name-ux.log .template-field-name-ux.error.log
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add .template-field-name-ux.py .template-field-name-ux.error.log
-            git commit --no-verify -m 'capture template field patch diagnostics'
-            git push origin HEAD:fix/template-field-name-ux
-            cat /tmp/apply-template-field-name-ux.log
-            exit "$status"
-          fi
-          cat /tmp/apply-template-field-name-ux.log
-          rm -f \
-            .apply-template-field-name-ux \
-            .template-field-name-ux.py.gz.b64 \
-            .template-field-name-ux.py \
-            .template-field-name-ux.error.log \
-            .github/workflows/apply-template-field-name-ux.yml
+          rm -f .finalize-template-field-name-ux .template-field-name-ux.check.log
           git diff --check
 
       - name: Определить версию Node.js
-        if: steps.marker.outputs.apply == 'true'
         id: node
         shell: bash
         run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
 
       - name: Установить Node.js
-        if: steps.marker.outputs.apply == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
 
       - name: Установить зафиксированные зависимости
-        if: steps.marker.outputs.apply == 'true'
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Проверить весь репозиторий
-        if: steps.marker.outputs.apply == 'true'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          set +e
-          npm run check > /tmp/template-field-name-ux-check.log 2>&1
-          status=$?
-          set -e
-          if [[ $status -ne 0 ]]; then
-            cp /tmp/template-field-name-ux-check.log .template-field-name-ux.check.log
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add --all
-            git commit --no-verify -m 'capture template field implementation diagnostics'
-            git push origin HEAD:fix/template-field-name-ux
-            tail -n 160 /tmp/template-field-name-ux-check.log
-            exit "$status"
-          fi
-          cat /tmp/template-field-name-ux-check.log
+        run: npm run check
 
       - name: Проверить миграции на чистой базе
-        if: steps.marker.outputs.apply == 'true'
         env:
-          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-template-field-name-ux
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-template-field-name-ux-final
         run: npm run migrate
 
       - name: Зафиксировать проверенные изменения
-        if: steps.marker.outputs.apply == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -132,5 +88,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
           git diff --cached --check
-          git commit -m 'fix template field placement and personal name formats'
+          git commit -m 'finalize template field name formats and empty placement'
           git push origin HEAD:fix/template-field-name-ux
