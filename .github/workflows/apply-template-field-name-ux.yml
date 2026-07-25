@@ -1,0 +1,66 @@
+name: Исправить привязку полей и варианты ФИО
+
+on:
+  push:
+    branches:
+      - fix/template-field-name-ux
+    paths:
+      - .github/workflows/apply-template-field-name-ux.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: fix/template-field-name-ux
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить исправления полей шаблона
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base64 --decode .template-field-name-ux.py.gz.b64 | gzip -dc > /tmp/apply-template-field-name-ux.py
+          python3 /tmp/apply-template-field-name-ux.py
+          rm -f .template-field-name-ux.py.gz.b64 .github/workflows/apply-template-field-name-ux.yml
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зафиксированные зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить весь репозиторий
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-template-field-name-ux
+        run: npm run migrate
+
+      - name: Зафиксировать проверенные изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'fix template field placement and personal name formats'
+          git push origin HEAD:fix/template-field-name-ux
