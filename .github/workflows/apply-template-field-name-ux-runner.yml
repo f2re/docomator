@@ -1,18 +1,21 @@
 name: Финализировать исправление полей шаблона
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .finalize-template-field-name-ux
+  issue_comment:
+    types:
+      - created
 
 permissions:
   contents: write
+  issues: read
+  pull-requests: read
 
 jobs:
   finalize:
-    if: github.head_ref == 'fix/template-field-name-ux'
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.issue.number == 37 &&
+      github.event.comment.body == '/finalize-template-field-name-ux'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -47,9 +50,11 @@ jobs:
       }
     });
     assert.equal(invalid.statusCode, 422, invalid.body);'''
-          if source.count(old) != 1:
-              raise SystemExit('Не найден точный тест недопустимого шаблона ФИО')
-          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          if old in source:
+              source = source.replace(old, new, 1)
+              path.write_text(source, encoding='utf-8')
+          elif new not in source:
+              raise SystemExit('Не найден тест недопустимого шаблона ФИО')
           PY
           rm -f \
             .apply-template-field-name-ux \
@@ -92,6 +97,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
+          if git diff --cached --quiet; then
+            echo 'Ветка уже финализирована.'
+            exit 0
+          fi
           git diff --cached --check
           git commit -m 'finalize template field name formats and empty placement'
           git push origin HEAD:fix/template-field-name-ux
