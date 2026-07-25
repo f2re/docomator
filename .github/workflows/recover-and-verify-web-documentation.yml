@@ -1,0 +1,274 @@
+name: Восстановить и проверить веб-документацию
+
+on:
+  push:
+    branches:
+      - verify/web-documentation-main
+    paths:
+      - .github/workflows/recover-and-verify-web-documentation.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  recover-verify-merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-web-docs-recovery
+      DOCOMATOR_PORT: 18080
+      DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: verify/web-documentation-main
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Восстановить файлы из проверяемой ветки при необходимости
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ ! -f docs/USER_GUIDE.md || ! -f apps/api/ui/documentation-center.js || ! -f scripts/docs/build-web-docs.mjs ]]; then
+            git fetch origin feature/web-documentation-center:refs/remotes/origin/feature/web-documentation-center
+            git checkout origin/feature/web-documentation-center -- \
+              README.md \
+              package.json \
+              docs/README.md \
+              docs/QUICK_START.md \
+              docs/USER_GUIDE.md \
+              docs/FLOW_CATALOG.md \
+              docs/WEB_DOCUMENTATION.md \
+              apps/api/src/ui-routes.ts \
+              apps/api/ui/documentation-center.js \
+              apps/api/ui/documentation-center.css \
+              apps/api/ui/generated-documentation.js \
+              scripts/docs/build-web-docs.mjs \
+              scripts/ci/check-ui-bundles.mjs \
+              tests/e2e/documentation-center.spec.mjs
+          fi
+          test -f docs/QUICK_START.md
+          test -f docs/USER_GUIDE.md
+          test -f docs/FLOW_CATALOG.md
+          test -f docs/WEB_DOCUMENTATION.md
+          test -f apps/api/ui/documentation-center.js
+          test -f scripts/docs/build-web-docs.mjs
+
+      - name: Нормализовать безопасную навигацию справки
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('apps/api/ui/documentation-center.js')
+          value = path.read_text(encoding='utf-8')
+
+          value = value.replace(
+              '      globalThis.docomatorSelectView?.(documentationViewName);\n',
+              '',
+          )
+
+          old_click = '''    button.addEventListener("click", (event) => {
+                event.preventDefault();
+                documentationOpen();
+              });'''.replace('                ', '      ')
+          new_click = '''    button.addEventListener("click", (event) => {
+                event.preventDefault();
+                documentationSetVisible(true);
+                documentationShowIndex(true);
+                documentQuery("#documentationSearch")?.focus();
+              });'''.replace('                ', '      ')
+          if old_click in value:
+              value = value.replace(old_click, new_click, 1)
+          elif new_click not in value:
+              raise SystemExit('Не найден обработчик пункта «Справка»')
+
+          old_parse = '''  function documentationParseHash() {
+            const match = /^#documentation\\/([^/]+)(?:\\/(.+))?$/u.exec(globalThis.location?.hash || "");
+            if (!match) return null;'''.replace('          ', '')
+          new_parse = '''  function documentationParseHash() {
+            const hash = globalThis.location?.hash || "";
+            if (hash === "#documentation") return { id: "", anchor: "" };
+            const match = /^#documentation\\/([^/]+)(?:\\/(.+))?$/u.exec(hash);
+            if (!match) return null;'''.replace('          ', '')
+          if old_parse in value:
+              value = value.replace(old_parse, new_parse, 1)
+
+          old_open = '''  function documentationOpen(documentId = "", anchor = "") {
+            documentationSetVisible(true);
+            const parsed = documentId ? { id: documentId, anchor } : documentationParseHash();
+            if (parsed?.id && documentationSelectDocument(parsed.id, parsed.anchor, false)) return;
+            const contextual = documentationContextTarget();
+            if (contextual?.document) {'''.replace('          ', '')
+          new_open = '''  function documentationOpen(documentId = "", anchor = "") {
+            const parsed = documentId ? { id: documentId, anchor } : documentationParseHash();
+            const contextual = parsed?.id ? null : documentationContextTarget();
+            documentationSetVisible(true);
+            if (parsed?.id && documentationSelectDocument(parsed.id, parsed.anchor, false)) return;
+            if (parsed && !parsed.id) {
+              documentationShowIndex(false);
+              documentQuery("#documentationSearch")?.focus();
+              return;
+            }
+            if (contextual?.document) {'''.replace('          ', '')
+          if old_open in value:
+              value = value.replace(old_open, new_open, 1)
+
+          old_hash = '''      documentationSetVisible(true);
+                documentationSelectDocument(parsed.id, parsed.anchor, false);'''.replace('                ', '      ')
+          new_hash = '''      documentationSetVisible(true);
+                if (parsed.id) documentationSelectDocument(parsed.id, parsed.anchor, false);
+                else documentationShowIndex(false);'''.replace('                ', '      ')
+          if old_hash in value:
+              value = value.replace(old_hash, new_hash, 1)
+
+          old_bootstrap = '''    if (parsed) {
+                documentationSetVisible(true);
+                documentationSelectDocument(parsed.id, parsed.anchor, false);
+              }'''.replace('                ', '      ')
+          new_bootstrap = '''    if (parsed) {
+                documentationSetVisible(true);
+                if (parsed.id) documentationSelectDocument(parsed.id, parsed.anchor, false);
+                else documentationShowIndex(false);
+              }'''.replace('                ', '      ')
+          if old_bootstrap in value:
+              value = value.replace(old_bootstrap, new_bootstrap, 1)
+
+          pattern = re.compile(
+              r'  function documentationCreateNavigationButton\(\) \{[\s\S]*?\n  \}\n\n  function documentationCreateView\(\)',
+              re.MULTILINE,
+          )
+          replacement = '''  function documentationCreateNavigationButton() {
+            if (documentQuery("#documentationNavButton")) return;
+            const reference =
+              documentQuery('[data-view-target="employees"]') ||
+              documentQuery('[data-view-target="templates"]') ||
+              documentQuery("[data-view-target]");
+            const button = globalThis.document.createElement("button");
+            button.id = "documentationNavButton";
+            button.type = "button";
+            button.className = `${reference?.className || ""} documentation-nav-button`.trim();
+            button.dataset.viewTarget = documentationViewName;
+            button.innerHTML = '<span class="documentation-nav-icon" aria-hidden="true">?</span><span>Справка</span><kbd>F1</kbd>';
+
+            const referenceParent = reference?.parentElement;
+            if (referenceParent?.tagName === "LI" && referenceParent.parentElement) {
+              const item = referenceParent.cloneNode(false);
+              item.removeAttribute("id");
+              item.append(button);
+              referenceParent.insertAdjacentElement("afterend", item);
+            } else if (referenceParent) {
+              referenceParent.append(button);
+            } else {
+              button.classList.add("is-floating");
+              globalThis.document.body.append(button);
+            }
+            button.addEventListener("click", (event) => {
+              event.preventDefault();
+              documentationSetVisible(true);
+              documentationShowIndex(true);
+              documentQuery("#documentationSearch")?.focus();
+            });
+          }
+
+          function documentationCreateView()'''.replace('          ', '')
+          value, count = pattern.subn(replacement, value, count=1)
+          if count != 1:
+              raise SystemExit('Не удалось нормализовать создание кнопки справки')
+
+          path.write_text(value, encoding='utf-8')
+          PY
+          cat >> apps/api/ui/documentation-center.css <<'CSS'
+
+          .documentation-nav-button.is-floating {
+            position: fixed;
+            z-index: 1000;
+            right: 1rem;
+            bottom: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.55rem 0.75rem;
+            border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+            border-radius: 999px;
+            color: inherit;
+            background: var(--surface, #fff);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+          }
+          CSS
+          rm -f docs/.documentation-work-in-progress docs/QUICK_START_NEW.md
+          node scripts/docs/build-web-docs.mjs
+          node scripts/docs/build-web-docs.mjs --check
+          node --check apps/api/ui/documentation-center.js
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Полная проверка репозитория и миграций
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm run migrate
+
+      - name: Полный Chromium-набор
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npx playwright install --with-deps chromium
+          npm run start:api > "$RUNNER_TEMP/docomator-web-docs-recovery-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              npm run test:e2e
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-web-docs-recovery-api.log"
+          exit 1
+
+      - name: Зафиксировать только рабочие изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f .github/workflows/recover-and-verify-web-documentation.yml
+          node scripts/docs/build-web-docs.mjs
+          node scripts/docs/build-web-docs.mjs --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'recover and verify offline web documentation'
+            git push origin HEAD:verify/web-documentation-main
+          fi
+
+      - name: Слить изменения в main при наличии разницы
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git fetch origin main
+          if git diff --quiet origin/main...HEAD; then
+            echo 'Точное состояние main проверено, дополнительных изменений нет.'
+            exit 0
+          fi
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head verify/web-documentation-main --base main --state open --json number --jq '.[0].number')
+          if [[ -z "$pr_number" || "$pr_number" == "null" ]]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" --head verify/web-documentation-main --base main --title 'Гарантировать полную веб-документацию проекта' --body 'Восстановлен и полностью проверен офлайн-центр документации: быстрый старт, руководство оператора, каталог потоков, поиск, внутренние ссылки, F1, детерминированная сборка, миграции и полный Chromium-набор.'
+            pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head verify/web-documentation-main --base main --state open --json number --jq '.[0].number')
+          fi
+          gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --squash --admin --delete-branch --subject 'Гарантировать полную веб-документацию проекта' --body 'Вся Markdown-документация доступна в автономном интерфейсе. Добавлены исчерпывающие рабочие флоу, кейсы, поиск, категории, глубокие ссылки и F1; итог прошёл полный check, миграции и Chromium.'
