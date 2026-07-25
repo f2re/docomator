@@ -98,7 +98,25 @@ jobs:
 
       - name: Проверить весь репозиторий
         if: steps.marker.outputs.apply == 'true'
-        run: npm run check
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          npm run check > /tmp/template-field-name-ux-check.log 2>&1
+          status=$?
+          set -e
+          if [[ $status -ne 0 ]]; then
+            cp /tmp/template-field-name-ux-check.log .template-field-name-ux.check.log
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add --all
+            git diff --cached --check
+            git commit -m 'capture template field implementation diagnostics'
+            git push origin HEAD:fix/template-field-name-ux
+            cat /tmp/template-field-name-ux-check.log
+            exit "$status"
+          fi
+          cat /tmp/template-field-name-ux-check.log
 
       - name: Проверить миграции на чистой базе
         if: steps.marker.outputs.apply == 'true'
