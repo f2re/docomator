@@ -35,11 +35,17 @@ export class DocomatorPage {
       .first()
       .click();
     await this.page.locator("#employeeDisplayName").fill(displayName);
-    await this.page.locator("#employeeAddFieldButton").click();
-    await this.page.locator("#employeeFieldSource").selectOption("__new__");
-    await this.page.locator("#employeeFieldLabel").fill(label);
-    await this.page.locator("#employeeFieldType").selectOption("string");
-    await this.page.locator("#employeeFieldValue").fill(value);
+
+    await this.page.locator("#operatorEmployeeAddField").click();
+    await expect(this.page.locator("#operatorEmployeeNewField")).toBeVisible();
+    await this.page.locator("#operatorNewFieldLabel").fill(label);
+    await this.page.locator("#operatorNewFieldType").selectOption("string");
+    await this.page.locator("#operatorNewFieldValue").fill(value);
+    await this.page.locator("#operatorStageNewField").click();
+
+    await expect(
+      this.page.locator("[data-operator-field-card]").filter({ hasText: label })
+    ).toBeVisible();
     await this.page.locator("#employeeSubmitButton").click();
     await expect(this.page.locator("#employeeFieldConfirmDialog")).toBeVisible();
     await this.page
