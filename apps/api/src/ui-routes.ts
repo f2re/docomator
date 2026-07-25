@@ -29,6 +29,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "quarantine.css",
       "structure.css",
       "template-field.css",
+      "template-repeat-assistant.css",
       "template-trial.css",
       "template-multi-trial.css",
       "template-activation.css",
@@ -42,6 +43,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "shared-document-results.css",
       "storage-maintenance.css",
       "bulk-data-import.css",
+      "bulk-data-import-v2.css",
       "operation-center.css",
       "operations-readiness.css"
     ],
@@ -61,6 +63,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "document-intake.js",
     appendFileNames: [
       "document-structure.js",
+      "template-repeat-assistant.js",
       "template-trial.js",
       "template-multi-trial.js",
       "template-activation.js",
@@ -79,6 +82,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "shared-corporate-mode.js",
       "storage-maintenance.js",
       "bulk-data-import.js",
+      "bulk-data-import-v2.js",
       "operation-center.js",
       "operations-readiness.js"
     ],

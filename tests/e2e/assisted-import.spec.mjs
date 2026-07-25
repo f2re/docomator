@@ -27,7 +27,7 @@ test("оператор вставляет таблицу из Excel и пров�
   await positionRow.locator("[data-bulk-mapping-mode]").selectOption("create");
   await positionRow.locator("[data-bulk-value-type]").selectOption("enum");
   await expect(positionRow.locator("[data-bulk-enum-fields]")).toBeVisible();
-  await expect(positionRow.locator("[data-bulk-enum-values]")).toContainText(
+  await expect(positionRow.locator("[data-bulk-enum-values]")).toHaveValue(
     /Инженер|Аналитик/u
   );
   await page.locator("#bulkImportCreateGroup").check();

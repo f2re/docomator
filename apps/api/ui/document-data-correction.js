@@ -36,8 +36,21 @@ function generationPropertyDefinition(fieldKey) {
   );
 }
 
-function generationCorrectionInput(type, identifier) {
+function generationCorrectionInput(type, identifier, definition = null) {
   const escaped = generationEscape(identifier);
+  if (type === "enum") {
+    const validation = definition?.validation && typeof definition.validation === "object" && !Array.isArray(definition.validation)
+      ? definition.validation
+      : {};
+    const options = Array.isArray(validation.enum)
+      ? validation.enum.filter((value) => typeof value === "string")
+      : [];
+    if (validation.allowCustom === false) {
+      return `<select id="${escaped}" data-correction-value><option value="">Выберите</option>${options.map((value) => `<option value="${generationEscape(value)}">${generationEscape(value)}</option>`).join("")}</select>`;
+    }
+    const listId = `${escaped}_options`;
+    return `<input id="${escaped}" data-correction-value type="text" maxlength="4000" list="${listId}" placeholder="Введите или выберите значение" /><datalist id="${listId}">${options.map((value) => `<option value="${generationEscape(value)}"></option>`).join("")}</datalist>`;
+  }
   if (type === "boolean") {
     return `<select id="${escaped}" data-correction-value><option value="">Выберите</option><option value="true">Да</option><option value="false">Нет</option></select>`;
   }
@@ -156,7 +169,7 @@ async function appendGenerationCorrectionEditor(preflight, token) {
                 </div>
                 <label class="generation-correction-control" for="${generationEscape(identifier)}">
                   <span>Значение</span>
-                  ${generationCorrectionInput(row.valueType, identifier)}
+                  ${generationCorrectionInput(row.valueType, identifier, generationPropertyDefinition(row.fieldKey))}
                 </label>
                 <div class="generation-correction-result" data-correction-result></div>
               </article>`;

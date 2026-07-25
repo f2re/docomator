@@ -76,6 +76,7 @@ function multiTrialFieldTypeLabel(type) {
     {
       string: "Короткая строка",
       text: "Длинный текст",
+      enum: "Список вариантов",
       number: "Число",
       integer: "Целое число",
       boolean: "Да / нет",
@@ -102,7 +103,7 @@ function fieldInput(field) {
   if (field.valueType === "date-time") {
     return `<input id="${multiTrialEscape(identifier)}" data-field-id="${multiTrialEscape(field.id)}" data-value-type="date-time" type="datetime-local" ${field.required ? "required" : ""} />`;
   }
-  return `<input id="${multiTrialEscape(identifier)}" data-field-id="${multiTrialEscape(field.id)}" data-value-type="string" type="text" maxlength="4000" ${field.required ? "required" : ""} placeholder="Введите значение" />`;
+  return `<input id="${multiTrialEscape(identifier)}" data-field-id="${multiTrialEscape(field.id)}" data-value-type="${multiTrialEscape(field.valueType)}" type="text" maxlength="4000" ${field.required ? "required" : ""} placeholder="Введите значение" />`;
 }
 
 function selectedMultiTrialDraft() {

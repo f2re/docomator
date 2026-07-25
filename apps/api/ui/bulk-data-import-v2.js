@@ -140,7 +140,7 @@
     const booleanValues = new Set(["да", "нет", "true", "false", "1", "0", "+", "-"]);
     if (values.length > 0 && values.every((value) => booleanValues.has(bulkV2Normalize(value)))) return "boolean";
     if (values.length > 0 && values.every((value) => /^\d{1,2}[./-]\d{1,2}[./-]\d{4}$|^\d{4}-\d{2}-\d{2}$/u.test(value))) return "date";
-    if (values.length > 0 && values.every((value) => /^[-+]?\d+$/u.test(value.replace(/\s/gu, ""))) && !/[номер|паспорт|телефон|снилс|инн]/u.test(normalized)) return "integer";
+    if (values.length > 0 && values.every((value) => /^[-+]?\d+$/u.test(value.replace(/\s/gu, ""))) && !/номер|паспорт|телефон|снилс|инн/u.test(normalized)) return "integer";
     if (values.length > 0 && values.every((value) => /^[-+]?\d+(?:[.,]\d+)?$/u.test(value.replace(/\s/gu, ""))) && /сумма|ставка|оклад|процент|балл/u.test(normalized)) return "number";
     if (["position", "department", "group", "course", "status"].includes(semantic)) return "enum";
     const unique = bulkV2UniqueValues(header, 30);

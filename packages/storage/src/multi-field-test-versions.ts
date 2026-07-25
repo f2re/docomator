@@ -11,6 +11,7 @@ export type MultiFieldTestVersionFormat = "docx" | "xlsx";
 export type MultiFieldValueType =
   | "string"
   | "text"
+  | "enum"
   | "number"
   | "integer"
   | "boolean"
@@ -201,6 +202,7 @@ function valueType(value: string): MultiFieldValueType {
   if (
     value === "string" ||
     value === "text" ||
+    value === "enum" ||
     value === "number" ||
     value === "integer" ||
     value === "boolean" ||

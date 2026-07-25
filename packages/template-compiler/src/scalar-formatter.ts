@@ -3,6 +3,7 @@ import { TemplateCompilerError } from "./compiler.js";
 export type ScalarValueType =
   | "string"
   | "text"
+  | "enum"
   | "number"
   | "integer"
   | "boolean"
@@ -191,7 +192,7 @@ export function defaultScalarFormatter(
   valueType: ScalarValueType,
   options: { fractionDigits?: number | null; timeZone?: string } = {}
 ): ScalarFormatter {
-  if (valueType === "string" || valueType === "text") {
+  if (valueType === "string" || valueType === "text" || valueType === "enum") {
     return { version: 1, kind: "identity" };
   }
   if (valueType === "number") {
@@ -237,7 +238,7 @@ export function parseScalarFormatter(
     return { version: 1, kind: "legacy" };
   }
   if (value.kind === "identity") {
-    if (valueType !== "string" && valueType !== "text") {
+    if (valueType !== "string" && valueType !== "text" && valueType !== "enum") {
       return formatterError("Текстовый формат не соответствует типу поля.");
     }
     return { version: 1, kind: "identity" };

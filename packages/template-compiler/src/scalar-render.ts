@@ -229,7 +229,7 @@ export function normalizeScalarValueForRendering(
   value: unknown,
   formatterValue: unknown
 ): NormalizedScalarValue {
-  if (valueType === "string") {
+  if (valueType === "string" || valueType === "enum") {
     const text = requiredText(value, "пробное значение", 4_000);
     const display = formatScalarDisplay(valueType, text, formatterValue);
     return { display, xlsxMode: "inline-string", xlsxValue: display };

@@ -166,6 +166,7 @@ function fieldTypeOptions() {
   return [
     ["string", "Короткая строка"],
     ["text", "Длинный текст"],
+    ["enum", "Список вариантов"],
     ["number", "Число"],
     ["integer", "Целое число"],
     ["boolean", "Да / нет"],
@@ -181,6 +182,7 @@ function structureFieldTypeLabel(valueType) {
     {
       string: "Короткая строка",
       text: "Длинный текст",
+      enum: "Список вариантов",
       number: "Число",
       integer: "Целое число",
       boolean: "Да / нет",

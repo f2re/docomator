@@ -41,6 +41,7 @@ interface CreateFieldBody {
   valueType:
     | "string"
     | "text"
+    | "enum"
     | "number"
     | "integer"
     | "boolean"
@@ -606,6 +607,7 @@ export function registerTemplateDraftRoutes(
               enum: [
                 "string",
                 "text",
+                "enum",
                 "number",
                 "integer",
                 "boolean",

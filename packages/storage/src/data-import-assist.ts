@@ -219,6 +219,10 @@ export class AssistedDataImportRegistry {
     this.operator = options.operator ?? new OperatorAssistRegistry(store);
   }
 
+  list(spaceIdentity: string, limitValue = 50): DataImportRunRecord[] {
+    return this.imports.list(spaceIdentity, limitValue);
+  }
+
   plan(
     spaceIdentity: string,
     input: AssistedExecuteDataImportInput,

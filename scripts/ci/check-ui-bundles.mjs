@@ -15,6 +15,7 @@ const bundles = {
   "document-intake.js": [
     "document-intake.js",
     "document-structure.js",
+    "template-repeat-assistant.js",
     "template-trial.js",
     "template-multi-trial.js",
     "template-activation.js",
@@ -33,6 +34,7 @@ const bundles = {
     "shared-corporate-mode.js",
     "storage-maintenance.js",
     "bulk-data-import.js",
+    "bulk-data-import-v2.js",
     "operation-center.js",
     "operations-readiness.js"
   ]
