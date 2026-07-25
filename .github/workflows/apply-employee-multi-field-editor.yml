@@ -31,7 +31,7 @@ jobs:
         id: detect
         shell: bash
         run: |
-          if [[ -f .apply-employee-multi-field-editor.py.gz.b64 ]]; then
+          if compgen -G '.apply-employee-multi-field-editor.part-*' > /dev/null; then
             echo 'apply=true' >> "$GITHUB_OUTPUT"
           else
             echo 'apply=false' >> "$GITHUB_OUTPUT"
@@ -43,7 +43,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          base64 --decode .apply-employee-multi-field-editor.py.gz.b64 | gzip -dc > /tmp/apply-employee-multi-field-editor.py
+          cat .apply-employee-multi-field-editor.part-* \
+            | base64 --decode \
+            | gzip -dc \
+            > /tmp/apply-employee-multi-field-editor.py
           python3 /tmp/apply-employee-multi-field-editor.py
           git diff --check
 
@@ -80,7 +83,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           rm -f \
-            .apply-employee-multi-field-editor.py.gz.b64 \
+            .apply-employee-multi-field-editor.part-* \
             .github/workflows/apply-employee-multi-field-editor.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
