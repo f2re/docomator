@@ -1,0 +1,77 @@
+name: Проверить главную страницу справки
+
+on:
+  push:
+    branches:
+      - fix/documentation-landing
+    paths:
+      - .github/workflows/fix-documentation-landing.yml
+      - scripts/ci/fix-documentation-landing.py
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  verify-and-merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-documentation-landing
+      DOCOMATOR_PORT: 18080
+      DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/documentation-landing
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить исправление
+        run: python3 scripts/ci/fix-documentation-landing.py
+
+      - name: Определить версию Node.js
+        id: node
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зависимости и проверить репозиторий
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm run migrate
+
+      - name: Проверить Chromium-сценарий справки
+        run: |
+          npx playwright install --with-deps chromium
+          npm run start:api > "$RUNNER_TEMP/docomator-documentation-landing-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              npx playwright test tests/e2e/documentation-center.spec.mjs
+              break
+            fi
+            if [[ "$attempt" == "30" ]]; then
+              cat "$RUNNER_TEMP/docomator-documentation-landing-api.log"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Зафиксировать и слить
+        run: |
+          rm -f scripts/ci/fix-documentation-landing.py .github/workflows/fix-documentation-landing.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'fix documentation landing navigation'
+          git push origin HEAD:fix/documentation-landing
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head fix/documentation-landing --base main --state open --json number --jq '.[0].number')
+          gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --squash --admin --delete-branch --subject 'Открывать справку с главной страницы документации' --body 'Пункт «Справка» открывает обзор документов; F1 сохраняет контекстное открытие. Проверены общий check, миграции и Chromium-сценарии справки.'
