@@ -6,7 +6,7 @@ import path from "node:path";
 const projectRoot = path.resolve(import.meta.dirname, "../..");
 const uiDirectory = path.join(projectRoot, "apps/api/ui");
 const bundles = {
-  "app.js": ["app.js"],
+  "app.js": ["app.js", "operator-workflows.js"],
   "document-intake.js": [
     "document-intake.js",
     "document-structure.js",
@@ -22,6 +22,7 @@ const bundles = {
     "email-recipients.js",
     "document-schedules.js",
     "document-schedule-network.js",
+    "document-schedules-v2.js",
     "shared-document-results.js",
     "shared-document-view-labels.js",
     "shared-corporate-mode.js",

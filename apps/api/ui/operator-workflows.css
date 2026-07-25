@@ -1,0 +1,53 @@
+.employee-dialog { width: min(960px, calc(100vw - 28px)); }
+.operator-employee-fields-shell { display: grid; gap: 14px; }
+.operator-employee-fields-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto auto; align-items: center; gap: 10px; }
+.operator-employee-fields-toolbar .search-field { max-width: none; }
+.operator-check { display: inline-flex; min-height: 40px; align-items: center; gap: 8px; color: var(--muted); font-size: .82rem; }
+.operator-check input { width: 18px; height: 18px; accent-color: var(--accent-fill); }
+.operator-counter { padding: 6px 10px; color: var(--hint); font-size: .74rem; font-weight: 700; white-space: nowrap; background: var(--surface-2); border-radius: 999px; }
+.operator-employee-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.operator-employee-field-card { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 13px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; }
+.operator-employee-field-card.is-filled { border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); background: color-mix(in srgb, var(--accent-soft) 38%, var(--surface-2)); }
+.operator-employee-field-card input,
+.operator-employee-field-card select,
+.operator-employee-field-card textarea { width: 100%; min-height: 44px; padding: 9px 11px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 11px; }
+.operator-employee-field-card textarea { min-height: 84px; resize: vertical; }
+.operator-field-heading { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.operator-field-heading label { font-weight: 700; }
+.operator-field-heading span { flex: 0 0 auto; padding: 3px 7px; color: var(--hint); font-size: .67rem; font-weight: 700; background: var(--surface); border-radius: 999px; }
+.operator-employee-field-card small { min-height: 34px; }
+.operator-remove-field { min-height: 28px; font-size: .75rem; }
+.operator-new-field { display: grid; gap: 13px; padding: 15px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; }
+.operator-new-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.operator-new-field-grid .field { display: grid; gap: 6px; }
+.operator-new-field-grid .field > span { font-size: .82rem; font-weight: 700; }
+.operator-inline-actions { display: flex; justify-content: flex-end; }
+.operator-property-enum { display: grid; gap: 12px; padding: 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; }
+.operator-group-dialog { width: min(820px, calc(100vw - 28px)); }
+.operator-group-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+.operator-group-selection-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.operator-group-selection-heading > div { display: flex; gap: 14px; }
+.operator-group-members { display: grid; max-height: 340px; overflow: auto; border: 1px solid var(--border); border-radius: 14px; }
+.operator-group-member { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; min-height: 52px; padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.operator-group-member:last-child { border-bottom: 0; }
+.operator-group-member:hover { background: var(--surface-hover); }
+.operator-group-member input { width: 18px; height: 18px; accent-color: var(--accent-fill); }
+.operator-group-member span { overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.operator-group-member small { white-space: nowrap; }
+.collection-card .card-actions { margin-top: 12px; }
+
+@media (max-width: 760px) {
+  .operator-employee-fields-toolbar { grid-template-columns: 1fr 1fr; }
+  .operator-employee-fields-toolbar .search-field { grid-column: 1 / -1; }
+  .operator-employee-field-grid,
+  .operator-new-field-grid { grid-template-columns: 1fr; }
+  .operator-group-toolbar { grid-template-columns: 1fr; }
+  .operator-group-selection-heading { align-items: start; flex-direction: column; }
+}
+
+@media (max-width: 480px) {
+  .operator-employee-fields-toolbar { grid-template-columns: 1fr; }
+  .operator-counter { width: fit-content; }
+  .operator-group-member { grid-template-columns: auto minmax(0, 1fr); }
+  .operator-group-member small { grid-column: 2; }
+}
