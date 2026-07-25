@@ -1,0 +1,68 @@
+name: Применить исправление формирования документов
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .trigger-document-generation-fix
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: fix/document-generation-failures
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить исправления
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-document-generation-failures.py
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить репозиторий
+        run: npm run check
+
+      - name: Проверить миграции
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-generation-fix
+        run: npm run migrate
+
+      - name: Зафиксировать проверенные изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            .apply-document-generation-failures \
+            .github/workflows/apply-document-generation-failures.yml \
+            scripts/ci/apply-document-generation-failures.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'fix document generation failures and diagnostics'
+          git push origin HEAD:fix/document-generation-failures
