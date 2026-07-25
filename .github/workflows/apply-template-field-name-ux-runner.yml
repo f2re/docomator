@@ -1,0 +1,92 @@
+name: Применить исправление полей шаблона
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+    paths:
+      - .apply-template-field-name-ux
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'fix/template-field-name-ux'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: fix/template-field-name-ux
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Проверить необходимость применения
+        id: marker
+        shell: bash
+        run: |
+          if [[ -f .apply-template-field-name-ux && -f .template-field-name-ux.py.gz.b64 ]]; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+            echo 'Пакет уже применён или временные файлы удалены.'
+          fi
+
+      - name: Применить исправления полей шаблона
+        if: steps.marker.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base64 --decode .template-field-name-ux.py.gz.b64 | gzip -dc > /tmp/apply-template-field-name-ux.py
+          python3 /tmp/apply-template-field-name-ux.py
+          rm -f \
+            .apply-template-field-name-ux \
+            .template-field-name-ux.py.gz.b64 \
+            .github/workflows/apply-template-field-name-ux.yml
+          git diff --check
+
+      - name: Определить версию Node.js
+        if: steps.marker.outputs.apply == 'true'
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        if: steps.marker.outputs.apply == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зафиксированные зависимости
+        if: steps.marker.outputs.apply == 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить весь репозиторий
+        if: steps.marker.outputs.apply == 'true'
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        if: steps.marker.outputs.apply == 'true'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-template-field-name-ux
+        run: npm run migrate
+
+      - name: Зафиксировать проверенные изменения
+        if: steps.marker.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'fix template field placement and personal name formats'
+          git push origin HEAD:fix/template-field-name-ux
