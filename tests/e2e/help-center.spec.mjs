@@ -23,7 +23,7 @@ test("встроенное руководство открывается, ище
     "Руководство по всем рабочим потокам"
   );
 
-  await page.locator("#helpCenterSearch").fill("студенты темы руководители");
+  await page.locator("#helpCenterSearch").fill("студенты");
   const studentCard = page
     .locator("[data-help-article]")
     .filter({ hasText: "студенты, темы работ" })
