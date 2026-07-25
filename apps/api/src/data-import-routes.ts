@@ -170,6 +170,7 @@ function importResultForClient<T extends {
   sourceSha256: string;
   identityPropertyKey: string;
   groupId: string | null;
+  mappingResolutions?: unknown;
 }>(result: T, includeTechnicalDetails: boolean) {
   if (includeTechnicalDetails) return result;
   const {
@@ -179,6 +180,7 @@ function importResultForClient<T extends {
     sourceSha256: _sourceSha256,
     identityPropertyKey: _identityPropertyKey,
     groupId: _groupId,
+    mappingResolutions: _mappingResolutions,
     ...publicResult
   } = result;
   return publicResult;
@@ -350,8 +352,9 @@ export function registerDataImportRoutes(
           mutationContextFromRequest(request)
         )
       );
+      const { mappingResolutions: _mappingResolutions, ...publicPlan } = plan;
       reply.header("cache-control", "no-store");
-      return responseEnvelope(request, plan);
+      return responseEnvelope(request, publicPlan);
     }
   );
 

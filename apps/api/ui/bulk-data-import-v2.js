@@ -212,7 +212,7 @@
     const note = isDisplayName
       ? "Используется как имя человека"
       : header === identityColumn
-        ? "Устойчивый ключ для повторных импортов"
+        ? "Используется при повторных импортах"
         : `Колонка ${index + 1}`;
     return `<article class="bulk-import-mapping-row bulk-v2-mapping-row" data-bulk-mapping-row data-column="${escapeHtml(header)}">
       <div class="bulk-import-column-name"><div><strong>${escapeHtml(header)}</strong>${confidence}</div><small>${escapeHtml(note)}</small>${samples.length ? `<small>Примеры: ${samples.map((value) => `«${escapeHtml(value)}»`).join(", ")}</small>` : ""}</div>
