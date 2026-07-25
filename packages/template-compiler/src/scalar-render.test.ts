@@ -694,3 +694,26 @@ test("production fallback renders a missing optional value as an empty string", 
   assert.equal(result.renderedValue, "");
   assert.equal(result.readBackValue, "");
 });
+
+test("text fields apply the selected personal-name format before DOCX rendering", async () => {
+  const input = await compiledDocx();
+  const result = await renderScalarValue({
+    compiled: input.compiled.output,
+    technicalBinding: input.compiled.technicalBinding,
+    fieldBinding: input.fieldBinding,
+    valueType: "string",
+    value: "Иванов Иван Иванович",
+    formatter: {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given-patronymic",
+      pattern: "{Фамилия} {И}.{О}."
+    }
+  });
+
+  assert.equal(result.renderedValue, "Иванов И.И.");
+  assert.equal(result.readBackValue, "Иванов И.И.");
+  const entries = await readOoxmlPackage(result.output);
+  const xml = packageEntry(entries, "word/document.xml").content.toString("utf8");
+  assert.match(xml, /Иванов И\.И\./u);
+});

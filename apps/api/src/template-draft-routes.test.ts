@@ -53,7 +53,7 @@ function sourceDocx(): Buffer {
         ? {
             ...entry,
             content:
-              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>ФИО получателя</w:t></w:r></w:p><w:p><w:r><w:t>Должность</w:t></w:r></w:p><w:p><w:r><w:t>ФИО: ______</w:t></w:r></w:p></w:body></w:document>'
+              '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>ФИО получателя</w:t></w:r></w:p><w:p><w:r><w:t>Должность</w:t></w:r></w:p><w:p><w:r><w:t>ФИО: ______</w:t></w:r></w:p><w:p><w:r><w:t></w:t></w:r></w:p></w:body></w:document>'
           }
         : entry
     )
@@ -665,6 +665,79 @@ test("API hides a draft from another space and rejects a duplicate element", asy
       url: `/api/v1/spaces/${otherSpaceId}/template-drafts/${draft.id}`
     });
     assert.equal(hidden.statusCode, 404, hidden.body);
+  } finally {
+    await app.close();
+    await fsPromises.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("API accepts an empty DOCX paragraph and stores a safe FIO formatter", async () => {
+  const { app, dataDir } = await testApp();
+  try {
+    const source = await quarantineSource(app);
+    const draftResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/document-sources/${source.id}/draft`,
+      headers: { "content-type": "application/json" },
+      payload: {}
+    });
+    const draft = draftResponse.json().data as {
+      id: string;
+      structure: {
+        elements: Array<{ id: string; kind: string; text: string }>;
+      };
+    };
+    const emptyParagraph = draft.structure.elements.find(
+      (element) => element.kind === "paragraph" && element.text === ""
+    );
+    const otherParagraph = draft.structure.elements.find(
+      (element) => element.kind === "paragraph" && element.text === "Должность"
+    );
+    assert.ok(emptyParagraph);
+    assert.ok(otherParagraph);
+
+    const created = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "subject.name_a1b2c3d4.display_name",
+        label: "ФИО сотрудника",
+        valueType: "string",
+        elementId: emptyParagraph.id,
+        personName: {
+          sourceOrder: "family-given-patronymic",
+          pattern: "{Фамилия} {И}.{О}."
+        }
+      }
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    assert.equal(created.json().data.field.originalPreview, "");
+    assert.equal(created.json().data.field.binding.kind, "docx.paragraph");
+    assert.deepEqual(created.json().data.field.formatter, {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given-patronymic",
+      pattern: "{Фамилия} {И}.{О}."
+    });
+
+    const invalid = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields`,
+      headers: { "content-type": "application/json" },
+      payload: {
+        key: "subject.name_deadbeef.display_name",
+        label: "ФИО сотрудника",
+        valueType: "string",
+        elementId: otherParagraph.id,
+        personName: {
+          sourceOrder: "family-given-patronymic",
+          pattern: "{Неизвестно}"
+        }
+      }
+    });
+    assert.equal(invalid.statusCode, 400, invalid.body);
+    assert.match(invalid.json().error.message, /неизвестн.*част/ui);
   } finally {
     await app.close();
     await fsPromises.rm(dataDir, { recursive: true, force: true });

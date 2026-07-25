@@ -87,3 +87,90 @@ test("formatter parser rejects unsupported and incompatible contracts", () => {
     );
   }
 });
+
+test("Russian personal-name formatter supports common and custom variants", () => {
+  const source = "Иванов Иван Иванович";
+  assert.equal(
+    formatScalarDisplay("string", source, {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given-patronymic",
+      pattern: "{Фамилия} {И}.{О}."
+    }),
+    "Иванов И.И."
+  );
+  assert.equal(
+    formatScalarDisplay("string", source, {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given-patronymic",
+      pattern: "{И}.{О}. {Фамилия}"
+    }),
+    "И.И. Иванов"
+  );
+  assert.equal(
+    formatScalarDisplay("string", source, {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given-patronymic",
+      pattern: "{Фамилия}"
+    }),
+    "Иванов"
+  );
+  assert.equal(
+    formatScalarDisplay("string", "Иван Иванович Иванов", {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "given-patronymic-family",
+      pattern: "{Фамилия}, {Имя} {Отчество}"
+    }),
+    "Иванов, Иван Иванович"
+  );
+  assert.equal(
+    formatScalarDisplay("string", "Иванов Иван", {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given",
+      pattern: "{Фамилия} {И}.{О}."
+    }),
+    "Иванов И."
+  );
+  assert.equal(
+    formatScalarDisplay("string", "Иванов И.И.", {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given-patronymic",
+      pattern: "{И}.{О}. {Фамилия}"
+    }),
+    "И.И. Иванов"
+  );
+});
+
+test("personal-name formatter rejects scripts and unknown tokens", () => {
+  for (const formatter of [
+    {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given-patronymic",
+      pattern: "{Должность} {Фамилия}"
+    },
+    {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "unknown",
+      pattern: "{Фамилия}"
+    },
+    {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: "family-given-patronymic",
+      pattern: "return employee.name"
+    }
+  ]) {
+    assert.throws(
+      () => parseScalarFormatter("string", formatter),
+      (error: unknown) =>
+        error instanceof TemplateCompilerError && error.code === "invalid_formatter"
+    );
+  }
+});

@@ -9,9 +9,21 @@ export type ScalarValueType =
   | "date"
   | "date-time";
 
+export type PersonNameSourceOrder =
+  | "family-given-patronymic"
+  | "given-patronymic-family"
+  | "family-given"
+  | "given-family";
+
 export type ScalarFormatter =
   | { version: 1; kind: "legacy" }
   | { version: 1; kind: "identity" }
+  | {
+      version: 1;
+      kind: "person-name.ru";
+      sourceOrder: PersonNameSourceOrder;
+      pattern: string;
+    }
   | { version: 1; kind: "number.ru"; fractionDigits: number | null }
   | { version: 1; kind: "date.ru" }
   | { version: 1; kind: "date-time.ru"; timeZone: string }
@@ -48,6 +60,131 @@ function timeZone(value: unknown): string {
     return formatterError("Указанный часовой пояс не поддерживается системой.");
   }
   return value;
+}
+
+const PERSON_NAME_SOURCE_ORDERS: readonly PersonNameSourceOrder[] = [
+  "family-given-patronymic",
+  "given-patronymic-family",
+  "family-given",
+  "given-family"
+];
+const PERSON_NAME_TOKEN_PATTERN = /\{([^{}]+)\}/gu;
+const PERSON_NAME_TOKENS = new Set([
+  "Фамилия",
+  "Имя",
+  "Отчество",
+  "Ф",
+  "И",
+  "О"
+]);
+
+interface PersonNameParts {
+  family: string;
+  given: string;
+  patronymic: string;
+}
+
+function personNameSourceOrder(value: unknown): PersonNameSourceOrder {
+  if (
+    typeof value === "string" &&
+    (PERSON_NAME_SOURCE_ORDERS as readonly string[]).includes(value)
+  ) {
+    return value as PersonNameSourceOrder;
+  }
+  return formatterError("Не удалось определить порядок частей ФИО в исходных данных.");
+}
+
+function personNamePattern(value: unknown): string {
+  if (typeof value !== "string") {
+    return formatterError("Шаблон записи ФИО должен содержать текст.");
+  }
+  const normalized = value.normalize("NFKC").trim();
+  if (
+    normalized.length === 0 ||
+    normalized.length > 160 ||
+    /[\u0000-\u001f\u007f]/u.test(normalized)
+  ) {
+    return formatterError("Шаблон записи ФИО должен содержать от 1 до 160 безопасных знаков.");
+  }
+  let tokenCount = 0;
+  for (const match of normalized.matchAll(PERSON_NAME_TOKEN_PATTERN)) {
+    const token = match[1] ?? "";
+    tokenCount += 1;
+    if (!PERSON_NAME_TOKENS.has(token)) {
+      return formatterError(`В шаблоне ФИО неизвестная часть «${token}».`);
+    }
+  }
+  const withoutTokens = normalized.replace(PERSON_NAME_TOKEN_PATTERN, "");
+  if (tokenCount === 0 || withoutTokens.includes("{") || withoutTokens.includes("}")) {
+    return formatterError(
+      "Используйте части {Фамилия}, {Имя}, {Отчество}, {Ф}, {И} или {О}."
+    );
+  }
+  return normalized;
+}
+
+function compactInitials(value: string): [string, string] | null {
+  const match = /^(\p{L})\.\s*(\p{L})\.?$/u.exec(value);
+  return match === null ? null : [match[1] ?? "", match[2] ?? ""];
+}
+
+function parsePersonName(value: string, order: PersonNameSourceOrder): PersonNameParts {
+  const normalized = value.normalize("NFKC").trim().replace(/\s+/gu, " ");
+  if (normalized === "") return { family: "", given: "", patronymic: "" };
+  const words = normalized.split(" ");
+  if (order === "family-given-patronymic") {
+    const initials = words.length === 2 ? compactInitials(words[1] ?? "") : null;
+    return {
+      family: words[0] ?? "",
+      given: initials?.[0] ?? words[1] ?? "",
+      patronymic: initials?.[1] ?? words.slice(2).join(" ")
+    };
+  }
+  if (order === "given-patronymic-family") {
+    const initials = words.length === 2 ? compactInitials(words[0] ?? "") : null;
+    return {
+      family: words.at(-1) ?? "",
+      given: initials?.[0] ?? words[0] ?? "",
+      patronymic: initials?.[1] ?? words.slice(1, -1).join(" ")
+    };
+  }
+  if (order === "family-given") {
+    return {
+      family: words[0] ?? "",
+      given: words.slice(1).join(" "),
+      patronymic: ""
+    };
+  }
+  return {
+    family: words.slice(1).join(" "),
+    given: words[0] ?? "",
+    patronymic: ""
+  };
+}
+
+function personNameInitial(value: string): string {
+  return value.match(/\p{L}/u)?.[0]?.toLocaleUpperCase("ru-RU") ?? "";
+}
+
+function formatPersonName(value: string, formatter: Extract<ScalarFormatter, { kind: "person-name.ru" }>): string {
+  const parts = parsePersonName(value, formatter.sourceOrder);
+  const values: Record<string, string> = {
+    Фамилия: parts.family,
+    Имя: parts.given,
+    Отчество: parts.patronymic,
+    Ф: personNameInitial(parts.family),
+    И: personNameInitial(parts.given),
+    О: personNameInitial(parts.patronymic)
+  };
+  const rendered = formatter.pattern
+    .replace(PERSON_NAME_TOKEN_PATTERN, (_match, token: string) => values[token] ?? "")
+    .replace(/\s+/gu, " ")
+    .replace(/\s+([,.;:])/gu, "$1")
+    .replace(/([,.;:])(?:\s*\1)+/gu, "$1")
+    .replace(/(^|[\s(])[,.;:]+(?=\s|$|\))/gu, "$1")
+    .replace(/\s+[,.;:]+$/gu, "")
+    .trim();
+  return /[\p{L}\p{N}]/u.test(rendered) ? rendered : "";
 }
 
 export function defaultScalarFormatter(
@@ -104,6 +241,17 @@ export function parseScalarFormatter(
       return formatterError("Текстовый формат не соответствует типу поля.");
     }
     return { version: 1, kind: "identity" };
+  }
+  if (value.kind === "person-name.ru") {
+    if (valueType !== "string" && valueType !== "text") {
+      return formatterError("Формат ФИО можно применить только к текстовому полю.");
+    }
+    return {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: personNameSourceOrder(value.sourceOrder),
+      pattern: personNamePattern(value.pattern)
+    };
   }
   if (value.kind === "number.ru") {
     if (valueType !== "number" && valueType !== "integer") {
@@ -179,6 +327,9 @@ export function formatScalarDisplay(
     return String(value);
   }
   if (formatter.kind === "identity") return String(value);
+  if (formatter.kind === "person-name.ru") {
+    return formatPersonName(String(value), formatter);
+  }
   if (formatter.kind === "boolean.ru") {
     if (typeof value !== "boolean") {
       return formatterError("Логическое значение должно быть «да» или «нет».");

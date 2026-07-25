@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { analyzeOoxmlBuffer } from "@docomator/document-intake";
-import { defaultScalarFormatter } from "@docomator/template-compiler";
+import {
+  defaultScalarFormatter,
+  parseScalarFormatter
+} from "@docomator/template-compiler";
 import {
   ContentAddressedObjectStore,
   DocumentQuarantineRegistry,
@@ -47,6 +50,14 @@ interface CreateFieldBody {
   elementId: string;
   decimalPlaces?: number;
   timeZone?: string;
+  personName?: {
+    sourceOrder:
+      | "family-given-patronymic"
+      | "given-patronymic-family"
+      | "family-given"
+      | "given-family";
+    pattern: string;
+  };
   repeatRow?: boolean;
   repeatArea?: {
     selection: "used-row" | "range";
@@ -615,6 +626,23 @@ export function registerTemplateDraftRoutes(
               maxLength: 100,
               pattern: "^(?:UTC|[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+)+)$"
             },
+            personName: {
+              type: "object",
+              additionalProperties: false,
+              required: ["sourceOrder", "pattern"],
+              properties: {
+                sourceOrder: {
+                  type: "string",
+                  enum: [
+                    "family-given-patronymic",
+                    "given-patronymic-family",
+                    "family-given",
+                    "given-family"
+                  ]
+                },
+                pattern: { type: "string", minLength: 1, maxLength: 160 }
+              }
+            },
             repeatRow: { type: "boolean", default: false },
             repeatArea: {
               type: "object",
@@ -714,14 +742,31 @@ export function registerTemplateDraftRoutes(
           "Часовой пояс можно задать только для поля даты и времени."
         );
       }
-      const formatter = defaultScalarFormatter(request.body.valueType, {
-        ...(request.body.decimalPlaces === undefined
-          ? {}
-          : { fractionDigits: request.body.decimalPlaces }),
-        ...(request.body.timeZone === undefined
-          ? {}
-          : { timeZone: request.body.timeZone })
-      });
+      if (
+        request.body.personName !== undefined &&
+        request.body.valueType !== "string" &&
+        request.body.valueType !== "text"
+      ) {
+        throw new TemplateDraftValidationError(
+          "Вариант записи ФИО можно задать только для текстового поля."
+        );
+      }
+      const formatter =
+        request.body.personName === undefined
+          ? defaultScalarFormatter(request.body.valueType, {
+              ...(request.body.decimalPlaces === undefined
+                ? {}
+                : { fractionDigits: request.body.decimalPlaces }),
+              ...(request.body.timeZone === undefined
+                ? {}
+                : { timeZone: request.body.timeZone })
+            })
+          : parseScalarFormatter(request.body.valueType, {
+              version: 1,
+              kind: "person-name.ru",
+              sourceOrder: request.body.personName.sourceOrder,
+              pattern: request.body.personName.pattern
+            });
       const field = draftRegistry.createField(
         request.params.spaceId,
         draft.id,

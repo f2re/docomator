@@ -1,0 +1,354 @@
+
+> docomator@0.1.0-alpha.0 check
+> npm run clean && npm run build && npm run test && npm run check:examples && npm run test:release-gate && npm run test:release-gate:libreoffice && npm run check:docs && npm run check:no-iam && npm run check:shell && npm run check:runtime && npm run check:ui && npm run check:language
+
+
+> docomator@0.1.0-alpha.0 clean
+> node scripts/ci/clean.mjs
+
+
+> docomator@0.1.0-alpha.0 build
+> npm run build -w @docomator/contracts && npm run build -w @docomator/config && npm run build -w @docomator/storage && npm run build -w @docomator/document-intake && npm run build -w @docomator/template-compiler && npm run build -w @docomator/api && npm run build -w @docomator/worker
+
+
+> @docomator/contracts@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/config@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/storage@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/document-intake@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/template-compiler@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/api@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/worker@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> docomator@0.1.0-alpha.0 test
+> npm run test -w @docomator/contracts && npm run test -w @docomator/config && npm run test -w @docomator/storage && npm run test -w @docomator/document-intake && npm run test -w @docomator/template-compiler && npm run test -w @docomator/api && npm run test -w @docomator/worker && node --test scripts/runtime/*.test.mjs scripts/offline/*.test.mjs scripts/ci/*.test.mjs
+
+
+> @docomator/contracts@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ service contract contains the bootstrap processes (1.430104ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 64.745029
+
+> @docomator/config@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ api config applies safe defaults (1.668981ms)
+✔ api config resolves installed release metadata path (0.285334ms)
+✔ invalid ports are rejected (0.584042ms)
+✔ worker queue timings and identity are configurable (1.104315ms)
+✔ worker retry range must be coherent (0.194383ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 70.152428
+
+> @docomator/storage@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ two worker connections cannot own the same active lease (725.598342ms)
+✔ keyless employee import plans without writes and creates personal fields and a named group (753.004537ms)
+✔ duplicate identity is reported in Russian and preview leaves no data (440.29237ms)
+✔ blank cells do not clear values and a failed new row is rolled back (450.772222ms)
+✔ group conflict is validated before rows and leaves history, audit and outbox unchanged (409.023676ms)
+✔ finalization failure rolls back imported rows, history, audit and outbox (427.964496ms)
+✔ transactions commit, roll back and isolate nested savepoints (3.574735ms)
+✔ asynchronous transaction callbacks are rejected (0.399967ms)
+✔ accepted source is stored immutably with audit and outbox (562.308683ms)
+✔ quarantine records remain isolated by space (448.389042ms)
+✔ rejected or checksum-changed documents cannot be quarantined (439.896746ms)
+✔ standard person type and generated employee field keys require no machine input (455.302553ms)
+✔ generated field keys retry collisions and employee creates are idempotent (426.528894ms)
+✔ new employee fields reuse one normalized label and reject type conflicts (413.321391ms)
+✔ employee create and update roll back entity, definitions and values atomically (421.606055ms)
+✔ employee read and update deny cross-space access (406.788422ms)
+✔ employee updates replay idempotently without new versions, events or audit (421.848931ms)
+✔ employee resource fields stay in one space and reject unscoped files (412.002489ms)
+✔ email recipients generate opaque keys when omitted and keep explicit keys (412.974314ms)
+✔ knowledge mutations append outbox and audit records atomically (444.553981ms)
+✔ property scope and enum validation are enforced before mutation (412.593219ms)
+✔ stable keys are unique and invalid keys are rejected (418.724623ms)
+✔ ordinary knowledge creates allocate opaque keys and retry collisions (400.705096ms)
+✔ multi-field version stores ordered field rows, files, audit and event (450.271711ms)
+✔ multi-field version validates all fields and exact read-back values (433.009802ms)
+✔ multi-field versions are immutable and hidden from another space (413.305293ms)
+✔ repeat contract is frozen in multi-field version and release candidate (416.140142ms)
+✔ XLSX repeat contract is validated and frozen with its draft (438.891361ms)
+✔ operation center combines persistent workflows and isolates spaces (5.089152ms)
+✔ operation center validates its bounded limit (1.271877ms)
+✔ business mutation, outbox event and audit share one transaction (395.291074ms)
+✔ outbox append is idempotent and rejects conflicting reuse (412.683881ms)
+✔ outbox leases provide at-least-once retry and dead-letter semantics (382.194308ms)
+✔ outbox retry delay and publish acknowledgement are persisted (397.932757ms)
+✔ queue enqueue is idempotent and canonical JSON ignores object key order (408.782036ms)
+✔ queue claims by priority and completes only with a valid lease (415.303941ms)
+✔ expired leases are retried and then dead-lettered at max attempts (385.847969ms)
+✔ retry delay and permanent failure are persisted (405.526736ms)
+✔ spaces isolate entities and preserve default ownership (397.268885ms)
+✔ audience snapshots build one-per-member and aggregate document plans (414.740836ms)
+✔ cross-space members are rejected before group or snapshot mutation (388.289651ms)
+✔ legacy space memberships do not create or restrict application access (409.464484ms)
+✔ property codecs validate values and create typed projections (2.448376ms)
+✔ content-addressed object storage is immutable and deduplicated (16.690046ms)
+✔ draft creation is idempotent and preserves verified structure (398.935895ms)
+✔ field binding is stored once and remains scoped to the draft structure (411.208751ms)
+✔ drafts and fields cannot be resolved through another space (412.96193ms)
+✔ object store reads by SHA-256 and detects an invalid identifier (390.469698ms)
+✔ preview request is idempotent and enqueues one persistent job (425.012093ms)
+✔ failed preview can be explicitly retried with a new job attempt (425.973838ms)
+✔ ready PDF is verified, stored and required for activation (424.734546ms)
+✔ invalid PDF and cross-space identifiers are rejected (420.675045ms)
+✔ single and multi-field tested versions share one release catalog (476.480244ms)
+✔ XLSX _AI_META bindings use manifest v5 while legacy bindings stay on v4 (446.19732ms)
+✔ formatter contracts stay immutable and constrained across release rows (351.917048ms)
+✔ document schedules generate opaque keys when omitted and keep explicit keys (391.599317ms)
+✔ release previews stay isolated by space and validate version kind (347.126907ms)
+✔ tested version stores immutable compiled and trial objects (368.467368ms)
+✔ a different trial output creates the next immutable version (357.178437ms)
+✔ tested versions are hidden from another space and immutable in SQLite (323.992887ms)
+✔ tested version preserves leading and trailing spaces exactly (270.832879ms)
+ℹ tests 61
+ℹ suites 0
+ℹ pass 61
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8743.337503
+
+> @docomator/document-intake@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ accepts a minimal DOCX package and inventories its parts (21.484026ms)
+✔ reports external relationships without loading them (6.075756ms)
+✔ rejects macro-enabled package content (4.011839ms)
+✔ returns a compatibility rejection when a required OOXML part is missing (3.834688ms)
+✔ rejects path traversal and duplicate package parts (4.492918ms)
+✔ rejects encrypted parts and symbolic links (3.680579ms)
+✔ enforces part count and compression ratio limits (7.88582ms)
+✔ rejects unsupported extensions and invalid ZIP signatures with Russian messages (0.554807ms)
+✔ DOCX structure contains stable paragraphs, runs and table coordinates (31.399369ms)
+✔ XLSX structure resolves shared strings, values and formulas (10.820327ms)
+✔ structure response is truncated without losing total counters (6.836868ms)
+✔ unsafe XML declarations are rejected before structural parsing (3.487338ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 128.32189
+
+> @docomator/template-compiler@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ DOCX compiler creates w:sdt, preserves content and is deterministic (52.624312ms)
+✔ DOCX text-range compiler wraps only selected adjacent runs (26.647328ms)
+✔ DOCX text-range compiler rejects stale, mixed and complex selections (20.038351ms)
+✔ XLSX compiler creates a defined name and preserves worksheet bytes (43.4852ms)
+✔ XLSX compiler does not adopt pre-existing _AI_META without trusted bindings (46.528969ms)
+✔ XLSX compiler rejects a user sheet that conflicts with _AI_META (29.910627ms)
+✔ compiler rejects stale structure and invented coordinates (11.386683ms)
+✔ OOXML reader and deterministic writer preserve ordered entry contents (8.633327ms)
+✔ DOCX compilation is deterministic for multiple fields regardless of input order (108.634344ms)
+✔ DOCX renders and finally reads back every field (47.999512ms)
+✔ DOCX compiles and renders multiple text ranges without changing labels (44.248266ms)
+✔ DOCX compiler marks one safe table row as an audience repeat (69.185251ms)
+✔ DOCX repeat renderer clones the sample row and reverse-reads every value (41.238257ms)
+✔ DOCX repeat renderer enforces member limits and required values (24.295128ms)
+✔ DOCX repeat renderer resolves deterministic Word ID collisions (266.40232ms)
+✔ DOCX repeat compiler rejects unsafe row structures (64.580803ms)
+✔ XLSX compiles and renders two typed cells without changing a neighbour (66.385376ms)
+✔ multi-field XLSX render rejects mixed legacy and _AI_META bindings (31.398988ms)
+✔ multi-field XLSX render rejects an extra self-consistent metadata record (29.434982ms)
+✔ multi-field compiler rejects duplicate coordinates and stale element identifiers (2.779497ms)
+✔ safe Russian formatters produce deterministic display values (32.915586ms)
+✔ default formatters are explicit and versioned (1.215642ms)
+✔ legacy formatter preserves already activated display contracts (0.211766ms)
+✔ formatter parser rejects unsupported and incompatible contracts (1.055262ms)
+✔ Russian personal-name formatter supports common and custom variants (5.196774ms)
+✔ personal-name formatter rejects scripts and unknown tokens (0.598038ms)
+✔ DOCX trial render writes and reads back text while preserving other content (77.728394ms)
+✔ DOCX text-range render preserves the label and suffix (18.406985ms)
+✔ XLSX trial render supports text, numbers and booleans and preserves cell style (128.503841ms)
+✔ XLSX renderer rejects changed _AI_META and keeps legacy templates working (55.452257ms)
+✔ XLSX renderer rejects partial or inconsistent _AI_META artifacts (102.563848ms)
+✔ trial render refuses to overwrite an XLSX formula (27.409542ms)
+✔ trial render validates dates, integers and binding pairs (7.489008ms)
+✔ XLSX render rejects unknown, redirected and downgraded technical bindings (25.95828ms)
+✔ production fallback renders a missing optional value as an empty string (13.042518ms)
+✔ text fields apply the selected personal-name format before DOCX rendering (12.931922ms)
+✔ safe XLSX formulas translate only relative references in the sample row (2.43977ms)
+✔ unsafe XLSX formula syntax and functions fail closed (0.916252ms)
+✔ XLSX repeat clones a styled row, formulas and merges deterministically (239.343732ms)
+✔ XLSX repeat rejects mixed legacy and _AI_META field bindings (70.378919ms)
+✔ XLSX repeat rejects an unsafe formula before compilation (40.610614ms)
+✔ XLSX repeat rejects formulas outside the repeated row (42.535224ms)
+✔ XLSX repeat rejects a quoted global defined name (45.200235ms)
+✔ XLSX repeat rejects a bare-sheet global defined name (32.631649ms)
+✔ XLSX repeat rejects a localSheetId defined name (29.622129ms)
+✔ XLSX repeat rejects an external relationship (25.455872ms)
+✔ XLSX repeat rejects a shared formula (24.259281ms)
+✔ XLSX repeat rejects an array formula (22.341908ms)
+✔ XLSX repeat rejects a package signature (27.098927ms)
+✔ XLSX repeat rejects a spoofed SpreadsheetML namespace (27.32263ms)
+✔ XLSX repeat rejects a nested default namespace spoof (21.5369ms)
+✔ XLSX repeat rejects an invalid worksheet content type (19.631871ms)
+✔ XLSX repeat rejects an out-of-range cell style (20.089606ms)
+✔ XLSX repeat rejects an out-of-range shared string (22.116782ms)
+✔ XLSX repeat rejects duplicate cells (26.842566ms)
+✔ XLSX repeat rejects duplicate rows (25.555206ms)
+✔ XLSX repeat rejects a hidden sample row (20.559044ms)
+✔ XLSX repeat rechecks unsafe compiled part xl/vbaProject.bin (36.494015ms)
+✔ XLSX repeat rechecks unsafe compiled part xl/activeX/activeX1.bin (34.487178ms)
+✔ XLSX repeat rechecks unsafe compiled part xl/embeddings/oleObject1.bin (34.270707ms)
+✔ XLSX repeat rejects an invalid worksheet relationship type (36.666243ms)
+✔ XLSX repeat rejects an invalid worksheet relationship target (24.962379ms)
+✔ XLSX repeat rejects a range that cuts through a merged cell (27.436781ms)
+✔ XLSX repeat enforces the audience size boundary (26.843565ms)
+✔ XLSX repeat rejects invalid audience members (25.186514ms)
+✔ XLSX repeat rejects rows beyond the worksheet boundary (30.178807ms)
+ℹ tests 66
+ℹ suites 0
+ℹ pass 66
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1581.974598
+
+> @docomator/api@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+✔ health endpoint reports the API service (412.385671ms)
+✔ release identity distinguishes development from an installed release (354.62238ms)
+✔ release identity rejects metadata for another installed version (116.207065ms)
+✔ readiness stays degraded before migrations create the database (152.201066ms)
+✔ readiness stays degraded until employee update idempotency migration is applied (530.628628ms)
+✔ readiness stays degraded until template formatter migration is applied (476.010034ms)
+✔ readiness stays degraded until DOCX repeat migration is applied (494.537701ms)
+✔ readiness stays degraded until XLSX repeat migration is registered (533.45739ms)
+✔ keyless API plans and imports employees without returning generated keys (891.34129ms)
+✔ API reports duplicate update values in Russian during planning (546.84835ms)
+✔ explicit technical import contract remains available for automation (555.373359ms)
+✔ document intake API returns a Russian compatibility report (442.997348ms)
+✔ document intake API reports macros as a blocked compatibility result (254.546649ms)
+✔ document intake API rejects malformed binary data with a clear Russian error (187.508672ms)
+✔ document intake API requires a file name (154.603566ms)
+✔ explicit confirmation quarantines an accepted document and lists it (861.112209ms)
+✔ a rejected document cannot be placed in quarantine (585.834317ms)
+✔ quarantine lookup does not expose a record through another space (511.416479ms)
+✔ generation downloads use the shared result state and AUD-003 log (182.965051ms)
+✔ archive download is collected and audited as an archive (63.143115ms)
+✔ a missing object does not collect or audit a result (49.700556ms)
+✔ a checksum mismatch does not collect or audit a result (46.639957ms)
+✔ audit failure rolls back collection and the outbox event (59.788348ms)
+✔ deleted results stay closed through canonical and legacy links (48.513496ms)
+✔ structure API returns stable Russian DOCX coordinates (505.100635ms)
+✔ structure API reports a bounded result without hiding totals (174.18131ms)
+✔ structure API rejects unsafe XML with a clear message (126.391767ms)
+✔ employee API creates, lists, reads and updates a profile without machine keys (937.113027ms)
+✔ employee API keeps explicit property compatibility and denies cross-space access (575.515089ms)
+✔ recipient and schedule POST accept omitted machine keys (831.929499ms)
+✔ knowledge API creates typed data with outbox and audit (772.482381ms)
+✔ knowledge API returns stable validation and conflict errors (615.558274ms)
+✔ API creates, reads and downloads a complete multi-field tested version (1025.760474ms)
+✔ API compiles and freezes a DOCX audience repeat row (683.265256ms)
+✔ API compiles and freezes an XLSX audience repeat row (756.353654ms)
+✔ API rejects incomplete, duplicate and foreign field sets (588.853894ms)
+✔ operation center API returns a no-store space-scoped projection (453.966202ms)
+✔ operation center API rejects unknown spaces and invalid query values (188.6847ms)
+✔ operation center API does not expose raw stored errors (140.326457ms)
+✔ valid correlation and actor identifiers are preserved (2.606153ms)
+✔ unsafe context headers are replaced with the internal request ID (0.26251ms)
+✔ spaces API isolates entities and creates aggregate target plan (850.443876ms)
+✔ spaces API rejects cross-space group membership (581.582453ms)
+✔ spaces API exposes one shared workspace without IAM filters (593.456061ms)
+✔ API creates a draft from quarantined bytes and saves a verified field (908.753547ms)
+✔ API stores a verified DOCX text range without changing Document IR (673.453938ms)
+✔ API derives and stores safe formatter contracts from field settings (548.112368ms)
+✔ API derives one DOCX repeat row and keeps every field inside it (518.270805ms)
+✔ API derives a used XLSX row from server-side element identifiers (551.735836ms)
+✔ API rejects an element that is absent from the server structure (546.505413ms)
+✔ API hides a draft from another space and rejects a duplicate element (550.37126ms)
+✖ API accepts an empty DOCX paragraph and stores a safe FIO formatter (445.461673ms)
+✔ API exposes persistent preview state, PDF, activation and active catalog (926.546567ms)
+✔ API retries a failed preview and hides requests from another space (633.024335ms)
+✔ API previews and activates a multi-field tested version (904.697403ms)
+✔ trial endpoint compiles, renders, reads back and stores immutable files (966.551254ms)
+✔ XLSX trial endpoint stores and returns a verified _AI_META contract (678.844945ms)
+✔ trial endpoint rejects an unknown field and hides versions across spaces (414.154276ms)
+✔ UI shell is served locally with security headers (389.562445ms)
+✔ UI assets are served without external runtime dependencies (167.495049ms)
+✔ ordinary employee flow does not ask for machine keys (136.025901ms)
+✔ template connection is a space-scoped sequential wizard (150.554823ms)
+✔ domain validation messages are translated into clear Russian text (2.712805ms)
+✔ database errors do not expose raw English diagnostics (1.35763ms)
+✔ already Russian messages are preserved (1.193152ms)
+✔ unknown diagnostics are replaced with a safe Russian fallback (0.384577ms)
+ℹ tests 66
+ℹ suites 0
+ℹ pass 65
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11315.084961
+
+✖ failing tests:
+
+test at dist/template-draft-routes.test.js:532:1
+✖ API accepts an empty DOCX paragraph and stores a safe FIO formatter (445.461673ms)
+  AssertionError [ERR_ASSERTION]: {"error":{"code":"invalid_formatter","message":"В шаблоне ФИО неизвестная часть «Неизвестно»."},"correlationId":"req-4"}
+  
+  422 !== 400
+  
+      at TestContext.<anonymous> (file:///home/runner/work/docomator/docomator/apps/api/dist/template-draft-routes.test.js:586:16)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 422,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /home/runner/work/docomator/docomator/apps/api
+npm error workspace @docomator/api@0.1.0-alpha.0
+npm error location /home/runner/work/docomator/docomator/apps/api
+npm error command failed
+npm error command sh -c node --test dist/*.test.js

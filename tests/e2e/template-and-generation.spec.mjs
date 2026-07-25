@@ -530,3 +530,49 @@ test("repeat-шаблон выбирает один сводный докуме�
     "3 сотрудников → 1 DOCX"
   );
 });
+
+test("мастер предлагает варианты ФИО и отправляет безопасный формат", async ({
+  page
+}) => {
+  const scenario = await installDocomatorApiMock(page);
+  const app = new DocomatorPage(page);
+  await app.open();
+  await app.openView("templates");
+  await uploadAndSaveSource(page, templateCases[0]);
+  await page.locator("#documentStructureButton").click();
+  await page.locator(".structure-element").first().click();
+  const textRange = page.locator("#documentFieldTextRange");
+  await textRange.evaluate((control) => {
+    const start = control.value.indexOf("______");
+    control.focus();
+    control.setSelectionRange(start, start + 6);
+    control.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+
+  await expect(page.locator("#documentFieldProperty")).toHaveValue(
+    "__system_display_name__"
+  );
+  await page
+    .locator("#documentFieldTextPresentation")
+    .selectOption("family-initials");
+  await expect(page.locator("#documentFieldNamePreview")).toContainText(
+    "Иванов И.И."
+  );
+  await page.locator("#documentFieldSave").click();
+  await expect(page.locator("#documentFieldMessage")).toContainText(
+    "Следующий шаг — пробное заполнение"
+  );
+
+  expect(scenario.fieldRequests).toHaveLength(1);
+  expect(scenario.fieldRequests[0].key).toMatch(
+    /^subject\.name_[0-9a-f]{8}\.display_name$/u
+  );
+  expect(scenario.fieldRequests[0]).toMatchObject({
+    label: "ФИО сотрудника",
+    valueType: "string",
+    personName: {
+      sourceOrder: "family-given-patronymic",
+      pattern: "{Фамилия} {И}.{О}."
+    }
+  });
+});
