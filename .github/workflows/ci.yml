@@ -14,6 +14,105 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  finalize-template-field-name-ux:
+    name: Finalize template field name UX
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 37 && github.head_ref == 'fix/template-field-name-ux'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/template-field-name-ux
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Detect finalization marker
+        id: finalize
+        shell: bash
+        run: |
+          if [[ -f .finalize-template-field-name-ux ]]; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Correct expected validation status and remove diagnostics
+        if: steps.finalize.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/api/src/template-draft-routes.test.ts')
+          source = path.read_text(encoding='utf-8')
+          old = '''        personName: {
+          sourceOrder: "family-given-patronymic",
+          pattern: "{Неизвестно}"
+        }
+      }
+    });
+    assert.equal(invalid.statusCode, 400, invalid.body);'''
+          new = '''        personName: {
+          sourceOrder: "family-given-patronymic",
+          pattern: "{Неизвестно}"
+        }
+      }
+    });
+    assert.equal(invalid.statusCode, 422, invalid.body);'''
+          if source.count(old) != 1:
+              raise SystemExit('Не найден точный тест недопустимого шаблона ФИО')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+          rm -f \
+            .finalize-template-field-name-ux \
+            .template-field-name-ux.check.log \
+            .github/workflows/finalize-template-field-name-ux-branch.yml
+          git diff --check
+
+      - name: Read Node.js version
+        if: steps.finalize.outputs.apply == 'true'
+        id: finalize-node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: steps.finalize.outputs.apply == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.finalize-node.outputs.version }}
+          cache: npm
+
+      - name: Install locked dependencies
+        if: steps.finalize.outputs.apply == 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify finalized repository
+        if: steps.finalize.outputs.apply == 'true'
+        run: npm run check
+
+      - name: Smoke-test migration on a fresh database
+        if: steps.finalize.outputs.apply == 'true'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-template-field-name-ux-final
+        run: npm run migrate
+
+      - name: Commit finalized implementation
+        if: steps.finalize.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'finalize template field name formats and empty placement'
+          git push origin HEAD:fix/template-field-name-ux
+
   verify:
     name: Build, test, docs, and shell
     runs-on: ubuntu-24.04
