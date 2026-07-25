@@ -2,8 +2,9 @@ import type { ApiConfig } from "@docomator/config";
 import {
   DocumentScheduleRegistry,
   DocumentScheduleValidationError,
+  normalizeScheduleNetworkTemplate,
   OperatorAssistRegistry,
-  PROPERTY_VALUE_TYPES,
+  scheduleNetworkRegistryFromScheduleRegistry,
   sqliteStoreFromDocumentScheduleRegistry,
   type DocumentGenerationMode,
   type DocumentScheduleDelivery,
@@ -72,6 +73,21 @@ interface UpdateScheduleBody {
   emailMessageText?: string | null;
 }
 
+interface UpdateNetworkScheduleBody {
+  name?: string;
+  description?: string | null;
+  activeReleaseId?: string;
+  groupId?: string;
+  targetMode?: DocumentGenerationMode;
+  recurrenceKind?: DocumentScheduleRecurrence;
+  timezone?: string;
+  localTime?: string;
+  startDate?: string;
+  dayOfMonth?: number | null;
+  deliveryChannel: "network_folder";
+  networkSubdirectory: string;
+}
+
 const idSchema = {
   type: "string",
   minLength: 1,
@@ -83,6 +99,32 @@ const stableKeySchema = {
   minLength: 1,
   maxLength: 160,
   pattern: "^[A-Za-z][A-Za-z0-9]*(?:[._-][A-Za-z0-9]+)*$"
+} as const;
+
+const scheduleUpdateProperties = {
+  name: { type: "string", minLength: 1, maxLength: 300 },
+  description: {
+    anyOf: [{ type: "string", maxLength: 2_000 }, { type: "null" }]
+  },
+  activeReleaseId: idSchema,
+  groupId: idSchema,
+  targetMode: {
+    type: "string",
+    enum: ["one_per_member", "aggregate"]
+  },
+  recurrenceKind: {
+    type: "string",
+    enum: ["once", "daily", "monthly"]
+  },
+  timezone: { type: "string", minLength: 1, maxLength: 100 },
+  localTime: { type: "string", pattern: "^\\d{2}:\\d{2}$" },
+  startDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+  dayOfMonth: {
+    anyOf: [
+      { type: "integer", minimum: 1, maximum: 28 },
+      { type: "null" }
+    ]
+  }
 } as const;
 
 function responseEnvelope<T>(request: FastifyRequest, data: T) {
@@ -97,6 +139,8 @@ export function registerOperatorAssistRoutes(
   const registry = new OperatorAssistRegistry(
     sqliteStoreFromDocumentScheduleRegistry(scheduleRegistry)
   );
+  const networkRegistry =
+    scheduleNetworkRegistryFromScheduleRegistry(scheduleRegistry);
 
   app.get<{ Params: SpaceParams; Querystring: SuggestionsQuery }>(
     "/api/v1/spaces/:spaceId/property-suggestions",
@@ -273,32 +317,7 @@ export function registerOperatorAssistRoutes(
           additionalProperties: false,
           minProperties: 1,
           properties: {
-            name: { type: "string", minLength: 1, maxLength: 300 },
-            description: {
-              anyOf: [
-                { type: "string", maxLength: 2_000 },
-                { type: "null" }
-              ]
-            },
-            activeReleaseId: idSchema,
-            groupId: idSchema,
-            targetMode: {
-              type: "string",
-              enum: ["one_per_member", "aggregate"]
-            },
-            recurrenceKind: {
-              type: "string",
-              enum: ["once", "daily", "monthly"]
-            },
-            timezone: { type: "string", minLength: 1, maxLength: 100 },
-            localTime: { type: "string", pattern: "^\\d{2}:\\d{2}$" },
-            startDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
-            dayOfMonth: {
-              anyOf: [
-                { type: "integer", minimum: 1, maximum: 28 },
-                { type: "null" }
-              ]
-            },
+            ...scheduleUpdateProperties,
             deliveryChannel: { type: "string", enum: ["none", "email"] },
             emailRecipientId: {
               anyOf: [idSchema, { type: "null" }]
@@ -339,5 +358,70 @@ export function registerOperatorAssistRoutes(
     }
   );
 
-  void PROPERTY_VALUE_TYPES;
+  app.put<{ Params: ScheduleParams; Body: UpdateNetworkScheduleBody }>(
+    "/api/v1/spaces/:spaceId/document-schedules/:scheduleId/network-folder",
+    {
+      schema: {
+        params: {
+          type: "object",
+          additionalProperties: false,
+          required: ["spaceId", "scheduleId"],
+          properties: { spaceId: idSchema, scheduleId: idSchema }
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["deliveryChannel", "networkSubdirectory"],
+          properties: {
+            ...scheduleUpdateProperties,
+            deliveryChannel: {
+              type: "string",
+              enum: ["network_folder"]
+            },
+            networkSubdirectory: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500
+            }
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      if (config.networkDeliveryRoot === null) {
+        throw new DocumentScheduleValidationError(
+          "Сетевая доставка не настроена администратором."
+        );
+      }
+      const {
+        networkSubdirectory,
+        deliveryChannel: _deliveryChannel,
+        ...scheduleInput
+      } = request.body;
+      const context = mutationContextFromRequest(request);
+      const updated = registry.updateSchedule(
+        request.params.spaceId,
+        request.params.scheduleId,
+        {
+          ...scheduleInput,
+          deliveryChannel: "none",
+          emailRecipientId: null,
+          emailSubject: null,
+          emailMessageText: null
+        },
+        context
+      );
+      const setting = networkRegistry.set(
+        updated.id,
+        normalizeScheduleNetworkTemplate(networkSubdirectory),
+        context
+      );
+      reply.header("cache-control", "no-store");
+      return responseEnvelope(request, {
+        ...updated,
+        deliveryChannel: "network_folder" as const,
+        networkSubdirectory: setting.subdirectoryTemplate
+      });
+    }
+  );
 }
