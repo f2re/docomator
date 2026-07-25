@@ -1,0 +1,20 @@
+/tmp/apply-template-field-name-ux.py:77: SyntaxWarning: invalid escape sequence '\/'
+  '''function timeZone(value: unknown): string {
+/tmp/apply-template-field-name-ux.py:94: SyntaxWarning: invalid escape sequence '\/'
+  '''function timeZone(value: unknown): string {
+updated packages/template-compiler/src/scalar-formatter.ts
+updated packages/template-compiler/src/scalar-render.ts
+updated apps/api/src/template-draft-routes.ts
+Traceback (most recent call last):
+  File "/tmp/apply-template-field-name-ux.py", line 723, in <module>
+    content = replace_between(
+              ^^^^^^^^^^^^^^^^
+  File "/tmp/apply-template-field-name-ux.py", line 28, in replace_between
+    updated, count = pattern.subn(replacement.rstrip() + "\n\n", content, count=1)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/re/__init__.py", line 334, in _compile_template
+    return _sre.template(pattern, _parser.parse_template(repl, pattern))
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/re/_parser.py", line 1075, in parse_template
+    raise s.error('bad escape %s' % this, len(this)) from None
+re.error: bad escape \u at position 3277 (line 92, column 39)
