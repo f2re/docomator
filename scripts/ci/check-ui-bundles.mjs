@@ -10,7 +10,8 @@ const bundles = {
   "app.js": [
     "app.js",
     "operator-workflows.js",
-    "operator-workflows-recovery.js"
+    "operator-workflows-recovery.js",
+    "help-center.js"
   ],
   "document-intake.js": [
     "document-intake.js",
