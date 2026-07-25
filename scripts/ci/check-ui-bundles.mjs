@@ -7,7 +7,11 @@ const projectRoot = path.resolve(import.meta.dirname, "../..");
 const uiDirectory = path.join(projectRoot, "apps/api/ui");
 const scheduleV2FileName = "document-schedules-v2.js";
 const bundles = {
-  "app.js": ["app.js", "operator-workflows.js"],
+  "app.js": [
+    "app.js",
+    "operator-workflows.js",
+    "operator-workflows-recovery.js"
+  ],
   "document-intake.js": [
     "document-intake.js",
     "document-structure.js",
