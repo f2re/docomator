@@ -10,6 +10,7 @@ import {
 } from "@docomator/storage";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { registerOperatorAssistRoutes } from "./operator-assist-routes.js";
 import { correlationId, mutationContextFromRequest } from "./request-context.js";
 import { registerScheduleNetworkDeliveryRoutes } from "./schedule-network-delivery-routes.js";
 
@@ -76,6 +77,7 @@ export function registerDocumentScheduleRoutes(
   config: ApiConfig,
   registry: DocumentScheduleRegistry
 ): void {
+  registerOperatorAssistRoutes(app, config, registry);
   registerScheduleNetworkDeliveryRoutes(
     app,
     config,
