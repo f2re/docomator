@@ -1,0 +1,6 @@
+updated packages/storage/src/document-generation.ts
+updated apps/worker/src/document-generation-handler.ts
+updated apps/worker/src/main.ts
+updated apps/api/src/document-generation-routes.ts
+updated apps/api/src/operations-readiness-routes.ts
+generation progress and job error: expected one match, found 0
