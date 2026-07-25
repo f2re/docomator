@@ -102,12 +102,12 @@ test("диалог сотрудника не содержит машинно-в�
   await app.openView("employees");
   await page.locator('[data-employee-action="add"]:visible').first().click();
   await expect(page.locator("#employeeDialog")).toBeVisible();
-  await page.locator("#employeeAddFieldButton").click();
-  await expect(page.locator("#employeeNewField")).toBeVisible();
+  await page.locator("#operatorEmployeeAddField").click();
+  await expect(page.locator("#operatorEmployeeNewField")).toBeVisible();
 
   await expectNoDetectableViolations(
     page,
-    "Добавление сотрудника и поля",
+    "Добавление сотрудника и нескольких полей",
     testInfo
   );
 });
