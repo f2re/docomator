@@ -1,0 +1,102 @@
+name: Укрепить и слить веб-документацию
+
+on:
+  push:
+    branches:
+      - feature/web-documentation-center
+    paths:
+      - .github/workflows/harden-and-merge-web-documentation.yml
+      - scripts/ci/harden-documentation-center.py
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  verify-and-merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-web-docs-hardened
+      DOCOMATOR_PORT: 18080
+      DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/web-documentation-center
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Укрепить навигацию
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/harden-documentation-center.py
+          node scripts/docs/build-web-docs.mjs
+          node scripts/docs/build-web-docs.mjs --check
+          node --check apps/api/ui/documentation-center.js
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Проверить репозиторий и миграции
+        run: |
+          set -Eeuo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm run migrate
+
+      - name: Проверить полный Chromium-набор
+        run: |
+          set -Eeuo pipefail
+          npx playwright install --with-deps chromium
+          npm run start:api > "$RUNNER_TEMP/docomator-web-docs-hardened-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              npm run test:e2e
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-web-docs-hardened-api.log"
+          exit 1
+
+      - name: Очистить временные файлы и зафиксировать
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            scripts/ci/harden-documentation-center.py \
+            scripts/ci/fix-documentation-navigation.py \
+            scripts/ci/apply-web-documentation-center.py \
+            .github/workflows/apply-web-documentation-center.yml \
+            .github/workflows/verify-and-merge-web-documentation.yml \
+            .github/workflows/fix-and-merge-web-documentation.yml \
+            .github/workflows/finalize-web-documentation.yml \
+            .github/workflows/harden-and-merge-web-documentation.yml \
+            docs/.documentation-work-in-progress \
+            docs/QUICK_START_NEW.md
+          node scripts/docs/build-web-docs.mjs
+          node scripts/docs/build-web-docs.mjs --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'harden and verify offline documentation center'
+          git push origin HEAD:feature/web-documentation-center
+
+      - name: Слить PR
+        run: |
+          set -Eeuo pipefail
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head feature/web-documentation-center --base main --state open --json number --jq '.[0].number')
+          test -n "$pr_number"
+          test "$pr_number" != "null"
+          gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --squash --admin --delete-branch --subject 'Добавить полное руководство и встроенный центр документации' --body 'Вся Markdown-документация проекта доступна в автономном веб-интерфейсе. Добавлены быстрый старт, руководство оператора, каталог потоков, поиск, категории, внутренние ссылки, F1 и детерминированная CI-проверяемая сборка.'
