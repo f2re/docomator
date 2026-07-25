@@ -46,7 +46,21 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 scripts/ci/apply-document-generation-failures.py
+          set +e
+          python3 scripts/ci/apply-document-generation-failures.py > /tmp/document-generation-fix.log 2>&1
+          status=$?
+          set -e
+          if [[ $status -ne 0 ]]; then
+            cp /tmp/document-generation-fix.log .document-generation-fix.error.log
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .document-generation-fix.error.log
+            git commit --no-verify -m 'capture document generation fix diagnostics' || true
+            git push origin HEAD:fix/document-generation-failures || true
+            cat /tmp/document-generation-fix.log
+            exit "$status"
+          fi
+          cat /tmp/document-generation-fix.log
           git diff --check
 
       - name: Read Node.js version
@@ -83,6 +97,7 @@ jobs:
           set -Eeuo pipefail
           rm -f \
             .apply-document-generation-failures \
+            .document-generation-fix.error.log \
             .github/workflows/apply-document-generation-failures.yml \
             scripts/ci/apply-document-generation-failures.py
           git config user.name 'github-actions[bot]'
