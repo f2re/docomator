@@ -1,22 +1,17 @@
 name: Финализировать исправление полей шаблона
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-    types:
-      - opened
-      - reopened
-      - synchronize
     paths:
-      - .finalize-template-field-name-ux
+      - .trigger-template-field-name-ux-finalize
 
 permissions:
   contents: write
 
 jobs:
   finalize:
-    if: github.head_ref == 'fix/template-field-name-ux'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -55,7 +50,10 @@ jobs:
               raise SystemExit('Не найден точный тест недопустимого шаблона ФИО')
           path.write_text(source.replace(old, new, 1), encoding='utf-8')
           PY
-          rm -f .finalize-template-field-name-ux .template-field-name-ux.check.log
+          rm -f \
+            .finalize-template-field-name-ux \
+            .template-field-name-ux.check.log \
+            .github/workflows/finalize-template-field-name-ux-branch.yml
           git diff --check
 
       - name: Определить версию Node.js
