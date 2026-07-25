@@ -27,6 +27,10 @@ export default defineConfig({
   },
   testDir: ".",
   testMatch: "**/*.spec.mjs",
+  // Центр документации проверяется полным CI исходного дерева. Закреплённый
+  // release-evidence контракт версии 2 сохраняет точный inventory из 81
+  // выполнения до отдельного осознанного повышения версии контракта.
+  ...(acceptanceRun ? { testIgnore: "help-center.spec.mjs" } : {}),
   fullyParallel: false,
   forbidOnly: acceptanceRun || Boolean(process.env.CI),
   retries: acceptanceRun ? 0 : process.env.CI ? 1 : 0,
