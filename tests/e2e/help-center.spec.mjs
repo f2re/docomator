@@ -3,6 +3,13 @@ import { expect, test } from "./fixtures/test.mjs";
 import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
 import { DocomatorPage } from "./pages/docomator-page.mjs";
 
+async function openHelpCenter(page) {
+  await page.locator("#helpButton").click();
+  await expect(page.locator("#helpDrawer")).toHaveClass(/is-open/u);
+  await page.locator("#helpDrawer [data-help-center-open]").click();
+  await expect(page.locator("#helpCenterView")).toHaveClass(/is-visible/u);
+}
+
 test("встроенное руководство открывается, ищет кейсы и ведёт к рабочему разделу", async ({
   page
 }) => {
@@ -10,8 +17,7 @@ test("встроенное руководство открывается, ище
   const app = new DocomatorPage(page);
   await app.open();
 
-  await page.locator("#helpCenterNavButton").click();
-  await expect(page.locator("#helpCenterView")).toHaveClass(/is-visible/u);
+  await openHelpCenter(page);
   await expect(page.locator("#viewTitle")).toHaveText("Руководство");
   await expect(page.locator("#helpCenterHeading")).toContainText(
     "Руководство по всем рабочим потокам"
@@ -44,10 +50,7 @@ test("контекстная помощь содержит переход к п�
   const app = new DocomatorPage(page);
   await app.open();
 
-  await page.locator("#helpButton").click();
-  await expect(page.locator("#helpDrawer")).toHaveClass(/is-open/u);
-  await page.locator("#helpDrawer [data-help-center-open]").click();
-  await expect(page.locator("#helpCenterView")).toHaveClass(/is-visible/u);
+  await openHelpCenter(page);
   await expect(page).toHaveURL(/#help$/u);
 
   await page.reload();
@@ -64,7 +67,7 @@ test("полный каталог Markdown-документов открывае
   await installDocomatorApiMock(page);
   const app = new DocomatorPage(page);
   await app.open();
-  await page.locator("#helpCenterNavButton").click();
+  await openHelpCenter(page);
 
   await expect(page.locator("#helpProjectDocumentsEntry")).toBeVisible();
   await page.locator("[data-help-project-open]").click();
