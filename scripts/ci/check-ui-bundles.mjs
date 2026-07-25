@@ -37,6 +37,8 @@ const bundles = {
     "storage-maintenance.js",
     "bulk-data-import.js",
     "bulk-data-import-v2.js",
+    "generated-documentation.js",
+    "documentation-center.js",
     "operation-center.js",
     "operations-readiness.js"
   ]

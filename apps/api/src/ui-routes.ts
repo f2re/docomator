@@ -62,6 +62,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "storage-maintenance.css",
       "bulk-data-import.css",
       "bulk-data-import-v2.css",
+      "documentation-center.css",
       "operation-center.css",
       "operations-readiness.css",
       "help-center.css"
@@ -104,6 +105,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "storage-maintenance.js",
       "bulk-data-import.js",
       "bulk-data-import-v2.js",
+      "generated-documentation.js",
+      "documentation-center.js",
       "operation-center.js",
       "operations-readiness.js"
     ],

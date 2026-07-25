@@ -18,6 +18,10 @@
 |---|---|
 | [REQUIREMENTS.md](REQUIREMENTS.md) | нормативные функциональные и нефункциональные требования |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | компоненты, потоки, границы и модель данных |
+| [QUICK_START.md](QUICK_START.md) | краткий путь от импорта до первого готового документа |
+| [USER_GUIDE.md](USER_GUIDE.md) | полное руководство оператора, кейсы и диагностика |
+| [FLOW_CATALOG.md](FLOW_CATALOG.md) | пользовательские и технические потоки, проверки и результаты |
+| [WEB_DOCUMENTATION.md](WEB_DOCUMENTATION.md) | встроенный офлайн-центр документации и его сопровождение |
 | [UX_UI_SPECIFICATION.md](UX_UI_SPECIFICATION.md) | требования к пользовательскому интерфейсу и состояниям |
 | [TEMPLATE_COMPILER.md](TEMPLATE_COMPILER.md) | правила компиляции, привязок и заполнения DOCX/XLSX |
 | [SPACES_AND_AUDIENCES.md](SPACES_AND_AUDIENCES.md) | разделы данных, группы, выбор участников и снимки состава |

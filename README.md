@@ -446,3 +446,16 @@ Gate fail-closed блокирует RC при несовпадении commit/SH
 7. Локальные агенты ИИ — после стабилизации детерминированного пути.
 
 Подробности: [архитектура](docs/ARCHITECTURE.md), [требования](docs/REQUIREMENTS.md), [release-gate](docs/RELEASE_GATE.md), [план](docs/ROADMAP.md), [ближайшие приращения](docs/NEXT_ITERATIONS.md) и [автономное развёртывание](docs/OFFLINE_DEPLOYMENT.md).
+
+## Встроенная справка
+
+В рабочем интерфейсе доступен раздел **Справка**. Он содержит быстрый старт, руководство оператора, каталог процессов, эксплуатационные документы, архитектуру, API и ADR. Документация работает автономно, поддерживает поиск и открывается клавишей `F1`.
+
+После изменения Markdown-файлов обновите локальный каталог:
+
+```bash
+npm run docs:web:build
+npm run docs:web:check
+```
+
+Подробности: [`docs/WEB_DOCUMENTATION.md`](docs/WEB_DOCUMENTATION.md).
