@@ -50,7 +50,10 @@ const assets: Readonly<Record<string, UiAsset>> = {
   },
   "/ui/app.js": {
     fileName: "app.js",
-    appendFileNames: ["operator-workflows.js"],
+    appendFileNames: [
+      "operator-workflows.js",
+      "operator-workflows-recovery.js"
+    ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "no-store"
   },
