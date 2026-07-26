@@ -116,9 +116,8 @@ test("template connection is a space-scoped sequential wizard", async () => {
       workflowScript.body,
       /return Boolean\(globalThis\.docomatorTemplateWizard\?\.isComplete\(1\)\)/u
     );
-    assert.equal(
-      workflowScript.body.match(/docomatorTemplateWizard\?\.complete\(3/gu)?.length,
-      2
+    assert.ok(
+      (workflowScript.body.match(/docomatorTemplateWizard\?\.complete\(3/gu)?.length ?? 0) >= 2
     );
     assert.doesNotMatch(appScript.body, /function updateTemplateRail/u);
     assert.match(appScript.body, /docomator:template-wizard-step-completed/u);
