@@ -92,6 +92,16 @@ jobs:
             git cherry-pick --continue
           fi
 
+          cat > migrations/0026_space_colors.sql <<'SQL'
+          -- Persistent visual identity for organizational spaces.
+          -- The backend performs strict #RRGGBB validation; the database keeps a safe
+          -- default for installations upgraded from earlier versions.
+
+          ALTER TABLE spaces
+            ADD COLUMN color TEXT NOT NULL DEFAULT '#5B8DEF'
+              CHECK (length(color) = 7 AND substr(color, 1, 1) = '#');
+          SQL
+
           rm -f \
             .apply-functional-spaces-v2 \
             .github/workflows/reapply-functional-spaces.yml
