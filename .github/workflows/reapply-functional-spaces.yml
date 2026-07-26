@@ -1,0 +1,118 @@
+name: Перенести функциональные пространства на текущую основную ветку
+
+on:
+  push:
+    branches:
+      - feature/functional-spaces
+    paths:
+      - .apply-functional-spaces-v2
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: feature/functional-spaces
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить реализацию поверх текущей основной ветки
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          set +e
+          git cherry-pick 66cccdb35c1d82d138fd2618946d7c3e8bb2bcbf
+          status=$?
+          set -e
+
+          if [[ $status -ne 0 ]]; then
+            for path in \
+              apps/api/src/ui-routes.ts \
+              package.json \
+              scripts/ci/check-ui-bundles.mjs; do
+              git checkout --ours -- "$path"
+            done
+
+            python3 - <<'PY'
+          from pathlib import Path
+
+          def insert_after(path: str, marker: str, line: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if line in text:
+                  return
+              if marker not in text:
+                  raise SystemExit(f"{path}: не найден ориентир {marker!r}")
+              file.write_text(text.replace(marker, marker + line, 1), encoding="utf-8")
+
+          insert_after(
+              "apps/api/src/ui-routes.ts",
+              '      "spaces.css",\n',
+              '      "workspace-switcher.css",\n',
+          )
+          insert_after(
+              "apps/api/src/ui-routes.ts",
+              '      "group-management-v2.js",\n',
+              '      "workspace-switcher.js",\n',
+          )
+          insert_after(
+              "package.json",
+              'node --check apps/api/ui/app.js && ',
+              'node --check apps/api/ui/workspace-switcher.js && ',
+          )
+          insert_after(
+              "scripts/ci/check-ui-bundles.mjs",
+              '    "group-management-v2.js",\n',
+              '    "workspace-switcher.js",\n',
+          )
+          PY
+
+            git add \
+              apps/api/src/ui-routes.ts \
+              package.json \
+              scripts/ci/check-ui-bundles.mjs
+            git cherry-pick --continue
+          fi
+
+          rm -f \
+            .apply-functional-spaces-v2 \
+            .github/workflows/reapply-functional-spaces.yml
+          git add --all
+          git commit --amend --no-edit
+          git diff --check HEAD^
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зафиксированные зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить репозиторий
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-functional-spaces
+        run: npm run migrate
+
+      - name: Обновить ветку pull request
+        shell: bash
+        run: git push --force-with-lease origin HEAD:feature/functional-spaces
