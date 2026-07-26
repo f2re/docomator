@@ -543,7 +543,7 @@ test("DOCX repeat renderer clones the sample row and reverse-reads every value",
     (match) => match[1]
   );
   assert.equal(wordIds.length, 6);
-  assert.equal(new Set(wordIds).size, 7);
+  assert.equal(new Set(wordIds).size, 6);
 });
 
 test("DOCX repeat renderer enforces member limits and required values", async () => {
