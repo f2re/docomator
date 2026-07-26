@@ -43,6 +43,13 @@ interface CreateSpaceBody {
   key?: string;
   name: string;
   description?: string;
+  color?: string;
+}
+
+interface UpdateSpaceBody {
+  name?: string;
+  description?: string;
+  color?: string;
 }
 
 interface CreateSpaceEntityBody {
@@ -87,6 +94,11 @@ const stableKeySchema = {
   pattern: "^[A-Za-z][A-Za-z0-9]*(?:[._-][A-Za-z0-9]+)*$"
 } as const;
 
+const spaceColorSchema = {
+  type: "string",
+  pattern: "^#[0-9A-Fa-f]{6}$"
+} as const;
+
 const paginationProperties = {
   limit: { type: "integer", minimum: 1, maximum: 1_000 }
 } as const;
@@ -128,7 +140,8 @@ export function registerSpaceRoutes(
           properties: {
             key: stableKeySchema,
             name: { type: "string", minLength: 1, maxLength: 500 },
-            description: { type: "string", maxLength: 2_000 }
+            description: { type: "string", maxLength: 2_000 },
+            color: spaceColorSchema
           }
         }
       }
@@ -173,6 +186,38 @@ export function registerSpaceRoutes(
     },
     async (request) =>
       responseEnvelope(request, registry.getSpace(request.params.spaceId))
+  );
+
+  app.patch<{ Params: SpaceParams; Body: UpdateSpaceBody }>(
+    "/api/v1/spaces/:spaceId",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["spaceId"],
+          properties: { spaceId: idSchema }
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          minProperties: 1,
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 500 },
+            description: { type: "string", maxLength: 2_000 },
+            color: spaceColorSchema
+          }
+        }
+      }
+    },
+    async (request) =>
+      responseEnvelope(
+        request,
+        registry.updateSpace(
+          request.params.spaceId,
+          request.body,
+          mutationContextFromRequest(request)
+        )
+      )
   );
 
   app.post<{ Params: SpaceParams; Body: CreateSpaceEntityBody }>(

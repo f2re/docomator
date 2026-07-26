@@ -3,10 +3,12 @@ import test from "node:test";
 
 import { KnowledgeRegistry } from "./knowledge.js";
 import {
+  DEFAULT_SPACE_COLOR,
   DEFAULT_SPACE_ID,
   SpaceConflictError,
   SpaceNotFoundError,
-  SpaceRegistry
+  SpaceRegistry,
+  SpaceValidationError
 } from "./spaces.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
@@ -65,6 +67,53 @@ test("spaces isolate entities and preserve default ownership", () => {
     );
     assert.equal(spaces.getSpace(alpha.id).entityCount, 1);
     assert.equal(spaces.getSpace(beta.id).entityCount, 1);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("space colors persist, normalize and can be updated without moving data", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    assert.equal(spaces.getSpace(DEFAULT_SPACE_ID).color, DEFAULT_SPACE_COLOR);
+
+    const created = spaces.createSpace(
+      {
+        key: "colored",
+        name: "Цветное пространство",
+        description: "Исходное описание",
+        color: "#3d9472"
+      },
+      context("corr-colored")
+    );
+    assert.equal(created.color, "#3D9472");
+    assert.equal(created.version, 1);
+
+    const updated = spaces.updateSpace(
+      created.id,
+      {
+        name: "Инженерная служба",
+        description: "Отдельные люди, группы и документы",
+        color: "#7568e8"
+      },
+      context("corr-colored-update")
+    );
+    assert.equal(updated.name, "Инженерная служба");
+    assert.equal(updated.description, "Отдельные люди, группы и документы");
+    assert.equal(updated.color, "#7568E8");
+    assert.equal(updated.version, 2);
+    assert.equal(spaces.getSpace(created.id).color, "#7568E8");
+
+    assert.throws(
+      () =>
+        spaces.updateSpace(
+          created.id,
+          { color: "violet" },
+          context("corr-colored-invalid")
+        ),
+      SpaceValidationError
+    );
   } finally {
     fixture.cleanup();
   }
