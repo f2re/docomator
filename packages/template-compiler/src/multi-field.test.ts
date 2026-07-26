@@ -446,7 +446,14 @@ test("DOCX compiler marks one safe table row as an audience repeat", async () =>
   ).content.toString("utf8");
   assert.equal((xml.match(/airepeat:/gu) ?? []).length, 1);
   assert.equal((xml.match(/aifield:/gu) ?? []).length, 2);
-  assert.match(xml, /<w:sdtContent><w:tr><w:trPr><w:cantSplit\/><\/w:trPr>/u);
+  assert.match(
+    xml,
+    /<w:tr><w:trPr><w:cantSplit\/><\/w:trPr>[\s\S]*?airepeat:[a-f0-9]{24}[\s\S]*?<\/w:tr>/u
+  );
+  assert.doesNotMatch(
+    xml,
+    /<w:tbl\b[^>]*>[\s\S]*?<w:sdt\b[^>]*>[\s\S]*?<w:sdtContent>[\s\S]*?<w:tr\b/u
+  );
   assert.match(xml, /Список сотрудников/u);
   assert.match(xml, /Подпись после таблицы/u);
 
@@ -535,7 +542,7 @@ test("DOCX repeat renderer clones the sample row and reverse-reads every value",
   const wordIds = [...xml.matchAll(/<w:id\s+w:val="(\d+)"\/>/gu)].map(
     (match) => match[1]
   );
-  assert.equal(wordIds.length, 7);
+  assert.equal(wordIds.length, 6);
   assert.equal(new Set(wordIds).size, 7);
 });
 
@@ -631,7 +638,7 @@ test("DOCX repeat renderer resolves deterministic Word ID collisions", async () 
   const wordIds = [...xml.matchAll(/<w:id\s+w:val="(\d+)"\/>/gu)].map(
     (match) => match[1]
   );
-  assert.equal(wordIds.length, 1 + 1_000 * 2);
+  assert.equal(wordIds.length, 1_000 * 2);
   assert.equal(new Set(wordIds).size, wordIds.length);
 });
 
