@@ -13,7 +13,8 @@ const bundles = {
     "operator-workflows-recovery.js",
     "group-management-v2.js",
     "help-center.js",
-    "help-project-documents.js"
+    "help-project-documents.js",
+    "interface-hierarchy.js"
   ],
   "document-intake.js": [
     "document-intake.js",
