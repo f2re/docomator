@@ -293,6 +293,42 @@ test("API exposes persistent preview state, PDF, activation and active catalog",
   }
 });
 
+test("API saves a tested template without generating PDF", async () => {
+  const setup = await setupApp();
+  try {
+    const response = await setup.app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-test-versions/${setup.tested.id}/activate`,
+      headers: {
+        "x-actor-id": "editor-1",
+        "x-correlation-id": "corr-direct-activate-api"
+      }
+    });
+    assert.equal(response.statusCode, 201, response.body);
+    const body = response.json();
+    assert.equal(body.data.active.previewMode, "skipped");
+    assert.equal(body.data.active.manifest.previewMode, "skipped");
+    assert.equal(body.data.previewUrl, null);
+    assert.equal(body.data.active.title, "Официальное письмо");
+
+    const compiled = await setup.app.inject({
+      method: "GET",
+      url: body.data.compiledUrl
+    });
+    assert.equal(compiled.statusCode, 200, compiled.body);
+    assert.equal(compiled.rawPayload.toString(), "compiled-template");
+
+    const preview = await setup.app.inject({
+      method: "GET",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/active-templates/${body.data.active.id}/files/preview`
+    });
+    assert.equal(preview.statusCode, 409, preview.body);
+    assert.match(preview.json().error.message, /PDF не создавался/ui);
+  } finally {
+    await setup.cleanup();
+  }
+});
+
 test("API retries a failed preview and hides requests from another space", async () => {
   const setup = await setupApp();
   try {

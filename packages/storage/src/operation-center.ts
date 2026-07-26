@@ -189,6 +189,10 @@ export class OperationCenterRegistry {
             JOIN template_drafts d ON d.id = c.draft_id
             JOIN worker_jobs w ON w.id = p.worker_job_id
             WHERE p.space_id = ?
+              AND (
+                p.converter_json IS NULL OR
+                p.converter_json NOT LIKE '%"mode":"skipped"%'
+              )
 
             UNION ALL
 

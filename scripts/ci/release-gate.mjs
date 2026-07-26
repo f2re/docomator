@@ -1298,14 +1298,19 @@ async function main() {
   const repeatXml = repeatXmlEntry.content.toString("utf8");
   assert.match(repeatXml, /Реестр сотрудников/u);
   assert.match(repeatXml, /Ответственный: отдел кадров/u);
+  assert.equal((repeatXml.match(/<w:tbl\b/gu) ?? []).length, 1);
   assert.equal((repeatXml.match(/<w:tr>/gu) ?? []).length, 11);
   assert.equal((repeatXml.match(/<w:cantSplit\/>/gu) ?? []).length, 10);
   assert.equal((repeatXml.match(/aifield:/gu) ?? []).length, 10);
-  assert.equal((repeatXml.match(/airepeat:/gu) ?? []).length, 1);
+  assert.equal((repeatXml.match(/airepeat:/gu) ?? []).length, 0);
+  assert.match(
+    repeatXml,
+    /<w:tbl\b[^>]*>[\s\S]*?<w:tr>[\s\S]*?<w:t>ФИО<\/w:t>[\s\S]*?<\/w:tr><w:tr>[\s\S]*?Сотрудник 01[\s\S]*?<\/w:tr>/u
+  );
   const repeatWordIds = [...repeatXml.matchAll(/<w:id\s+w:val="(\d+)"\/>/gu)].map(
     (match) => match[1]
   );
-  assert.equal(repeatWordIds.length, 11);
+  assert.equal(repeatWordIds.length, 10);
   assert.equal(new Set(repeatWordIds).size, repeatWordIds.length);
   let previousPosition = -1;
   for (const [index] of members.entries()) {

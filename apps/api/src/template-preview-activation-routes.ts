@@ -105,6 +105,38 @@ function registerPreviewRequestRoute(
   );
 }
 
+function registerDirectActivationRoute(
+  app: FastifyInstance,
+  registry: TemplatePreviewActivationRegistry,
+  route: string,
+  versionKind: TemplateReleaseCandidateKind
+): void {
+  app.post<{ Params: VersionParams }>(
+    route,
+    { schema: { params: versionParamsSchema } },
+    async (request, reply) => {
+      const active = registry.activateVersionWithoutPreview(
+        {
+          spaceId: request.params.spaceId,
+          versionId: request.params.versionId,
+          versionKind
+        },
+        mutationContextFromRequest(request)
+      );
+      reply.code(201).header("cache-control", "no-store");
+      return responseEnvelope(request, {
+        active,
+        catalogUrl: `/api/v1/spaces/${encodeURIComponent(active.spaceId)}/active-templates`,
+        compiledUrl: `/api/v1/spaces/${encodeURIComponent(active.spaceId)}/active-templates/${encodeURIComponent(active.id)}/files/compiled`,
+        previewUrl:
+          active.previewMode === "pdf"
+            ? `/api/v1/spaces/${encodeURIComponent(active.spaceId)}/active-templates/${encodeURIComponent(active.id)}/files/preview`
+            : null
+      });
+    }
+  );
+}
+
 export function registerTemplatePreviewActivationRoutes(
   app: FastifyInstance,
   objectStore: ContentAddressedObjectStore,
@@ -120,6 +152,18 @@ export function registerTemplatePreviewActivationRoutes(
     app,
     registry,
     "/api/v1/spaces/:spaceId/template-multi-test-versions/:versionId/preview",
+    "multi"
+  );
+  registerDirectActivationRoute(
+    app,
+    registry,
+    "/api/v1/spaces/:spaceId/template-test-versions/:versionId/activate",
+    "single"
+  );
+  registerDirectActivationRoute(
+    app,
+    registry,
+    "/api/v1/spaces/:spaceId/template-multi-test-versions/:versionId/activate",
     "multi"
   );
 
@@ -195,7 +239,10 @@ export function registerTemplatePreviewActivationRoutes(
         active,
         catalogUrl: `/api/v1/spaces/${encodeURIComponent(active.spaceId)}/active-templates`,
         compiledUrl: `/api/v1/spaces/${encodeURIComponent(active.spaceId)}/active-templates/${encodeURIComponent(active.id)}/files/compiled`,
-        previewUrl: `/api/v1/spaces/${encodeURIComponent(active.spaceId)}/active-templates/${encodeURIComponent(active.id)}/files/preview`
+        previewUrl:
+          active.previewMode === "pdf"
+            ? `/api/v1/spaces/${encodeURIComponent(active.spaceId)}/active-templates/${encodeURIComponent(active.id)}/files/preview`
+            : null
       });
     }
   );
@@ -276,6 +323,11 @@ export function registerTemplatePreviewActivationRoutes(
         request.params.activeVersionId
       );
       const isPreview = request.params.kind === "preview";
+      if (isPreview && active.previewMode === "skipped") {
+        throw new TemplatePreviewConflictError(
+          "Для этой версии PDF не создавался. Шаблон сохранён и готов к работе."
+        );
+      }
       const hash = isPreview ? active.previewSha256 : active.compiledSha256;
       const content = await objectStore.getBuffer(hash);
       const fileName = isPreview

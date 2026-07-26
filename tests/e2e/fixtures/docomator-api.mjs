@@ -911,6 +911,20 @@ export async function installDocomatorApiMock(page, options = {}) {
           trial: "/api/v1/e2e/trial"
         }
       };
+    } else if (/\/template-(?:multi-)?test-versions\/[^/]+\/activate$/.test(path) && method === "POST") {
+      const draft = space.drafts[0];
+      const active = activeTemplateFixture(
+        draft?.format || state.format,
+        draft?.title || "Личная карточка сотрудника"
+      );
+      active.previewMode = "skipped";
+      active.manifest = { ...(active.manifest || {}), previewMode: "skipped" };
+      space.activeTemplates = [active];
+      data = {
+        active,
+        previewUrl: null,
+        compiledUrl: "/api/v1/e2e/compiled"
+      };
     } else if (/\/template-(?:multi-)?test-versions\/[^/]+\/preview$/.test(path) && method === "POST") {
       space.previewRequest = {
         id: "template-preview-e2e",

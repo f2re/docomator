@@ -102,14 +102,14 @@ function createActivationPanel() {
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Готовность шаблона</p>
-          <h2>Просмотрите документ и включите шаблон</h2>
-          <p>Система создаст PDF в фоне. После просмотра отдельно подтвердите, что шаблон можно использовать.</p>
+          <h2>Сохраните проверенный шаблон</h2>
+          <p>После успешного пробного заполнения шаблон можно использовать сразу. PDF создаётся только по желанию для дополнительной визуальной проверки.</p>
         </div>
-        <span class="template-file-mark" aria-hidden="true">PDF</span>
+        <span class="template-file-mark" aria-hidden="true">✓</span>
       </div>
       <div class="activation-guidance">
         <span aria-hidden="true">ⓘ</span>
-        <p>Операция сохраняется. Можно перейти в другой раздел или закрыть страницу: состояние останется в журнале и будет доступно после возвращения.</p>
+        <p>Сохранение фиксирует проверенную неизменяемую версию. Необязательное создание PDF выполняется отдельно и сохраняется в журнале операций.</p>
       </div>
       <div id="templateActivationContent" class="activation-content" aria-live="polite">
         <div class="activation-state">
@@ -340,6 +340,64 @@ async function requestTemplatePreview(versionId = null) {
   }
 }
 
+async function renderActivationSuccess(body) {
+  const holder = document.querySelector("#templateActivationStatus");
+  if (!holder) return;
+  const active = body.data.active;
+  const directButton = document.querySelector("#templateActivateDirect");
+  if (directButton) directButton.hidden = true;
+  holder.innerHTML = `
+    <div class="activation-state is-success">
+      <span aria-hidden="true">✅</span>
+      <div>
+        <strong>Версия ${active.versionNumber} сохранена</strong>
+        <p>Шаблон «${activationEscape(active.title)}» появился в каталоге выбранного пространства: ${activationEscape(activationVersionKindLabel(active))}.</p>
+        <div class="activation-inline-actions">
+          ${body.data.previewUrl ? `<a class="secondary-button" href="${activationEscape(body.data.previewUrl)}">Скачать PDF</a>` : ""}
+          <a class="primary-button" href="${activationEscape(body.data.compiledUrl)}">Скачать активный шаблон</a>
+        </div>
+        <small>${active.previewMode === "skipped" ? "PDF не создавался: использована успешно проверенная пробная версия. " : "PDF сохранён вместе с версией. "}Идентификатор операции: <code>${activationEscape(body.correlationId)}</code>.</small>
+      </div>
+    </div>`;
+  globalThis.docomatorTemplateWizard?.complete(4, { activeId: active.id });
+  await loadActiveTemplateCatalog();
+}
+
+async function activateTemplateVersionDirect() {
+  if (activationBusy) return;
+  const version = selectedActivationVersion();
+  const spaceId = currentActivationSpaceId();
+  const holder = document.querySelector("#templateActivationStatus");
+  const button = document.querySelector("#templateActivateDirect");
+  if (!version || !spaceId || !holder) return;
+  clearActivationPolling();
+  clearActivationReload();
+  activationBusy = true;
+  if (button) button.disabled = true;
+  const previous = holder.innerHTML;
+  holder.innerHTML = `
+    <div class="activation-state is-pending" role="status">
+      <span aria-hidden="true">⏳</span>
+      <div><strong>Сохраняем проверенную версию</strong><p>Фиксируем неизменяемый манифест и добавляем шаблон в рабочий каталог. PDF не создаётся.</p></div>
+    </div>`;
+  try {
+    const collection =
+      version.versionKind === "multi"
+        ? "template-multi-test-versions"
+        : "template-test-versions";
+    const body = await activationFetchJson(
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/${collection}/${encodeURIComponent(version.id)}/activate`,
+      { method: "POST" }
+    );
+    await renderActivationSuccess(body);
+  } catch (error) {
+    holder.innerHTML = `${previous}<div class="activation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Шаблон не сохранён</strong><p>${activationEscape(error?.message || "Повторите действие.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.</small>` : ""}</div></div>`;
+  } finally {
+    activationBusy = false;
+    if (button) button.disabled = false;
+  }
+}
+
 async function activateTemplateVersion(requestId) {
   if (activationBusy) return;
   const spaceId = currentActivationSpaceId();
@@ -359,24 +417,7 @@ async function activateTemplateVersion(requestId) {
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-previews/${encodeURIComponent(requestId)}/activate`,
       { method: "POST" }
     );
-    const active = body.data.active;
-    holder.innerHTML = `
-      <div class="activation-state is-success">
-        <span aria-hidden="true">✅</span>
-        <div>
-          <strong>Версия ${active.versionNumber} активирована</strong>
-          <p>Шаблон «${activationEscape(active.title)}» появился в каталоге выбранного пространства: ${activationEscape(activationVersionKindLabel(active))}.</p>
-          <div class="activation-inline-actions">
-            <a class="secondary-button" href="${activationEscape(body.data.previewUrl)}">Скачать PDF</a>
-            <a class="primary-button" href="${activationEscape(body.data.compiledUrl)}">Скачать активный шаблон</a>
-          </div>
-          <small>Идентификатор операции: <code>${activationEscape(body.correlationId)}</code>.</small>
-        </div>
-      </div>`;
-    globalThis.docomatorTemplateWizard?.complete(4, {
-      activeId: active.id
-    });
-    await loadActiveTemplateCatalog();
+    await renderActivationSuccess(body);
   } catch (error) {
     holder.innerHTML = existing;
     holder.insertAdjacentHTML(
@@ -440,12 +481,13 @@ async function loadActivationVersions() {
           </label>
         </div>
         <div class="activation-actions">
-          <button class="primary-button" id="templatePreviewSubmit" type="submit">Создать предварительный просмотр</button>
-          <p>LibreOffice работает в фоновом задании с отдельным временным профилем.</p>
+          <button class="primary-button" id="templateActivateDirect" type="submit">Сохранить шаблон</button>
+          <button class="secondary-button" id="templatePreviewSubmit" type="button">Создать PDF для визуальной проверки</button>
+          <p>PDF необязателен. Он нужен только если требуется отдельно проверить расположение элементов глазами.</p>
         </div>
       </form>
       <div id="templateActivationStatus" class="activation-status">
-        <div class="activation-state"><span aria-hidden="true">👁️</span><div><strong>Выберите проверенную версию</strong><p>После создания PDF здесь появится просмотр и кнопка активации.</p></div></div>
+        <div class="activation-state"><span aria-hidden="true">✓</span><div><strong>Выберите проверенную версию</strong><p>Её можно сохранить сразу. Необязательный PDF создаётся отдельной кнопкой.</p></div></div>
       </div>`;
     content
       .querySelector("#templateActivationDraft")
@@ -454,8 +496,11 @@ async function loadActivationVersions() {
       .querySelector("#templateActivationForm")
       ?.addEventListener("submit", (event) => {
         event.preventDefault();
-        void requestTemplatePreview();
+        void activateTemplateVersionDirect();
       });
+    content
+      .querySelector("#templatePreviewSubmit")
+      ?.addEventListener("click", () => void requestTemplatePreview());
     await updateActivationVersionSelect();
   } catch (error) {
     content.querySelector("#templateActivationReloadState")?.remove();
@@ -475,10 +520,12 @@ async function updateActivationVersionSelect() {
   const draft = selectedActivationDraft();
   const versionSelect = document.querySelector("#templateActivationVersion");
   const hint = document.querySelector("#templateActivationVersionHint");
-  const button = document.querySelector("#templatePreviewSubmit");
-  if (!draft || !versionSelect || !hint || !button) return;
+  const previewButton = document.querySelector("#templatePreviewSubmit");
+  const directButton = document.querySelector("#templateActivateDirect");
+  if (!draft || !versionSelect || !hint || !previewButton || !directButton) return;
   versionSelect.disabled = true;
-  button.disabled = true;
+  previewButton.disabled = true;
+  directButton.disabled = true;
   hint.textContent = "Получаем одно- и многополевые проверенные версии…";
   try {
     const base = `/api/v1/spaces/${encodeURIComponent(currentActivationSpaceId())}/template-drafts/${encodeURIComponent(draft.id)}`;
@@ -521,7 +568,8 @@ async function updateActivationVersionSelect() {
         ? `Доступно многополевых версий: ${multiCount}. Можно также выбрать прежнюю одно-полевую проверку.`
         : "Доступны одно-полевые версии. Для обычного документа проверьте полный набор полей на шаге выше.";
     versionSelect.disabled = false;
-    button.disabled = false;
+    previewButton.disabled = false;
+    directButton.disabled = false;
   } catch (error) {
     activationVersions = [];
     versionSelect.innerHTML = "";
@@ -560,7 +608,7 @@ async function loadActiveTemplateCatalog() {
               <p>Версия ${template.versionNumber} · ${template.format.toUpperCase()} · ${activationEscape(activationVersionKindLabel(template))} · активирована ${activationEscape(new Date(template.activatedAt).toLocaleString("ru-RU"))}</p>
             </div>
             <div class="activation-catalog-actions">
-              <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/active-templates/${encodeURIComponent(template.id)}/files/preview">PDF</a>
+              ${template.previewMode === "pdf" ? `<a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/active-templates/${encodeURIComponent(template.id)}/files/preview">PDF</a>` : '<span class="activation-preview-omitted">PDF не создавался</span>'}
               <a href="/api/v1/spaces/${encodeURIComponent(spaceId)}/active-templates/${encodeURIComponent(template.id)}/files/compiled">Шаблон</a>
             </div>
           </article>`

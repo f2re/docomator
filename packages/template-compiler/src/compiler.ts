@@ -1234,6 +1234,40 @@ function findDocxTableRowRange(
   );
 }
 
+function firstDocxParagraphRange(
+  xml: string,
+  parent: XmlElementRange
+): XmlElementRange {
+  const tags = scanXmlTags(xml);
+  for (let index = 0; index < tags.length; index += 1) {
+    const tag = tags[index];
+    if (
+      tag === undefined ||
+      tag.closing ||
+      tag.selfClosing ||
+      tag.localName !== "p" ||
+      tag.start < parent.openEnd ||
+      tag.end > parent.closeStart
+    ) {
+      continue;
+    }
+    const close = tags[matchingCloseIndex(tags, index)];
+    if (close === undefined || close.end > parent.closeStart) continue;
+    return {
+      start: tag.start,
+      end: close.end,
+      openEnd: tag.end,
+      closeStart: close.start,
+      name: tag.name,
+      selfClosing: false
+    };
+  }
+  throw new TemplateCompilerError(
+    "repeat_row_paragraph_not_found",
+    "В строке-образце не найден обычный абзац для служебной метки повтора."
+  );
+}
+
 function docxTagIdentifiers(xml: string): string[] {
   return scanXmlTags(xml)
     .filter((tag) => !tag.closing && tag.localName === "tag")
@@ -1433,16 +1467,13 @@ export async function compileDocxRepeatRow(
       "Повторяемая строка должна содержать весь и только сохранённый набор скалярных полей черновика."
     );
   }
-  const prefix = tagPrefix(row.name) || "w:";
-  const namespace =
-    tagPrefix(row.name).length === 0
-      ? ' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-      : "";
-  const wrapper = `<${prefix}sdt${namespace}><${prefix}sdtPr><${prefix}alias ${prefix}val="Повтор участников"/><${prefix}tag ${prefix}val="${xmlAttribute(repeatIdentifier)}"/><${prefix}id ${prefix}val="${deterministicWordId(repeatIdentifier)}"/></${prefix}sdtPr><${prefix}sdtContent>${rowXml}</${prefix}sdtContent></${prefix}sdt>`;
+  const paragraph = firstDocxParagraphRange(decoded.text, row);
+  const prefix = tagPrefix(paragraph.name);
+  const marker = `<${prefix}sdt><${prefix}sdtPr><${prefix}alias ${prefix}val="Повтор участников"/><${prefix}tag ${prefix}val="${xmlAttribute(repeatIdentifier)}"/><${prefix}id ${prefix}val="${deterministicWordId(repeatIdentifier)}"/></${prefix}sdtPr><${prefix}sdtContent><${prefix}r><${prefix}t/></${prefix}r></${prefix}sdtContent></${prefix}sdt>`;
   const updated =
-    decoded.text.slice(0, row.start) +
-    wrapper +
-    decoded.text.slice(row.end);
+    decoded.text.slice(0, paragraph.closeStart) +
+    marker +
+    decoded.text.slice(paragraph.closeStart);
   const output = writeOoxmlPackage(
     replacePackageEntry(entries, binding.part, encodeXml(decoded, updated))
   );
@@ -1454,15 +1485,23 @@ export async function compileDocxRepeatRow(
   if (content === null) {
     throw new TemplateCompilerError(
       "compiled_repeat_binding_not_found",
-      "После сборки не удалось повторно найти повторяемую строку DOCX."
+      "После сборки не удалось повторно найти служебную метку повторяемой строки DOCX."
     );
   }
-  const verifiedRow = verifiedXml.slice(content.openEnd, content.closeStart);
-  findDocxTableRowRange(
-    `<w:tbl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${verifiedRow}</w:tbl>`,
-    0,
-    0
+  const verifiedRow = findDocxTableRowRange(
+    verifiedXml,
+    binding.tableIndex,
+    binding.rowIndex
   );
+  if (
+    content.start < verifiedRow.openEnd ||
+    content.end > verifiedRow.closeStart
+  ) {
+    throw new TemplateCompilerError(
+      "compiled_repeat_binding_outside_row",
+      "Служебная метка повтора оказалась вне выбранной строки таблицы DOCX."
+    );
+  }
   return {
     output,
     inputSha256: sha256(compiled),

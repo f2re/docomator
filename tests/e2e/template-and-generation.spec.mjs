@@ -135,18 +135,17 @@ async function runTrial(page, { expectFirstError = false } = {}) {
   );
 }
 
-async function previewAndActivate(page) {
-  await expect(page.locator("#templatePreviewSubmit")).toBeEnabled({
+async function saveTestedTemplate(page) {
+  await expect(page.locator("#templateActivateDirect")).toBeEnabled({
     timeout: 12_000
   });
-  await page.locator("#templatePreviewSubmit").click();
+  await expect(page.locator("#templatePreviewSubmit")).toBeVisible();
+  await page.locator("#templateActivateDirect").click();
   await expect(page.locator("#templateActivationStatus")).toContainText(
-    "Предварительный просмотр готов"
+    "сохранена"
   );
-  await page.locator("#templateActivationConfirmed").check();
-  await page.locator("#templateActivateButton").click();
   await expect(page.locator("#templateActivationStatus")).toContainText(
-    "активирована"
+    "PDF не создавался"
   );
   await expect(page.locator("#activeTemplateCatalog")).toContainText("Активен");
   await expect(page.locator("#activeTemplateCatalog")).toContainText(
@@ -175,7 +174,7 @@ for (const templateCase of templateCases) {
     await expectWizardUiConstraints(page);
     await runTrial(page);
     await expectWizardUiConstraints(page);
-    await previewAndActivate(page);
+    await saveTestedTemplate(page);
     await expectWizardUiConstraints(page);
   });
 }
@@ -409,7 +408,7 @@ test("активный шаблон переживает перезагрузк�
   await uploadAndSaveSource(page, templateCases[0]);
   await bindEmployeeField(page);
   await runTrial(page);
-  await previewAndActivate(page);
+  await saveTestedTemplate(page);
 
   await app.openView("settings");
   await app.openView("spaces");

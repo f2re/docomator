@@ -28,6 +28,7 @@ function setupRegistry(): { store: SqliteStore; registry: OperationCenterRegistr
         candidate_id TEXT NOT NULL,
         worker_job_id TEXT NOT NULL,
         state TEXT NOT NULL,
+        converter_json TEXT,
         error_json TEXT,
         correlation_id TEXT NOT NULL,
         requested_at TEXT NOT NULL,
@@ -87,7 +88,7 @@ function setupRegistry(): { store: SqliteStore; registry: OperationCenterRegistr
       INSERT INTO template_drafts VALUES ('draft-a', 'Личная карточка');
       INSERT INTO template_release_candidates VALUES ('candidate-a', 'draft-a', 'docx');
       INSERT INTO template_release_previews VALUES (
-        'preview-a', 'space-a', 'candidate-a', 'worker-preview', 'pending', NULL,
+        'preview-a', 'space-a', 'candidate-a', 'worker-preview', 'pending', NULL, NULL,
         'corr-preview', '2026-07-15T09:00:00.000Z', NULL, '2026-07-15T10:04:00.000Z'
       );
       INSERT INTO template_releases VALUES ('release-a', 'Личная карточка', 'docx');

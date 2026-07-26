@@ -108,6 +108,20 @@ test("DOCX repeats an empty four-cell row created by desktop Word", async () => 
     binding: DocxRepeatRowBinding;
     technicalBinding: CompiledRepeatTechnicalBinding;
   };
+  const compiledXml = packageEntry(
+    await readOoxmlPackage(compiled.output),
+    "word/document.xml"
+  ).content.toString("utf8");
+  assert.equal((compiledXml.match(/<w:tbl\b/gu) ?? []).length, 1);
+  assert.doesNotMatch(
+    compiledXml,
+    /<w:tbl\b[^>]*>[\s\S]*?<w:sdt\b[^>]*>[\s\S]*?<w:sdtContent>[\s\S]*?<w:tr\b/u
+  );
+  assert.match(
+    compiledXml,
+    /<w:tr\b[^>]*>[\s\S]*?airepeat:[a-f0-9]{24}[\s\S]*?<\/w:tr>/u
+  );
+
   const byId = new Map(compiled.fields.map((field) => [field.fieldId, field]));
   const rendered = await renderDocxRepeatRows({
     compiled: compiled.output,
@@ -143,7 +157,13 @@ test("DOCX repeats an empty four-cell row created by desktop Word", async () => 
     await readOoxmlPackage(rendered.output),
     "word/document.xml"
   ).content.toString("utf8");
+  assert.equal((xml.match(/<w:tbl\b/gu) ?? []).length, 1);
   assert.equal((xml.match(/<w:tr\b/gu) ?? []).length, 3);
+  assert.doesNotMatch(xml, /airepeat:[a-f0-9]{24}/u);
+  assert.match(
+    xml,
+    /<w:tbl\b[^>]*>[\s\S]*?<w:tr\b[^>]*>[\s\S]*?<w:t>#<\/w:t>[\s\S]*?<\/w:tr><w:tr\b[^>]*>[\s\S]*?Иванов Иван[\s\S]*?<\/w:tr><w:tr\b[^>]*>[\s\S]*?Петров Пётр[\s\S]*?<\/w:tr>[\s\S]*?<\/w:tbl>/u
+  );
   assert.match(xml, /Темы работ/u);
   assert.match(xml, /Что еще/u);
   assert.match(xml, /Иванов Иван/u);
