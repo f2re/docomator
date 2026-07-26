@@ -27,9 +27,33 @@ jobs:
           show-progress: false
 
       - name: Применить исправления
+        id: apply
+        continue-on-error: true
+        shell: bash
         run: |
-          python3 scripts/ci/apply-template-structure-preview-csp.py
-          python3 scripts/ci/apply-optional-template-preview.py
+          set -o pipefail
+          python3 scripts/ci/apply-template-structure-preview-csp.py 2>&1 | tee patch-structure.log
+          first=${PIPESTATUS[0]}
+          if [[ "$first" -eq 0 ]]; then
+            python3 scripts/ci/apply-optional-template-preview.py 2>&1 | tee patch-preview.log
+            second=${PIPESTATUS[0]}
+          else
+            second=1
+          fi
+          exit $(( first || second ))
+
+      - name: Сохранить диагностику применения
+        if: steps.apply.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-structure-preview-patch-diagnostic
+          path: patch-*.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Остановиться после ошибки применения
+        if: steps.apply.outcome == 'failure'
+        run: exit 1
 
       - name: Проверить синтаксис интерфейса и CSP
         run: |
