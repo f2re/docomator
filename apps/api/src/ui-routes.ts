@@ -67,7 +67,9 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "bulk-data-import-v2.css",
       "operation-center.css",
       "operations-readiness.css",
-      "help-center.css"
+      "help-center.css",
+      "interface-hierarchy.css",
+      "interface-stability.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "no-store"
@@ -80,7 +82,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "group-management-v2.js",
       "workspace-switcher.js",
       "help-center.js",
-      "help-project-documents.js"
+      "help-project-documents.js",
+      "interface-hierarchy.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "no-store"

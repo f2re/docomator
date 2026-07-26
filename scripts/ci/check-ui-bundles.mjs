@@ -14,7 +14,8 @@ const bundles = {
     "group-management-v2.js",
     "workspace-switcher.js",
     "help-center.js",
-    "help-project-documents.js"
+    "help-project-documents.js",
+    "interface-hierarchy.js"
   ],
   "document-intake.js": [
     "document-intake.js",

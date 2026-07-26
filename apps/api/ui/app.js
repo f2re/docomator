@@ -1375,17 +1375,12 @@ function attachEvents() {
   });
 }
 
+const initialViewHash = location.hash.slice(1);
+const initialSpecialHash = initialViewHash === "help" ? "#help" : "";
 applyTheme(state.theme);
 publishCurrentSpace();
 attachEvents();
 initializeTemplateCatalogSync();
-const docomatorRequestedInitialView = location.hash.slice(1);
-selectView(
-  docomatorRequestedInitialView in views
-    ? docomatorRequestedInitialView
-    : "overview"
-);
-if (docomatorRequestedInitialView === "help") {
-  window.history.replaceState(null, "", "#help");
-}
+selectView(initialViewHash in views ? initialViewHash : "overview");
+if (initialSpecialHash) window.history.replaceState(null, "", initialSpecialHash);
 loadData();
