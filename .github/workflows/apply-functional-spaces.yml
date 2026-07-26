@@ -1,0 +1,65 @@
+name: Реализовать функциональные пространства
+
+on:
+  push:
+    branches:
+      - feature/functional-spaces
+    paths:
+      - .apply-functional-spaces
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: feature/functional-spaces
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить изменение пространств
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-functional-spaces.py
+          rm -f scripts/ci/apply-functional-spaces.py .apply-functional-spaces
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зафиксированные зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить весь репозиторий
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-functional-spaces
+        run: npm run migrate
+
+      - name: Зафиксировать проверенную реализацию
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all -- . ':(exclude).github/workflows/**'
+          git diff --cached --check
+          git commit -m 'implement functional isolated spaces'
+          git push origin HEAD:feature/functional-spaces
