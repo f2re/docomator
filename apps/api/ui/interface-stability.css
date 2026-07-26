@@ -20,3 +20,11 @@
     scroll-behavior: auto !important;
   }
 }
+
+@media (forced-colors: active) {
+  .system-status-dot,
+  .path-index,
+  .management-tile-icon {
+    forced-color-adjust: auto;
+  }
+}
