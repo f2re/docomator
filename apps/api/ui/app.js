@@ -1375,9 +1375,12 @@ function attachEvents() {
   });
 }
 
+const initialViewHash = location.hash.slice(1);
+const initialSpecialHash = initialViewHash === "help" ? "#help" : "";
 applyTheme(state.theme);
 publishCurrentSpace();
 attachEvents();
 initializeTemplateCatalogSync();
-selectView(location.hash.slice(1) in views ? location.hash.slice(1) : "overview");
+selectView(initialViewHash in views ? initialViewHash : "overview");
+if (initialSpecialHash) window.history.replaceState(null, "", initialSpecialHash);
 loadData();

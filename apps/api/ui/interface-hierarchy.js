@@ -545,6 +545,11 @@
     new MutationObserver(interfaceScheduleSync).observe(documentsView, { childList: true, subtree: true });
   }
 
+  const overviewView = interfaceQuery('[data-view="overview"]');
+  if (overviewView) {
+    new MutationObserver(interfaceScheduleSync).observe(overviewView, { childList: true });
+  }
+
   const connectionBadge = interfaceQuery("#connectionBadge");
   if (connectionBadge) {
     new MutationObserver(interfaceScheduleSync).observe(connectionBadge, { attributes: true, childList: true, subtree: true });

@@ -260,17 +260,7 @@ body {
 .status-ribbon[data-interface-state="warning"] .status-ribbon-icon { color: var(--warning); background: var(--warning-soft); }
 .status-ribbon[data-interface-state="error"] .status-ribbon-icon { color: var(--danger); background: var(--danger-soft); }
 .status-ribbon.is-routine:not(.is-user-expanded) {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  clip: rect(0 0 0 0) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
-  clip-path: inset(50%) !important;
+  display: none;
 }
 
 .view { padding-top: 10px; }
