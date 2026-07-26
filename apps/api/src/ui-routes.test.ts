@@ -100,6 +100,7 @@ test("template connection is a space-scoped sequential wizard", async () => {
     assert.match(shell.body, /data-template-wizard-go="2" disabled/u);
     assert.match(shell.body, /id="templateWizardBack"[^>]*hidden/u);
     assert.match(workflowScript.body, /dataset\.templateWizardPanel = "2"/u);
+    // Дополнительные модули могут безопасно возвращать мастер к третьему шагу.
     assert.ok(
       (workflowScript.body.match(/dataset\.templateWizardPanel = "3"/gu)?.length ?? 0) >= 2
     );
