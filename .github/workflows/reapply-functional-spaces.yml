@@ -38,6 +38,12 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
+          # Эти два файла были созданы отдельными коммитами до итогового
+          # серверного патча. Без них UI-route ссылается на отсутствующие
+          # части бандла и возвращает HTTP 500.
+          git cherry-pick c097b6fb8f690854e122602a00e156d4927a7d4e
+          git cherry-pick 52c852d85761a78cca1593bca21b913aa4af2469
+
           set +e
           git cherry-pick 66cccdb35c1d82d138fd2618946d7c3e8bb2bcbf
           status=$?
