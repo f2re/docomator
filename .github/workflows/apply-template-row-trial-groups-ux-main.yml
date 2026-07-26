@@ -6,12 +6,21 @@ on:
       - main
     paths:
       - .github/workflows/apply-template-row-trial-groups-ux-main.yml
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'fix/template-row-trial-groups-ux'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
