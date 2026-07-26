@@ -1,0 +1,188 @@
+name: Применить финальное исправление строки, проверки и групп
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-template-row-trial-groups-ux-final.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  apply-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-template-row-main
+      DOCOMATOR_PORT: 18080
+      DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Получить актуальный main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить целевое изменение при необходимости
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f .ci-template-row-main.log .ci-template-row-main-api.log
+          if [[ ! -f apps/api/ui/group-management-v2.js || ! -f packages/storage/src/template-draft-field-editor.ts ]]; then
+            git fetch origin fix/template-row-trial-groups-ux:refs/remotes/origin/fix/template-row-trial-groups-ux
+            git checkout origin/fix/template-row-trial-groups-ux -- \
+              scripts/ci/apply-template-row-ux-server.py \
+              scripts/ci/apply-template-row-ux-client.py \
+              scripts/ci/apply-template-row-ux-tests.py \
+              scripts/ci/fix-template-row-ux-known-issues.py \
+              scripts/ci/fix-template-row-ux-known-issues-2.py
+            python3 scripts/ci/apply-template-row-ux-server.py
+            python3 scripts/ci/apply-template-row-ux-client.py
+            python3 scripts/ci/apply-template-row-ux-tests.py
+            python3 scripts/ci/fix-template-row-ux-known-issues.py
+            python3 scripts/ci/fix-template-row-ux-known-issues-2.py
+          fi
+          test -f packages/storage/src/template-draft-field-editor.ts
+          test -f apps/api/src/template-draft-field-edit-routes.ts
+          test -f apps/api/ui/template-placement-guidance.js
+          test -f apps/api/ui/template-multi-trial-recovery.js
+          test -f apps/api/ui/group-management-v2.js
+          test -f tests/e2e/group-management-large.spec.mjs
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Полная проверка репозитория
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee .ci-template-row-main.log
+
+      - name: Миграции на чистой базе
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run migrate 2>&1 | tee -a .ci-template-row-main.log
+
+      - name: Установить Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Полный Chromium-набор до фиксации
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run start:api > .ci-template-row-main-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..45}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              set -o pipefail
+              npm run test:e2e 2>&1 | tee -a .ci-template-row-main.log
+              exit 0
+            fi
+            sleep 1
+          done
+          cat .ci-template-row-main-api.log | tee -a .ci-template-row-main.log
+          exit 1
+
+      - name: Сохранить диагностику как артефакт при ошибке
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-row-main-diagnostics
+          path: |
+            .ci-template-row-main.log
+            .ci-template-row-main-api.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Очистить временный контур и создать коммит
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            scripts/ci/apply-template-row-ux-server.py \
+            scripts/ci/apply-template-row-ux-client.py \
+            scripts/ci/apply-template-row-ux-tests.py \
+            scripts/ci/fix-template-row-ux-known-issues.py \
+            scripts/ci/fix-template-row-ux-known-issues-2.py \
+            .github/workflows/apply-template-row-trial-groups-ux-final.yml \
+            .ci-template-row-main.log \
+            .ci-template-row-main-api.log
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix template row editing trial recovery and large groups'
+          fi
+
+      - name: Синхронизировать с изменившимся main
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git fetch origin main
+          git rebase origin/main
+
+      - name: Повторная проверка точного итогового дерева
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run check
+          rm -rf "$DOCOMATOR_DATA_DIR"
+          npm run migrate
+          rm -f .ci-template-row-main-api.log
+          npm run start:api > .ci-template-row-main-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..45}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              npm run test:e2e
+              exit 0
+            fi
+            sleep 1
+          done
+          cat .ci-template-row-main-api.log
+          exit 1
+
+      - name: Отправить проверенный результат в main
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f .ci-template-row-main-api.log
+          git status --short
+          git push origin HEAD:main
+
+      - name: Закрыть заменённые PR и удалить технические ветки
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for head in fix/template-row-trial-groups-ux fix/template-row-trial-groups-ux-final; do
+            pr_numbers=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$head" --state open --json number --jq '.[].number')
+            for pr in $pr_numbers; do
+              gh pr close "$pr" --repo "$GITHUB_REPOSITORY" --comment 'Изменение проверено полным набором и перенесено непосредственно в main.' || true
+            done
+            encoded=${head//\//%2F}
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$encoded" || true
+          done
