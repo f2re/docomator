@@ -55,7 +55,18 @@ test("повторяемую строку Word можно сохранить, п
     "4 ячейки"
   );
   expect(
-    await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+    await panel.evaluate((element) => {
+      const panelBounds = element.getBoundingClientRect();
+      return [...element.querySelectorAll("[data-row-editor-column]")].every(
+        (card) => {
+          const bounds = card.getBoundingClientRect();
+          return (
+            bounds.left >= panelBounds.left - 1 &&
+            bounds.right <= panelBounds.right + 1
+          );
+        }
+      );
+    })
   ).toBe(true);
   await expect(panel.locator("[data-row-editor-column]")).toHaveCount(4);
   await expect(
