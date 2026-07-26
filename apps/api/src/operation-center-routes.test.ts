@@ -23,8 +23,8 @@ function createProjectionSchema(store: SqliteStore): void {
       );
       CREATE TABLE template_release_previews(
         id TEXT PRIMARY KEY, space_id TEXT NOT NULL, candidate_id TEXT NOT NULL,
-        worker_job_id TEXT NOT NULL, state TEXT NOT NULL, error_json TEXT,
-        correlation_id TEXT NOT NULL,
+        worker_job_id TEXT NOT NULL, state TEXT NOT NULL, converter_json TEXT,
+        error_json TEXT, correlation_id TEXT NOT NULL,
         requested_at TEXT NOT NULL, completed_at TEXT, updated_at TEXT NOT NULL
       );
       CREATE TABLE template_releases(
