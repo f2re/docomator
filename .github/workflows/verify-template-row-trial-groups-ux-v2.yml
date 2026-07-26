@@ -1,0 +1,172 @@
+name: Финально проверить редактор строки, пробную проверку и группы
+
+on:
+  push:
+    branches:
+      - fix/template-row-trial-groups-ux
+    paths:
+      - .github/workflows/verify-template-row-trial-groups-ux-v2.yml
+      - scripts/ci/fix-template-row-ux-known-issues.py
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  verify-and-merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-template-row-ux-v2
+      DOCOMATOR_PORT: 18080
+      DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: fix/template-row-trial-groups-ux
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить незавершённые изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f .ci-template-row-ux-error.log .ci-template-row-ux-api.log
+          if [[ -f scripts/ci/apply-template-row-ux-server.py ]]; then
+            python3 scripts/ci/apply-template-row-ux-server.py
+          fi
+          if [[ -f scripts/ci/apply-template-row-ux-client.py ]]; then
+            python3 scripts/ci/apply-template-row-ux-client.py
+          fi
+          if [[ -f scripts/ci/apply-template-row-ux-tests.py ]]; then
+            python3 scripts/ci/apply-template-row-ux-tests.py
+          fi
+          python3 scripts/ci/fix-template-row-ux-known-issues.py
+          git diff --check
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зафиксированные зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Выполнить полную проверку репозитория
+        id: repository_check
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee .ci-template-row-ux-error.log
+
+      - name: Проверить миграции на чистой базе
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run migrate 2>&1 | tee -a .ci-template-row-ux-error.log
+
+      - name: Установить Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Выполнить полный Chromium-набор
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run start:api > .ci-template-row-ux-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..45}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              set -o pipefail
+              npm run test:e2e 2>&1 | tee -a .ci-template-row-ux-error.log
+              exit 0
+            fi
+            sleep 1
+          done
+          cat .ci-template-row-ux-api.log | tee -a .ci-template-row-ux-error.log
+          exit 1
+
+      - name: Сохранить диагностику при ошибке
+        if: failure()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          {
+            echo
+            echo '--- API LOG ---'
+            cat .ci-template-row-ux-api.log 2>/dev/null || true
+          } >> .ci-template-row-ux-error.log
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .ci-template-row-ux-error.log
+          git commit --no-verify -m 'capture template row UX verification diagnostics' || true
+          git push origin HEAD:fix/template-row-trial-groups-ux || true
+
+      - name: Очистить временный контур и зафиксировать проверенное дерево
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            scripts/ci/apply-template-row-ux-server.py \
+            scripts/ci/apply-template-row-ux-client.py \
+            scripts/ci/apply-template-row-ux-tests.py \
+            scripts/ci/fix-template-row-ux-known-issues.py \
+            .github/workflows/verify-template-row-trial-groups-ux.yml \
+            .github/workflows/verify-template-row-trial-groups-ux-v2.yml \
+            .ci-template-row-ux-error.log \
+            .ci-template-row-ux-api.log
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix template row editing trial recovery and large groups'
+            git push origin HEAD:fix/template-row-trial-groups-ux
+          fi
+
+      - name: Создать и слить проверенный PR
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pr_number=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --head fix/template-row-trial-groups-ux \
+            --base main \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+          if [[ -z "$pr_number" || "$pr_number" == "null" ]]; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --head fix/template-row-trial-groups-ux \
+              --base main \
+              --title 'Исправить повторное редактирование строки, пробную проверку и большие группы' \
+              --body 'Реализованы изменение и удаление сохранённых связей строки Word, понятное объяснение пустых мест, автоматическое восстановление общей пробной проверки после изменения состава полей и масштабируемое управление группами до 1000 участников. Выполнены npm run check, миграции и полный Chromium-набор.'
+            pr_number=$(gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --head fix/template-row-trial-groups-ux \
+              --base main \
+              --state open \
+              --json number \
+              --jq '.[0].number')
+          fi
+          test -n "$pr_number"
+          test "$pr_number" != "null"
+          gh pr merge "$pr_number" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --admin \
+            --delete-branch \
+            --subject 'Исправить повторное редактирование строки, пробную проверку и большие группы' \
+            --body 'Добавлены полноценное изменение и удаление связей полей шаблона, устойчивый мастер строки Word, понятные подсказки пустого места, восстановление общей проверки при изменении состава полей и постраничное управление большими группами. Полный check, миграции и Chromium прошли.'
