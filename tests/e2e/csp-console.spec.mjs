@@ -34,6 +34,7 @@ test("рабочие экраны не создают ошибок Content-Secur
   await app.open();
   await app.openView("documents");
   const progress = page.locator("#operationCenterList progress");
+  await expect(progress).toHaveAttribute("max", "100");
   await expect(progress).toHaveAttribute("value", "50");
   await expect(progress).not.toHaveAttribute("style", /.+/u);
   await app.openView("templates");
@@ -41,5 +42,5 @@ test("рабочие экраны не создают ошибок Content-Secur
   await page.waitForTimeout(100);
 
   expect(await page.locator("[style]").count()).toBe(0);
-  expect(violations).toEqual([]);
+  expect(violations, violations.join("\n")).toEqual([]);
 });
