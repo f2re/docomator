@@ -7,6 +7,7 @@ const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 const files = [
   "apps/api/ui/index.html",
   "apps/api/ui/app.js",
+  "apps/api/ui/interface-hierarchy.js",
   "apps/api/ui/group-management-v2.js",
   "apps/api/ui/document-intake.js",
   "apps/api/ui/document-structure.js",
