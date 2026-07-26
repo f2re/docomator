@@ -13,6 +13,7 @@ const files = [
   "apps/api/ui/document-structure.js",
   "apps/api/ui/template-placement-guidance.js",
   "apps/api/ui/template-row-editor-v2.js",
+  "apps/api/ui/template-row-flow.js",
   "apps/api/ui/template-trial.js",
   "apps/api/ui/template-multi-trial.js",
   "apps/api/ui/template-multi-trial-recovery.js",

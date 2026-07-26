@@ -1353,57 +1353,67 @@ export async function compileDocxRepeatRow(
   );
   const rowXml = decoded.text.slice(row.start, row.end);
   const rowTags = scanXmlTags(rowXml);
+  if (rowTags.some((tag) => !tag.closing && tag.localName === "tbl")) {
+    throw new TemplateCompilerError(
+      "unsupported_repeat_row",
+      "Строка содержит вложенную таблицу DOCX. Выберите обычную строку без таблицы внутри ячейки."
+    );
+  }
+  if (rowTags.some((tag) => !tag.closing && tag.localName === "vMerge")) {
+    throw new TemplateCompilerError(
+      "unsupported_repeat_row",
+      "Строка использует вертикальное объединение ячеек. Выберите строку без объединения по вертикали."
+    );
+  }
+  if (rowTags.some((tag) => !tag.closing && tag.localName === "tblHeader")) {
+    throw new TemplateCompilerError(
+      "unsupported_repeat_row",
+      "Выбрана строка заголовка таблицы. Для повторения выберите строку-образец под заголовками."
+    );
+  }
+  const unsupportedRepeatRowElements = new Set([
+    "altChunk",
+    "bookmarkStart",
+    "bookmarkEnd",
+    "commentRangeStart",
+    "commentRangeEnd",
+    "commentReference",
+    "control",
+    "customXml",
+    "customXmlDelRangeEnd",
+    "customXmlDelRangeStart",
+    "customXmlInsRangeEnd",
+    "customXmlInsRangeStart",
+    "del",
+    "drawing",
+    "endnoteReference",
+    "fldSimple",
+    "fldChar",
+    "footnoteReference",
+    "hyperlink",
+    "ins",
+    "instrText",
+    "moveFrom",
+    "moveFromRangeEnd",
+    "moveFromRangeStart",
+    "moveTo",
+    "moveToRangeEnd",
+    "moveToRangeStart",
+    "object",
+    "permStart",
+    "permEnd",
+    "pict",
+    "smartTag",
+    "subDoc"
+  ]);
   if (
     rowTags.some(
-      (tag) =>
-        !tag.closing &&
-        (/\s(?:[A-Za-z_][\w.-]*:)?(?:anchorId|paraId|textId)\s*=/u.test(
-          tag.raw
-        ) ||
-          tag.localName === "tbl" ||
-          tag.localName === "vMerge" ||
-          tag.localName === "tblHeader" ||
-          [
-            "altChunk",
-            "bookmarkStart",
-            "bookmarkEnd",
-            "commentRangeStart",
-            "commentRangeEnd",
-            "commentReference",
-            "control",
-            "customXml",
-            "customXmlDelRangeEnd",
-            "customXmlDelRangeStart",
-            "customXmlInsRangeEnd",
-            "customXmlInsRangeStart",
-            "del",
-            "drawing",
-            "endnoteReference",
-            "fldSimple",
-            "fldChar",
-            "footnoteReference",
-            "hyperlink",
-            "ins",
-            "instrText",
-            "moveFrom",
-            "moveFromRangeEnd",
-            "moveFromRangeStart",
-            "moveTo",
-            "moveToRangeEnd",
-            "moveToRangeStart",
-            "object",
-            "permStart",
-            "permEnd",
-            "pict",
-            "proofErr",
-            "smartTag",
-            "subDoc"
-          ].includes(tag.localName))
+      (tag) => !tag.closing && unsupportedRepeatRowElements.has(tag.localName)
     )
   ) {
     throw new TemplateCompilerError(
       "unsupported_repeat_row",
-      "Строка с вложенной таблицей, вертикальным объединением, признаком заголовка или сложным объектом DOCX не может повторяться."
+      "Строка содержит рисунок, поле, ссылку, исправления или другой сложный объект DOCX. Упростите только строку-образец и повторите проверку."
     );
   }
   const sdtCount = rowTags.filter(

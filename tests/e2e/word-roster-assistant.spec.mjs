@@ -27,6 +27,11 @@ test("повторяемую строку Word можно сохранить, п
   await page.locator("#documentQuarantineButton").click();
   await page.locator("#documentStructureButton").click();
 
+  await expect(page.locator(".structure-table-row")).toHaveCount(2);
+  await expect(
+    page.locator(".structure-table-row").nth(1).locator(".structure-table-cell-stack")
+  ).toHaveCount(4);
+
   const sampleCell = page.locator(".structure-element").filter({
     hasText: "Таблица 1, строка 2, ячейка 1"
   });
@@ -42,6 +47,27 @@ test("повторяемую строку Word можно сохранить, п
   const panel = page.locator("#rowEditorPanel");
   await expect(panel).toBeVisible();
   await expect(page.locator("#documentFieldForm")).toBeHidden();
+  await expect(page.locator(".structure-report")).toHaveClass(
+    /is-row-editor-open/u
+  );
+  await expect(page.locator(".structure-element-list")).toBeHidden();
+  await expect(panel.locator(".roster-assistant-heading")).toContainText(
+    "4 ячейки"
+  );
+  expect(
+    await panel.evaluate((element) => {
+      const panelBounds = element.getBoundingClientRect();
+      return [...element.querySelectorAll("[data-row-editor-column]")].every(
+        (card) => {
+          const bounds = card.getBoundingClientRect();
+          return (
+            bounds.left >= panelBounds.left - 1 &&
+            bounds.right <= panelBounds.right + 1
+          );
+        }
+      );
+    })
+  ).toBe(true);
   await expect(panel.locator("[data-row-editor-column]")).toHaveCount(4);
   await expect(
     panel.locator("[data-row-editor-column]").nth(0).locator("[data-row-editor-mode]")

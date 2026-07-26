@@ -193,7 +193,7 @@ async function docxTextRangeDefinitions() {
 }
 
 async function docxRepeatRowDefinitions(
-  options: { unsafe?: "vMerge" | "nested" | "complex" | "unique-id" } = {}
+  options: { unsafe?: "vMerge" | "nested" | "complex" } = {}
 ) {
   const unsafeXml =
     options.unsafe === "vMerge"
@@ -202,9 +202,7 @@ async function docxRepeatRowDefinitions(
         ? "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Вложено</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
         : options.unsafe === "complex"
           ? '<w:p><w:hyperlink r:id="rIdExternal" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:r><w:t>Ссылка</w:t></w:r></w:hyperlink></w:p>'
-          : options.unsafe === "unique-id"
-            ? '<w:p xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:paraId="12345678"><w:r><w:t>Уникальный абзац</w:t></w:r></w:p>'
-        : "";
+          : "";
   const source = buildZipFixture(
     minimalDocxEntries().map((entry) =>
       entry.name === "word/document.xml"
@@ -638,12 +636,7 @@ test("DOCX repeat renderer resolves deterministic Word ID collisions", async () 
 });
 
 test("DOCX repeat compiler rejects unsafe row structures", async () => {
-  for (const unsafe of [
-    "vMerge",
-    "nested",
-    "complex",
-    "unique-id"
-  ] as const) {
+  for (const unsafe of ["vMerge", "nested", "complex"] as const) {
     const input = await docxRepeatRowDefinitions({ unsafe });
     await assert.rejects(
       compileScalarFields({

@@ -1160,6 +1160,92 @@ function wordIdCounts(xml: string): Map<number, number> {
   return counts;
 }
 
+type DocxRepeatVolatileIdentifier = "anchorId" | "paraId" | "textId";
+
+function collectDocxRepeatVolatileIdentifiers(
+  xml: string
+): Record<DocxRepeatVolatileIdentifier, Set<string>> {
+  const identifiers: Record<DocxRepeatVolatileIdentifier, Set<string>> = {
+    anchorId: new Set<string>(),
+    paraId: new Set<string>(),
+    textId: new Set<string>()
+  };
+  const expression =
+    /\s(?:[A-Za-z_][\w.-]*:)?(anchorId|paraId|textId)\s*=\s*(["'])([0-9A-Fa-f]{8})\2/gu;
+  for (const match of xml.matchAll(expression)) {
+    const localName = match[1] as DocxRepeatVolatileIdentifier;
+    const value = match[3];
+    if (value !== undefined) identifiers[localName].add(value.toUpperCase());
+  }
+  return identifiers;
+}
+
+function allocateDocxRepeatVolatileIdentifier(
+  localName: DocxRepeatVolatileIdentifier,
+  memberIndex: number,
+  occurrenceIndex: number,
+  used: Set<string>
+): string {
+  let candidate = createHash("sha256")
+    .update("docomator-repeat-volatile-id")
+    .update("\u0000")
+    .update(localName)
+    .update("\u0000")
+    .update(String(memberIndex))
+    .update("\u0000")
+    .update(String(occurrenceIndex))
+    .digest()
+    .readUInt32BE(0);
+  if (candidate === 0) candidate = 1;
+  const first = candidate;
+  do {
+    const value = candidate.toString(16).toUpperCase().padStart(8, "0");
+    if (!used.has(value)) {
+      used.add(value);
+      return value;
+    }
+    candidate = candidate === 0xffffffff ? 1 : candidate + 1;
+  } while (candidate !== first);
+  throw new TemplateCompilerError(
+    "repeat_volatile_id_exhausted",
+    "Не удалось назначить уникальные служебные идентификаторы строкам DOCX."
+  );
+}
+
+function stripDocxProofingMarkers(xml: string): string {
+  return xml.replace(
+    /<\/?(?:[A-Za-z_][\w.-]*:)?proofErr\b[^>]*>/gu,
+    ""
+  );
+}
+
+function rewriteDocxRepeatVolatileIdentifiers(
+  xml: string,
+  memberIndex: number,
+  used: Record<DocxRepeatVolatileIdentifier, Set<string>>
+): string {
+  const occurrences: Record<DocxRepeatVolatileIdentifier, number> = {
+    anchorId: 0,
+    paraId: 0,
+    textId: 0
+  };
+  return xml.replace(
+    /(\s(?:[A-Za-z_][\w.-]*:)?(anchorId|paraId|textId)\s*=\s*)(["'])([0-9A-Fa-f]{8})\3/gu,
+    (_source, prefix: string, localNameValue: string, quote: string) => {
+      const localName = localNameValue as DocxRepeatVolatileIdentifier;
+      const occurrenceIndex = occurrences[localName];
+      occurrences[localName] += 1;
+      const value = allocateDocxRepeatVolatileIdentifier(
+        localName,
+        memberIndex,
+        occurrenceIndex,
+        used[localName]
+      );
+      return `${prefix}${quote}${value}${quote}`;
+    }
+  );
+}
+
 export async function renderDocxRepeatRows(
   input: RenderDocxRepeatRowsInput
 ): Promise<RenderDocxRepeatRowsResult> {
@@ -1263,6 +1349,7 @@ export async function renderDocxRepeatRows(
   });
   const expectedRows: string[][] = [];
   const usedWordIds = existingWordIds(decoded.text);
+  const volatileIdentifiers = collectDocxRepeatVolatileIdentifiers(decoded.text);
   const generatedWordIds = new Set<number>();
   let expandedRowsBytes = 0;
   const renderedRows = input.members.map((member, memberIndex) => {
@@ -1301,7 +1388,11 @@ export async function renderDocxRepeatRows(
       );
       expected[fieldIndex] = normalized.display;
     }
-    const row = applyXmlReplacements(template, replacements);
+    const row = rewriteDocxRepeatVolatileIdentifiers(
+      stripDocxProofingMarkers(applyXmlReplacements(template, replacements)),
+      memberIndex,
+      volatileIdentifiers
+    );
     expandedRowsBytes += Buffer.byteLength(row, "utf8");
     if (expandedRowsBytes > 32 * 1024 * 1024) {
       throw new TemplateCompilerError(
