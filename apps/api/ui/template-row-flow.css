@@ -86,6 +86,8 @@
 
 .structure-selection.is-row-editor-open {
   display: block;
+  width: 100%;
+  min-width: 0;
   margin-top: 0.85rem;
   padding: 0;
   border: 0;
@@ -98,6 +100,8 @@
 
 .row-editor-panel.row-flow-workspace {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   max-height: none;
   margin: 0;
   padding: clamp(1rem, 2.2vw, 1.5rem);
@@ -108,6 +112,7 @@
 }
 
 .row-flow-workspace .roster-assistant-heading {
+  min-width: 0;
   align-items: center;
 }
 
@@ -116,6 +121,7 @@
 }
 
 .row-flow-workspace .row-editor-explanation {
+  min-width: 0;
   grid-template-columns: minmax(10rem, auto) minmax(0, 1fr);
   align-items: start;
 }
@@ -127,6 +133,7 @@
 
 .row-flow-workspace .roster-assistant-columns {
   display: grid;
+  min-width: 0;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
   gap: 0.8rem;
   align-items: start;
@@ -134,9 +141,22 @@
 
 .row-flow-workspace .roster-assistant-column {
   min-width: 0;
+  max-width: 100%;
   height: 100%;
+  grid-template-columns: 2rem minmax(0, 1fr);
   align-content: start;
   padding: 0.9rem;
+  overflow: hidden;
+}
+
+.row-flow-workspace .roster-assistant-column-body,
+.row-flow-workspace .row-editor-column-title,
+.row-flow-workspace label,
+.row-flow-workspace fieldset,
+.row-flow-workspace .row-editor-name,
+.row-flow-workspace .roster-new-property {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .row-flow-workspace .roster-assistant-column-body {
@@ -157,10 +177,26 @@
   min-width: 0;
 }
 
+.row-flow-workspace strong,
+.row-flow-workspace p,
+.row-flow-workspace small,
+.row-flow-workspace output,
+.row-flow-workspace option {
+  overflow-wrap: anywhere;
+}
+
 .row-flow-workspace select,
 .row-flow-workspace input,
+.row-flow-workspace textarea,
 .row-flow-workspace button {
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
+}
+
+.row-flow-workspace input[type="checkbox"] {
+  width: 1.25rem;
+  min-width: 1.25rem;
 }
 
 .row-flow-workspace select,
@@ -171,6 +207,10 @@
 .row-flow-workspace .roster-assistant-actions {
   padding-top: 1rem;
   border-top: 1px solid var(--border);
+}
+
+.row-flow-workspace .roster-assistant-actions > * {
+  width: auto;
 }
 
 @media (max-width: 720px) {
@@ -192,7 +232,17 @@
     flex-direction: column;
   }
 
-  .row-flow-back-button {
+  .row-editor-panel.row-flow-workspace {
+    padding: 0.75rem;
+  }
+
+  .row-flow-workspace .roster-assistant-column {
+    gap: 0.55rem;
+    padding: 0.7rem;
+  }
+
+  .row-flow-back-button,
+  .row-flow-workspace .roster-assistant-actions > * {
     width: 100%;
   }
 }
