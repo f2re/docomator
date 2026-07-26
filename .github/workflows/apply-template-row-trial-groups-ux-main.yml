@@ -42,15 +42,30 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 scripts/ci/apply-template-row-trial-groups-ux.py
-          git diff --check
-          node --check apps/api/ui/template-row-editor-v2.js
-          node --check apps/api/ui/template-placement-guidance.js
-          node --check apps/api/ui/template-multi-trial-recovery.js
-          node --check apps/api/ui/group-management-v2.js
-          node --check tests/e2e/word-roster-assistant.spec.mjs
-          node --check tests/e2e/template-multi-trial-recovery.spec.mjs
-          node --check tests/e2e/group-management-large.spec.mjs
+          set +e
+          {
+            python3 scripts/ci/apply-template-row-trial-groups-ux.py
+            git diff --check
+            node --check apps/api/ui/template-row-editor-v2.js
+            node --check apps/api/ui/template-placement-guidance.js
+            node --check apps/api/ui/template-multi-trial-recovery.js
+            node --check apps/api/ui/group-management-v2.js
+            node --check tests/e2e/word-roster-assistant.spec.mjs
+            node --check tests/e2e/template-multi-trial-recovery.spec.mjs
+            node --check tests/e2e/group-management-large.spec.mjs
+          } > /tmp/template-row-trial-groups-ux.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/template-row-trial-groups-ux.log
+          if [[ $status -ne 0 ]]; then
+            cp /tmp/template-row-trial-groups-ux.log .template-row-trial-groups-ux.error.log
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .template-row-trial-groups-ux.error.log
+            git commit --no-verify -m 'capture template row trial groups diagnostics' || true
+            git push origin HEAD:fix/template-row-trial-groups-ux || true
+            exit "$status"
+          fi
 
       - name: Зафиксировать итог в рабочей ветке
         shell: bash
@@ -58,7 +73,8 @@ jobs:
           set -Eeuo pipefail
           rm -f \
             scripts/ci/apply-template-row-trial-groups-ux.py \
-            .github/workflows/apply-template-row-trial-groups-ux.yml
+            .github/workflows/apply-template-row-trial-groups-ux.yml \
+            .template-row-trial-groups-ux.error.log
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
