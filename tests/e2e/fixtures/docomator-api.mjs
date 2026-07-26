@@ -50,6 +50,8 @@ function createSpaceState(employeeCount = 0, activeTemplate = false) {
     documentSources: [],
     drafts: [],
     trialVersions: [],
+    multiTrialVersions: [],
+    groups: [],
     previewRequest: null,
     generationCreated: false,
     resultCollected: false,
@@ -112,7 +114,7 @@ function structureReport(fileName, repeatTemplate = false, studentRosterTemplate
     truncated: false
   };
   if (format === "docx" && studentRosterTemplate) {
-    const labels = ["ФИО студента", "Тема научной работы", "Научный руководитель"];
+    const labels = ["№", "ФИО студента", "Тема научной работы", "Научный руководитель"];
     const elements = [
       ...labels.map((text, columnIndex) => ({
         id: `word/document.xml#paragraph:header-${columnIndex + 1}`,
@@ -225,6 +227,40 @@ async function jsonBody(request) {
   }
 }
 
+function fieldFormatter(payload) {
+  if (payload.personName) {
+    return {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: payload.personName.sourceOrder,
+      pattern: payload.personName.pattern
+    };
+  }
+  if (payload.valueType === "number") {
+    return {
+      version: 1,
+      kind: "number.ru",
+      fractionDigits:
+        payload.decimalPlaces === undefined ? null : payload.decimalPlaces
+    };
+  }
+  if (payload.valueType === "integer") {
+    return { version: 1, kind: "number.ru", fractionDigits: 0 };
+  }
+  if (payload.valueType === "date") return { version: 1, kind: "date.ru" };
+  if (payload.valueType === "date-time") {
+    return {
+      version: 1,
+      kind: "date-time.ru",
+      timeZone: payload.timeZone || "Europe/Moscow"
+    };
+  }
+  if (payload.valueType === "boolean") {
+    return { version: 1, kind: "boolean.ru" };
+  }
+  return { version: 1, kind: "identity" };
+}
+
 function pathSpaceId(path) {
   return path.match(/^\/api\/v1\/spaces\/([^/]+)/)?.[1] || E2E_SPACE_ID;
 }
@@ -266,6 +302,10 @@ export function createDocomatorScenario(options = {}) {
     directAnalyzeCalls: 0,
     draftRequests: [],
     fieldRequests: [],
+    fieldUpdateRequests: [],
+    fieldDeleteRequests: [],
+    multiTrialBodies: [],
+    groupMemberRequests: [],
     inspectedFileName: "Личная карточка.docx",
     format: "docx",
     repeatTemplate: Boolean(options.repeatTemplate),
@@ -372,7 +412,11 @@ export async function installDocomatorApiMock(page, options = {}) {
         label: payload.label,
         valueType: payload.valueType || "string",
         sensitivity: payload.sensitivity || "personal",
-        appliesTo: payload.appliesTo || ["person"]
+        appliesTo: payload.appliesTo || ["person"],
+        aliases: payload.aliases || [],
+        validation: payload.validation || {},
+        description: payload.description || null,
+        unit: payload.unit || null
       };
       state.properties.push(definition);
       data = definition;
@@ -383,7 +427,7 @@ export async function installDocomatorApiMock(page, options = {}) {
           name: "Отдел разработки",
           description: "Тестовый локальный раздел",
           entityCount: state.primary.entities.length,
-          groupCount: 0
+          groupCount: state.primary.groups.filter((group) => group.status === "active").length
         },
         ...(state.includeSecondSpace
           ? [

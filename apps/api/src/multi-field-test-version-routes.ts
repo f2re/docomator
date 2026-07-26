@@ -153,10 +153,11 @@ export function registerMultiFieldTestVersionRoutes(
         (fieldId) => !draft.fields.some((field) => field.id === fieldId)
       );
       if (missing.length > 0 || extra.length > 0) {
+        const missingLabels = missing
+          .map((field) => `«${field.label}»`)
+          .join(", ");
         throw new MultiFieldTestVersionValidationError(
-          `Multi-field trial must provide exactly all draft fields; missing=${missing
-            .map((field) => field.key)
-            .join(",")}; extra=${extra.join(",")}`
+          `Состав полей черновика изменился после открытия формы. Не переданы: ${missingLabels || "нет"}; лишних значений: ${extra.length}. Обновите форму и повторите проверку.`
         );
       }
 

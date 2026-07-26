@@ -1,6 +1,6 @@
 {
   const multiTrialRecoveredValues = new Map();
-  let multiTrialKnownFieldIds = new Set();
+  const multiTrialKnownFieldIdsByDraft = new Map();
 
   function multiTrialRecoveryKey(draftId, field) {
     return `${draftId}:${field.key || field.id}`;
@@ -89,11 +89,12 @@
     const count = document.querySelector("#templateMultiTrialCount");
     if (!draft || !holder || !count) return;
     const currentIds = new Set(draft.fields.map((field) => field.id));
+    const knownIds = multiTrialKnownFieldIdsByDraft.get(draft.id) || new Set();
     const newIds = new Set(
-      [...currentIds].filter((fieldId) => !multiTrialKnownFieldIds.has(fieldId))
+      [...currentIds].filter((fieldId) => !knownIds.has(fieldId))
     );
-    if (multiTrialKnownFieldIds.size === 0) newIds.clear();
-    multiTrialKnownFieldIds = currentIds;
+    if (knownIds.size === 0) newIds.clear();
+    multiTrialKnownFieldIdsByDraft.set(draft.id, currentIds);
     count.textContent = `${draft.fields.length} полей будут одновременно вставлены в одну пробную копию и считаны обратно.`;
     holder.innerHTML = `
       <section class="multi-trial-explanation">
@@ -171,12 +172,28 @@
     if (submit) submit.textContent = "Создать и проверить пробную копию";
   };
 
+  function multiTrialFieldSignature(field) {
+    return JSON.stringify({
+      id: field.id,
+      version: field.version || 1,
+      key: field.key,
+      label: field.label,
+      valueType: field.valueType,
+      required: Boolean(field.required),
+      formatter: field.formatter || null
+    });
+  }
+
   function multiTrialSameFields(left, right) {
-    const leftIds = (left?.fields || []).map((field) => field.id).sort();
-    const rightIds = (right?.fields || []).map((field) => field.id).sort();
+    const leftFields = (left?.fields || [])
+      .map(multiTrialFieldSignature)
+      .sort();
+    const rightFields = (right?.fields || [])
+      .map(multiTrialFieldSignature)
+      .sort();
     return (
-      leftIds.length === rightIds.length &&
-      leftIds.every((fieldId, index) => fieldId === rightIds[index])
+      leftFields.length === rightFields.length &&
+      leftFields.every((signature, index) => signature === rightFields[index])
     );
   }
 

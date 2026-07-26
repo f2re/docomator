@@ -6,7 +6,6 @@ import {
 } from "@docomator/template-compiler";
 import {
   type JsonValue,
-  SqliteStore,
   TemplateDraftFieldEditor,
   TemplateDraftValidationError,
   toJsonValue
@@ -105,9 +104,8 @@ function formatterFor(body: UpdateFieldBody): JsonValue {
 
 export function registerTemplateDraftFieldEditRoutes(
   app: FastifyInstance,
-  store: SqliteStore
+  editor: TemplateDraftFieldEditor
 ): void {
-  const editor = new TemplateDraftFieldEditor(store);
 
   app.put<{ Params: FieldParams; Body: UpdateFieldBody }>(
     "/api/v1/spaces/:spaceId/template-drafts/:draftId/fields/:fieldId",

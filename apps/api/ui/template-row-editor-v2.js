@@ -25,12 +25,24 @@
 
   function rowEditorElements(element) {
     if (!element?.tableLocation || !Array.isArray(structureReport?.elements)) return [];
-    return structureReport.elements
-      .filter((candidate) => rowEditorSameRow(candidate, element))
-      .sort(
-        (left, right) =>
-          left.tableLocation.columnIndex - right.tableLocation.columnIndex
-      );
+    const byColumn = new Map();
+    for (const candidate of structureReport.elements) {
+      if (!rowEditorSameRow(candidate, element)) continue;
+      const column = candidate.tableLocation.columnIndex;
+      const previous = byColumn.get(column);
+      const candidateLinked = Boolean(rowEditorExistingField(candidate));
+      const previousLinked = Boolean(previous && rowEditorExistingField(previous));
+      if (
+        !previous ||
+        (candidateLinked && !previousLinked) ||
+        (!previousLinked && !previous.text && candidate.text)
+      ) {
+        byColumn.set(column, candidate);
+      }
+    }
+    return [...byColumn.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, candidate]) => candidate);
   }
 
   function rowEditorHeader(element) {
@@ -129,7 +141,8 @@
         score: rowEditorPropertyScore(header, definition)
       }))
       .sort((left, right) => right.score - left.score)[0];
-    return best?.score >= 0.82 ? `existing:${best.definition.key}` : "skip";
+    if (best?.score >= 0.82) return `existing:${best.definition.key}`;
+    return semantic === "unknown" ? "skip" : "new";
   }
 
   function rowEditorPropertyOptions(selected, existing) {
@@ -367,6 +380,23 @@
     const label = card.querySelector("[data-row-editor-label]")?.value?.trim() || "";
     const valueType = card.querySelector("[data-row-editor-type]")?.value || "string";
     if (!label) throw new Error("Укажите название нового поля для выбранной колонки.");
+    const matches = structurePropertyDefinitions.filter(
+      (candidate) =>
+        rowEditorNormalize(candidate.label) === rowEditorNormalize(label)
+    );
+    if (matches.length > 1) {
+      throw new Error(
+        `Найдено несколько полей «${label}». Выберите существующее поле из списка.`
+      );
+    }
+    if (matches[0]) {
+      if (matches[0].valueType !== valueType) {
+        throw new Error(
+          `Поле «${label}» уже существует с другим типом значения.`
+        );
+      }
+      return matches[0];
+    }
     const created = await structureFetchJson("/api/v1/knowledge/property-definitions", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -382,6 +412,28 @@
       structurePropertyDefinitions.push(definition);
     }
     return definition;
+  }
+
+  function rowEditorExistingFormat(existing, definition) {
+    if (!existing || existing.key !== definition.key || existing.valueType !== definition.valueType) {
+      return {};
+    }
+    if (
+      definition.valueType === "number" &&
+      existing.formatter?.kind === "number.ru" &&
+      existing.formatter.fractionDigits !== null &&
+      existing.formatter.fractionDigits !== undefined
+    ) {
+      return { decimalPlaces: existing.formatter.fractionDigits };
+    }
+    if (
+      definition.valueType === "date-time" &&
+      existing.formatter?.kind === "date-time.ru" &&
+      existing.formatter.timeZone
+    ) {
+      return { timeZone: existing.formatter.timeZone };
+    }
+    return {};
   }
 
   async function rowEditorLatestDraft(spaceId, draftId) {
@@ -428,25 +480,26 @@
         const mode = card.querySelector("[data-row-editor-mode]")?.value || "skip";
         if (mode === "skip") {
           if (existing) {
-            await structureFetchJson(
+            const deleted = await structureFetchJson(
               `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts/${encodeURIComponent(draft.id)}/fields/${encodeURIComponent(existing.id)}`,
               { method: "DELETE" }
             );
             deletedCount += 1;
             latest.fields = latest.fields.filter((field) => field.id !== existing.id);
+            if (deleted.data.repeatBindingCleared) repeatExists = false;
           }
           continue;
         }
         const definition = await rowEditorDefinition(card, element, existing);
         if (!definition) continue;
+        const personName = rowEditorPersonName(card);
         const payload = {
           key: definition.key,
           label: definition.label,
           valueType: definition.valueType,
           required: Boolean(card.querySelector("[data-row-editor-required]")?.checked),
-          ...(rowEditorPersonName(card) === undefined
-            ? {}
-            : { personName: rowEditorPersonName(card) })
+          ...rowEditorExistingFormat(existing, definition),
+          ...(personName === undefined ? {} : { personName })
         };
         if (existing) {
           const body = await structureFetchJson(
@@ -488,7 +541,10 @@
         rowEditorOpen(selectedStructureElement)
       );
       panel.querySelector("#rowEditorContinueTrial")?.addEventListener("click", () =>
-        globalThis.docomatorTemplateWizard?.go(3)
+        globalThis.docomatorTemplateWizard?.complete(2, {
+          sourceId: latest.sourceRecordId || structureWizardArtifacts().sourceId,
+          draftId: draft.id
+        })
       );
       window.dispatchEvent(
         new CustomEvent("docomator:template-draft-changed", {
@@ -503,6 +559,18 @@
     } finally {
       rowEditorBusy = false;
     }
+  }
+
+  function rowEditorRestoreSingleFieldForm() {
+    const form = document.querySelector("#documentFieldForm");
+    const entry = document.querySelector("#rowEditorEntry");
+    if (form) form.hidden = false;
+    if (entry) entry.hidden = false;
+  }
+
+  function rowEditorClosePanel() {
+    document.querySelector("#rowEditorPanel")?.remove();
+    rowEditorRestoreSingleFieldForm();
   }
 
   function rowEditorOpen(element) {
@@ -523,8 +591,12 @@
       <div class="form-error" id="rowEditorError" role="alert" hidden></div>
       <div class="roster-assistant-actions"><button class="secondary-button" id="rowEditorCancel" type="button">Отмена</button><button class="primary-button" id="rowEditorSave" type="button">Сохранить настройки строки</button></div>`;
     detail.prepend(panel);
-    panel.querySelector("#rowEditorClose")?.addEventListener("click", () => panel.remove());
-    panel.querySelector("#rowEditorCancel")?.addEventListener("click", () => panel.remove());
+    const singleFieldForm = detail.querySelector("#documentFieldForm");
+    const entry = detail.querySelector("#rowEditorEntry");
+    if (singleFieldForm) singleFieldForm.hidden = true;
+    if (entry) entry.hidden = true;
+    panel.querySelector("#rowEditorClose")?.addEventListener("click", rowEditorClosePanel);
+    panel.querySelector("#rowEditorCancel")?.addEventListener("click", rowEditorClosePanel);
     panel.querySelector("#rowEditorSave")?.addEventListener("click", rowEditorSave);
     panel.querySelectorAll("[data-row-editor-column]").forEach((card) => {
       card.querySelector("[data-row-editor-mode]")?.addEventListener("change", () => rowEditorUpdateCard(card));
