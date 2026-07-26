@@ -3,6 +3,16 @@ import { expect, test } from "./fixtures/test.mjs";
 import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
 import { DocomatorPage } from "./pages/docomator-page.mjs";
 
+async function openFullGuide(page, app) {
+  const sidebarButton = page.locator("#helpCenterNavButton:visible");
+  if ((await sidebarButton.count()) > 0) {
+    await sidebarButton.click();
+    return;
+  }
+  await app.openView("settings");
+  await page.locator('[data-view="settings"] [data-help-center-open]').click();
+}
+
 test("встроенное руководство открывается, ищет кейсы и ведёт к рабочему разделу", async ({
   page
 }) => {
@@ -10,7 +20,7 @@ test("встроенное руководство открывается, ище
   const app = new DocomatorPage(page);
   await app.open();
 
-  await page.locator("#helpCenterNavButton").click();
+  await openFullGuide(page, app);
   await expect(page.locator("#helpCenterView")).toHaveClass(/is-visible/u);
   await expect(page.locator("#viewTitle")).toHaveText("Руководство");
   await expect(page.locator("#helpCenterHeading")).toContainText(
@@ -44,7 +54,7 @@ test("контекстная помощь содержит переход к п�
   const app = new DocomatorPage(page);
   await app.open();
 
-  await page.locator("#helpButton").click();
+  await page.locator("#helpButton:visible, #mobileHelpButton:visible").first().click();
   await expect(page.locator("#helpDrawer")).toHaveClass(/is-open/u);
   await page.locator("#helpDrawer [data-help-center-open]").click();
   await expect(page.locator("#helpCenterView")).toHaveClass(/is-visible/u);
