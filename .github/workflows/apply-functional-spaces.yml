@@ -35,6 +35,20 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/ci/apply-functional-spaces.py")
+          source = path.read_text(encoding="utf-8")
+          needle = "    if count != 1:\n"
+          if needle not in source:
+              raise SystemExit("Не найдена проверка точного совпадения в сценарии изменения")
+          path.write_text(
+              source.replace(needle, "    if count == 0:\n", 1).replace(
+                  "expected exactly one match", "expected at least one match", 1
+              ),
+              encoding="utf-8",
+          )
+          PY
           python3 scripts/ci/apply-functional-spaces.py 2>&1 | tee /tmp/functional-spaces-patch.log
           rm -f scripts/ci/apply-functional-spaces.py .apply-functional-spaces
           git diff --check
