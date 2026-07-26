@@ -33,10 +33,9 @@ test("рабочие экраны не создают ошибок Content-Secur
   const app = new DocomatorPage(page);
   await app.open();
   await app.openView("documents");
-  await expect(page.locator("#operationCenterList progress")).toHaveAttribute(
-    "value",
-    "50"
-  );
+  const progress = page.locator("#operationCenterList progress");
+  await expect(progress).toHaveAttribute("value", "50");
+  await expect(progress).not.toHaveAttribute("style", /.+/u);
   await app.openView("templates");
   await app.openView("generation");
   await page.waitForTimeout(100);
