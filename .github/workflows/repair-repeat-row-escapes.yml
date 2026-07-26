@@ -1,0 +1,41 @@
+name: Восстановить экранирование рендера DOCX
+
+on:
+  push:
+    branches:
+      - fix/docx-repeat-row-flow
+    paths:
+      - .github/workflows/repair-repeat-row-escapes.yml
+      - scripts/ci/repair-repeat-row-escapes.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/docx-repeat-row-flow
+          fetch-depth: 0
+          show-progress: false
+      - run: python3 scripts/ci/repair-repeat-row-escapes.py
+      - name: Проверить TypeScript
+        run: |
+          if grep -Pn '[\x00\x02\x03\x08]' packages/template-compiler/src/scalar-render.ts; then
+            exit 1
+          fi
+      - shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            scripts/ci/repair-repeat-row-escapes.py \
+            .github/workflows/repair-repeat-row-escapes.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Восстановить экранирование идентификаторов DOCX'
+          git push origin HEAD:fix/docx-repeat-row-flow
