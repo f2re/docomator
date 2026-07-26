@@ -1171,7 +1171,7 @@ function collectDocxRepeatVolatileIdentifiers(
     textId: new Set<string>()
   };
   const expression =
-    /\s(?:[A-Za-z_][\w.-]*:)?(anchorId|paraId|textId)\s*=\s*(["'])([0-9A-Fa-f]{8})/gu;
+    /\s(?:[A-Za-z_][\w.-]*:)?(anchorId|paraId|textId)\s*=\s*(["'])([0-9A-Fa-f]{8})\2/gu;
   for (const match of xml.matchAll(expression)) {
     const localName = match[1] as DocxRepeatVolatileIdentifier;
     const value = match[3];
@@ -1188,11 +1188,11 @@ function allocateDocxRepeatVolatileIdentifier(
 ): string {
   let candidate = createHash("sha256")
     .update("docomator-repeat-volatile-id")
-    .update(" ")
+    .update("\u0000")
     .update(localName)
-    .update(" ")
+    .update("\u0000")
     .update(String(memberIndex))
-    .update(" ")
+    .update("\u0000")
     .update(String(occurrenceIndex))
     .digest()
     .readUInt32BE(0);
@@ -1214,7 +1214,7 @@ function allocateDocxRepeatVolatileIdentifier(
 
 function stripDocxProofingMarkers(xml: string): string {
   return xml.replace(
-    /<\/?(?:[A-Za-z_][\w.-]*:)?proofErr[^>]*>/gu,
+    /<\/?(?:[A-Za-z_][\w.-]*:)?proofErr\b[^>]*>/gu,
     ""
   );
 }
@@ -1230,7 +1230,7 @@ function rewriteDocxRepeatVolatileIdentifiers(
     textId: 0
   };
   return xml.replace(
-    /(\s(?:[A-Za-z_][\w.-]*:)?(anchorId|paraId|textId)\s*=\s*)(["'])([0-9A-Fa-f]{8})/gu,
+    /(\s(?:[A-Za-z_][\w.-]*:)?(anchorId|paraId|textId)\s*=\s*)(["'])([0-9A-Fa-f]{8})\3/gu,
     (_source, prefix: string, localNameValue: string, quote: string) => {
       const localName = localNameValue as DocxRepeatVolatileIdentifier;
       const occurrenceIndex = occurrences[localName];
