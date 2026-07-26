@@ -14,13 +14,19 @@ on:
       - reopened
       - synchronize
       - edited
+  issue_comment:
+    types:
+      - created
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'fix/template-row-trial-groups-ux'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request_target' && github.event.pull_request.head.ref == 'fix/template-row-trial-groups-ux') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.body == '/apply-template-row-trial-groups-ux')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
