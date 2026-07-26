@@ -1,0 +1,44 @@
+name: Исправить ожидания тестов PR 50
+
+on:
+  push:
+    branches:
+      - fix/template-row-trial-groups-ux
+    paths:
+      - .github/workflows/fix-pr50-test-expectations.yml
+      - scripts/ci/fix-pr50-test-expectations.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/template-row-trial-groups-ux
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить исправление
+        shell: bash
+        run: |
+          if [[ -f scripts/ci/fix-pr50-test-expectations.py ]]; then
+            python3 scripts/ci/fix-pr50-test-expectations.py
+          fi
+
+      - name: Зафиксировать исправление
+        shell: bash
+        run: |
+          if [[ ! -f scripts/ci/fix-pr50-test-expectations.py ]]; then
+            exit 0
+          fi
+          rm -f scripts/ci/fix-pr50-test-expectations.py .github/workflows/fix-pr50-test-expectations.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Исправить ожидания тестов редактора строки'
+          git push origin HEAD:fix/template-row-trial-groups-ux
