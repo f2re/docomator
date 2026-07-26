@@ -42,6 +42,6 @@ test("рабочие экраны не создают ошибок Content-Secur
   await app.openView("generation");
   await page.waitForTimeout(100);
 
-  expect(await page.locator("[style]").count()).toBe(0);
+  await expect(page.locator("[style]")).toHaveCount(0);
   expect(violations, violations.join("\n")).toEqual([]);
 });
