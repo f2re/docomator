@@ -344,6 +344,8 @@ async function renderActivationSuccess(body) {
   const holder = document.querySelector("#templateActivationStatus");
   if (!holder) return;
   const active = body.data.active;
+  const directButton = document.querySelector("#templateActivateDirect");
+  if (directButton) directButton.hidden = true;
   holder.innerHTML = `
     <div class="activation-state is-success">
       <span aria-hidden="true">✅</span>

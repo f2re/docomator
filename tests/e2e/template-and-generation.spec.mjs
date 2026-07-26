@@ -408,7 +408,7 @@ test("активный шаблон переживает перезагрузк�
   await uploadAndSaveSource(page, templateCases[0]);
   await bindEmployeeField(page);
   await runTrial(page);
-  await previewAndActivate(page);
+  await saveTestedTemplate(page);
 
   await app.openView("settings");
   await app.openView("spaces");
