@@ -43,6 +43,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "styles.css",
     appendFileNames: [
       "spaces.css",
+      "workspace-switcher.css",
       "intake.css",
       "quarantine.css",
       "structure.css",
@@ -74,6 +75,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     appendFileNames: [
       "operator-workflows.js",
       "operator-workflows-recovery.js",
+      "workspace-switcher.js",
       "help-center.js",
       "help-project-documents.js"
     ],

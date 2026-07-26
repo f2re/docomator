@@ -73,13 +73,44 @@ test("spaces API isolates entities and creates aggregate target plan", async () 
       headers,
       payload: {
         name: "Инженерная служба",
-        description: "Изолированные данные инженерной службы"
+        description: "Изолированные данные инженерной службы",
+        color: "#3d9472"
       }
     });
     assert.equal(spaceResponse.statusCode, 201, spaceResponse.body);
-    const spaceData = (spaceResponse.json() as { data: { id: string; key: string } }).data;
+    const spaceData = (
+      spaceResponse.json() as {
+        data: { id: string; key: string; color: string; version: number };
+      }
+    ).data;
     const spaceId = spaceData.id;
     assert.match(spaceData.key, /^space\.[a-f0-9]{32}$/u);
+    assert.equal(spaceData.color, "#3D9472");
+    assert.equal(spaceData.version, 1);
+
+    const updateResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/spaces/${spaceId}`,
+      headers,
+      payload: {
+        name: "Инженерное пространство",
+        description: "Люди, группы, шаблоны и результаты инженерной службы",
+        color: "#7568e8"
+      }
+    });
+    assert.equal(updateResponse.statusCode, 200, updateResponse.body);
+    const updatedSpace = (
+      updateResponse.json() as {
+        data: { name: string; description: string; color: string; version: number };
+      }
+    ).data;
+    assert.equal(updatedSpace.name, "Инженерное пространство");
+    assert.equal(
+      updatedSpace.description,
+      "Люди, группы, шаблоны и результаты инженерной службы"
+    );
+    assert.equal(updatedSpace.color, "#7568E8");
+    assert.equal(updatedSpace.version, 2);
 
     const people = [];
     for (const displayName of ["Иванов Иван", "Петров Пётр", "Сидорова Анна"]) {
@@ -161,6 +192,30 @@ test("spaces API isolates entities and creates aggregate target plan", async () 
     });
     assert.equal(listResponse.statusCode, 200, listResponse.body);
     assert.equal((listResponse.json() as { data: unknown[] }).data.length, 3);
+  } finally {
+    await app.close();
+    fixture.cleanup();
+  }
+});
+
+test("spaces API rejects invalid colors", async () => {
+  const fixture = migratedFixture();
+  const app = buildApp(
+    loadApiConfig({
+      DOCOMATOR_DATA_DIR: fixture.directory,
+      DOCOMATOR_LOG_LEVEL: "fatal"
+    }),
+    { store: fixture.store }
+  );
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/spaces",
+      headers,
+      payload: { name: "Некорректное пространство", color: "green" }
+    });
+    assert.equal(response.statusCode, 400, response.body);
   } finally {
     await app.close();
     fixture.cleanup();

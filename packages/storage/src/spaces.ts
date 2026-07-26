@@ -10,6 +10,7 @@ import {
 import { DomainEventOutbox } from "./outbox.js";
 
 export const DEFAULT_SPACE_ID = "00000000-0000-4000-8000-000000000001";
+export const DEFAULT_SPACE_COLOR = "#5B8DEF";
 
 export type SpaceStatus = "active" | "archived";
 export type AudienceSourceKind = "all_space" | "group" | "selected";
@@ -20,6 +21,7 @@ export interface SpaceRecord {
   key: string;
   name: string;
   description: string | null;
+  color: string;
   status: SpaceStatus;
   version: number;
   entityCount: number;
@@ -33,6 +35,13 @@ export interface CreateSpaceInput {
   key?: string;
   name: string;
   description?: string | null;
+  color?: string;
+}
+
+export interface UpdateSpaceInput {
+  name?: string;
+  description?: string | null;
+  color?: string;
 }
 
 export interface ListSpacesOptions {
@@ -167,6 +176,7 @@ interface SpaceRow {
   key: string;
   name: string;
   description: string | null;
+  color: string;
   status: string;
   version: number;
   entity_count: number;
@@ -268,6 +278,17 @@ function optionalText(
   return normalized;
 }
 
+function spaceColor(value: string | undefined): string {
+  if (value === undefined) {
+    return DEFAULT_SPACE_COLOR;
+  }
+  const normalized = requiredText(value, "color", 7).toUpperCase();
+  if (!/^#[0-9A-F]{6}$/u.test(normalized)) {
+    throw new SpaceValidationError("color must use the #RRGGBB format");
+  }
+  return normalized;
+}
+
 function stableKey(value: string, name: string): string {
   const normalized = requiredText(value, name, 160).toLowerCase();
   if (!/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(normalized)) {
@@ -361,6 +382,7 @@ function mapSpace(row: SpaceRow): SpaceRecord {
     key: row.key,
     name: row.name,
     description: row.description,
+    color: spaceColor(row.color),
     status: spaceStatus(row.status),
     version: row.version,
     entityCount: Number(row.entity_count),
@@ -620,6 +642,7 @@ export class SpaceRegistry {
     const explicitKey = input.key === undefined ? null : stableKey(input.key, "key");
     const name = requiredText(input.name, "name");
     const description = optionalText(input.description, "description");
+    const color = spaceColor(input.color);
     const context = normalizeContext(contextInput);
 
     return this.store.transaction((connection) => {
@@ -633,10 +656,11 @@ export class SpaceRegistry {
       }
       connection
         .prepare(`
-          INSERT INTO spaces(id, key, name, description, status, version, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'active', 1, ?, ?)
+          INSERT INTO spaces(
+            id, key, name, description, color, status, version, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?)
         `)
-        .run(id, key, name, description, context.now, context.now);
+        .run(id, key, name, description, color, context.now, context.now);
 
       this.outbox.append(
         {
@@ -644,7 +668,7 @@ export class SpaceRegistry {
           schemaVersion: 1,
           source: "space-registry",
           occurredAt: context.now,
-          payload: { id, key, name, initiatedBy: context.actorId },
+          payload: { id, key, name, color, initiatedBy: context.actorId },
           dedupeKey: `space.created:${id}:v1`,
           now: context.now
         },
@@ -659,7 +683,7 @@ export class SpaceRegistry {
           objectType: "space",
           objectId: id,
           correlationId: context.correlationId,
-          details: { key, version: 1 }
+          details: { key, color, version: 1 }
         },
         connection
       );
@@ -667,6 +691,100 @@ export class SpaceRegistry {
       const row = spaceRowByIdentity(connection, id);
       if (row === undefined) {
         throw new Error(`Created space was not found: ${id}`);
+      }
+      return mapSpace(row);
+    });
+  }
+
+  updateSpace(
+    spaceIdentity: string,
+    input: UpdateSpaceInput,
+    contextInput: MutationContext
+  ): SpaceRecord {
+    const name = input.name === undefined ? undefined : requiredText(input.name, "name");
+    const description =
+      input.description === undefined
+        ? undefined
+        : optionalText(input.description, "description");
+    const color = input.color === undefined ? undefined : spaceColor(input.color);
+    if (name === undefined && description === undefined && color === undefined) {
+      throw new SpaceValidationError("at least one space field must be provided");
+    }
+    const context = normalizeContext(contextInput);
+
+    return this.store.transaction((connection) => {
+      const current = requireSpace(connection, spaceIdentity);
+      const nextName = name ?? current.name;
+      const nextDescription =
+        description === undefined ? current.description : description;
+      const currentColor = spaceColor(current.color);
+      const nextColor = color ?? currentColor;
+      if (
+        nextName === current.name &&
+        nextDescription === current.description &&
+        nextColor === currentColor
+      ) {
+        return mapSpace(current);
+      }
+
+      const nextVersion = current.version + 1;
+      connection
+        .prepare(`
+          UPDATE spaces
+          SET name = ?, description = ?, color = ?, version = ?, updated_at = ?
+          WHERE id = ?
+        `)
+        .run(
+          nextName,
+          nextDescription,
+          nextColor,
+          nextVersion,
+          context.now,
+          current.id
+        );
+
+      this.outbox.append(
+        {
+          eventType: "space.updated",
+          schemaVersion: 1,
+          source: "space-registry",
+          occurredAt: context.now,
+          payload: {
+            id: current.id,
+            key: current.key,
+            name: nextName,
+            description: nextDescription,
+            color: nextColor,
+            version: nextVersion,
+            initiatedBy: context.actorId
+          },
+          dedupeKey: `space.updated:${current.id}:v${nextVersion}`,
+          now: context.now
+        },
+        connection
+      );
+      this.audit.record(
+        {
+          occurredAt: context.now,
+          actorType: context.actorType,
+          actorId: context.actorId,
+          action: "update",
+          objectType: "space",
+          objectId: current.id,
+          correlationId: context.correlationId,
+          details: {
+            key: current.key,
+            name: nextName,
+            color: nextColor,
+            version: nextVersion
+          }
+        },
+        connection
+      );
+
+      const row = spaceRowByIdentity(connection, current.id);
+      if (row === undefined) {
+        throw new Error(`Updated space was not found: ${current.id}`);
       }
       return mapSpace(row);
     });

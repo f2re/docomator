@@ -11,6 +11,7 @@ const bundles = {
     "app.js",
     "operator-workflows.js",
     "operator-workflows-recovery.js",
+    "workspace-switcher.js",
     "help-center.js",
     "help-project-documents.js"
   ],
