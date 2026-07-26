@@ -50,6 +50,8 @@ function createSpaceState(employeeCount = 0, activeTemplate = false) {
     documentSources: [],
     drafts: [],
     trialVersions: [],
+    multiTrialVersions: [],
+    groups: [],
     previewRequest: null,
     generationCreated: false,
     resultCollected: false,
@@ -112,7 +114,7 @@ function structureReport(fileName, repeatTemplate = false, studentRosterTemplate
     truncated: false
   };
   if (format === "docx" && studentRosterTemplate) {
-    const labels = ["ФИО студента", "Тема научной работы", "Научный руководитель"];
+    const labels = ["№", "ФИО студента", "Тема научной работы", "Научный руководитель"];
     const elements = [
       ...labels.map((text, columnIndex) => ({
         id: `word/document.xml#paragraph:header-${columnIndex + 1}`,
@@ -225,6 +227,40 @@ async function jsonBody(request) {
   }
 }
 
+function fieldFormatter(payload) {
+  if (payload.personName) {
+    return {
+      version: 1,
+      kind: "person-name.ru",
+      sourceOrder: payload.personName.sourceOrder,
+      pattern: payload.personName.pattern
+    };
+  }
+  if (payload.valueType === "number") {
+    return {
+      version: 1,
+      kind: "number.ru",
+      fractionDigits:
+        payload.decimalPlaces === undefined ? null : payload.decimalPlaces
+    };
+  }
+  if (payload.valueType === "integer") {
+    return { version: 1, kind: "number.ru", fractionDigits: 0 };
+  }
+  if (payload.valueType === "date") return { version: 1, kind: "date.ru" };
+  if (payload.valueType === "date-time") {
+    return {
+      version: 1,
+      kind: "date-time.ru",
+      timeZone: payload.timeZone || "Europe/Moscow"
+    };
+  }
+  if (payload.valueType === "boolean") {
+    return { version: 1, kind: "boolean.ru" };
+  }
+  return { version: 1, kind: "identity" };
+}
+
 function pathSpaceId(path) {
   return path.match(/^\/api\/v1\/spaces\/([^/]+)/)?.[1] || E2E_SPACE_ID;
 }
@@ -266,6 +302,10 @@ export function createDocomatorScenario(options = {}) {
     directAnalyzeCalls: 0,
     draftRequests: [],
     fieldRequests: [],
+    fieldUpdateRequests: [],
+    fieldDeleteRequests: [],
+    multiTrialBodies: [],
+    groupMemberRequests: [],
     inspectedFileName: "Личная карточка.docx",
     format: "docx",
     repeatTemplate: Boolean(options.repeatTemplate),
@@ -372,7 +412,11 @@ export async function installDocomatorApiMock(page, options = {}) {
         label: payload.label,
         valueType: payload.valueType || "string",
         sensitivity: payload.sensitivity || "personal",
-        appliesTo: payload.appliesTo || ["person"]
+        appliesTo: payload.appliesTo || ["person"],
+        aliases: payload.aliases || [],
+        validation: payload.validation || {},
+        description: payload.description || null,
+        unit: payload.unit || null
       };
       state.properties.push(definition);
       data = definition;
@@ -383,7 +427,7 @@ export async function installDocomatorApiMock(page, options = {}) {
           name: "Отдел разработки",
           description: "Тестовый локальный раздел",
           entityCount: state.primary.entities.length,
-          groupCount: 0
+          groupCount: state.primary.groups.filter((group) => group.status === "active").length
         },
         ...(state.includeSecondSpace
           ? [
@@ -392,7 +436,7 @@ export async function installDocomatorApiMock(page, options = {}) {
                 name: "Отдел эксплуатации",
                 description: "Второй изолированный раздел",
                 entityCount: 0,
-                groupCount: 0
+                groupCount: state.secondary.groups.filter((group) => group.status === "active").length
               }
             ]
           : [])
@@ -450,9 +494,76 @@ export async function installDocomatorApiMock(page, options = {}) {
     } else if (/\/employees\/[^/]+$/.test(path) && method === "GET") {
       const id = decodeURIComponent(path.split("/").pop());
       data = space.employees.find((employee) => employee.id === id) || null;
+    } else if (/\/groups\/[^/]+\/members$/.test(path) && method === "GET") {
+      const groupId = decodeURIComponent(path.split("/").at(-2));
+      const group = space.groups.find((candidate) => candidate.id === groupId);
+      data = (group?.memberIds || []).map((entityId, position) => {
+        const employee = space.employees.find((candidate) => candidate.id === entityId);
+        return {
+          entityId,
+          position,
+          displayName: employee?.displayName || entityId,
+          entityTypeKey: "person",
+          entityTypeLabel: "Человек",
+          status: employee?.status || "active"
+        };
+      });
+    } else if (/\/groups\/[^/]+\/members$/.test(path) && method === "PUT") {
+      const groupId = decodeURIComponent(path.split("/").at(-2));
+      const payload = await jsonBody(request);
+      const group = space.groups.find((candidate) => candidate.id === groupId);
+      if (group) {
+        group.memberIds = [...new Set(payload.entityIds || [])];
+        group.memberCount = group.memberIds.length;
+        group.version += 1;
+      }
+      state.groupMemberRequests.push({
+        groupId,
+        entityIds: [...new Set(payload.entityIds || [])]
+      });
+      data = (group?.memberIds || []).map((entityId, position) => ({
+        entityId,
+        position,
+        displayName:
+          space.employees.find((candidate) => candidate.id === entityId)?.displayName ||
+          entityId,
+        entityTypeKey: "person",
+        entityTypeLabel: "Человек",
+        status:
+          space.employees.find((candidate) => candidate.id === entityId)?.status ||
+          "active"
+      }));
+    } else if (/\/groups\/[^/]+$/.test(path) && method === "PUT") {
+      const groupId = decodeURIComponent(path.split("/").pop());
+      const payload = await jsonBody(request);
+      const group = space.groups.find((candidate) => candidate.id === groupId);
+      if (group) {
+        if (payload.name !== undefined) group.name = payload.name;
+        if (payload.description !== undefined) group.description = payload.description;
+        if (payload.status !== undefined) group.status = payload.status;
+        group.version += 1;
+      }
+      data = group;
+    } else if (/\/groups$/.test(path) && method === "POST") {
+      const payload = await jsonBody(request);
+      const group = {
+        id: `group-e2e-${space.groups.length + 1}`,
+        spaceId,
+        key: `group_e2e_${space.groups.length + 1}`,
+        name: payload.name,
+        description: payload.description || null,
+        status: "active",
+        version: 1,
+        memberCount: 0,
+        memberIds: []
+      };
+      space.groups.push(group);
+      data = group;
+    } else if (/\/groups$/.test(path) && method === "GET") {
+      data = space.groups.map(({ memberIds: _memberIds, ...group }) => group);
     } else if (/\/entities$/.test(path)) {
       data = space.entities;
-    } else if (/\/(?:groups|audience-snapshots)$/.test(path) && method === "GET") {
+    } else if (/\/audience-snapshots$/.test(path) && method === "GET") {
       data = [];
     } else if (/\/active-templates$/.test(path)) {
       data = space.activeTemplates;
@@ -621,6 +732,36 @@ export async function installDocomatorApiMock(page, options = {}) {
     } else if (/\/document-sources\/[^/]+$/.test(path) && method === "GET") {
       const sourceId = decodeURIComponent(path.split("/").pop());
       data = space.documentSources.find((record) => record.id === sourceId) || null;
+    } else if (/\/template-drafts\/[^/]+\/fields\/[^/]+$/.test(path) && method === "PUT") {
+      const payload = await jsonBody(request);
+      const fieldId = decodeURIComponent(path.split("/").pop());
+      const draftId = decodeURIComponent(path.split("/").at(-3));
+      const draft = space.drafts.find((candidate) => candidate.id === draftId);
+      const field = draft?.fields.find((candidate) => candidate.id === fieldId);
+      state.fieldUpdateRequests.push({ fieldId, ...payload });
+      if (field) {
+        field.key = payload.key;
+        field.label = payload.label;
+        field.valueType = payload.valueType;
+        field.required = Boolean(payload.required);
+        field.formatter = fieldFormatter(payload);
+        field.version = (field.version || 1) + 1;
+      }
+      data = { field };
+    } else if (/\/template-drafts\/[^/]+\/fields\/[^/]+$/.test(path) && method === "DELETE") {
+      const fieldId = decodeURIComponent(path.split("/").pop());
+      const draftId = decodeURIComponent(path.split("/").at(-3));
+      const draft = space.drafts.find((candidate) => candidate.id === draftId);
+      const previousCount = draft?.fields.length || 0;
+      if (draft) draft.fields = draft.fields.filter((field) => field.id !== fieldId);
+      const remainingFieldCount = draft?.fields.length || 0;
+      const repeatBindingCleared =
+        previousCount > 0 &&
+        remainingFieldCount === 0 &&
+        Boolean(draft?.repeatBinding);
+      if (repeatBindingCleared && draft) draft.repeatBinding = null;
+      state.fieldDeleteRequests.push({ fieldId, draftId });
+      data = { fieldId, remainingFieldCount, repeatBindingCleared };
     } else if (/\/template-drafts\/[^/]+\/fields$/.test(path) && method === "POST") {
       const payload = await jsonBody(request);
       state.fieldRequests.push(payload);
@@ -632,7 +773,12 @@ export async function installDocomatorApiMock(page, options = {}) {
         valueType: payload.valueType,
         required: Boolean(payload.required),
         elementId: payload.elementId,
-        textRange: payload.textRange || null
+        elementKind:
+          draft.structure.elements.find((element) => element.id === payload.elementId)
+            ?.kind || "paragraph",
+        textRange: payload.textRange || null,
+        formatter: fieldFormatter(payload),
+        version: 1
       };
       draft.fields.push(field);
       if (payload.repeatRow) {
@@ -679,8 +825,58 @@ export async function installDocomatorApiMock(page, options = {}) {
     } else if (/\/template-drafts\/[^/]+$/.test(path) && method === "GET") {
       const draftId = decodeURIComponent(path.split("/").pop());
       data = space.drafts.find((draft) => draft.id === draftId) || null;
+    } else if (/\/template-drafts\/[^/]+\/trial-all$/.test(path) && method === "POST") {
+      const draftId = decodeURIComponent(path.split("/").at(-2));
+      const draft = space.drafts.find((candidate) => candidate.id === draftId);
+      const payload = await jsonBody(request);
+      const provided = new Set((payload.values || []).map((item) => item.fieldId));
+      const missing = (draft?.fields || []).filter((field) => !provided.has(field.id));
+      const extra = (payload.values || []).filter(
+        (item) => !(draft?.fields || []).some((field) => field.id === item.fieldId)
+      );
+      if (missing.length > 0 || extra.length > 0) {
+        await route.fulfill({
+          status: 400,
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            error: {
+              message:
+                "Состав полей черновика изменился после открытия формы. Обновите форму и повторите проверку."
+            },
+            correlationId: "e2e-stale-multi-trial"
+          })
+        });
+        return;
+      }
+      state.multiTrialBodies.push(payload);
+      const values = new Map(
+        (payload.values || []).map((item) => [item.fieldId, item.value])
+      );
+      const version = {
+        id: `template-multi-version-${space.multiTrialVersions.length + 1}`,
+        versionNumber: space.multiTrialVersions.length + 1,
+        format: draft?.format || "docx",
+        fieldCount: draft?.fields.length || 0,
+        fields: (draft?.fields || []).map((field) => ({
+          fieldId: field.id,
+          fieldKey: field.key,
+          fieldLabel: field.label,
+          readBackValue: String(values.get(field.id) ?? "")
+        })),
+        compiledSha256: "e2e-multi-compiled-sha256",
+        trialSha256: "e2e-multi-trial-sha256"
+      };
+      space.multiTrialVersions.push(version);
+      data = {
+        version,
+        verification: { fieldCount: version.fieldCount, allMatched: true },
+        downloads: {
+          compiled: "/api/v1/e2e/multi-compiled",
+          trial: "/api/v1/e2e/multi-trial"
+        }
+      };
     } else if (/\/multi-test-versions$/.test(path) && method === "GET") {
-      data = [];
+      data = space.multiTrialVersions;
     } else if (/\/test-versions$/.test(path) && method === "GET") {
       data = space.trialVersions;
     } else if (/\/template-drafts\/[^/]+\/trial$/.test(path) && method === "POST") {

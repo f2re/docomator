@@ -57,6 +57,7 @@ import {
   TemplateActivationNotFoundError,
   TemplateActivationValidationError,
   TemplateDraftConflictError,
+  TemplateDraftFieldEditor,
   TemplateDraftNotFoundError,
   TemplateDraftRegistry,
   TemplateDraftValidationError,
@@ -91,6 +92,7 @@ import { loadReleaseIdentity } from "./release-identity.js";
 import { correlationId } from "./request-context.js";
 import { registerSpaceRoutes } from "./space-routes.js";
 import { registerTemplateDraftRoutes } from "./template-draft-routes.js";
+import { registerTemplateDraftFieldEditRoutes } from "./template-draft-field-edit-routes.js";
 import { registerTemplatePreviewActivationRoutes } from "./template-preview-activation-routes.js";
 import { registerTemplateTestVersionRoutes } from "./template-test-version-routes.js";
 import { registerUiRoutes } from "./ui-routes.js";
@@ -116,6 +118,7 @@ export interface AppDependencies {
   employeeRegistry?: EmployeeRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
+  templateDraftFieldEditor?: TemplateDraftFieldEditor;
   templateTestVersionRegistry?: TemplateTestVersionRegistry;
   multiFieldTestVersionRegistry?: MultiFieldTestVersionRegistry;
   operationCenterRegistry?: OperationCenterRegistry;
@@ -247,6 +250,8 @@ export function buildApp(
     new DocumentQuarantineRegistry(store, objectStore);
   const templateDraftRegistry =
     dependencies.templateDraftRegistry ?? new TemplateDraftRegistry(store);
+  const templateDraftFieldEditor =
+    dependencies.templateDraftFieldEditor ?? new TemplateDraftFieldEditor(store);
   const templateTestVersionRegistry =
     dependencies.templateTestVersionRegistry ??
     new TemplateTestVersionRegistry(store, objectStore);
@@ -594,6 +599,7 @@ export function buildApp(
     objectStore,
     templateDraftRegistry
   );
+  registerTemplateDraftFieldEditRoutes(app, templateDraftFieldEditor);
   registerTemplateTestVersionRoutes(
     app,
     objectStore,

@@ -48,6 +48,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "structure.css",
       "template-field.css",
       "template-repeat-assistant.css",
+      "template-ux-recovery.css",
       "template-trial.css",
       "template-multi-trial.css",
       "template-activation.css",
@@ -58,6 +59,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-schedules.css",
       "document-schedules-v2.css",
       "operator-workflows.css",
+      "group-management-v2.css",
       "shared-document-results.css",
       "storage-maintenance.css",
       "bulk-data-import.css",
@@ -74,6 +76,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     appendFileNames: [
       "operator-workflows.js",
       "operator-workflows-recovery.js",
+      "group-management-v2.js",
       "help-center.js",
       "help-project-documents.js"
     ],
@@ -84,9 +87,12 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "document-intake.js",
     appendFileNames: [
       "document-structure.js",
+      "template-placement-guidance.js",
       "template-repeat-assistant.js",
+      "template-row-editor-v2.js",
       "template-trial.js",
       "template-multi-trial.js",
+      "template-multi-trial-recovery.js",
       "template-activation.js",
       "document-generation.js",
       "document-generation-preflight.js",

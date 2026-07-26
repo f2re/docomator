@@ -36,6 +36,7 @@ export * from "./schedule-network-delivery.js";
 export * from "./schedule-time.js";
 export * from "./spaces.js";
 export * from "./template-drafts.js";
+export * from "./template-draft-field-editor.js";
 export * from "./template-preview-activation.js";
 export * from "./template-release-compatibility.js";
 export * from "./template-releases.js";

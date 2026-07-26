@@ -34,7 +34,7 @@ const rules: readonly MessageRule[] = [
   [/^Multi-field trial supports at most 100 saved fields$/i, () =>
     "За один проход можно проверить не более 100 полей."],
   [/^Multi-field trial must provide exactly all draft fields;/i, () =>
-    "Для общей проверки заполните все поля текущего черновика без посторонних идентификаторов."],
+    "Состав полей шаблона изменился после открытия формы. Обновите список полей, заполните новые тестовые примеры и повторите проверку."],
   [/^Duplicate fieldId in multi-field request:/i, () =>
     "Одно поле передано в общую проверку несколько раз."],
   [/^One or more template fields were not found in this draft$/i, () =>
