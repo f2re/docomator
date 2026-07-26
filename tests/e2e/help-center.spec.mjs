@@ -39,7 +39,7 @@ test("встроенное руководство открывается, ище
     "Номер зачётной книжки"
   );
   await expect(page.locator("#helpCenterArticlePane")).toContainText(
-    "Один сводный документ"
+    /один сводный документ/ui
   );
 
   await page.locator('[data-help-go-view="employees"]').click();
