@@ -48,7 +48,7 @@
   function rowEditorHeader(element) {
     const location = element?.tableLocation;
     if (!location || location.rowIndex < 1) return "";
-    const previous = structureReport?.elements?.find(
+    const candidates = (structureReport?.elements || []).filter(
       (candidate) =>
         candidate.kind === "paragraph" &&
         candidate.part === element.part &&
@@ -56,6 +56,9 @@
         candidate.tableLocation?.rowIndex === location.rowIndex - 1 &&
         candidate.tableLocation?.columnIndex === location.columnIndex
     );
+    const previous =
+      candidates.find((candidate) => String(candidate.text || "").trim() !== "") ||
+      candidates[0];
     return String(previous?.text || "").trim();
   }
 
@@ -64,8 +67,10 @@
   }
 
   function rowEditorSemantic(header) {
+    const raw = String(header || "").trim();
+    if (/^(?:#|№)$/u.test(raw)) return "position";
     const value = rowEditorNormalize(header);
-    if (/^(?:#|№|n|номер|п п|порядковый номер)$/u.test(value)) return "position";
+    if (/^(?:n|номер|п п|порядковый номер)$/u.test(value)) return "position";
     if (/\bфио\b|фамил|полное имя|студент|сотрудник/u.test(value)) return "name";
     if (/тем.*(?:работ|исслед|вкр)|научн.*тем/u.test(value)) return "topic";
     if (/руковод|научрук|научн.*рук/u.test(value)) return "supervisor";
@@ -540,12 +545,13 @@
       panel.querySelector("#rowEditorContinueEditing")?.addEventListener("click", () =>
         rowEditorOpen(selectedStructureElement)
       );
-      panel.querySelector("#rowEditorContinueTrial")?.addEventListener("click", () =>
+      panel.querySelector("#rowEditorContinueTrial")?.addEventListener("click", () => {
         globalThis.docomatorTemplateWizard?.complete(2, {
           sourceId: latest.sourceRecordId || structureWizardArtifacts().sourceId,
           draftId: draft.id
-        })
-      );
+        });
+        if (typeof loadMultiTrialDrafts === "function") void loadMultiTrialDrafts();
+      });
       window.dispatchEvent(
         new CustomEvent("docomator:template-draft-changed", {
           detail: { spaceId, draftId: draft.id, fieldCount: latest.fields.length }

@@ -46,9 +46,12 @@ test("UI assets are served without external runtime dependencies", async () => {
     assert.equal(styles.statusCode, 200);
     assert.match(styles.headers["content-type"] ?? "", /^text\/css/);
     assert.match(styles.body, /--surface/);
+    assert.match(styles.body, /--purple/);
+    assert.match(styles.body, /Прозрачное появление всего экрана/);
 
     assert.equal(script.statusCode, 200);
     assert.match(script.headers["content-type"] ?? "", /^text\/javascript/);
+    assert.match(script.body, /interfaceWorkflowSteps/);
     assert.doesNotMatch(script.body, /https?:\/\//);
 
     assert.equal(icon.statusCode, 200);
