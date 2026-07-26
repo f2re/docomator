@@ -295,7 +295,7 @@ function renderGenerationWorkspace() {
   if (!content) return;
   if (generationTemplates.length === 0) {
     content.innerHTML = `
-      <div class="generation-state is-warning"><div><strong>Сначала подключите шаблон</strong><p>Проверьте документ, свяжите его с полями сотрудников и подтвердите предварительный просмотр.</p><button class="primary-button" type="button" data-view-target="templates">Открыть шаблоны</button></div></div>`;
+      <div class="generation-state is-warning"><div><strong>Сначала подключите шаблон</strong><p>Проверьте документ, свяжите его с полями сотрудников и сохраните проверенную версию. PDF можно создать отдельно только для визуального контроля.</p><button class="primary-button" type="button" data-view-target="templates">Открыть шаблоны</button></div></div>`;
     return;
   }
   const repeatByDefault = generationTemplateHasRepeat(generationTemplates[0]);
@@ -430,7 +430,7 @@ function renderGenerationJob(payload) {
       <div class="generation-progress-item"><span>С ошибкой</span><strong>${job.failedCount}</strong></div>
       <div class="generation-progress-item"><span>Выполнение</span><strong>${progress}%</strong></div>
     </div>
-    <div class="generation-progress-bar" aria-label="Выполнение ${progress}%"><span style="--progress: ${progress}%"></span></div>
+    <progress class="generation-progress-bar" max="100" value="${progress}" aria-label="Выполнение ${progress}%">${progress}%</progress>
     ${payload.downloadUrl ? `<div class="generation-downloads"><a class="primary-button" href="${generationEscape(payload.downloadUrl)}">${job.archiveSha256 ? "Скачать комплект ZIP" : "Скачать готовый документ"}</a>${finished ? '<button class="secondary-button" id="generationOpenResults" type="button">Открыть все результаты</button>' : ""}</div>` : ""}
     ${readyOutputs.length > 0 ? `
       <section class="generation-output-list">

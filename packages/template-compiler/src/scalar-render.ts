@@ -1009,6 +1009,58 @@ function directDocxRows(
   });
 }
 
+function findDocxTableRowRange(
+  xml: string,
+  tableIndex: number,
+  rowIndex: number
+): { start: number; end: number; openEnd: number; closeStart: number } {
+  const tags = scanXmlTags(xml);
+  const openStack: XmlTag[] = [];
+  const tableStack: Array<{ tableIndex: number; rowIndex: number }> = [];
+  let tableSequence = -1;
+  for (let index = 0; index < tags.length; index += 1) {
+    const tag = tags[index];
+    if (tag === undefined) continue;
+    if (tag.closing) {
+      const opening = openStack.pop();
+      if (opening === undefined || opening.name !== tag.name) throwInvalidXml();
+      if (tag.localName === "tbl") tableStack.pop();
+      continue;
+    }
+    if (tag.localName === "tbl") {
+      tableSequence += 1;
+      tableStack.push({ tableIndex: tableSequence, rowIndex: -1 });
+    } else if (tag.localName === "tr") {
+      const table = tableStack.at(-1);
+      if (table !== undefined) {
+        table.rowIndex += 1;
+        if (table.tableIndex === tableIndex && table.rowIndex === rowIndex) {
+          if (openStack.at(-1)?.localName !== "tbl" || tag.selfClosing) {
+            throw new TemplateCompilerError(
+              "repeat_row_structure_mismatch",
+              "Повторяемая строка должна оставаться непосредственной строкой исходной таблицы DOCX."
+            );
+          }
+          const close = tags[matchingCloseIndex(tags, index)];
+          if (close === undefined) throwInvalidXml();
+          return {
+            start: tag.start,
+            end: close.end,
+            openEnd: tag.end,
+            closeStart: close.start
+          };
+        }
+      }
+    }
+    if (!tag.selfClosing) openStack.push(tag);
+    else if (tag.localName === "tbl") tableStack.pop();
+  }
+  throw new TemplateCompilerError(
+    "repeat_row_not_found",
+    `Строка ${rowIndex + 1} таблицы ${tableIndex + 1} не найдена в DOCX.`
+  );
+}
+
 function setWordIdAttribute(opening: string, value: number): string {
   const expression = /(\s+(?:[A-Za-z_][\w.-]*:)?val\s*=\s*)(["']).*?\2/u;
   if (!expression.test(opening)) {
@@ -1316,23 +1368,49 @@ export async function renderDocxRepeatRows(
     decoded.text,
     input.technicalBinding.identifier
   );
-  const content = target.tags[target.contentOpenIndex];
-  const contentClose = target.tags[target.contentCloseIndex];
-  if (content === undefined || contentClose === undefined) throwInvalidXml();
-  const templates = directDocxRows(
+  const repeatOpen = target.tags[target.sdtOpenIndex];
+  const repeatClose = target.tags[target.sdtCloseIndex];
+  if (repeatOpen === undefined || repeatClose === undefined) throwInvalidXml();
+  const sourceRow = findDocxTableRowRange(
     decoded.text,
-    target.tags,
-    target.contentOpenIndex,
-    target.contentCloseIndex
+    input.binding.tableIndex,
+    input.binding.rowIndex
   );
-  if (templates.length !== 1) {
-    throw new TemplateCompilerError(
-      "repeat_template_row_count_mismatch",
-      "Скомпилированный повтор должен содержать ровно одну строку-образец."
+  const markerInsideRow =
+    repeatOpen.start >= sourceRow.openEnd &&
+    repeatClose.end <= sourceRow.closeStart;
+  let template: string;
+  let replacementStart: number;
+  let replacementEnd: number;
+  if (markerInsideRow) {
+    const rowXml = decoded.text.slice(sourceRow.start, sourceRow.end);
+    template =
+      rowXml.slice(0, repeatOpen.start - sourceRow.start) +
+      rowXml.slice(repeatClose.end - sourceRow.start);
+    replacementStart = sourceRow.start;
+    replacementEnd = sourceRow.end;
+  } else {
+    const content = target.tags[target.contentOpenIndex];
+    const contentClose = target.tags[target.contentCloseIndex];
+    if (content === undefined || contentClose === undefined) throwInvalidXml();
+    const templates = directDocxRows(
+      decoded.text,
+      target.tags,
+      target.contentOpenIndex,
+      target.contentCloseIndex
     );
+    if (templates.length !== 1) {
+      throw new TemplateCompilerError(
+        "repeat_template_row_count_mismatch",
+        "Скомпилированный повтор должен содержать ровно одну строку-образец."
+      );
+    }
+    const legacyTemplate = templates[0];
+    if (legacyTemplate === undefined) throwInvalidXml();
+    template = legacyTemplate;
+    replacementStart = content.end;
+    replacementEnd = contentClose.start;
   }
-  const template = templates[0];
-  if (template === undefined) throwInvalidXml();
   const templateValues = readDocxSdtValues(template, fieldIdentifiers);
   const fieldTargets = input.fields.map((field, fieldIndex) => {
     if (templateValues.get(field.technicalBinding.identifier)?.count !== 1) {
@@ -1404,9 +1482,9 @@ export async function renderDocxRepeatRows(
     return row;
   });
   const updatedXml =
-    decoded.text.slice(0, content.end) +
+    decoded.text.slice(0, replacementStart) +
     renderedRows.join("") +
-    decoded.text.slice(contentClose.start);
+    decoded.text.slice(replacementEnd);
   if (Buffer.byteLength(updatedXml, "utf8") > 32 * 1024 * 1024) {
     throw new TemplateCompilerError(
       "repeat_output_too_large",
@@ -1435,16 +1513,38 @@ export async function renderDocxRepeatRows(
       "После формирования идентификаторы повторяемых полей DOCX не остались уникальными."
     );
   }
-  const verifiedTarget = docxContentTarget(
-    verifiedDecoded.text,
-    input.technicalBinding.identifier
-  );
-  const verifiedRows = directDocxRows(
-    verifiedDecoded.text,
-    verifiedTarget.tags,
-    verifiedTarget.contentOpenIndex,
-    verifiedTarget.contentCloseIndex
-  );
+  let verifiedRows: string[];
+  if (markerInsideRow) {
+    const remainingMarker = readDocxSdtValues(
+      verifiedDecoded.text,
+      new Set([input.technicalBinding.identifier])
+    ).get(input.technicalBinding.identifier);
+    if (remainingMarker !== undefined) {
+      throw new TemplateCompilerError(
+        "repeat_marker_not_removed",
+        "После формирования в DOCX осталась служебная метка строки-образца."
+      );
+    }
+    verifiedRows = input.members.map((_member, memberIndex) => {
+      const row = findDocxTableRowRange(
+        verifiedDecoded.text,
+        input.binding.tableIndex,
+        input.binding.rowIndex + memberIndex
+      );
+      return verifiedDecoded.text.slice(row.start, row.end);
+    });
+  } else {
+    const verifiedTarget = docxContentTarget(
+      verifiedDecoded.text,
+      input.technicalBinding.identifier
+    );
+    verifiedRows = directDocxRows(
+      verifiedDecoded.text,
+      verifiedTarget.tags,
+      verifiedTarget.contentOpenIndex,
+      verifiedTarget.contentCloseIndex
+    );
+  }
   if (verifiedRows.length !== input.members.length) {
     throw new TemplateCompilerError(
       "repeat_row_count_mismatch",

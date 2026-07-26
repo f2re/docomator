@@ -163,16 +163,25 @@
   height: 0.3rem;
   margin: 0.25rem 0;
   overflow: hidden;
+  appearance: none;
+  background: var(--surface-hover);
+  border: 0;
+  border-radius: 999px;
+}
+
+.operation-progress::-webkit-progress-bar {
   background: var(--surface-hover);
   border-radius: 999px;
 }
 
-.operation-progress span {
-  display: block;
-  width: var(--operation-progress);
-  height: 100%;
+.operation-progress::-webkit-progress-value {
   background: var(--accent);
-  border-radius: inherit;
+  border-radius: 999px;
+}
+
+.operation-progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 999px;
 }
 
 .operation-action {

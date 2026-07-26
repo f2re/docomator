@@ -5,6 +5,7 @@ import test from "node:test";
 import { DocumentQuarantineRegistry } from "./document-quarantine.js";
 import { DocumentScheduleRegistry } from "./document-schedules.js";
 import { MultiFieldTestVersionRegistry } from "./multi-field-test-versions.js";
+import { OperationCenterRegistry } from "./operation-center.js";
 import { ContentAddressedObjectStore } from "./object-store.js";
 import { DEFAULT_SPACE_ID, SpaceRegistry } from "./spaces.js";
 import { TemplateDraftRegistry } from "./template-drafts.js";
@@ -350,6 +351,51 @@ test("single and multi-field tested versions share one release catalog", async (
           .prepare("UPDATE template_releases SET title = ? WHERE id = ?")
           .run("Изменено", multiRelease.id)
       )
+    );
+  } finally {
+    setup.fixture.cleanup();
+  }
+});
+
+test("tested version activates directly while PDF remains optional", async () => {
+  const setup = await setupFixture();
+  try {
+    const active = setup.releases.activateVersionWithoutPreview(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        versionId: setup.multi.id,
+        versionKind: "multi"
+      },
+      context("corr-direct-activate", 3)
+    );
+    assert.equal(active.previewMode, "skipped");
+    assert.equal(
+      (active.manifest as { previewMode: string }).previewMode,
+      "skipped"
+    );
+    assert.equal(active.compiledSha256, setup.multi.compiledSha256);
+    assert.equal(setup.releases.listActiveTemplates(DEFAULT_SPACE_ID).length, 1);
+
+    const previewRow = setup.fixture.store.execute((database) =>
+      database
+        .prepare(`
+          SELECT p.state, p.converter_json, w.state AS worker_state
+          FROM template_release_previews p
+          JOIN worker_jobs w ON w.id = p.worker_job_id
+          WHERE p.id = ?
+        `)
+        .get(active.previewRequestId)
+    ) as { state: string; converter_json: string; worker_state: string };
+    assert.equal(previewRow.state, "ready");
+    assert.equal(previewRow.worker_state, "completed");
+    assert.match(previewRow.converter_json, /"mode":"skipped"/u);
+
+    const operations = new OperationCenterRegistry(setup.fixture.store).list(
+      DEFAULT_SPACE_ID
+    );
+    assert.equal(
+      operations.some((operation) => operation.kind === "template_preview"),
+      false
     );
   } finally {
     setup.fixture.cleanup();

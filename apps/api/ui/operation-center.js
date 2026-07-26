@@ -143,7 +143,7 @@ function operationCenterProgress(operation) {
   const completed = Number(operation.progress?.completed || 0);
   const failed = Number(operation.progress?.failed || 0);
   const percent = Math.min(100, Math.round(((completed + failed) / expected) * 100));
-  return `<div class="operation-progress" role="progressbar" aria-label="Выполнение ${percent}%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="--operation-progress: ${percent}%"></span></div>`;
+  return `<progress class="operation-progress" max="100" value="${percent}" aria-label="Выполнение ${percent}%">${percent}%</progress>`;
 }
 
 function operationCenterCard(operation) {

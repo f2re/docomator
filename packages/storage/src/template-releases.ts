@@ -65,6 +65,12 @@ export interface ActivateTemplateReleaseInput {
   previewRequestId: string;
 }
 
+export interface ActivateTemplateReleaseCandidateInput {
+  spaceId: string;
+  versionId: string;
+  versionKind: TemplateReleaseCandidateKind;
+}
+
 export interface ActiveTemplateReleaseRecord {
   id: string;
   spaceId: string;
@@ -78,6 +84,7 @@ export interface ActiveTemplateReleaseRecord {
   previewFileId: string;
   compiledSha256: string;
   previewSha256: string;
+  previewMode: "pdf" | "skipped";
   versionNumber: number;
   title: string;
   format: ActiveTemplateReleaseFormat;
@@ -141,6 +148,7 @@ interface ReleaseSourceRow {
   preview_request_id: string;
   preview_file_id: string;
   preview_sha256: string;
+  preview_converter_json: string | null;
   candidate_id: string;
   version_kind: string;
   source_version_number: number;
@@ -206,6 +214,16 @@ function xlsxMetadataManifest(
     sheetName: "_AI_META",
     visibility: "veryHidden"
   });
+}
+
+function previewModeFromConverter(
+  converterJson: string | null
+): "pdf" | "skipped" {
+  if (converterJson === null) return "pdf";
+  const converter = parseJson(converterJson);
+  return jsonObject(converter) && converter.mode === "skipped"
+    ? "skipped"
+    : "pdf";
 }
 
 function requiredText(value: string, name: string, maximum = 500): string {
@@ -309,6 +327,11 @@ function mapPreview(row: PreviewRow): TemplateReleasePreviewRecord {
 }
 
 function mapRelease(row: ReleaseRow): ActiveTemplateReleaseRecord {
+  const manifest = parseJson(row.manifest_json);
+  const previewMode =
+    jsonObject(manifest) && manifest.previewMode === "skipped"
+      ? "skipped"
+      : "pdf";
   return {
     id: row.id,
     spaceId: row.space_id,
@@ -322,10 +345,11 @@ function mapRelease(row: ReleaseRow): ActiveTemplateReleaseRecord {
     previewFileId: row.preview_file_id,
     compiledSha256: row.compiled_sha256,
     previewSha256: row.preview_sha256,
+    previewMode,
     versionNumber: Number(row.version_number),
     title: row.title,
     format: formatValue(row.format),
-    manifest: parseJson(row.manifest_json),
+    manifest,
     activatedBy: row.activated_by,
     correlationId: row.correlation_id,
     activatedAt: row.activated_at
@@ -824,6 +848,174 @@ export class TemplateReleaseRegistry {
     });
   }
 
+  activateVersionWithoutPreview(
+    input: ActivateTemplateReleaseCandidateInput,
+    contextInput: MutationContext
+  ): ActiveTemplateReleaseRecord {
+    const spaceId = requiredText(input.spaceId, "spaceId", 160);
+    const versionId = requiredText(input.versionId, "versionId", 160);
+    const versionKind = candidateKind(input.versionKind);
+    const context = contextValue(contextInput);
+
+    const preview = this.store.transaction((connection) => {
+      const candidate = connection
+        .prepare(`
+          SELECT id, space_id, trial_file_id, trial_sha256
+          FROM template_release_candidates
+          WHERE id = ? AND space_id = ? AND kind = ?
+        `)
+        .get(versionId, spaceId, versionKind) as
+        | {
+            id: string;
+            space_id: string;
+            trial_file_id: string;
+            trial_sha256: string;
+          }
+        | undefined;
+      if (candidate === undefined) {
+        throw new TemplatePreviewNotFoundError(
+          `Template release candidate was not found in this space: ${versionId}`
+        );
+      }
+
+      const existing = connection
+        .prepare(`
+          SELECT id, state, request_attempt
+          FROM template_release_previews
+          WHERE space_id = ? AND candidate_id = ?
+        `)
+        .get(spaceId, versionId) as
+        | { id: string; state: string; request_attempt: number }
+        | undefined;
+      if (existing?.state === "ready") {
+        const row = previewRow(connection, existing.id, spaceId);
+        if (row === undefined) throw new Error(`Preview request was not found: ${existing.id}`);
+        return mapPreview(row);
+      }
+      if (existing !== undefined && existing.state !== "failed") {
+        throw new TemplatePreviewConflictError(
+          "PDF уже создаётся. Дождитесь завершения визуальной проверки, затем сохраните шаблон."
+        );
+      }
+
+      const requestId = existing?.id ?? randomUUID();
+      const attempt = existing === undefined ? 1 : Number(existing.request_attempt) + 1;
+      const queued = this.queue.enqueue(
+        {
+          jobType: "template.preview.skipped",
+          payload: toJsonValue({
+            previewRequestId: requestId,
+            spaceId,
+            versionId,
+            versionKind,
+            attempt
+          }),
+          priority: 70,
+          maxAttempts: 1,
+          idempotencyKey: `template.preview.skipped:${spaceId}:${versionId}`,
+          now: context.now
+        },
+        connection
+      );
+      connection
+        .prepare(`
+          UPDATE worker_jobs
+          SET state = 'completed', attempts = 1, completed_at = ?,
+              locked_by = NULL, locked_at = NULL, lease_expires_at = NULL,
+              updated_at = ?
+          WHERE id = ? AND state = 'pending'
+        `)
+        .run(context.now, context.now, queued.job.id);
+
+      const converterJson = stringifyJson(
+        toJsonValue({ mode: "skipped", reason: "tested-version-confirmed" })
+      );
+      if (existing === undefined) {
+        connection
+          .prepare(`
+            INSERT INTO template_release_previews(
+              id, space_id, candidate_id, worker_job_id, request_attempt,
+              state, preview_file_id, preview_sha256, converter_json,
+              error_json, requested_by, correlation_id, requested_at,
+              completed_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, 'ready', ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+          `)
+          .run(
+            requestId,
+            spaceId,
+            versionId,
+            queued.job.id,
+            attempt,
+            candidate.trial_file_id,
+            candidate.trial_sha256,
+            converterJson,
+            context.actorId,
+            context.correlationId,
+            context.now,
+            context.now,
+            context.now
+          );
+      } else {
+        connection
+          .prepare(`
+            UPDATE template_release_previews
+            SET worker_job_id = ?, request_attempt = ?, state = 'ready',
+                preview_file_id = ?, preview_sha256 = ?, converter_json = ?,
+                error_json = NULL, requested_by = ?, correlation_id = ?,
+                requested_at = ?, completed_at = ?, updated_at = ?
+            WHERE id = ? AND state = 'failed'
+          `)
+          .run(
+            queued.job.id,
+            attempt,
+            candidate.trial_file_id,
+            candidate.trial_sha256,
+            converterJson,
+            context.actorId,
+            context.correlationId,
+            context.now,
+            context.now,
+            context.now,
+            requestId
+          );
+      }
+
+      this.outbox.append(
+        {
+          eventType: "template.release-preview.skipped",
+          schemaVersion: 1,
+          source: "template-release-registry",
+          occurredAt: context.now,
+          payload: { requestId, spaceId, versionId, versionKind },
+          dedupeKey: `template.release-preview.skipped:${requestId}:attempt:${attempt}`,
+          now: context.now
+        },
+        connection
+      );
+      this.audit.record(
+        {
+          occurredAt: context.now,
+          actorType: context.actorType,
+          actorId: context.actorId,
+          action: "skip_preview",
+          objectType: "template_release_candidate",
+          objectId: versionId,
+          correlationId: context.correlationId,
+          details: { requestId, versionKind, attempt }
+        },
+        connection
+      );
+      const row = previewRow(connection, requestId, spaceId);
+      if (row === undefined) throw new Error(`Created review record was not found: ${requestId}`);
+      return mapPreview(row);
+    });
+
+    return this.activateVersion(
+      { spaceId, previewRequestId: preview.id },
+      contextInput
+    );
+  }
+
   activateVersion(
     input: ActivateTemplateReleaseInput,
     contextInput: MutationContext
@@ -844,6 +1036,7 @@ export class TemplateReleaseRegistry {
             p.id AS preview_request_id,
             p.preview_file_id,
             p.preview_sha256,
+            p.converter_json AS preview_converter_json,
             c.id AS candidate_id,
             c.kind AS version_kind,
             c.source_version_number,
@@ -916,6 +1109,7 @@ export class TemplateReleaseRegistry {
       const versionNumber = Number(current.value) + 1;
       const versionKind = candidateKind(source.version_kind);
       const releaseFormat = formatValue(source.format);
+      const previewMode = previewModeFromConverter(source.preview_converter_json);
       const xlsxMetadata = xlsxMetadataManifest(releaseFormat, fields);
       const manifest = toJsonValue({
         version: xlsxMetadata === null ? 4 : 5,
@@ -929,6 +1123,7 @@ export class TemplateReleaseRegistry {
         compiledSha256: source.compiled_sha256,
         trialSha256: source.trial_sha256,
         previewSha256: source.preview_sha256,
+        previewMode,
         compatibilityLevel:
           source.repeat_contract_json === null ? "safe-scalar" : "structured",
         repeats:

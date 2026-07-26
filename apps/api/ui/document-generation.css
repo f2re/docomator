@@ -390,19 +390,28 @@
 }
 
 .generation-progress-bar {
-  height: 0.55rem;
+  width: 100%;
+  height: 0.65rem;
   overflow: hidden;
-  border-radius: 999px;
+  appearance: none;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 0;
+  border-radius: 999px;
 }
 
-.generation-progress-bar > span {
-  display: block;
-  height: 100%;
-  width: var(--progress, 0%);
+.generation-progress-bar::-webkit-progress-bar {
+  background: var(--surface-2);
+  border-radius: 999px;
+}
+
+.generation-progress-bar::-webkit-progress-value {
   background: var(--accent);
-  transition: width 180ms ease;
+  border-radius: 999px;
+}
+
+.generation-progress-bar::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 999px;
 }
 
 .generation-output-list,
