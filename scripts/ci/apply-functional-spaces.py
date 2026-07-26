@@ -48,6 +48,13 @@ if run("git", "rev-parse", "--is-shallow-repository").stdout.strip() == "true":
 else:
     run("git", "fetch", "origin", "--prune", "--no-tags")
 run("git", "fetch", "origin", "main:refs/remotes/origin/main")
+run("git", "config", "user.name", "github-actions[bot]")
+run(
+    "git",
+    "config",
+    "user.email",
+    "41898282+github-actions[bot]@users.noreply.github.com",
+)
 
 merge = run("git", "merge", "--no-commit", "--no-ff", "origin/main", check=False)
 if merge.returncode not in (0, 1):
