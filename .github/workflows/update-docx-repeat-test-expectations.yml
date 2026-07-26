@@ -1,0 +1,36 @@
+name: Обновить проверки прямой строки DOCX
+
+on:
+  push:
+    branches:
+      - fix/template-structure-preview-csp
+    paths:
+      - .github/workflows/update-docx-repeat-test-expectations.yml
+      - scripts/ci/update-docx-repeat-test-expectations.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/template-structure-preview-csp
+          fetch-depth: 0
+          show-progress: false
+      - run: python3 scripts/ci/update-docx-repeat-test-expectations.py
+      - shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            scripts/ci/update-docx-repeat-test-expectations.py \
+            .github/workflows/update-docx-repeat-test-expectations.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Обновить проверки прямой repeat-строки DOCX'
+          git push origin HEAD:fix/template-structure-preview-csp
