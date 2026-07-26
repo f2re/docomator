@@ -2,10 +2,14 @@
   position: relative;
   display: inline-flex;
   min-width: 0;
+  max-width: min(310px, 32vw);
 }
 
 .workspace-switcher-button {
-  max-width: min(310px, 32vw);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--text);
   font: inherit;
   cursor: pointer;
@@ -21,6 +25,13 @@
 .workspace-switcher-button:focus-visible {
   outline: 3px solid rgb(var(--space-color-rgb) / .28);
   outline-offset: 2px;
+}
+
+.workspace-switcher-button #currentSpaceChipText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace-switcher-button .context-dot {
@@ -303,8 +314,13 @@
 }
 
 @media (max-width: 760px) {
+  .workspace-switcher-host {
+    max-width: min(112px, 32vw);
+  }
+
   .workspace-switcher-button {
-    max-width: min(235px, 52vw);
+    width: 100%;
+    max-width: 100%;
   }
 
   .workspace-switcher-menu {

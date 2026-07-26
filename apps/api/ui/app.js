@@ -1379,5 +1379,13 @@ applyTheme(state.theme);
 publishCurrentSpace();
 attachEvents();
 initializeTemplateCatalogSync();
-selectView(location.hash.slice(1) in views ? location.hash.slice(1) : "overview");
+const docomatorRequestedInitialView = location.hash.slice(1);
+selectView(
+  docomatorRequestedInitialView in views
+    ? docomatorRequestedInitialView
+    : "overview"
+);
+if (docomatorRequestedInitialView === "help") {
+  window.history.replaceState(null, "", "#help");
+}
 loadData();

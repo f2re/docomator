@@ -6,7 +6,7 @@
       .normalize("NFKC")
       .toLocaleLowerCase("ru-RU")
       .replace(/ё/gu, "е")
-      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .replace(/[^\p{L}\p{N}#№]+/gu, " ")
       .trim()
       .replace(/\s+/gu, " ");
   }
@@ -540,12 +540,26 @@
       panel.querySelector("#rowEditorContinueEditing")?.addEventListener("click", () =>
         rowEditorOpen(selectedStructureElement)
       );
-      panel.querySelector("#rowEditorContinueTrial")?.addEventListener("click", () =>
-        globalThis.docomatorTemplateWizard?.complete(2, {
-          sourceId: latest.sourceRecordId || structureWizardArtifacts().sourceId,
-          draftId: draft.id
-        })
-      );
+      panel
+        .querySelector("#rowEditorContinueTrial")
+        ?.addEventListener("click", async (event) => {
+          const continueButton = event.currentTarget;
+          continueButton.disabled = true;
+          continueButton.textContent = "Готовим общую проверку…";
+          const ready = await globalThis.docomatorMultiTrial?.reload?.();
+          if (!ready) {
+            errorBox.hidden = false;
+            errorBox.textContent =
+              "Форму общей проверки подготовить не удалось. Повторите действие.";
+            continueButton.disabled = false;
+            continueButton.textContent = "Перейти к проверке шаблона";
+            return;
+          }
+          globalThis.docomatorTemplateWizard?.complete(2, {
+            sourceId: latest.sourceRecordId || structureWizardArtifacts().sourceId,
+            draftId: draft.id
+          });
+        });
       window.dispatchEvent(
         new CustomEvent("docomator:template-draft-changed", {
           detail: { spaceId, draftId: draft.id, fieldCount: latest.fields.length }
