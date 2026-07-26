@@ -48,7 +48,7 @@
   function rowEditorHeader(element) {
     const location = element?.tableLocation;
     if (!location || location.rowIndex < 1) return "";
-    const previous = structureReport?.elements?.find(
+    const candidates = (structureReport?.elements || []).filter(
       (candidate) =>
         candidate.kind === "paragraph" &&
         candidate.part === element.part &&
@@ -56,6 +56,9 @@
         candidate.tableLocation?.rowIndex === location.rowIndex - 1 &&
         candidate.tableLocation?.columnIndex === location.columnIndex
     );
+    const previous =
+      candidates.find((candidate) => String(candidate.text || "").trim() !== "") ||
+      candidates[0];
     return String(previous?.text || "").trim();
   }
 
