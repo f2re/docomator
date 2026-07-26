@@ -1,0 +1,45 @@
+name: Применить визуальную иерархию интерфейса
+
+on:
+  push:
+    branches:
+      - feature/interface-hierarchy
+    paths:
+      - .github/workflows/apply-interface-hierarchy.yml
+      - scripts/ci/apply-interface-hierarchy.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: feature/interface-hierarchy
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Применить интеграционные изменения
+        run: python3 scripts/ci/apply-interface-hierarchy.py
+
+      - name: Проверить синтаксис нового слоя
+        run: node --check apps/api/ui/interface-hierarchy.js
+
+      - name: Зафиксировать целостное изменение
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            scripts/ci/apply-interface-hierarchy.py \
+            .github/workflows/apply-interface-hierarchy.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Реализовать визуальную иерархию интерфейса'
+          git push origin HEAD:feature/interface-hierarchy
