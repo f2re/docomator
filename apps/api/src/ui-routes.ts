@@ -69,7 +69,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "operations-readiness.css",
       "help-center.css",
       "interface-hierarchy.css",
-      "interface-stability.css"
+      "interface-stability.css",
+      "template-row-flow.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "no-store"
@@ -116,7 +117,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "bulk-data-import.js",
       "bulk-data-import-v2.js",
       "operation-center.js",
-      "operations-readiness.js"
+      "operations-readiness.js",
+      "template-row-flow.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "no-store"

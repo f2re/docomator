@@ -44,7 +44,8 @@ const bundles = {
     "bulk-data-import.js",
     "bulk-data-import-v2.js",
     "operation-center.js",
-    "operations-readiness.js"
+    "operations-readiness.js",
+    "template-row-flow.js"
   ]
 };
 
