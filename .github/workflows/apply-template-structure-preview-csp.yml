@@ -6,6 +6,7 @@ on:
       - fix/template-structure-preview-csp
     paths:
       - .github/workflows/apply-template-structure-preview-csp.yml
+      - scripts/ci/fix-template-patch-script.py
       - scripts/ci/apply-template-structure-preview-csp.py
       - scripts/ci/apply-optional-template-preview.py
   pull_request:
@@ -32,15 +33,21 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python3 scripts/ci/apply-template-structure-preview-csp.py 2>&1 | tee patch-structure.log
-          first=${PIPESTATUS[0]}
+          python3 scripts/ci/fix-template-patch-script.py 2>&1 | tee patch-fixer.log
+          fixer=${PIPESTATUS[0]}
+          if [[ "$fixer" -eq 0 ]]; then
+            python3 scripts/ci/apply-template-structure-preview-csp.py 2>&1 | tee patch-structure.log
+            first=${PIPESTATUS[0]}
+          else
+            first=1
+          fi
           if [[ "$first" -eq 0 ]]; then
             python3 scripts/ci/apply-optional-template-preview.py 2>&1 | tee patch-preview.log
             second=${PIPESTATUS[0]}
           else
             second=1
           fi
-          exit $(( first || second ))
+          exit $(( fixer || first || second ))
 
       - name: Сохранить диагностику применения
         if: steps.apply.outcome == 'failure'
@@ -67,6 +74,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           rm -f \
+            scripts/ci/fix-template-patch-script.py \
             scripts/ci/apply-template-structure-preview-csp.py \
             scripts/ci/apply-optional-template-preview.py \
             .github/workflows/apply-template-structure-preview-csp.yml
