@@ -28,16 +28,25 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: feature/functional-spaces
-          fetch-depth: 0
+          fetch-depth: 1
           show-progress: false
 
       - name: Применить изменение пространств
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 scripts/ci/apply-functional-spaces.py
+          python3 scripts/ci/apply-functional-spaces.py 2>&1 | tee /tmp/functional-spaces-patch.log
           rm -f scripts/ci/apply-functional-spaces.py .apply-functional-spaces
           git diff --check
+
+      - name: Сохранить журнал ошибки изменения
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: functional-spaces-patch-error
+          path: /tmp/functional-spaces-patch.log
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Определить версию Node.js
         id: node
