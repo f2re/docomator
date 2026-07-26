@@ -67,7 +67,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "operation-center.css",
       "operations-readiness.css",
       "help-center.css",
-      "interface-hierarchy.css"
+      "interface-hierarchy.css",
+      "interface-stability.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "no-store"

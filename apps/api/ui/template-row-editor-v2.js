@@ -67,7 +67,7 @@
   }
 
   function rowEditorSemantic(header) {
-    const raw = String(header || "").normalize("NFKC").trim();
+    const raw = String(header || "").trim();
     if (/^(?:#|№)$/u.test(raw)) return "position";
     const value = rowEditorNormalize(header);
     if (/^(?:n|номер|п п|порядковый номер)$/u.test(value)) return "position";
