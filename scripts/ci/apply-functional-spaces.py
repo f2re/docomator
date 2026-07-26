@@ -164,6 +164,8 @@ remaining = run(
 ).stdout.strip()
 if remaining:
     raise RuntimeError(f"Остались неразрешённые конфликты:\n{remaining}")
-run("git", "diff", "--check", "--cached")
+whitespace = run("git", "diff", "--check", "--cached", check=False)
+if whitespace.returncode != 0:
+    raise RuntimeError(whitespace.stdout)
 run("git", "commit", "-m", "merge current main into functional spaces")
 print("Текущая main объединена с функциональными пространствами без потери UI-иерархии.")
