@@ -1371,18 +1371,30 @@ export async function renderDocxRepeatRows(
   const repeatOpen = target.tags[target.sdtOpenIndex];
   const repeatClose = target.tags[target.sdtCloseIndex];
   if (repeatOpen === undefined || repeatClose === undefined) throwInvalidXml();
-  const sourceRow = findDocxTableRowRange(
-    decoded.text,
-    input.binding.tableIndex,
-    input.binding.rowIndex
-  );
+  let sourceRow: ReturnType<typeof findDocxTableRowRange> | null = null;
+  try {
+    sourceRow = findDocxTableRowRange(
+      decoded.text,
+      input.binding.tableIndex,
+      input.binding.rowIndex
+    );
+  } catch (error) {
+    if (
+      !(error instanceof TemplateCompilerError) ||
+      (error.code !== "repeat_row_structure_mismatch" &&
+        error.code !== "repeat_row_not_found")
+    ) {
+      throw error;
+    }
+  }
   const markerInsideRow =
+    sourceRow !== null &&
     repeatOpen.start >= sourceRow.openEnd &&
     repeatClose.end <= sourceRow.closeStart;
   let template: string;
   let replacementStart: number;
   let replacementEnd: number;
-  if (markerInsideRow) {
+  if (markerInsideRow && sourceRow !== null) {
     const rowXml = decoded.text.slice(sourceRow.start, sourceRow.end);
     template =
       rowXml.slice(0, repeatOpen.start - sourceRow.start) +
