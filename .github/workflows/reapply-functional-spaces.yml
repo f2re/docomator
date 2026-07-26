@@ -6,12 +6,20 @@ on:
       - feature/functional-spaces
     paths:
       - .apply-functional-spaces-v2
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 permissions:
   contents: write
 
 jobs:
   integrate:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
 
