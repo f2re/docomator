@@ -1,0 +1,263 @@
+
+  async function entityWorkspacePlanImport() {
+    if (entityWorkspaceState.importBusy || !entityWorkspaceState.importPreview) return;
+    const message = document.querySelector("#entityImportMessage");
+    entityWorkspaceState.importBusy = true;
+    message.className = "bulk-import-message is-loading";
+    message.textContent = "Проверяем строки без сохранения…";
+    try {
+      const body = await entityWorkspaceFetch(`/api/v1/spaces/${encodeURIComponent(entityWorkspaceSpaceId())}/data-import/plan`, {
+        method: "POST",
+        body: JSON.stringify(entityWorkspaceImportBody())
+      });
+      entityWorkspaceState.importPlan = body.data;
+      message.className = body.data.failedCount ? "bulk-import-message is-warning" : "bulk-import-message is-success";
+      message.textContent = body.data.failedCount ? `Проверка завершена: ${body.data.failedCount} строк требуют исправления.` : "Проверка завершена. Данные можно сохранить.";
+      entityWorkspaceRenderImportPlan(body.data);
+    } catch (error) {
+      message.className = "bulk-import-message is-error";
+      message.textContent = error.message || "Проверка не выполнена.";
+    } finally {
+      entityWorkspaceState.importBusy = false;
+    }
+  }
+
+  async function entityWorkspaceExecuteImport() {
+    if (entityWorkspaceState.importBusy || !entityWorkspaceState.importPlan) return;
+    const message = document.querySelector("#entityImportMessage");
+    entityWorkspaceState.importBusy = true;
+    message.className = "bulk-import-message is-loading";
+    message.textContent = "Сохраняем объекты и значения…";
+    try {
+      const body = await entityWorkspaceFetch(`/api/v1/spaces/${encodeURIComponent(entityWorkspaceSpaceId())}/data-import/execute`, {
+        method: "POST",
+        body: JSON.stringify(entityWorkspaceImportBody())
+      });
+      message.className = body.data.failedCount ? "bulk-import-message is-warning" : "bulk-import-message is-success";
+      message.textContent = `Импорт завершён: создано ${body.data.createdCount}, обновлено ${body.data.updatedCount}, ошибок ${body.data.failedCount}.`;
+      document.querySelector("#entityImportWorkspace").innerHTML = `<div class="roster-assistant-finished"><span aria-hidden="true">✓</span><div><h3>Импорт завершён</h3><p>Создано: ${body.data.createdCount}, обновлено: ${body.data.updatedCount}, без изменений: ${body.data.unchangedCount}, ошибок: ${body.data.failedCount}.</p></div></div>`;
+      entityWorkspaceSetImportStep(4);
+      await entityWorkspaceLoad();
+    } catch (error) {
+      message.className = "bulk-import-message is-error";
+      message.textContent = error.message || "Импорт не выполнен.";
+    } finally {
+      entityWorkspaceState.importBusy = false;
+    }
+  }
+
+  function entityWorkspaceImportChanged(event) {
+    if (event.target.matches("#entityImportCreateGroup")) {
+      const fields = document.querySelector("#entityImportGroupFields");
+      if (fields) fields.hidden = !event.target.checked;
+    }
+    if (event.target.matches("[data-entity-import-mode]")) {
+      const row = event.target.closest("[data-entity-import-mapping]");
+      row?.querySelectorAll("[data-entity-import-create]").forEach((field) => {
+        field.hidden = event.target.value !== "create";
+      });
+    }
+    if (event.target.matches("#entityImportDisplayColumn")) {
+      const preview = entityWorkspaceState.importPreview;
+      if (preview) {
+        document.querySelector("#entityImportMappings").innerHTML = preview.headers.map((header) => entityWorkspaceImportMappingRow(header, event.target.value)).join("");
+        globalThis.docomatorSearchableSelect?.enhanceAll?.(document.querySelector("#entityImportMappings"));
+      }
+    }
+    if (event.target.matches("#entityImportWorkspace input, #entityImportWorkspace select, #entityImportWorkspace textarea")) {
+      entityWorkspaceState.importPlan = null;
+      const planButton = document.querySelector("#entityImportPlanButton");
+      if (planButton) planButton.hidden = false;
+      document.querySelector("#entityImportExecuteButton")?.remove();
+      entityWorkspaceSetImportStep(2);
+    }
+  }
+
+  function entityWorkspaceImportClicked(event) {
+    if (event.target.closest("#entityImportPlanButton")) void entityWorkspacePlanImport();
+    if (event.target.closest("#entityImportExecuteButton")) void entityWorkspaceExecuteImport();
+  }
+
+  function entityWorkspaceHandleClick(event) {
+    const action = event.target.closest("[data-entity-action]")?.dataset.entityAction;
+    if (action === "reload") void entityWorkspaceLoad();
+    if (action === "clear-search") {
+      entityWorkspaceState.search = "";
+      const input = document.querySelector("#entityWorkspaceSearch");
+      if (input) input.value = "";
+      entityWorkspaceRenderList();
+      input?.focus();
+    }
+    if (action === "type") {
+      entityWorkspaceEnsureDialogs();
+      document.querySelector("#entityTypeForm")?.reset();
+      document.querySelector("#entityTypeError").hidden = true;
+      document.querySelector("#entityTypeDialog")?.showModal();
+    }
+    if (action === "property") entityWorkspaceOpenPropertyDialog();
+    if (action === "record") entityWorkspaceOpenRecordDialog();
+    if (action === "import") entityWorkspaceOpenImportDialog();
+    if (action === "document") {
+      globalThis.docomatorSelectView?.("spaces");
+      if (typeof setSpaceTab === "function") setSpaceTab("audience");
+    }
+    const open = event.target.closest("[data-entity-open]");
+    if (open) entityWorkspaceOpenRecordDialog(open.dataset.entityOpen);
+  }
+
+  function entityWorkspaceHandleChange(event) {
+    if (event.target.matches("#entityWorkspaceType")) {
+      entityWorkspaceState.selectedTypeKey = event.target.value;
+      localStorage.setItem(`docomator.entity-type:${entityWorkspaceSpaceId()}`, event.target.value);
+      globalThis.docomatorSelectedEntityTypeKey = event.target.value;
+      const available = new Set(
+        entityWorkspaceState.entities
+          .filter((entity) => entity.entityTypeKey === event.target.value)
+          .map((entity) => entity.entityId)
+      );
+      state.selectedEntityIds = new Set(
+        [...state.selectedEntityIds].filter((entityId) => available.has(entityId))
+      );
+      entityWorkspaceRender();
+    }
+    const checkbox = event.target.closest("[data-entity-select]");
+    if (checkbox) {
+      if (checkbox.checked) state.selectedEntityIds.add(checkbox.dataset.entitySelect);
+      else state.selectedEntityIds.delete(checkbox.dataset.entitySelect);
+      entityWorkspaceRenderList();
+    }
+  }
+
+  function entityWorkspaceInstall() {
+    if (entityWorkspaceState.ready && document.querySelector("#entityWorkspace")) return;
+    views.entities = [
+      "Каталог данных",
+      "Объекты",
+      "Произвольные типы записей, их параметры и массовый импорт.",
+      null,
+      null
+    ];
+    entityWorkspaceEnsureDialogs();
+    const root = document.querySelector("#entityWorkspace");
+    root?.addEventListener("click", entityWorkspaceHandleClick);
+    root?.addEventListener("change", entityWorkspaceHandleChange);
+    root?.addEventListener("input", (event) => {
+      if (event.target.matches("#entityWorkspaceSearch")) {
+        entityWorkspaceState.search = event.target.value;
+        entityWorkspaceRenderList();
+      }
+    });
+    document.addEventListener("docomator:view-changed", (event) => {
+      if (event.detail?.view === "entities") void entityWorkspaceLoad();
+    });
+    document.addEventListener("docomator:space-changed", () => {
+      entityWorkspaceState.ready = false;
+      entityWorkspaceState.entities = [];
+      entityWorkspaceState.search = "";
+      if (state.view === "entities") void entityWorkspaceLoad();
+    });
+  }
+
+  const entityWorkspaceBaseRenderMembers = renderMembers;
+  renderMembers = function renderGenericSpaceMembers() {
+    entityWorkspaceBaseRenderMembers();
+    const pane = document.querySelector('[data-space-pane="members"]');
+    pane?.querySelector("h2") && (pane.querySelector("h2").textContent = "Объекты пространства");
+    const hint = pane?.querySelector(".inline-hint p");
+    if (hint) hint.textContent = "Отмечайте объекты одного типа для разового документа или будущей группы.";
+  };
+
+  const entityWorkspaceBaseRenderGroups = renderGroups;
+  renderGroups = function renderGenericGroups() {
+    entityWorkspaceBaseRenderGroups();
+    document.querySelectorAll("#spaceGroups .pill").forEach((pill) => {
+      pill.textContent = pill.textContent.replace(/\sчел\.$/u, " объектов");
+    });
+  };
+
+  renderAudienceSource = function renderGenericAudienceSource() {
+    const select = document.querySelector("#audienceSource");
+    if (!select) return;
+    const previous = select.value;
+    const selectedCount = state.selectedEntityIds.size;
+    const active = state.data.spaceEntities.filter((entity) => entity.status === "active");
+    const typeKeys = [...new Set(active.map((entity) => entity.entityTypeKey))];
+    const options = [
+      ...typeKeys.map((typeKey) => [
+        `all_space:${typeKey}`,
+        `Все объекты типа «${entityWorkspaceEscape(active.find((entity) => entity.entityTypeKey === typeKey)?.entityTypeLabel || typeKey)}» (${active.filter((entity) => entity.entityTypeKey === typeKey).length})`
+      ]),
+      ["selected", `Только отмеченные (${selectedCount})`],
+      ...state.data.groups
+        .filter((group) => group.status === "active")
+        .map((group) => [`group:${group.id}`, `Группа «${group.name}» (${group.memberCount})`])
+    ];
+    select.innerHTML = options.map(([value, label]) => `<option value="${entityWorkspaceEscape(value)}">${label}</option>`).join("");
+    if (options.some(([value]) => value === previous)) select.value = previous;
+    updateAudiencePreview();
+  };
+
+  estimatedAudienceCount = function estimatedGenericAudienceCount() {
+    const source = document.querySelector("#audienceSource")?.value || "";
+    if (source === "selected") return state.selectedEntityIds.size;
+    if (source.startsWith("group:")) return state.data.groups.find((group) => `group:${group.id}` === source)?.memberCount || 0;
+    if (source.startsWith("all_space:")) {
+      const typeKey = source.slice("all_space:".length);
+      return state.data.spaceEntities.filter((entity) => entity.status === "active" && entity.entityTypeKey === typeKey).length;
+    }
+    return 0;
+  };
+
+  updateAudiencePreview = function updateGenericAudiencePreview() {
+    const target = document.querySelector("#audiencePreviewText");
+    if (!target) return;
+    const count = estimatedAudienceCount();
+    const mode = document.querySelector('input[name="targetMode"]:checked')?.value || "aggregate";
+    target.textContent = count === 0
+      ? "В выбранном источнике нет активных объектов."
+      : mode === "aggregate"
+        ? `Будет подготовлен один документ со списком из ${count} объектов.`
+        : `Будет подготовлено ${count} отдельных документов — по одному на каждый объект.`;
+  };
+
+  const entityWorkspaceBaseCreateAudienceSnapshot = createAudienceSnapshot;
+  createAudienceSnapshot = async function createGenericAudienceSnapshot() {
+    const sourceValue = document.querySelector("#audienceSource")?.value || "";
+    if (!sourceValue.startsWith("all_space:")) {
+      if (sourceValue === "selected") {
+        const selectedTypes = new Set(
+          state.data.spaceEntities
+            .filter((entity) => state.selectedEntityIds.has(entity.entityId))
+            .map((entity) => entity.entityTypeKey)
+        );
+        if (selectedTypes.size > 1) {
+          notify("⚠️", "Выбраны разные типы объектов", "Один документ использует объекты одного типа. Снимите лишние отметки или создайте отдельные группы.");
+          return;
+        }
+      }
+      return entityWorkspaceBaseCreateAudienceSnapshot();
+    }
+    if (!currentSpace()) return;
+    const mode = document.querySelector('input[name="targetMode"]:checked')?.value || "aggregate";
+    const typeKey = sourceValue.slice("all_space:".length);
+    const button = document.querySelector("#createAudienceSnapshotButton");
+    button.disabled = true;
+    try {
+      const result = await api(spaceEndpoint("/audience-snapshots"), {
+        method: "POST",
+        body: JSON.stringify({ source: { kind: "all_space", entityTypeKey: typeKey }, targetMode: mode })
+      });
+      renderPlan(result.data);
+      const snapshots = await api(spaceEndpoint("/audience-snapshots?limit=50"));
+      state.data.snapshots = snapshots?.data || [];
+      renderSnapshots();
+      notify("✅", "Состав объектов зафиксирован", `Тип: ${entityWorkspaceTypeLabel(typeKey)}. Объектов: ${result.data.snapshot.memberCount}.`);
+    } catch (error) {
+      setStatus("error", "!", "Состав не создан", error.message || "Повторите действие.");
+    } finally {
+      button.disabled = false;
+    }
+  };
+
+  entityWorkspaceInstall();
+}
