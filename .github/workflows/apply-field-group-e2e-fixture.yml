@@ -1,0 +1,39 @@
+name: Обновить E2E группы полей
+
+on:
+  push:
+    branches:
+      - fix/property-groups-searchable-select
+    paths:
+      - .github/workflows/apply-field-group-e2e-fixture.yml
+      - scripts/ci/apply-field-group-e2e-fixture.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-field-group-e2e-fixture.yml
+      - scripts/ci/apply-field-group-e2e-fixture.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/property-groups-searchable-select
+          fetch-depth: 0
+      - run: python3 scripts/ci/apply-field-group-e2e-fixture.py
+      - run: node --check tests/e2e/fixtures/docomator-api.mjs
+      - shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f scripts/ci/apply-field-group-e2e-fixture.py .github/workflows/apply-field-group-e2e-fixture.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Обновить E2E-данные групп полей'
+          git push origin HEAD:fix/property-groups-searchable-select
