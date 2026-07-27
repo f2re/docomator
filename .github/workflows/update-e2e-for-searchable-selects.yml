@@ -1,0 +1,32 @@
+name: Обновить E2E для селектов с поиском
+
+on:
+  push:
+    branches:
+      - fix/property-groups-searchable-select
+    paths:
+      - .github/workflows/update-e2e-for-searchable-selects.yml
+      - scripts/ci/update-e2e-for-searchable-selects.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/property-groups-searchable-select
+          fetch-depth: 0
+      - run: python3 scripts/ci/update-e2e-for-searchable-selects.py
+      - shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f scripts/ci/update-e2e-for-searchable-selects.py .github/workflows/update-e2e-for-searchable-selects.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Обновить E2E для селектов с поиском'
+          git push origin HEAD:fix/property-groups-searchable-select
