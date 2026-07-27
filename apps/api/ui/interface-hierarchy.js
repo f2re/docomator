@@ -80,7 +80,16 @@
       stage.className = "workflow-stage-chip";
       stage.hidden = true;
       const context = interfaceQuery("#currentSpaceChip", actions);
-      actions.insertBefore(stage, context || control);
+      const contextHost = context?.closest(".workspace-switcher-host");
+      const anchor =
+        contextHost?.parentElement === actions
+          ? contextHost
+          : context?.parentElement === actions
+            ? context
+            : control?.parentElement === actions
+              ? control
+              : null;
+      actions.insertBefore(stage, anchor);
     }
   }
 
