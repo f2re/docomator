@@ -324,10 +324,18 @@
     if (!select || !element) return;
     const previous = select.value;
     const suggested = rowEditorSuggestedMode(element, existing, group);
-    select.innerHTML = rowEditorPropertyOptions(previous || suggested, existing, group);
-    if (![...select.options].some((option) => option.value === select.value)) {
-      select.value = suggested;
-    }
+    const available = new Set(
+      rowEditorApplicableProperties(group, existing).map(
+        (definition) => `existing:${definition.key}`
+      )
+    );
+    const preserved =
+      ["skip", "system:position", "system:name", "new"].includes(previous) ||
+      available.has(previous) ||
+      (existing && previous.startsWith("current:"));
+    const selected = preserved ? previous : suggested;
+    select.innerHTML = rowEditorPropertyOptions(selected, existing, group);
+    select.value = selected;
     globalThis.docomatorSearchableSelect?.refresh(select);
     rowEditorUpdateCard(card);
   }
@@ -350,7 +358,7 @@
             : mode === "system:name"
               ? "ФИО берётся из имени карточки и приводится к выбранному виду."
               : mode === "new"
-                ? "Будет создано общее поле карточки."
+                ? `Будет создано поле в разделе «${globalThis.docomatorFieldGroups.label(card.querySelector("[data-row-editor-group]")?.value || "common")}».`
                 : "Значение будет взято из выбранного поля карточки.";
     }
     rowEditorUpdateNamePreview(card);
@@ -445,6 +453,11 @@
       return { key: existing.key, label: existing.label, valueType: existing.valueType };
     }
     if (mode !== "new") return null;
+    if (fieldGroup === "unassigned") {
+      throw new Error(
+        "Для нового поля выберите конкретный раздел: общие сведения, преподаватель или студент."
+      );
+    }
     const label = card.querySelector("[data-row-editor-label]")?.value?.trim() || "";
     const valueType = card.querySelector("[data-row-editor-type]")?.value || "string";
     if (!label) throw new Error("Укажите название нового поля для выбранной колонки.");
