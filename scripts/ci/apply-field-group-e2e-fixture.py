@@ -40,15 +40,15 @@ replace_once(
     } else if (path === "/api/v1/spaces") {'''
 )
 replace_once(
-    '''               sensitivity: "personal",
-               appliesTo: ["person"]
-             };''',
-    '''               sensitivity: "personal",
-               appliesTo: ["person"],
-               validation: {
-                 uiGroup: field.definition.uiGroup || "unassigned"
-               }
-             };'''
+    '''              sensitivity: "personal",
+              appliesTo: ["person"]
+            };''',
+    '''              sensitivity: "personal",
+              appliesTo: ["person"],
+              validation: {
+                uiGroup: field.definition.uiGroup || "unassigned"
+              }
+            };'''
 )
 path.write_text(value, encoding="utf-8")
 print("updated e2e property group fixture")
