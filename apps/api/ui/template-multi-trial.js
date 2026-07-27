@@ -254,7 +254,7 @@ async function loadMultiTrialDrafts() {
   if (!content) return;
   if (!spaceId) {
     content.innerHTML = `<div class="multi-trial-state"><span aria-hidden="true">🧑‍🤝‍🧑</span><div><strong>Выберите пространство</strong><p>Черновики и проверенные версии относятся к выбранному пространству.</p></div></div>`;
-    return;
+    return false;
   }
   const existingForm = content.querySelector("#templateMultiTrialForm");
   if (existingForm) {
@@ -269,6 +269,7 @@ async function loadMultiTrialDrafts() {
     );
     multiTrialDrafts = Array.isArray(body.data) ? body.data : [];
     renderMultiTrialWorkspace();
+    return Boolean(document.querySelector("#templateMultiTrialForm"));
   } catch (error) {
     content.querySelector("#templateMultiTrialReloadState")?.remove();
     const errorHtml = `<div class="multi-trial-state is-error" id="templateMultiTrialLoadError"><span aria-hidden="true">⚠️</span><div><strong>Черновики получить не удалось</strong><p>${multiTrialEscape(error?.message || "Повторите действие.")} Введённые значения сохранены.</p>${error?.operationId ? `<small>Идентификатор операции: <code>${multiTrialEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateMultiTrialRetry" type="button">Повторить</button></div></div>`;
@@ -279,6 +280,7 @@ async function loadMultiTrialDrafts() {
     content
       .querySelector("#templateMultiTrialRetry")
       ?.addEventListener("click", loadMultiTrialDrafts);
+    return false;
   }
 }
 
@@ -381,6 +383,11 @@ function multiTrialSourceMarker() {
     ? fieldMessage.textContent?.trim() || ""
     : "";
 }
+
+globalThis.docomatorMultiTrial = {
+  reload: loadMultiTrialDrafts,
+  hasForm: () => Boolean(document.querySelector("#templateMultiTrialForm"))
+};
 
 if (multiTrialView) {
   createMultiTrialPanel();

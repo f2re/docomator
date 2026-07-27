@@ -578,12 +578,24 @@ npm run restore</code></pre>
     return `${article.title} ${article.summary} ${article.keywords} ${element.textContent || ""}`.toLocaleLowerCase("ru-RU");
   }
 
+  function helpCenterSearchTerms(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .toLocaleLowerCase("ru-RU")
+      .replace(/ё/gu, "е")
+      .match(/[\p{L}\p{N}]+/gu) || [];
+  }
+
   function helpCenterFilteredArticles() {
-    const query = helpCenterQuery.trim().toLocaleLowerCase("ru-RU");
-    return helpCenterArticles.filter((article) =>
-      (helpCenterCategory === "all" || article.category === helpCenterCategory) &&
-      (!query || helpCenterPlainText(article).includes(query))
-    );
+    const terms = helpCenterSearchTerms(helpCenterQuery);
+    return helpCenterArticles.filter((article) => {
+      if (helpCenterCategory !== "all" && article.category !== helpCenterCategory) {
+        return false;
+      }
+      if (terms.length === 0) return true;
+      const searchable = helpCenterPlainText(article).replace(/ё/gu, "е");
+      return terms.every((term) => searchable.includes(term));
+    });
   }
 
   function helpCenterCategoryLabel(category) {
