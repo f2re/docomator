@@ -32,10 +32,25 @@ jobs:
           fetch-depth: 0
       - name: Применить изменения
         run: python3 scripts/ci/apply-generic-entities-backend.py
+      - name: Установить зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Проверить репозиторий
+        id: check
+        continue-on-error: true
+        shell: bash
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run check
+          set -o pipefail
+          npm run check 2>&1 | tee generic-entities-check.log
+      - name: Сохранить журнал ошибки
+        if: steps.check.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generic-entities-check-log
+          path: generic-entities-check.log
+          retention-days: 3
+      - name: Остановиться после ошибки
+        if: steps.check.outcome == 'failure'
+        run: exit 1
       - name: Зафиксировать изменения
         shell: bash
         run: |
