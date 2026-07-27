@@ -1,0 +1,71 @@
+name: Проверить группы полей в Chromium
+
+on:
+  push:
+    branches:
+      - fix/property-groups-searchable-select
+    paths:
+      - .github/workflows/debug-property-field-groups-e2e.yml
+      - tests/e2e/property-field-groups.spec.mjs
+      - apps/api/ui/searchable-select.js
+      - apps/api/ui/field-groups-ui.js
+      - apps/api/ui/document-structure.js
+      - apps/api/ui/template-row-editor-v2.js
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/property-groups-searchable-select
+      - id: node
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Подготовить базу
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-focused-data
+        run: npm run migrate
+      - name: Запустить приложение
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-focused-data
+          DOCOMATOR_PORT: 18080
+        shell: bash
+        run: |
+          npm run start:api > "$RUNNER_TEMP/docomator-focused-api.log" 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-focused-api.log"
+          exit 1
+      - name: Выполнить целевой сценарий
+        id: focused
+        continue-on-error: true
+        shell: bash
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        run: |
+          set -o pipefail
+          npx playwright test tests/e2e/property-field-groups.spec.mjs --config tests/e2e/playwright.config.mjs --project=chromium-1440 --reporter=list 2>&1 | tee focused-e2e.log
+      - name: Сохранить журнал
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: property-field-groups-e2e-log
+          path: |
+            focused-e2e.log
+            ${{ runner.temp }}/docomator-focused-api.log
+          retention-days: 3
+      - if: steps.focused.outcome == 'failure'
+        run: exit 1
