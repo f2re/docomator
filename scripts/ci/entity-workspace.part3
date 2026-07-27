@@ -1,0 +1,230 @@
+    document.querySelector("#entityRecordDialogDescription").textContent = entityId
+      ? "Измените параметры. Предыдущие значения сохранятся в истории."
+      : "Укажите название и заполните известные параметры.";
+    document.querySelector("#entityRecordName").disabled = Boolean(entityId);
+    document.querySelector("#entityRecordSubmit").textContent = entityId ? "Сохранить значения" : "Сохранить объект";
+    entityWorkspaceRenderRecordFields();
+    document.querySelector("#entityRecordDialog")?.showModal();
+    if (entityId) void entityWorkspaceLoadRecord(entityId);
+    else requestAnimationFrame(() => document.querySelector("#entityRecordName")?.focus());
+  }
+
+  async function entityWorkspaceLoadRecord(entityId) {
+    const entity = entityWorkspaceState.entities.find((item) => item.entityId === entityId);
+    if (entity) document.querySelector("#entityRecordName").value = entity.displayName;
+    try {
+      const history = await entityWorkspaceFetch(
+        `/api/v1/knowledge/entities/${encodeURIComponent(entityId)}/property-values?limit=500`
+      );
+      entityWorkspaceRenderRecordFields(entityWorkspaceLatestValues(history.data));
+    } catch (error) {
+      const errorBox = document.querySelector("#entityRecordError");
+      if (errorBox) {
+        errorBox.hidden = false;
+        errorBox.textContent = error.message || "Значения получить не удалось.";
+      }
+    }
+  }
+
+  function entityWorkspaceReadValue(control) {
+    const raw = control.value;
+    if (raw === "") return undefined;
+    if (control.dataset.valueType === "boolean") return raw === "true";
+    if (control.dataset.valueType === "number") return Number(raw);
+    if (control.dataset.valueType === "integer") return Number.parseInt(raw, 10);
+    if (control.dataset.valueType === "date-time") return new Date(raw).toISOString();
+    return raw;
+  }
+
+  async function entityWorkspaceSaveRecord(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const errorBox = document.querySelector("#entityRecordError");
+    const button = document.querySelector("#entityRecordSubmit");
+    if (!form.reportValidity()) return;
+    if (errorBox) errorBox.hidden = true;
+    if (button) button.disabled = true;
+    try {
+      let entityId = entityWorkspaceState.selectedEntityId;
+      if (!entityId) {
+        const body = await entityWorkspaceFetch(
+          `/api/v1/spaces/${encodeURIComponent(entityWorkspaceSpaceId())}/entities`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              entityTypeKey: entityWorkspaceState.selectedTypeKey,
+              displayName: document.querySelector("#entityRecordName")?.value.trim(),
+              status: "active"
+            })
+          }
+        );
+        entityId = body.data.entityId || body.data.id;
+      }
+      const controls = [...form.querySelectorAll("[data-entity-property]")];
+      for (const control of controls) {
+        const value = entityWorkspaceReadValue(control);
+        if (value === undefined) continue;
+        await entityWorkspaceFetch(
+          `/api/v1/knowledge/entities/${encodeURIComponent(entityId)}/properties/${encodeURIComponent(control.dataset.entityProperty)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              value,
+              sourceType: "user_input",
+              confirmedBy: "local-ui"
+            })
+          }
+        );
+      }
+      document.querySelector("#entityRecordDialog")?.close();
+      entityWorkspaceState.selectedEntityId = "";
+      await entityWorkspaceLoad();
+    } catch (error) {
+      if (errorBox) {
+        errorBox.hidden = false;
+        errorBox.textContent = error.message || "Объект сохранить не удалось.";
+      }
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  function entityWorkspaceOpenImportDialog() {
+    entityWorkspaceEnsureDialogs();
+    const type = entityWorkspaceType();
+    if (!type) return;
+    entityWorkspaceState.importPreview = null;
+    entityWorkspaceState.importPlan = null;
+    document.querySelector("#entityImportForm")?.reset();
+    document.querySelector("#entityImportWorkspace").innerHTML = "";
+    document.querySelector("#entityImportMessage").className = "bulk-import-message";
+    document.querySelector("#entityImportMessage").textContent = "Выберите файл со строкой заголовков.";
+    document.querySelector("#entityImportDialogDescription").textContent = `Каждая строка будет объектом типа «${type.label}».`;
+    entityWorkspaceSetImportStep(1);
+    document.querySelector("#entityImportDialog")?.showModal();
+  }
+
+  function entityWorkspaceSetImportStep(step) {
+    document.querySelectorAll("[data-entity-import-step]").forEach((item) => {
+      const value = Number(item.dataset.entityImportStep);
+      item.classList.toggle("is-current", value === step);
+      item.classList.toggle("is-complete", value < step);
+    });
+  }
+
+  function entityWorkspaceGuessColumn(headers, patterns, fallback = "") {
+    return headers.find((header) => patterns.some((pattern) => pattern.test(entityWorkspaceNormalize(header)))) || fallback || headers[0] || "";
+  }
+
+  function entityWorkspaceGuessType(header) {
+    const value = entityWorkspaceNormalize(header);
+    if (/дата|год|опублик/u.test(value)) return "date";
+    if (/количество|вместимость|этаж|номер мест/u.test(value)) return "integer";
+    if (/площадь|сумма|стоимость|температура/u.test(value)) return "number";
+    if (/описание|аннотация|примечание|текст/u.test(value)) return "text";
+    if (/есть|доступен|активен|оснащен/u.test(value)) return "boolean";
+    return "string";
+  }
+
+  function entityWorkspaceGuessProperty(header) {
+    const target = entityWorkspaceNormalize(header);
+    return entityWorkspaceProperties().find((property) =>
+      entityWorkspaceNormalize(property.label) === target ||
+      (Array.isArray(property.aliases) && property.aliases.some((alias) => entityWorkspaceNormalize(alias) === target))
+    ) || null;
+  }
+
+  function entityWorkspaceImportMappingRow(header, displayColumn) {
+    const existing = entityWorkspaceGuessProperty(header);
+    const mode = header === displayColumn ? "skip" : existing ? `existing:${existing.key}` : "create";
+    return `<article class="bulk-import-mapping-row" data-entity-import-mapping data-column="${entityWorkspaceEscape(header)}"><div class="bulk-import-column-name"><strong>${entityWorkspaceEscape(header)}</strong><small>${header === displayColumn ? "Используется как название объекта" : "Параметр объекта"}</small></div><label><span>Куда перенести</span><select data-entity-import-mode data-searchable-select data-searchable-placeholder="Выберите поле" data-searchable-search-placeholder="Найти поле"><option value="skip"${mode === "skip" ? " selected" : ""}>Не переносить</option><option value="create"${mode === "create" ? " selected" : ""}>Создать новое поле</option><optgroup label="Существующие поля">${entityWorkspaceProperties().map((property) => `<option value="existing:${entityWorkspaceEscape(property.key)}"${mode === `existing:${property.key}` ? " selected" : ""}>${entityWorkspaceEscape(property.label)} · ${entityWorkspaceEscape(entityWorkspaceValueTypeLabel(property.valueType))}</option>`).join("")}</optgroup></select></label><label data-entity-import-create${mode === "create" ? "" : " hidden"}><span>Название поля</span><input data-entity-import-label type="text" value="${entityWorkspaceEscape(header)}" maxlength="300" /></label><label data-entity-import-create${mode === "create" ? "" : " hidden"}><span>Тип значения</span><select data-entity-import-type><option value="string"${entityWorkspaceGuessType(header) === "string" ? " selected" : ""}>Короткий текст</option><option value="text"${entityWorkspaceGuessType(header) === "text" ? " selected" : ""}>Длинный текст</option><option value="integer"${entityWorkspaceGuessType(header) === "integer" ? " selected" : ""}>Целое число</option><option value="number"${entityWorkspaceGuessType(header) === "number" ? " selected" : ""}>Число</option><option value="boolean"${entityWorkspaceGuessType(header) === "boolean" ? " selected" : ""}>Да или нет</option><option value="date"${entityWorkspaceGuessType(header) === "date" ? " selected" : ""}>Дата</option><option value="date-time">Дата и время</option><option value="enum">Список вариантов</option></select></label></article>`;
+  }
+
+  function entityWorkspaceRenderImportPreview() {
+    const preview = entityWorkspaceState.importPreview;
+    const root = document.querySelector("#entityImportWorkspace");
+    if (!preview || !root) return;
+    const displayColumn = entityWorkspaceGuessColumn(preview.headers, [/назван/u, /наимен/u, /заголов/u, /тема/u, /фио/u, /^name$/u], preview.headers[0]);
+    const identityColumn = entityWorkspaceGuessColumn(preview.headers, [/^id$/u, /код/u, /инвентар/u, /номер/u, /doi/u, /шифр/u], preview.headers[0]);
+    root.innerHTML = `<section class="bulk-import-config"><div class="bulk-import-file-summary"><strong>${entityWorkspaceEscape(preview.fileName)}</strong><span>${preview.rowCount} строк · ${preview.columnCount} колонок</span></div><div class="bulk-import-core-fields"><label class="generation-field"><span>Отображаемое название объекта</span><select id="entityImportDisplayColumn">${preview.headers.map((header) => `<option value="${entityWorkspaceEscape(header)}"${header === displayColumn ? " selected" : ""}>${entityWorkspaceEscape(header)}</option>`).join("")}</select><small>Например, «Аудитория 101» или заголовок статьи.</small></label><label class="generation-field"><span>Устойчивый идентификатор</span><select id="entityImportIdentityColumn">${preview.headers.map((header) => `<option value="${entityWorkspaceEscape(header)}"${header === identityColumn ? " selected" : ""}>${entityWorkspaceEscape(header)}</option>`).join("")}</select><small>По нему повторный импорт обновит прежний объект, а не создаст дубликат.</small></label></div><div class="panel-heading compact-heading"><div><h3>Сопоставление колонок</h3><p>Поля другого типа объектов не показываются.</p></div></div><div class="bulk-import-mappings" id="entityImportMappings">${preview.headers.map((header) => entityWorkspaceImportMappingRow(header, displayColumn)).join("")}</div><label class="bulk-import-group-option"><input id="entityImportCreateGroup" type="checkbox" /><span><strong>Создать группу из импортированных объектов</strong><small>Группа будет однородной и пригодной для формирования списка.</small></span></label><div id="entityImportGroupFields" class="bulk-import-group-fields" hidden><label class="generation-field"><span>Название группы</span><input id="entityImportGroupName" type="text" maxlength="300" value="${entityWorkspaceEscape(`${entityWorkspaceType()?.label || "Объекты"} — импорт ${new Date().toLocaleDateString("ru-RU")}`)}" /></label></div><details class="bulk-import-source-preview"><summary>Первые строки файла</summary><div class="bulk-import-table-wrap"><table class="bulk-import-table"><thead><tr>${preview.headers.map((header) => `<th>${entityWorkspaceEscape(header)}</th>`).join("")}</tr></thead><tbody>${preview.sampleRows.slice(0, 10).map((row) => `<tr>${preview.headers.map((header) => `<td>${entityWorkspaceEscape(row[header] || "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details><div id="entityImportPlan" class="bulk-import-plan"><p>Сначала выполните проверку без сохранения.</p></div><div class="bulk-import-submit-row"><button class="primary-button" id="entityImportPlanButton" type="button">Проверить ${preview.rowCount} строк</button></div></section>`;
+    globalThis.docomatorSearchableSelect?.enhanceAll?.(root);
+    entityWorkspaceSetImportStep(2);
+  }
+
+  async function entityWorkspacePreviewImport() {
+    if (entityWorkspaceState.importBusy) return;
+    const file = document.querySelector("#entityImportFile")?.files?.[0];
+    const message = document.querySelector("#entityImportMessage");
+    const button = document.querySelector("#entityImportPreviewButton");
+    if (!file || !message || !button) {
+      if (message) message.textContent = "Выберите CSV или XLSX.";
+      return;
+    }
+    entityWorkspaceState.importBusy = true;
+    button.disabled = true;
+    message.className = "bulk-import-message is-loading";
+    message.textContent = "Читаем файл…";
+    try {
+      const response = await fetch(`/api/v1/spaces/${encodeURIComponent(entityWorkspaceSpaceId())}/data-import/preview?fileName=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream", accept: "application/json" },
+        body: file
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || "Файл прочитать не удалось.");
+      entityWorkspaceState.importPreview = body.data;
+      entityWorkspaceState.importPlan = null;
+      message.className = "bulk-import-message is-success";
+      message.textContent = `Файл прочитан: ${body.data.rowCount} строк.`;
+      entityWorkspaceRenderImportPreview();
+    } catch (error) {
+      message.className = "bulk-import-message is-error";
+      message.textContent = error.message || "Файл прочитать не удалось.";
+    } finally {
+      entityWorkspaceState.importBusy = false;
+      button.disabled = false;
+    }
+  }
+
+  function entityWorkspaceCollectImportMappings() {
+    return [...document.querySelectorAll("[data-entity-import-mapping]")].flatMap((row) => {
+      const mode = row.querySelector("[data-entity-import-mode]")?.value || "skip";
+      if (mode === "skip") return [];
+      const column = row.dataset.column;
+      if (mode.startsWith("existing:")) return [{ column, propertyKey: mode.slice("existing:".length) }];
+      return [{
+        column,
+        createIfMissing: true,
+        label: row.querySelector("[data-entity-import-label]")?.value.trim() || column,
+        valueType: row.querySelector("[data-entity-import-type]")?.value || "string",
+        sensitivity: entityWorkspaceState.selectedTypeKey === "person" ? "personal" : "internal"
+      }];
+    });
+  }
+
+  function entityWorkspaceImportBody() {
+    const preview = entityWorkspaceState.importPreview;
+    const createGroup = document.querySelector("#entityImportCreateGroup")?.checked === true;
+    return {
+      fileName: preview.fileName,
+      fileFormat: preview.fileFormat,
+      sourceSha256: preview.sourceSha256,
+      previewToken: preview.previewToken,
+      entityTypeKey: entityWorkspaceState.selectedTypeKey,
+      identityColumn: document.querySelector("#entityImportIdentityColumn")?.value || "",
+      displayNameColumn: document.querySelector("#entityImportDisplayColumn")?.value || "",
+      headers: preview.headers,
+      rows: preview.rows,
+      mappings: entityWorkspaceCollectImportMappings(),
+      group: createGroup ? { name: document.querySelector("#entityImportGroupName")?.value.trim() || "Импорт" } : null
+    };
+  }
+
+  function entityWorkspaceRenderImportPlan(plan) {
+    const root = document.querySelector("#entityImportPlan");
+    if (!root) return;
+    const valid = plan.createdCount + plan.updatedCount + plan.unchangedCount;
+    root.innerHTML = `<div class="bulk-import-summary"><div><span>Новые</span><strong>${plan.createdCount}</strong></div><div><span>Обновятся</span><strong>${plan.updatedCount}</strong></div><div><span>Без изменений</span><strong>${plan.unchangedCount}</strong></div><div><span>С ошибками</span><strong>${plan.failedCount}</strong></div></div>${Array.isArray(plan.errors) && plan.errors.length ? `<div class="generation-error-list">${plan.errors.slice(0, 100).map((error) => `<article class="generation-error-item"><div><strong>Строка ${error.rowNumber}</strong><span>${entityWorkspaceEscape(error.message)}</span></div></article>`).join("")}</div>` : ""}<p class="bulk-import-safety-note">Пустые ячейки не удалят существующие значения.</p><button class="primary-button" id="entityImportExecuteButton" type="button"${valid ? "" : " disabled"}>Импортировать ${valid} объектов</button>`;
+    document.querySelector("#entityImportPlanButton").hidden = true;
+    entityWorkspaceSetImportStep(3);
+  }
