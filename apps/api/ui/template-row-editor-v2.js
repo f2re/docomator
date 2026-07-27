@@ -134,13 +134,41 @@
     return property ? `existing:${property.key}` : `current:${field.id}`;
   }
 
-  function rowEditorSuggestedMode(element, existing) {
+  function rowEditorSuggestedGroup(element, existing) {
+    if (existing) {
+      const property = structurePropertyDefinitions.find(
+        (definition) => definition.key === existing.key
+      );
+      if (property) return structurePropertyGroup(property);
+    }
+    return globalThis.docomatorFieldGroups.infer(
+      `${rowEditorHeader(element)} ${element?.text || ""}`
+    );
+  }
+
+  function rowEditorApplicableProperties(group, existing) {
+    const existingKey = existing?.key || "";
+    return structurePropertyDefinitions.filter((definition) => {
+      const appliesTo = Array.isArray(definition.appliesTo)
+        ? definition.appliesTo
+        : [];
+      return (
+        (appliesTo.length === 0 || appliesTo.includes("person")) &&
+        (definition.key === existingKey ||
+          globalThis.docomatorFieldGroups.allowed(definition, group, {
+            includeUnassigned: true
+          }))
+      );
+    });
+  }
+
+  function rowEditorSuggestedMode(element, existing, group) {
     if (existing) return rowEditorExistingMode(existing);
     const header = rowEditorHeader(element);
     const semantic = rowEditorSemantic(header);
     if (semantic === "position") return "system:position";
     if (semantic === "name") return "system:name";
-    const best = structurePropertyDefinitions
+    const best = rowEditorApplicableProperties(group, existing)
       .map((definition) => ({
         definition,
         score: rowEditorPropertyScore(header, definition)
@@ -150,39 +178,38 @@
     return semantic === "unknown" ? "skip" : "new";
   }
 
-  function rowEditorPropertyOptions(selected, existing) {
-    const applicable = structurePropertyDefinitions.filter((definition) => {
-      const appliesTo = Array.isArray(definition.appliesTo)
-        ? definition.appliesTo
-        : [];
-      return appliesTo.length === 0 || appliesTo.includes("person");
-    });
+  function rowEditorPropertyOptions(selected, existing, group) {
+    const applicable = rowEditorApplicableProperties(group, existing);
+    const grouped = globalThis.docomatorFieldGroups.grouped(
+      applicable,
+      group,
+      { includeUnassigned: true }
+    );
+    const order = [...new Set(["common", group, "unassigned"])];
     const options = [
-      ["skip", "Не заполнять эту колонку"],
-      ["system:position", "Номер строки · 1, 2, 3…"],
-      ["system:name", "ФИО участника · с выбором записи"],
-      ...applicable.map((definition) => [
-        `existing:${definition.key}`,
-        `${definition.label} · ${structureFieldTypeLabel(definition.valueType)}`
-      ]),
-      ["new", "Создать новое поле карточки…"]
+      '<optgroup label="Управление колонкой">',
+      `<option value="skip"${selected === "skip" ? " selected" : ""}>Не заполнять эту колонку</option>`,
+      `<option value="system:position"${selected === "system:position" ? " selected" : ""}>Номер строки · 1, 2, 3…</option>`,
+      `<option value="system:name"${selected === "system:name" ? " selected" : ""}>ФИО участника · с выбором записи</option>`,
+      "</optgroup>",
+      ...order
+        .filter((item) => grouped.get(item)?.length)
+        .map(
+          (item) =>
+            `<optgroup label="${structureEscape(globalThis.docomatorFieldGroups.label(item))}">${grouped
+              .get(item)
+              .map(
+                (definition) =>
+                  `<option value="existing:${structureEscape(definition.key)}" data-search-terms="${structureEscape(`${definition.label} ${(definition.aliases || []).join(" ")}`)}"${selected === `existing:${definition.key}` ? " selected" : ""}>${structureEscape(definition.label)} · ${structureEscape(structureFieldTypeLabel(definition.valueType))}</option>`
+              )
+              .join("")}</optgroup>`
+        ),
+      `<optgroup label="Действия"><option value="new"${selected === "new" ? " selected" : ""}>Создать новое поле в разделе «${structureEscape(globalThis.docomatorFieldGroups.label(group))}»…</option></optgroup>`
     ];
-    if (
-      existing &&
-      selected.startsWith("current:") &&
-      !options.some(([value]) => value === selected)
-    ) {
-      options.splice(options.length - 1, 0, [
-        selected,
-        `Сохранённая связь: ${existing.label}`
-      ]);
+    if (existing && selected.startsWith("current:")) {
+      options.splice(options.length - 1, 0, `<optgroup label="Сохранённая связь"><option value="${structureEscape(selected)}" selected>${structureEscape(existing.label)}</option></optgroup>`);
     }
-    return options
-      .map(
-        ([value, label]) =>
-          `<option value="${structureEscape(value)}"${value === selected ? " selected" : ""}>${structureEscape(label)}</option>`
-      )
-      .join("");
+    return options.join("");
   }
 
   function rowEditorNameSettings(field, selectedMode) {
@@ -227,7 +254,8 @@
 
   function rowEditorCard(element, index) {
     const existing = rowEditorExistingField(element);
-    const selected = rowEditorSuggestedMode(element, existing);
+    const group = rowEditorSuggestedGroup(element, existing);
+    const selected = rowEditorSuggestedMode(element, existing, group);
     const header = rowEditorHeader(element) || `Колонка ${index + 1}`;
     const settings = rowEditorNameSettings(existing, selected);
     return `
@@ -235,7 +263,8 @@
         <span class="roster-assistant-column-number">${index + 1}</span>
         <div class="roster-assistant-column-body">
           <div class="row-editor-column-title"><strong>${structureEscape(header)}</strong><p>${structureEscape(element.text || "Пустая ячейка")}</p>${existing ? `<span class="row-editor-saved">Сохранено: ${structureEscape(existing.label)}</span>` : ""}</div>
-          <label><span>Что подставлять?</span><select data-row-editor-mode>${rowEditorPropertyOptions(selected, existing)}</select><small data-row-editor-mode-hint></small></label>
+          <label><span>К кому относится колонка?</span><select data-row-editor-group>${structureGroupSelectOptions(group)}</select><small>Выбранный раздел ограничивает предложения и не смешивает поля преподавателей со студентами.</small></label>
+          <label><span>Что подставлять?</span><select data-row-editor-mode data-searchable-select data-searchable-placeholder="Выберите поле" data-searchable-search-placeholder="Найти поле для колонки">${rowEditorPropertyOptions(selected, existing, group)}</select><small data-row-editor-mode-hint></small></label>
           <label class="structure-required-field row-editor-required"><input data-row-editor-required type="checkbox"${existing?.required ? " checked" : ""} /><span><strong>Обязательное</strong><small>Без значения выпуск будет остановлен.</small></span></label>
           <div class="roster-new-property" data-row-editor-new hidden>
             <label><span>Название поля</span><input data-row-editor-label type="text" maxlength="500" value="${structureEscape(header.startsWith("Колонка ") ? "" : header)}" placeholder="Например, Номер зачётной книжки" /></label>
@@ -283,6 +312,24 @@
       .replace(/\s+([,.;:])/gu, "$1")
       .trim();
     output.textContent = `Пример результата: ${rendered}`;
+  }
+
+  function rowEditorRefreshModeOptions(card) {
+    const group = card.querySelector("[data-row-editor-group]")?.value || "common";
+    const element = structureReport?.elements?.find(
+      (candidate) => candidate.id === card.dataset.elementId
+    );
+    const existing = rowEditorExistingField(element);
+    const select = card.querySelector("[data-row-editor-mode]");
+    if (!select || !element) return;
+    const previous = select.value;
+    const suggested = rowEditorSuggestedMode(element, existing, group);
+    select.innerHTML = rowEditorPropertyOptions(previous || suggested, existing, group);
+    if (![...select.options].some((option) => option.value === select.value)) {
+      select.value = suggested;
+    }
+    globalThis.docomatorSearchableSelect?.refresh(select);
+    rowEditorUpdateCard(card);
   }
 
   function rowEditorUpdateCard(card) {
@@ -356,6 +403,7 @@
 
   async function rowEditorDefinition(card, element, existing) {
     const mode = card.querySelector("[data-row-editor-mode]")?.value || "skip";
+    const fieldGroup = card.querySelector("[data-row-editor-group]")?.value || "common";
     if (mode === "system:position") {
       return { key: "subject.position", label: "Номер строки", valueType: "integer" };
     }
@@ -376,6 +424,21 @@
         (candidate) => candidate.key === key
       );
       if (!definition) throw new Error("Выбранное поле карточки больше не найдено. Обновите страницу.");
+      if (structurePropertyGroup(definition) === "unassigned" && fieldGroup !== "unassigned") {
+        const classified = await structureFetchJson(
+          `/api/v1/knowledge/property-definitions/${encodeURIComponent(definition.key)}/group`,
+          {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ uiGroup: fieldGroup })
+          }
+        );
+        const index = structurePropertyDefinitions.findIndex(
+          (candidate) => candidate.key === definition.key
+        );
+        if (index >= 0) structurePropertyDefinitions[index] = classified.data;
+        return classified.data;
+      }
       return definition;
     }
     if (mode.startsWith("current:") && existing) {
@@ -387,7 +450,8 @@
     if (!label) throw new Error("Укажите название нового поля для выбранной колонки.");
     const matches = structurePropertyDefinitions.filter(
       (candidate) =>
-        rowEditorNormalize(candidate.label) === rowEditorNormalize(label)
+        rowEditorNormalize(candidate.label) === rowEditorNormalize(label) &&
+        structurePropertyGroup(candidate) === fieldGroup
     );
     if (matches.length > 1) {
       throw new Error(
@@ -409,7 +473,8 @@
         label,
         valueType,
         sensitivity: "personal",
-        appliesTo: ["person"]
+        appliesTo: ["person"],
+        validation: { uiGroup: fieldGroup }
       })
     });
     const definition = created.data;
@@ -604,7 +669,9 @@
     panel.querySelector("#rowEditorClose")?.addEventListener("click", rowEditorClosePanel);
     panel.querySelector("#rowEditorCancel")?.addEventListener("click", rowEditorClosePanel);
     panel.querySelector("#rowEditorSave")?.addEventListener("click", rowEditorSave);
+    globalThis.docomatorSearchableSelect?.enhanceAll(panel);
     panel.querySelectorAll("[data-row-editor-column]").forEach((card) => {
+      card.querySelector("[data-row-editor-group]")?.addEventListener("change", () => rowEditorRefreshModeOptions(card));
       card.querySelector("[data-row-editor-mode]")?.addEventListener("change", () => rowEditorUpdateCard(card));
       card.querySelector("[data-row-name-presentation]")?.addEventListener("change", () => rowEditorUpdateNamePreview(card));
       card.querySelector("[data-row-name-source]")?.addEventListener("change", () => rowEditorUpdateNamePreview(card));

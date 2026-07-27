@@ -213,6 +213,35 @@ const structureNamePatterns = {
   "given-patronymic": "{Имя} {Отчество}"
 };
 
+function structurePropertyGroup(definition) {
+  return globalThis.docomatorFieldGroups.key(definition);
+}
+
+function structureHeaderForElement(element) {
+  const location = element?.tableLocation;
+  if (!location || location.rowIndex < 1) return "";
+  const previous = (structureReport?.elements || []).find(
+    (candidate) =>
+      candidate.kind === "paragraph" &&
+      candidate.part === element.part &&
+      candidate.tableLocation?.tableIndex === location.tableIndex &&
+      candidate.tableLocation?.rowIndex === location.rowIndex - 1 &&
+      candidate.tableLocation?.columnIndex === location.columnIndex &&
+      String(candidate.text || "").trim() !== ""
+  );
+  return String(previous?.text || "").trim();
+}
+
+function structureInferredFieldGroup(element) {
+  return globalThis.docomatorFieldGroups.infer(
+    `${structureHeaderForElement(element)} ${structurePreview(element)} ${structureDraft?.title || ""}`
+  );
+}
+
+function structureGroupSelectOptions(selected) {
+  return globalThis.docomatorFieldGroups.options(selected, { includeUnassigned: true });
+}
+
 function structureSelectedDefinition(propertyKey = document.querySelector("#documentFieldProperty")?.value || "") {
   return (
     structureSystemPropertyDefinitions.find((definition) => definition.key === propertyKey) ||
@@ -237,24 +266,54 @@ function structureEffectiveDefinition(definition, element) {
   };
 }
 
-function structurePropertyOptions() {
-  const applicable = structurePropertyDefinitions.filter((definition) => {
-    const appliesTo = Array.isArray(definition.appliesTo) ? definition.appliesTo : [];
-    return appliesTo.length === 0 || appliesTo.includes("person");
-  });
-  const cardOptions = applicable
-    .map(
-      (definition) =>
-        `<option value="${structureEscape(definition.key)}">${structureEscape(definition.label)} · ${structureEscape(structureFieldTypeLabel(definition.valueType))}</option>`
-    )
-    .join("");
+function structurePropertyOptions(selectedGroup = "common") {
+  const applicable = structurePropertyDefinitions
+    .filter((definition) => {
+      const appliesTo = Array.isArray(definition.appliesTo) ? definition.appliesTo : [];
+      return appliesTo.length === 0 || appliesTo.includes("person");
+    })
+    .filter((definition) =>
+      globalThis.docomatorFieldGroups.allowed(definition, selectedGroup, {
+        includeUnassigned: true
+      })
+    );
+  const grouped = globalThis.docomatorFieldGroups.grouped(
+    applicable,
+    selectedGroup,
+    { includeUnassigned: true }
+  );
+  const order = [...new Set(["common", selectedGroup, "unassigned"])];
   return [
-    '<optgroup label="Основные сведения">',
-    '<option value="__system_display_name__">ФИО сотрудника · с выбором варианта записи</option>',
+    '<optgroup label="Системные значения">',
+    '<option value="__system_display_name__" data-search-terms="фио имя фамилия инициалы">ФИО участника · с выбором варианта записи</option>',
     "</optgroup>",
-    ...(cardOptions ? ['<optgroup label="Поля карточки">', cardOptions, "</optgroup>"] : []),
-    '<option value="__new__">Добавить новое поле сотрудника…</option>'
+    ...order
+      .filter((group) => grouped.get(group)?.length)
+      .map(
+        (group) =>
+          `<optgroup label="${structureEscape(globalThis.docomatorFieldGroups.label(group))}">${grouped
+            .get(group)
+            .map(
+              (definition) =>
+                `<option value="${structureEscape(definition.key)}" data-search-terms="${structureEscape(`${definition.label} ${(definition.aliases || []).join(" ")}`)}">${structureEscape(definition.label)} · ${structureEscape(structureFieldTypeLabel(definition.valueType))}</option>`
+            )
+            .join("")}</optgroup>`
+      ),
+    '<optgroup label="Действия"><option value="__new__">Создать новое поле в выбранном разделе…</option></optgroup>'
   ].join("");
+}
+
+function refreshStructurePropertySelector() {
+  const group = document.querySelector("#documentFieldGroup")?.value || "common";
+  const select = document.querySelector("#documentFieldProperty");
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = structurePropertyOptions(group);
+  if ([...select.options].some((option) => option.value === previous)) {
+    select.value = previous;
+  }
+  globalThis.docomatorSearchableSelect?.refresh(select);
+  renderNewStructurePropertyFields();
 }
 
 async function loadStructurePropertyDefinitions() {
@@ -699,7 +758,11 @@ function structureFieldBlockReason(form) {
     return "Ячейка находится вне ранее сохранённого повторяемого диапазона.";
   }
   const propertyKey = form.querySelector("#documentFieldProperty")?.value || "";
+  const fieldGroup = form.querySelector("#documentFieldGroup")?.value || "common";
   if (!propertyKey) return "Выберите поле сотрудника.";
+  if (propertyKey === "__new__" && fieldGroup === "unassigned") {
+    return "Для нового поля выберите конкретный раздел: общие сведения, преподаватель или студент.";
+  }
   if (propertyKey === "__new__") {
     const label = form.querySelector("#documentFieldLabel")?.value?.trim() || "";
     const confirmed = Boolean(form.querySelector("#documentPropertyConfirm")?.checked);
@@ -783,9 +846,14 @@ function renderStructureSelection(element) {
           ${structureTextRangeControl(element)}
           ${structureRepeatRowControl(element)}
           <label>
-            <span>Какое поле сотрудника поставить сюда?</span>
-            <select id="documentFieldProperty" name="propertyKey">${structurePropertyOptions()}</select>
-            <small>Для ФИО доступны полная запись, фамилия, инициалы и собственный безопасный шаблон.</small>
+            <span>К кому относится значение?</span>
+            <select id="documentFieldGroup" name="fieldGroup">${structureGroupSelectOptions(structureInferredFieldGroup(element))}</select>
+            <small>Преподавательские и студенческие поля хранятся раздельно, даже если называются одинаково.</small>
+          </label>
+          <label>
+            <span>Какое поле поставить сюда?</span>
+            <select id="documentFieldProperty" name="propertyKey" data-searchable-select data-searchable-placeholder="Выберите поле" data-searchable-search-placeholder="Найти поле по названию">${structurePropertyOptions(structureInferredFieldGroup(element))}</select>
+            <small>Список сгруппирован по назначению. Введите часть названия, чтобы быстро найти нужное поле.</small>
           </label>
           <div id="documentNewPropertyFields" class="structure-new-property" hidden>
             <label>
@@ -819,8 +887,12 @@ function renderStructureSelection(element) {
     </div>`;
   detail.hidden = false;
   detail
+    .querySelector("#documentFieldGroup")
+    ?.addEventListener("change", refreshStructurePropertySelector);
+  detail
     .querySelector("#documentFieldProperty")
     ?.addEventListener("change", renderNewStructurePropertyFields);
+  globalThis.docomatorSearchableSelect?.enhanceAll(detail);
   detail
     .querySelector("#documentFieldType")
     ?.addEventListener("change", renderStructureFormatterFields);
@@ -907,6 +979,7 @@ async function saveSelectedField(event) {
   const button = form.querySelector("#documentFieldSave");
   const message = form.querySelector("#documentFieldMessage");
   const propertyKey = form.querySelector("#documentFieldProperty")?.value || "";
+  const fieldGroup = form.querySelector("#documentFieldGroup")?.value || "common";
   let definition = structureSelectedDefinition(propertyKey);
   const label = form.querySelector("#documentFieldLabel")?.value?.trim() || "";
   const valueType = form.querySelector("#documentFieldType")?.value || "string";
@@ -951,7 +1024,8 @@ async function saveSelectedField(event) {
       const labelMatches = structurePropertyDefinitions.filter(
         (candidate) =>
           candidate.label.trim().toLocaleLowerCase("ru-RU") ===
-          label.toLocaleLowerCase("ru-RU")
+            label.toLocaleLowerCase("ru-RU") &&
+          structurePropertyGroup(candidate) === fieldGroup
       );
       if (labelMatches.length > 1) {
         throw { message: `Найдено несколько полей «${label}». Выберите нужное из списка.` };
@@ -972,7 +1046,8 @@ async function saveSelectedField(event) {
               label,
               valueType,
               appliesTo: ["person"],
-              sensitivity: "personal"
+              sensitivity: "personal",
+              validation: { uiGroup: fieldGroup }
             })
           }
         );
@@ -982,6 +1057,26 @@ async function saveSelectedField(event) {
           definition
         ];
       }
+    }
+    if (
+      definition &&
+      !definition.systemSource &&
+      structurePropertyGroup(definition) === "unassigned" &&
+      fieldGroup !== "unassigned"
+    ) {
+      const classified = await structureFetchJson(
+        `/api/v1/knowledge/property-definitions/${encodeURIComponent(definition.key)}/group`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ uiGroup: fieldGroup })
+        }
+      );
+      definition = classified.data;
+      const index = structurePropertyDefinitions.findIndex(
+        (candidate) => candidate.key === definition.key
+      );
+      if (index >= 0) structurePropertyDefinitions[index] = definition;
     }
     if (!definition) throw { message: "Выбранное поле сотрудника не найдено." };
     definition = structureEffectiveDefinition(definition, selectedStructureElement);
