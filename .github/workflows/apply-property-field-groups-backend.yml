@@ -7,6 +7,12 @@ on:
     paths:
       - .github/workflows/apply-property-field-groups-backend.yml
       - scripts/ci/apply-property-field-groups-backend.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-property-field-groups-backend.yml
+      - scripts/ci/apply-property-field-groups-backend.py
 
 permissions:
   contents: write
