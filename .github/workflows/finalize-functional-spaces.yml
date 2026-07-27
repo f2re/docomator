@@ -1,0 +1,181 @@
+name: Завершить и проверить функциональные пространства
+
+on:
+  push:
+    branches:
+      - feature/functional-spaces
+    paths:
+      - .finalize-functional-spaces
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Получить ветку полностью
+        uses: actions/checkout@v4
+        with:
+          ref: feature/functional-spaces
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Объединить актуальную main без потери функций
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main --no-tags
+
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_status=$?
+          set -e
+          if [[ $merge_status -ne 0 && $merge_status -ne 1 ]]; then
+            exit "$merge_status"
+          fi
+
+          mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+          for path in "${conflicts[@]}"; do
+            case "$path" in
+              apps/api/src/ui-routes.ts|package.json|scripts/ci/check-ui-bundles.mjs|docs/CHANGELOG.md)
+                git checkout --theirs -- "$path"
+                ;;
+              *)
+                echo "Неожиданный конфликт: $path" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          def main_file(path: str) -> str:
+              return subprocess.check_output(
+                  ["git", "show", f"origin/main:{path}"], text=True
+              )
+
+          def insert_after(path: str, marker: str, addition: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if addition in text:
+                  return
+              if marker not in text:
+                  raise SystemExit(f"{path}: не найден ориентир {marker!r}")
+              file.write_text(text.replace(marker, marker + addition, 1), encoding="utf-8")
+
+          # Эти файлы должны основываться на самой свежей main, включая
+          # исправления структуры таблиц Word и необязательного PDF.
+          for path in (
+              "apps/api/src/ui-routes.ts",
+              "package.json",
+              "scripts/ci/check-ui-bundles.mjs",
+          ):
+              Path(path).write_text(main_file(path), encoding="utf-8")
+
+          insert_after(
+              "apps/api/src/ui-routes.ts",
+              '      "spaces.css",\n',
+              '      "workspace-switcher.css",\n',
+          )
+          insert_after(
+              "apps/api/src/ui-routes.ts",
+              '      "group-management-v2.js",\n',
+              '      "workspace-switcher.js",\n',
+          )
+          insert_after(
+              "package.json",
+              "node --check apps/api/ui/app.js && ",
+              "node --check apps/api/ui/workspace-switcher.js && ",
+          )
+          insert_after(
+              "scripts/ci/check-ui-bundles.mjs",
+              '    "group-management-v2.js",\n',
+              '    "workspace-switcher.js",\n',
+          )
+
+          changelog = main_file("docs/CHANGELOG.md")
+          title = "# Журнал изменений Docomator\n"
+          if not changelog.startswith(title):
+              raise SystemExit("docs/CHANGELOG.md: изменился заголовок журнала")
+          entry = """
+
+          ## 2026-07-27 — функциональные пространства
+
+          - Верхняя надпись пространства заменена рабочим переключателем на каждом экране.
+          - Добавлены создание, переименование, описание и цвет пространства.
+          - Сотрудники, группы, исходники, шаблоны, выпуски, результаты и расписания загружаются только для выбранного пространства.
+          - Цвет сохраняется в SQLite; API проверяет формат `#RRGGBB` и поддерживает изменение через `PATCH /api/v1/spaces/:spaceId`.
+          - Переключатель согласован с визуальной иерархией интерфейса, горизонтальным представлением строк DOCX и последними исправлениями структуры Word.
+          """.strip("\n")
+          Path("docs/CHANGELOG.md").write_text(
+              title + "\n" + entry + "\n" + changelog[len(title):].lstrip("\n"),
+              encoding="utf-8",
+          )
+          PY
+
+          rm -f .finalize-functional-spaces .github/workflows/finalize-functional-spaces.yml
+          git add --all
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+          git diff --cached --check
+          git commit -m 'merge current main into functional spaces'
+
+      - name: Определить версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Выполнить полную проверку репозитория
+        run: npm run check
+
+      - name: Проверить миграции на чистой базе
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-functional-spaces-migration
+        run: npm run migrate
+
+      - name: Установить Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Запустить полный Chromium-набор
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-functional-spaces-browser
+          DOCOMATOR_PORT: 18080
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run migrate
+          npm run start:api > "$RUNNER_TEMP/docomator-functional-spaces-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              npm run test:e2e
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-functional-spaces-api.log"
+          exit 1
+
+      - name: Опубликовать проверенную ветку
+        shell: bash
+        run: git push origin HEAD:feature/functional-spaces
