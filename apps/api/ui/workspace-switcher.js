@@ -1,12 +1,12 @@
 const docomatorWorkspacePalette = Object.freeze([
-  ["#5B8DEF", "Синий"],
-  ["#7568E8", "Фиолетовый"],
-  ["#BF5F8A", "Розовый"],
-  ["#CF7047", "Терракотовый"],
-  ["#B58B2E", "Золотистый"],
-  ["#3D9472", "Зелёный"],
-  ["#2B8F9F", "Бирюзовый"],
-  ["#6B7280", "Графитовый"]
+  ["#5B8DEF", "Синий", "blue"],
+  ["#7568E8", "Фиолетовый", "violet"],
+  ["#BF5F8A", "Розовый", "pink"],
+  ["#CF7047", "Терракотовый", "terracotta"],
+  ["#B58B2E", "Золотистый", "gold"],
+  ["#3D9472", "Зелёный", "green"],
+  ["#2B8F9F", "Бирюзовый", "teal"],
+  ["#6B7280", "Графитовый", "graphite"]
 ]);
 const docomatorWorkspaceDefaultColor = "#5B8DEF";
 let docomatorWorkspaceMenuReturnFocus = null;
@@ -18,14 +18,17 @@ function docomatorWorkspaceColor(value) {
     : docomatorWorkspaceDefaultColor;
 }
 
-function docomatorWorkspaceColorRgb(value) {
+function docomatorWorkspaceTone(value) {
   const color = docomatorWorkspaceColor(value);
-  return `${Number.parseInt(color.slice(1, 3), 16)} ${Number.parseInt(color.slice(3, 5), 16)} ${Number.parseInt(color.slice(5, 7), 16)}`;
+  return (
+    docomatorWorkspacePalette.find(([candidate]) => candidate === color)?.[2] ||
+    "blue"
+  );
 }
 
-function docomatorWorkspaceStyle(value) {
-  const color = docomatorWorkspaceColor(value);
-  return `--space-color:${color};--space-color-rgb:${docomatorWorkspaceColorRgb(color)}`;
+function docomatorWorkspaceApplyTone(element, value) {
+  if (!element) return;
+  element.dataset.spaceTone = docomatorWorkspaceTone(value);
 }
 
 function docomatorWorkspaceEnsureMarkup() {
@@ -71,15 +74,22 @@ function docomatorWorkspaceEnsureMarkup() {
 
 function docomatorWorkspaceDecorateRows() {
   document.querySelectorAll("[data-space-id]").forEach((row) => {
-    const workspace = state.data.spaces.find((item) => item.id === row.dataset.spaceId);
+    const workspace = state.data.spaces.find(
+      (item) => item.id === row.dataset.spaceId
+    );
     if (!workspace) return;
-    row.setAttribute("style", docomatorWorkspaceStyle(workspace.color));
+    docomatorWorkspaceApplyTone(row, workspace.color);
   });
   const summary = document.querySelector("#spaceSummary");
   const workspace = currentSpace();
-  if (summary && workspace) summary.setAttribute("style", docomatorWorkspaceStyle(workspace.color));
+  if (summary && workspace) {
+    docomatorWorkspaceApplyTone(summary, workspace.color);
+  }
   const actions = summary?.querySelector(".summary-actions");
-  if (actions && !actions.querySelector('[data-workspace-switcher-action="edit"]')) {
+  if (
+    actions &&
+    !actions.querySelector('[data-workspace-switcher-action="edit"]')
+  ) {
     actions.insertAdjacentHTML(
       "afterbegin",
       '<button class="secondary-button" type="button" data-workspace-switcher-action="edit">Название и цвет</button>'
@@ -98,21 +108,23 @@ function docomatorWorkspaceRender() {
 
   if (!workspace) {
     button.hidden = true;
-    list.innerHTML = '<p class="workspace-switcher-empty">Создайте первое пространство.</p>';
+    list.innerHTML =
+      '<p class="workspace-switcher-empty">Создайте первое пространство.</p>';
     return;
   }
 
   const color = docomatorWorkspaceColor(workspace.color);
+  const tone = docomatorWorkspaceTone(color);
   button.hidden = false;
-  button.setAttribute("style", docomatorWorkspaceStyle(color));
+  button.dataset.spaceTone = tone;
+  host.dataset.spaceTone = tone;
   button.title = `Текущее пространство: ${workspace.name}`;
-  button.setAttribute("aria-label", `Текущее пространство: ${workspace.name}. Открыть список.`);
-  label.textContent = workspace.name;
-  document.documentElement.style.setProperty("--current-space-color", color);
-  document.documentElement.style.setProperty(
-    "--current-space-color-rgb",
-    docomatorWorkspaceColorRgb(color)
+  button.setAttribute(
+    "aria-label",
+    `Текущее пространство: ${workspace.name}. Открыть список.`
   );
+  label.textContent = workspace.name;
+  document.documentElement.dataset.currentSpaceTone = tone;
   globalThis.docomatorCurrentSpace = {
     id: workspace.id,
     name: workspace.name,
@@ -122,8 +134,9 @@ function docomatorWorkspaceRender() {
   list.innerHTML = state.data.spaces
     .map((item) => {
       const itemColor = docomatorWorkspaceColor(item.color);
+      const itemTone = docomatorWorkspaceTone(itemColor);
       const active = item.id === state.currentSpaceId;
-      return `<button class="workspace-switcher-option${active ? " is-active" : ""}" type="button" role="option" aria-selected="${String(active)}" data-workspace-switcher-space="${escapeHtml(item.id)}" style="${docomatorWorkspaceStyle(itemColor)}">
+      return `<button class="workspace-switcher-option${active ? " is-active" : ""}" type="button" role="option" aria-selected="${String(active)}" data-workspace-switcher-space="${escapeHtml(item.id)}" data-space-tone="${itemTone}">
         <span class="workspace-switcher-avatar" aria-hidden="true">${escapeHtml((item.name || "П").slice(0, 1).toUpperCase())}</span>
         <span class="workspace-switcher-copy"><strong>${escapeHtml(item.name)}</strong><small>${Number(item.entityCount || 0)} сотрудников · ${Number(item.groupCount || 0)} групп</small></span>
         <span class="workspace-switcher-check" aria-hidden="true">${active ? "✓" : ""}</span>
@@ -143,7 +156,9 @@ function docomatorWorkspaceOpenMenu() {
   menu.hidden = false;
   button.setAttribute("aria-expanded", "true");
   requestAnimationFrame(() =>
-    menu.querySelector('.workspace-switcher-option[aria-selected="true"]')?.focus()
+    menu
+      .querySelector('.workspace-switcher-option[aria-selected="true"]')
+      ?.focus()
   );
 }
 
@@ -166,11 +181,13 @@ function docomatorWorkspaceToggleMenu() {
 const docomatorWorkspaceOriginalFieldHtml = fieldHtml;
 fieldHtml = function fieldHtmlWithWorkspaceColor(definition) {
   const [name, label, type, required, _placeholder, hint] = definition;
-  if (type !== "space-color") return docomatorWorkspaceOriginalFieldHtml(definition);
+  if (type !== "space-color") {
+    return docomatorWorkspaceOriginalFieldHtml(definition);
+  }
   return `<fieldset class="field workspace-color-field"><legend>${escapeHtml(label)}${required ? '<span class="required-marker"> *</span>' : ""}</legend><div class="workspace-color-palette">${docomatorWorkspacePalette
     .map(
-      ([color, colorLabel], index) =>
-        `<label class="workspace-color-choice" title="${escapeHtml(colorLabel)}" style="${docomatorWorkspaceStyle(color)}"><input type="radio" name="${escapeHtml(name)}" value="${color}" ${index === 0 ? "checked" : ""} ${required ? "required" : ""}/><span aria-hidden="true"></span><small>${escapeHtml(colorLabel)}</small></label>`
+      ([color, colorLabel, tone], index) =>
+        `<label class="workspace-color-choice" title="${escapeHtml(colorLabel)}" data-space-tone="${tone}"><input type="radio" name="${escapeHtml(name)}" value="${color}" ${index === 0 ? "checked" : ""} ${required ? "required" : ""}/><span aria-hidden="true"></span><small>${escapeHtml(colorLabel)}</small></label>`
     )
     .join("")}</div><small>${escapeHtml(hint)}</small></fieldset>`;
 };
@@ -202,8 +219,22 @@ dialogs["space-edit"] = {
   success: "Пространство обновлено",
   submit: "Сохранить изменения",
   fields: [
-    ["name", "Название", "text", true, "Инженерная служба", "Название отображается в переключателе на каждом экране."],
-    ["description", "Описание", "textarea", false, "Какие данные находятся в этом пространстве", "Кратко объясните назначение раздела."],
+    [
+      "name",
+      "Название",
+      "text",
+      true,
+      "Инженерная служба",
+      "Название отображается в переключателе на каждом экране."
+    ],
+    [
+      "description",
+      "Описание",
+      "textarea",
+      false,
+      "Какие данные находятся в этом пространстве",
+      "Кратко объясните назначение раздела."
+    ],
     docomatorWorkspaceColorField
   ],
   payload: (values) => ({
@@ -219,7 +250,11 @@ dialogs["space-edit"] = {
 const docomatorWorkspaceOriginalOpenDialog = openDialog;
 openDialog = function openDialogWithWorkspaceDefaults(kind) {
   if (kind === "space-edit" && !currentSpace()) {
-    notify("💡", "Сначала создайте пространство", "После этого можно задать ему название и цвет.");
+    notify(
+      "💡",
+      "Сначала создайте пространство",
+      "После этого можно задать ему название и цвет."
+    );
     docomatorWorkspaceOriginalOpenDialog("space");
     return;
   }
@@ -285,11 +320,16 @@ document.addEventListener("click", (event) => {
   }
 
   const host = document.querySelector(".workspace-switcher-host");
-  if (host && !host.contains(event.target)) docomatorWorkspaceCloseMenu(false);
+  if (host && !host.contains(event.target)) {
+    docomatorWorkspaceCloseMenu(false);
+  }
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && document.querySelector("#workspaceSwitcherMenu")?.hidden === false) {
+  if (
+    event.key === "Escape" &&
+    document.querySelector("#workspaceSwitcherMenu")?.hidden === false
+  ) {
     event.preventDefault();
     docomatorWorkspaceCloseMenu(true);
   }
