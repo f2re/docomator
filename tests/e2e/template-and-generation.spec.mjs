@@ -92,7 +92,7 @@ async function bindEmployeeField(page, { structureReady = false } = {}) {
     });
     await expect(page.locator("#documentFieldSave")).toBeEnabled();
   }
-  await page.locator("#documentFieldProperty").selectOption("__new__");
+  await page.locator("#documentFieldProperty").selectOption("__new__", { force: true });
   await page.locator("#documentFieldLabel").fill("ФИО");
   await page.locator("#documentFieldType").selectOption("string");
   await page.locator("#documentPropertyConfirm").check();
@@ -196,7 +196,7 @@ test("мастер сохраняет ограниченные настройк�
     control.setSelectionRange(start, start + 6);
     control.dispatchEvent(new Event("select", { bubbles: true }));
   });
-  await page.locator("#documentFieldProperty").selectOption("__new__");
+  await page.locator("#documentFieldProperty").selectOption("__new__", { force: true });
   await page.locator("#documentFieldLabel").fill("Ставка");
   await page.locator("#documentFieldType").selectOption("number");
   await expect(page.locator("#documentFieldDecimalPlaces")).toBeVisible();
@@ -234,7 +234,7 @@ test("мастер сохраняет повторяемую строку DOCX �
     control.setSelectionRange(start, start + 6);
     control.dispatchEvent(new Event("select", { bubbles: true }));
   });
-  await page.locator("#documentFieldProperty").selectOption("__new__");
+  await page.locator("#documentFieldProperty").selectOption("__new__", { force: true });
   await page.locator("#documentFieldLabel").fill("ФИО");
   await page.locator("#documentFieldType").selectOption("string");
   await page.locator("#documentPropertyConfirm").check();
@@ -283,7 +283,7 @@ test("мастер XLSX выбирает повторяемый диапазон
     .locator("#documentFieldRepeatEnd")
     .selectOption("xl/worksheets/sheet1.xml#cell:C2");
 
-  await page.locator("#documentFieldProperty").selectOption("__new__");
+  await page.locator("#documentFieldProperty").selectOption("__new__", { force: true });
   await page.locator("#documentFieldLabel").fill("ФИО");
   await page.locator("#documentFieldType").selectOption("string");
   await page.locator("#documentPropertyConfirm").check();
