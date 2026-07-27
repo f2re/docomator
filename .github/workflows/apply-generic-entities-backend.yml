@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/ci/apply-generic-entities-backend.py
       - .github/workflows/apply-generic-entities-backend.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/ci/apply-generic-entities-backend.py
+      - .github/workflows/apply-generic-entities-backend.yml
 
 permissions:
   contents: write
