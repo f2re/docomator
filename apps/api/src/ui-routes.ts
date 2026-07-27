@@ -42,6 +42,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
   "/ui/styles.css": {
     fileName: "styles.css",
     appendFileNames: [
+      "searchable-select.css",
       "spaces.css",
       "workspace-switcher.css",
       "intake.css",
@@ -76,8 +77,10 @@ const assets: Readonly<Record<string, UiAsset>> = {
     cacheControl: "no-store"
   },
   "/ui/app.js": {
-    fileName: "app.js",
+    fileName: "field-groups-ui.js",
     appendFileNames: [
+      "searchable-select.js",
+      "app.js",
       "operator-workflows.js",
       "operator-workflows-recovery.js",
       "group-management-v2.js",

@@ -8,8 +8,11 @@ import {
   KnowledgeNotFoundError,
   KnowledgeRegistry,
   KnowledgeValidationError,
+  normalizePropertyUiGroup,
+  propertyUiGroupFromValidation,
   type MutationContext,
-  type PropertyDefinitionRecord
+  type PropertyDefinitionRecord,
+  type PropertyUiGroup
 } from "./knowledge.js";
 import { parseJson, stringifyJson, toJsonValue, type JsonValue } from "./json.js";
 import { DomainEventOutbox } from "./outbox.js";
@@ -27,6 +30,7 @@ export interface NewEmployeeFieldDefinitionInput {
   label: string;
   valueType: string;
   unit?: string | null;
+  uiGroup?: string;
 }
 
 export interface CreateEmployeeFieldInput {
@@ -145,6 +149,7 @@ interface EmployeePropertyMatchRow {
   label: string;
   value_type: string;
   applies_to_json: string;
+  validation_json: string;
 }
 
 interface EmployeeSummaryRow extends EmployeeRow {
@@ -163,6 +168,7 @@ type NormalizedCreateField =
         label: string;
         valueType: PropertyValueType;
         unit: string | null;
+        uiGroup: PropertyUiGroup;
       };
       value: JsonValue;
     };
@@ -321,7 +327,8 @@ function normalizeCreateInput(input: CreateEmployeeInput): NormalizedCreateInput
       definition: {
         label: requiredText(definition.label, `fields[${index}].definition.label`),
         valueType: valueType(definition.valueType),
-        unit: optionalText(definition.unit, `fields[${index}].definition.unit`, 80)
+        unit: optionalText(definition.unit, `fields[${index}].definition.unit`, 80),
+        uiGroup: normalizePropertyUiGroup(definition.uiGroup ?? "unassigned")
       },
       value
     };
@@ -370,7 +377,8 @@ function normalizeUpdateInput(input: UpdateEmployeeInput): NormalizedUpdateInput
       definition: {
         label: requiredText(definition.label, `fields[${index}].definition.label`),
         valueType: valueType(definition.valueType),
-        unit: optionalText(definition.unit, `fields[${index}].definition.unit`, 80)
+        unit: optionalText(definition.unit, `fields[${index}].definition.unit`, 80),
+        uiGroup: normalizePropertyUiGroup(definition.uiGroup ?? "unassigned")
       },
       value
     };
@@ -943,6 +951,7 @@ export class EmployeeRegistry {
       label: string;
       valueType: PropertyValueType;
       unit: string | null;
+      uiGroup: PropertyUiGroup;
     },
     context: NormalizedContext
   ): PropertyDefinitionRecord {
@@ -950,7 +959,7 @@ export class EmployeeRegistry {
     const matches = this.store.execute((connection) => {
       const rows = connection
         .prepare(`
-          SELECT key, label, value_type, applies_to_json
+          SELECT key, label, value_type, applies_to_json, validation_json
           FROM property_definitions
           ORDER BY key ASC
         `)
@@ -960,7 +969,8 @@ export class EmployeeRegistry {
         const appliesTo = stringArray(parseJson(row.applies_to_json), "appliesTo");
         return (
           appliesTo.includes(STANDARD_PERSON_TYPE_KEY) &&
-          normalizedLabel(row.label) === targetLabel
+          normalizedLabel(row.label) === targetLabel &&
+          propertyUiGroupFromValidation(parseJson(row.validation_json)) === input.uiGroup
         );
       });
     });
@@ -991,7 +1001,8 @@ export class EmployeeRegistry {
             unit: input.unit,
             cardinality: "single",
             sensitivity: "personal",
-            appliesTo: [STANDARD_PERSON_TYPE_KEY]
+            appliesTo: [STANDARD_PERSON_TYPE_KEY],
+            validation: { uiGroup: input.uiGroup }
           },
           context
         );

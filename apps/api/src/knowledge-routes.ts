@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
+  PROPERTY_UI_GROUPS,
   PROPERTY_VALUE_TYPES,
   type EntityStatus,
   type JsonValue,
@@ -54,6 +55,10 @@ interface CreatePropertyDefinitionBody {
   appliesTo?: string[];
   validation?: { [key: string]: JsonValue };
   aliases?: string[];
+}
+
+interface UpdatePropertyUiGroupBody {
+  uiGroup: string;
 }
 
 interface CreateEntityBody {
@@ -227,6 +232,37 @@ export function registerKnowledgeRoutes(
       responseEnvelope(
         request,
         registry.getPropertyDefinition(request.params.key)
+      )
+  );
+
+  app.put<{ Params: KeyParams; Body: UpdatePropertyUiGroupBody }>(
+    "/api/v1/knowledge/property-definitions/:key/group",
+    {
+      schema: {
+        params: {
+          type: "object",
+          additionalProperties: false,
+          required: ["key"],
+          properties: { key: stableKeySchema }
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["uiGroup"],
+          properties: {
+            uiGroup: { type: "string", enum: [...PROPERTY_UI_GROUPS] }
+          }
+        }
+      }
+    },
+    async (request) =>
+      responseEnvelope(
+        request,
+        registry.updatePropertyDefinitionUiGroup(
+          request.params.key,
+          request.body.uiGroup,
+          mutationContextFromRequest(request)
+        )
       )
   );
 

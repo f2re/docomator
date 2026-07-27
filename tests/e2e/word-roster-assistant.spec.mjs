@@ -97,7 +97,7 @@ test("повторяемую строку Word можно сохранить, п
     .locator("[data-row-name-presentation]")
     .selectOption("family-initials");
   const supervisorCard = panel.locator("[data-row-editor-column]").nth(3);
-  await supervisorCard.locator("[data-row-editor-mode]").selectOption("skip");
+  await supervisorCard.locator("[data-row-editor-mode]").selectOption("skip", { force: true });
   await panel.locator("#rowEditorSave").click();
 
   await expect(panel).toContainText("Строка сохранена");

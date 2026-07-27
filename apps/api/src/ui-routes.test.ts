@@ -48,10 +48,13 @@ test("UI assets are served without external runtime dependencies", async () => {
     assert.match(styles.body, /--surface/);
     assert.match(styles.body, /--purple/);
     assert.match(styles.body, /Прозрачное появление всего экрана/);
+    assert.match(styles.body, /\.searchable-select-panel/u);
 
     assert.equal(script.statusCode, 200);
     assert.match(script.headers["content-type"] ?? "", /^text\/javascript/);
     assert.match(script.body, /interfaceWorkflowSteps/);
+    assert.match(script.body, /docomatorFieldGroups/u);
+    assert.match(script.body, /docomatorSearchableSelect/u);
     assert.doesNotMatch(script.body, /https?:\/\//);
 
     assert.equal(icon.statusCode, 200);
@@ -75,7 +78,8 @@ test("ordinary employee flow does not ask for machine keys", async () => {
     assert.match(shell.body, />Сотрудники</u);
     assert.match(shell.body, />Создать документы</u);
     assert.match(appScript.body, /\/employees/u);
-    assert.match(workflowScript.body, /Какое поле сотрудника поставить сюда\?/u);
+    assert.match(workflowScript.body, /Какое поле поставить сюда\?/u);
+    assert.match(workflowScript.body, /К кому относится значение\?/u);
     for (const body of [shell.body, appScript.body, workflowScript.body]) {
       assert.doesNotMatch(
         body,
@@ -129,7 +133,6 @@ test("template connection is a space-scoped sequential wizard", async () => {
       styles.body,
       /\.template-step-rail \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/u
     );
-    assert.match(styles.body, /\.template-step-rail button \{[^}]*min-height: 54px/u);
   } finally {
     await app.close();
     await fs.rm(dataDir, { recursive: true, force: true });

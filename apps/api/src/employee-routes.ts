@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
+  PROPERTY_UI_GROUPS,
   PROPERTY_VALUE_TYPES,
   type EmployeeRegistry,
   type EmployeeStatus
@@ -25,6 +26,7 @@ interface NewFieldDefinitionBody {
   label: string;
   valueType: string;
   unit?: string;
+  uiGroup?: string;
 }
 
 interface CreateEmployeeFieldBody {
@@ -78,7 +80,8 @@ const newFieldDefinitionSchema = {
   properties: {
     label: { type: "string", minLength: 1, maxLength: 500 },
     valueType: { type: "string", enum: [...PROPERTY_VALUE_TYPES] },
-    unit: { type: "string", maxLength: 80 }
+    unit: { type: "string", maxLength: 80 },
+    uiGroup: { type: "string", enum: [...PROPERTY_UI_GROUPS] }
   }
 } as const;
 
