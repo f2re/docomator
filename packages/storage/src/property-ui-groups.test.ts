@@ -19,6 +19,11 @@ function context(correlationId: string) {
   };
 }
 
+function validationObject(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as Record<string, unknown>;
+}
+
 test("property UI group can be assigned without losing validation rules", () => {
   const fixture = createMigratedTestStore();
   try {
@@ -32,7 +37,7 @@ test("property UI group can be assigned without losing validation rules", () => 
         validation: { minLength: 2 }
       },
       context("create-property")
-    ).record;
+    );
     assert.equal(propertyUiGroupFromValidation(created.validation), "unassigned");
 
     const updated = registry.updatePropertyDefinitionUiGroup(
@@ -40,9 +45,10 @@ test("property UI group can be assigned without losing validation rules", () => 
       "teacher",
       context("classify-property")
     );
+    const validation = validationObject(updated.validation);
     assert.equal(updated.version, 2);
-    assert.equal(updated.validation["minLength"], 2);
-    assert.equal(updated.validation["uiGroup"], "teacher");
+    assert.equal(validation.minLength, 2);
+    assert.equal(validation.uiGroup, "teacher");
     assert.equal(propertyUiGroupFromValidation(updated.validation), "teacher");
 
     assert.throws(
