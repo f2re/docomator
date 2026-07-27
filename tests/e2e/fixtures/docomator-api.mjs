@@ -289,7 +289,7 @@ export function createDocomatorScenario(options = {}) {
     primary,
     secondary,
     includeSecondSpace: Boolean(options.secondSpace),
-    properties: [],
+    properties: Array.isArray(options.properties) ? options.properties.map((property) => structuredClone(property)) : [],
     failTrialRemaining: options.failTrialOnce ? 1 : 0,
     failOperationsRemaining: options.failOperationsOnce ? 1 : 0,
     operationRequests: [],
@@ -420,6 +420,20 @@ export async function installDocomatorApiMock(page, options = {}) {
       };
       state.properties.push(definition);
       data = definition;
+    } else if (
+      /\/knowledge\/property-definitions\/[^/]+\/group$/.test(path) &&
+      method === "PUT"
+    ) {
+      const key = decodeURIComponent(path.split("/").at(-2));
+      const payload = await jsonBody(request);
+      const definition = state.properties.find((candidate) => candidate.key === key);
+      if (definition) {
+        definition.validation = {
+          ...(definition.validation || {}),
+          uiGroup: payload.uiGroup
+        };
+      }
+      data = definition;
     } else if (path === "/api/v1/spaces") {
       data = [
         {
@@ -453,7 +467,10 @@ export async function installDocomatorApiMock(page, options = {}) {
               label: field.definition.label,
               valueType: field.definition.valueType,
               sensitivity: "personal",
-              appliesTo: ["person"]
+              appliesTo: ["person"],
+              validation: {
+                uiGroup: field.definition.uiGroup || "unassigned"
+              }
             };
             state.properties.push(definition);
             return {
