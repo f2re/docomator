@@ -262,10 +262,13 @@ export class AssistedDataImportRegistry {
     input: AssistedExecuteDataImportInput,
     context: MutationContext
   ): PreparedAssistedImport {
+    const entityTypeKey = (input.entityTypeKey ?? "person").trim().toLowerCase();
     const definitions = this.knowledge.listPropertyDefinitions(500);
     const byKey = new Map(definitions.map((definition) => [definition.key, definition]));
     const byLabel = new Map<string, PropertyDefinitionRecord[]>();
     for (const definition of definitions) {
+      const appliesTo = Array.isArray(definition.appliesTo) ? definition.appliesTo : [];
+      if (appliesTo.length > 0 && !appliesTo.includes(entityTypeKey)) continue;
       const key = normalizeIdentity(definition.label);
       const list = byLabel.get(key) ?? [];
       list.push(definition);
@@ -328,8 +331,9 @@ export class AssistedDataImportRegistry {
           {
             label: requestedLabel,
             valueType,
-            sensitivity: source.sensitivity ?? "personal",
-            appliesTo: [input.entityTypeKey ?? "person"],
+            sensitivity:
+              source.sensitivity ?? (entityTypeKey === "person" ? "personal" : "internal"),
+            appliesTo: [entityTypeKey],
             aliases,
             validation:
               valueType === "enum"

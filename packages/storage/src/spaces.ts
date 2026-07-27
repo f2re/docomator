@@ -1112,8 +1112,15 @@ export class SpaceRegistry {
     return this.store.transaction((connection) => {
       const space = requireSpace(connection, spaceIdentity);
       const group = requireGroup(connection, space.id, groupIdValue);
+      const entityTypes = new Set<string>();
       for (const entityId of entityIds) {
-        requireEntityInSpace(connection, space.id, entityId);
+        const entity = requireEntityInSpace(connection, space.id, entityId);
+        entityTypes.add(entity.entity_type_key);
+      }
+      if (entityTypes.size > 1) {
+        throw new SpaceValidationError(
+          "Одна группа может содержать только объекты одного типа. Создайте отдельные группы для разных типов данных."
+        );
       }
 
       connection.prepare("DELETE FROM audience_group_members WHERE group_id = ?").run(group.id);
@@ -1262,9 +1269,16 @@ export class SpaceRegistry {
 
       if (rows.length === 0) {
         throw new SpaceValidationError(
-          "Audience is empty. Select at least one active member before creating a snapshot."
+          "Состав пуст. Выберите хотя бы один активный объект перед созданием снимка."
         );
       }
+      const entityTypes = [...new Set(rows.map((row) => row.entity_type_key))];
+      if (entityTypes.length > 1) {
+        throw new SpaceValidationError(
+          "Один выпуск документов может использовать только объекты одного типа. Выберите тип данных или создайте отдельные группы."
+        );
+      }
+      entityTypeKey = entityTypes[0] ?? entityTypeKey;
 
       const criteria = toJsonValue({
         source: input.source,

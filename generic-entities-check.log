@@ -1,0 +1,2429 @@
+
+> docomator@0.1.0-alpha.0 check
+> npm run clean && npm run build && npm run test && npm run check:examples && npm run test:release-gate && npm run test:release-gate:libreoffice && npm run check:docs && npm run check:no-iam && npm run check:shell && npm run check:runtime && npm run check:ui && npm run check:language
+
+
+> docomator@0.1.0-alpha.0 clean
+> node scripts/ci/clean.mjs
+
+
+> docomator@0.1.0-alpha.0 build
+> npm run build -w @docomator/contracts && npm run build -w @docomator/config && npm run build -w @docomator/storage && npm run build -w @docomator/document-intake && npm run build -w @docomator/template-compiler && npm run build -w @docomator/api && npm run build -w @docomator/worker
+
+
+> @docomator/contracts@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/config@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/storage@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/document-intake@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/template-compiler@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/api@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> @docomator/worker@0.1.0-alpha.0 build
+> tsc -p tsconfig.json
+
+
+> docomator@0.1.0-alpha.0 test
+> npm run test -w @docomator/contracts && npm run test -w @docomator/config && npm run test -w @docomator/storage && npm run test -w @docomator/document-intake && npm run test -w @docomator/template-compiler && npm run test -w @docomator/api && npm run test -w @docomator/worker && node --test scripts/runtime/*.test.mjs scripts/offline/*.test.mjs scripts/ci/*.test.mjs
+
+
+> @docomator/contracts@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+TAP version 13
+# Subtest: service contract contains the bootstrap processes
+ok 1 - service contract contains the bootstrap processes
+  ---
+  duration_ms: 1.210649
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 57.569227
+
+> @docomator/config@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+TAP version 13
+# Subtest: api config applies safe defaults
+ok 1 - api config applies safe defaults
+  ---
+  duration_ms: 1.281081
+  type: 'test'
+  ...
+# Subtest: api config resolves installed release metadata path
+ok 2 - api config resolves installed release metadata path
+  ---
+  duration_ms: 0.268161
+  type: 'test'
+  ...
+# Subtest: invalid ports are rejected
+ok 3 - invalid ports are rejected
+  ---
+  duration_ms: 1.174081
+  type: 'test'
+  ...
+# Subtest: worker queue timings and identity are configurable
+ok 4 - worker queue timings and identity are configurable
+  ---
+  duration_ms: 0.344934
+  type: 'test'
+  ...
+# Subtest: worker retry range must be coherent
+ok 5 - worker retry range must be coherent
+  ---
+  duration_ms: 0.185957
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 65.613162
+
+> @docomator/storage@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+TAP version 13
+# (node:2583) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: two worker connections cannot own the same active lease
+ok 1 - two worker connections cannot own the same active lease
+  ---
+  duration_ms: 491.342083
+  type: 'test'
+  ...
+# (node:2584) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: assisted import plans without writes and creates typed fields, aliases and an expandable list
+ok 2 - assisted import plans without writes and creates typed fields, aliases and an expandable list
+  ---
+  duration_ms: 550.661089
+  type: 'test'
+  ...
+# Subtest: closed imported list rejects a value outside configured options without creating a person
+ok 3 - closed imported list rejects a value outside configured options without creating a person
+  ---
+  duration_ms: 439.045449
+  type: 'test'
+  ...
+# Subtest: assisted import resolves equal labels inside the selected arbitrary entity type
+ok 4 - assisted import resolves equal labels inside the selected arbitrary entity type
+  ---
+  duration_ms: 421.482222
+  type: 'test'
+  ...
+# (node:2590) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: keyless employee import plans without writes and creates personal fields and a named group
+ok 5 - keyless employee import plans without writes and creates personal fields and a named group
+  ---
+  duration_ms: 531.21347
+  type: 'test'
+  ...
+# Subtest: duplicate identity is reported in Russian and preview leaves no data
+ok 6 - duplicate identity is reported in Russian and preview leaves no data
+  ---
+  duration_ms: 430.093815
+  type: 'test'
+  ...
+# Subtest: blank cells do not clear values and a failed new row is rolled back
+ok 7 - blank cells do not clear values and a failed new row is rolled back
+  ---
+  duration_ms: 424.041516
+  type: 'test'
+  ...
+# Subtest: group conflict is validated before rows and leaves history, audit and outbox unchanged
+ok 8 - group conflict is validated before rows and leaves history, audit and outbox unchanged
+  ---
+  duration_ms: 428.32979
+  type: 'test'
+  ...
+# Subtest: finalization failure rolls back imported rows, history, audit and outbox
+ok 9 - finalization failure rolls back imported rows, history, audit and outbox
+  ---
+  duration_ms: 386.032507
+  type: 'test'
+  ...
+# (node:2604) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: transactions commit, roll back and isolate nested savepoints
+ok 10 - transactions commit, roll back and isolate nested savepoints
+  ---
+  duration_ms: 3.641536
+  type: 'test'
+  ...
+# Subtest: asynchronous transaction callbacks are rejected
+ok 11 - asynchronous transaction callbacks are rejected
+  ---
+  duration_ms: 0.449589
+  type: 'test'
+  ...
+# (node:2611) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: accepted source is stored immutably with audit and outbox
+ok 12 - accepted source is stored immutably with audit and outbox
+  ---
+  duration_ms: 451.315499
+  type: 'test'
+  ...
+# Subtest: quarantine records remain isolated by space
+ok 13 - quarantine records remain isolated by space
+  ---
+  duration_ms: 412.465353
+  type: 'test'
+  ...
+# Subtest: rejected or checksum-changed documents cannot be quarantined
+ok 14 - rejected or checksum-changed documents cannot be quarantined
+  ---
+  duration_ms: 408.903335
+  type: 'test'
+  ...
+# (node:2622) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: same-label teacher and student fields remain separate definitions
+ok 15 - same-label teacher and student fields remain separate definitions
+  ---
+  duration_ms: 439.334089
+  type: 'test'
+  ...
+# (node:2629) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: standard person type and generated employee field keys require no machine input
+ok 16 - standard person type and generated employee field keys require no machine input
+  ---
+  duration_ms: 418.772446
+  type: 'test'
+  ...
+# Subtest: generated field keys retry collisions and employee creates are idempotent
+ok 17 - generated field keys retry collisions and employee creates are idempotent
+  ---
+  duration_ms: 408.608892
+  type: 'test'
+  ...
+# Subtest: new employee fields reuse one normalized label and reject type conflicts
+ok 18 - new employee fields reuse one normalized label and reject type conflicts
+  ---
+  duration_ms: 422.330211
+  type: 'test'
+  ...
+# Subtest: employee create and update roll back entity, definitions and values atomically
+ok 19 - employee create and update roll back entity, definitions and values atomically
+  ---
+  duration_ms: 415.190291
+  type: 'test'
+  ...
+# Subtest: employee read and update deny cross-space access
+ok 20 - employee read and update deny cross-space access
+  ---
+  duration_ms: 424.085096
+  type: 'test'
+  ...
+# Subtest: employee updates replay idempotently without new versions, events or audit
+ok 21 - employee updates replay idempotently without new versions, events or audit
+  ---
+  duration_ms: 411.339222
+  type: 'test'
+  ...
+# Subtest: employee resource fields stay in one space and reject unscoped files
+ok 22 - employee resource fields stay in one space and reject unscoped files
+  ---
+  duration_ms: 419.740672
+  type: 'test'
+  ...
+# (node:2636) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: email recipients generate opaque keys when omitted and keep explicit keys
+ok 23 - email recipients generate opaque keys when omitted and keep explicit keys
+  ---
+  duration_ms: 421.026877
+  type: 'test'
+  ...
+# (node:2643) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: knowledge mutations append outbox and audit records atomically
+ok 24 - knowledge mutations append outbox and audit records atomically
+  ---
+  duration_ms: 433.923736
+  type: 'test'
+  ...
+# Subtest: property scope and enum validation are enforced before mutation
+ok 25 - property scope and enum validation are enforced before mutation
+  ---
+  duration_ms: 428.505153
+  type: 'test'
+  ...
+# Subtest: stable keys are unique and invalid keys are rejected
+ok 26 - stable keys are unique and invalid keys are rejected
+  ---
+  duration_ms: 400.832021
+  type: 'test'
+  ...
+# Subtest: ordinary knowledge creates allocate opaque keys and retry collisions
+ok 27 - ordinary knowledge creates allocate opaque keys and retry collisions
+  ---
+  duration_ms: 419.80541
+  type: 'test'
+  ...
+# (node:2650) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: multi-field version stores ordered field rows, files, audit and event
+ok 28 - multi-field version stores ordered field rows, files, audit and event
+  ---
+  duration_ms: 459.822156
+  type: 'test'
+  ...
+# Subtest: multi-field version validates all fields and exact read-back values
+ok 29 - multi-field version validates all fields and exact read-back values
+  ---
+  duration_ms: 444.739616
+  type: 'test'
+  ...
+# Subtest: multi-field versions are immutable and hidden from another space
+ok 30 - multi-field versions are immutable and hidden from another space
+  ---
+  duration_ms: 429.358988
+  type: 'test'
+  ...
+# Subtest: repeat contract is frozen in multi-field version and release candidate
+ok 31 - repeat contract is frozen in multi-field version and release candidate
+  ---
+  duration_ms: 421.319383
+  type: 'test'
+  ...
+# Subtest: XLSX repeat contract is validated and frozen with its draft
+ok 32 - XLSX repeat contract is validated and frozen with its draft
+  ---
+  duration_ms: 430.666438
+  type: 'test'
+  ...
+# (node:2661) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: operation center combines persistent workflows and isolates spaces
+ok 33 - operation center combines persistent workflows and isolates spaces
+  ---
+  duration_ms: 5.989046
+  type: 'test'
+  ...
+# Subtest: operation center validates its bounded limit
+ok 34 - operation center validates its bounded limit
+  ---
+  duration_ms: 1.512365
+  type: 'test'
+  ...
+# (node:2668) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: business mutation, outbox event and audit share one transaction
+ok 35 - business mutation, outbox event and audit share one transaction
+  ---
+  duration_ms: 407.303213
+  type: 'test'
+  ...
+# Subtest: outbox append is idempotent and rejects conflicting reuse
+ok 36 - outbox append is idempotent and rejects conflicting reuse
+  ---
+  duration_ms: 405.229259
+  type: 'test'
+  ...
+# Subtest: outbox leases provide at-least-once retry and dead-letter semantics
+ok 37 - outbox leases provide at-least-once retry and dead-letter semantics
+  ---
+  duration_ms: 407.270605
+  type: 'test'
+  ...
+# Subtest: outbox retry delay and publish acknowledgement are persisted
+ok 38 - outbox retry delay and publish acknowledgement are persisted
+  ---
+  duration_ms: 407.780788
+  type: 'test'
+  ...
+# (node:2676) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: property UI group can be assigned without losing validation rules
+ok 39 - property UI group can be assigned without losing validation rules
+  ---
+  duration_ms: 411.886768
+  type: 'test'
+  ...
+# (node:2683) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: queue enqueue is idempotent and canonical JSON ignores object key order
+ok 40 - queue enqueue is idempotent and canonical JSON ignores object key order
+  ---
+  duration_ms: 410.519162
+  type: 'test'
+  ...
+# Subtest: queue claims by priority and completes only with a valid lease
+ok 41 - queue claims by priority and completes only with a valid lease
+  ---
+  duration_ms: 406.080544
+  type: 'test'
+  ...
+# Subtest: expired leases are retried and then dead-lettered at max attempts
+ok 42 - expired leases are retried and then dead-lettered at max attempts
+  ---
+  duration_ms: 405.877287
+  type: 'test'
+  ...
+# Subtest: retry delay and permanent failure are persisted
+ok 43 - retry delay and permanent failure are persisted
+  ---
+  duration_ms: 404.089037
+  type: 'test'
+  ...
+# (node:2690) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: spaces isolate entities and preserve default ownership
+ok 44 - spaces isolate entities and preserve default ownership
+  ---
+  duration_ms: 419.183488
+  type: 'test'
+  ...
+# Subtest: space colors persist, normalize and can be updated without moving data
+ok 45 - space colors persist, normalize and can be updated without moving data
+  ---
+  duration_ms: 402.441968
+  type: 'test'
+  ...
+# Subtest: audience snapshots build one-per-member and aggregate document plans
+ok 46 - audience snapshots build one-per-member and aggregate document plans
+  ---
+  duration_ms: 414.834034
+  type: 'test'
+  ...
+# Subtest: cross-space members are rejected before group or snapshot mutation
+ok 47 - cross-space members are rejected before group or snapshot mutation
+  ---
+  duration_ms: 406.191482
+  type: 'test'
+  ...
+# Subtest: legacy space memberships do not create or restrict application access
+ok 48 - legacy space memberships do not create or restrict application access
+  ---
+  duration_ms: 427.780236
+  type: 'test'
+  ...
+# Subtest: groups and document snapshots keep one arbitrary entity type
+ok 49 - groups and document snapshots keep one arbitrary entity type
+  ---
+  duration_ms: 473.394935
+  type: 'test'
+  ...
+# Subtest: property codecs validate values and create typed projections
+ok 50 - property codecs validate values and create typed projections
+  ---
+  duration_ms: 3.018588
+  type: 'test'
+  ...
+# Subtest: content-addressed object storage is immutable and deduplicated
+ok 51 - content-addressed object storage is immutable and deduplicated
+  ---
+  duration_ms: 15.808167
+  type: 'test'
+  ...
+# (node:2708) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: draft creation is idempotent and preserves verified structure
+ok 52 - draft creation is idempotent and preserves verified structure
+  ---
+  duration_ms: 420.374431
+  type: 'test'
+  ...
+# Subtest: field binding is stored once and remains scoped to the draft structure
+ok 53 - field binding is stored once and remains scoped to the draft structure
+  ---
+  duration_ms: 398.002175
+  type: 'test'
+  ...
+# Subtest: drafts and fields cannot be resolved through another space
+ok 54 - drafts and fields cannot be resolved through another space
+  ---
+  duration_ms: 421.64452
+  type: 'test'
+  ...
+# Subtest: object store reads by SHA-256 and detects an invalid identifier
+ok 55 - object store reads by SHA-256 and detects an invalid identifier
+  ---
+  duration_ms: 469.057744
+  type: 'test'
+  ...
+# (node:2719) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: preview request is idempotent and enqueues one persistent job
+ok 56 - preview request is idempotent and enqueues one persistent job
+  ---
+  duration_ms: 442.571917
+  type: 'test'
+  ...
+# Subtest: failed preview can be explicitly retried with a new job attempt
+ok 57 - failed preview can be explicitly retried with a new job attempt
+  ---
+  duration_ms: 482.648186
+  type: 'test'
+  ...
+# Subtest: ready PDF is verified, stored and required for activation
+ok 58 - ready PDF is verified, stored and required for activation
+  ---
+  duration_ms: 448.500805
+  type: 'test'
+  ...
+# Subtest: invalid PDF and cross-space identifiers are rejected
+ok 59 - invalid PDF and cross-space identifiers are rejected
+  ---
+  duration_ms: 426.376886
+  type: 'test'
+  ...
+# (node:2730) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: single and multi-field tested versions share one release catalog
+ok 60 - single and multi-field tested versions share one release catalog
+  ---
+  duration_ms: 498.750801
+  type: 'test'
+  ...
+# Subtest: tested version activates directly while PDF remains optional
+ok 61 - tested version activates directly while PDF remains optional
+  ---
+  duration_ms: 412.185258
+  type: 'test'
+  ...
+# Subtest: XLSX _AI_META bindings use manifest v5 while legacy bindings stay on v4
+ok 62 - XLSX _AI_META bindings use manifest v5 while legacy bindings stay on v4
+  ---
+  duration_ms: 364.125276
+  type: 'test'
+  ...
+# Subtest: formatter contracts stay immutable and constrained across release rows
+ok 63 - formatter contracts stay immutable and constrained across release rows
+  ---
+  duration_ms: 329.113402
+  type: 'test'
+  ...
+# Subtest: document schedules generate opaque keys when omitted and keep explicit keys
+ok 64 - document schedules generate opaque keys when omitted and keep explicit keys
+  ---
+  duration_ms: 310.813516
+  type: 'test'
+  ...
+# Subtest: release previews stay isolated by space and validate version kind
+ok 65 - release previews stay isolated by space and validate version kind
+  ---
+  duration_ms: 253.893756
+  type: 'test'
+  ...
+# (node:2737) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: tested version stores immutable compiled and trial objects
+ok 66 - tested version stores immutable compiled and trial objects
+  ---
+  duration_ms: 447.340068
+  type: 'test'
+  ...
+# Subtest: a different trial output creates the next immutable version
+ok 67 - a different trial output creates the next immutable version
+  ---
+  duration_ms: 380.424017
+  type: 'test'
+  ...
+# Subtest: tested versions are hidden from another space and immutable in SQLite
+ok 68 - tested versions are hidden from another space and immutable in SQLite
+  ---
+  duration_ms: 324.259586
+  type: 'test'
+  ...
+# Subtest: tested version preserves leading and trailing spaces exactly
+ok 69 - tested version preserves leading and trailing spaces exactly
+  ---
+  duration_ms: 321.745401
+  type: 'test'
+  ...
+1..69
+# tests 69
+# suites 0
+# pass 69
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9979.107958
+
+> @docomator/document-intake@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+TAP version 13
+# Subtest: accepts a minimal DOCX package and inventories its parts
+ok 1 - accepts a minimal DOCX package and inventories its parts
+  ---
+  duration_ms: 25.300044
+  type: 'test'
+  ...
+# Subtest: reports external relationships without loading them
+ok 2 - reports external relationships without loading them
+  ---
+  duration_ms: 6.369802
+  type: 'test'
+  ...
+# Subtest: rejects macro-enabled package content
+ok 3 - rejects macro-enabled package content
+  ---
+  duration_ms: 3.683914
+  type: 'test'
+  ...
+# Subtest: returns a compatibility rejection when a required OOXML part is missing
+ok 4 - returns a compatibility rejection when a required OOXML part is missing
+  ---
+  duration_ms: 3.268948
+  type: 'test'
+  ...
+# Subtest: rejects path traversal and duplicate package parts
+ok 5 - rejects path traversal and duplicate package parts
+  ---
+  duration_ms: 4.69333
+  type: 'test'
+  ...
+# Subtest: rejects encrypted parts and symbolic links
+ok 6 - rejects encrypted parts and symbolic links
+  ---
+  duration_ms: 6.0583
+  type: 'test'
+  ...
+# Subtest: enforces part count and compression ratio limits
+ok 7 - enforces part count and compression ratio limits
+  ---
+  duration_ms: 11.45255
+  type: 'test'
+  ...
+# Subtest: rejects unsupported extensions and invalid ZIP signatures with Russian messages
+ok 8 - rejects unsupported extensions and invalid ZIP signatures with Russian messages
+  ---
+  duration_ms: 0.495546
+  type: 'test'
+  ...
+# Subtest: DOCX structure contains stable paragraphs, runs and table coordinates
+ok 9 - DOCX structure contains stable paragraphs, runs and table coordinates
+  ---
+  duration_ms: 31.941547
+  type: 'test'
+  ...
+# Subtest: XLSX structure resolves shared strings, values and formulas
+ok 10 - XLSX structure resolves shared strings, values and formulas
+  ---
+  duration_ms: 9.557228
+  type: 'test'
+  ...
+# Subtest: structure response is truncated without losing total counters
+ok 11 - structure response is truncated without losing total counters
+  ---
+  duration_ms: 8.730536
+  type: 'test'
+  ...
+# Subtest: unsafe XML declarations are rejected before structural parsing
+ok 12 - unsafe XML declarations are rejected before structural parsing
+  ---
+  duration_ms: 4.139104
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 141.834124
+
+> @docomator/template-compiler@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+TAP version 13
+# Subtest: DOCX compiler creates w:sdt, preserves content and is deterministic
+ok 1 - DOCX compiler creates w:sdt, preserves content and is deterministic
+  ---
+  duration_ms: 76.995209
+  type: 'test'
+  ...
+# Subtest: DOCX text-range compiler wraps only selected adjacent runs
+ok 2 - DOCX text-range compiler wraps only selected adjacent runs
+  ---
+  duration_ms: 58.774182
+  type: 'test'
+  ...
+# Subtest: DOCX text-range compiler rejects stale, mixed and complex selections
+ok 3 - DOCX text-range compiler rejects stale, mixed and complex selections
+  ---
+  duration_ms: 31.322939
+  type: 'test'
+  ...
+# Subtest: XLSX compiler creates a defined name and preserves worksheet bytes
+ok 4 - XLSX compiler creates a defined name and preserves worksheet bytes
+  ---
+  duration_ms: 62.220529
+  type: 'test'
+  ...
+# Subtest: XLSX compiler does not adopt pre-existing _AI_META without trusted bindings
+ok 5 - XLSX compiler does not adopt pre-existing _AI_META without trusted bindings
+  ---
+  duration_ms: 80.505531
+  type: 'test'
+  ...
+# Subtest: XLSX compiler rejects a user sheet that conflicts with _AI_META
+ok 6 - XLSX compiler rejects a user sheet that conflicts with _AI_META
+  ---
+  duration_ms: 38.830968
+  type: 'test'
+  ...
+# Subtest: compiler rejects stale structure and invented coordinates
+ok 7 - compiler rejects stale structure and invented coordinates
+  ---
+  duration_ms: 5.151666
+  type: 'test'
+  ...
+# Subtest: OOXML reader and deterministic writer preserve ordered entry contents
+ok 8 - OOXML reader and deterministic writer preserve ordered entry contents
+  ---
+  duration_ms: 6.453536
+  type: 'test'
+  ...
+# Subtest: enum values use the safe identity formatter in templates
+ok 9 - enum values use the safe identity formatter in templates
+  ---
+  duration_ms: 4.241213
+  type: 'test'
+  ...
+# Subtest: DOCX compilation is deterministic for multiple fields regardless of input order
+ok 10 - DOCX compilation is deterministic for multiple fields regardless of input order
+  ---
+  duration_ms: 108.713697
+  type: 'test'
+  ...
+# Subtest: DOCX renders and finally reads back every field
+ok 11 - DOCX renders and finally reads back every field
+  ---
+  duration_ms: 38.315953
+  type: 'test'
+  ...
+# Subtest: DOCX compiles and renders multiple text ranges without changing labels
+ok 12 - DOCX compiles and renders multiple text ranges without changing labels
+  ---
+  duration_ms: 68.940517
+  type: 'test'
+  ...
+# Subtest: DOCX compiler marks one safe table row as an audience repeat
+ok 13 - DOCX compiler marks one safe table row as an audience repeat
+  ---
+  duration_ms: 90.517945
+  type: 'test'
+  ...
+# Subtest: DOCX repeat renderer clones the sample row and reverse-reads every value
+ok 14 - DOCX repeat renderer clones the sample row and reverse-reads every value
+  ---
+  duration_ms: 83.993727
+  type: 'test'
+  ...
+# Subtest: DOCX repeat renderer enforces member limits and required values
+ok 15 - DOCX repeat renderer enforces member limits and required values
+  ---
+  duration_ms: 34.101891
+  type: 'test'
+  ...
+# Subtest: DOCX repeat renderer resolves deterministic Word ID collisions
+ok 16 - DOCX repeat renderer resolves deterministic Word ID collisions
+  ---
+  duration_ms: 17498.791997
+  type: 'test'
+  ...
+# Subtest: DOCX repeat compiler rejects unsafe row structures
+ok 17 - DOCX repeat compiler rejects unsafe row structures
+  ---
+  duration_ms: 44.712241
+  type: 'test'
+  ...
+# Subtest: XLSX compiles and renders two typed cells without changing a neighbour
+ok 18 - XLSX compiles and renders two typed cells without changing a neighbour
+  ---
+  duration_ms: 64.91104
+  type: 'test'
+  ...
+# Subtest: multi-field XLSX render rejects mixed legacy and _AI_META bindings
+ok 19 - multi-field XLSX render rejects mixed legacy and _AI_META bindings
+  ---
+  duration_ms: 31.685891
+  type: 'test'
+  ...
+# Subtest: multi-field XLSX render rejects an extra self-consistent metadata record
+ok 20 - multi-field XLSX render rejects an extra self-consistent metadata record
+  ---
+  duration_ms: 34.124436
+  type: 'test'
+  ...
+# Subtest: multi-field compiler rejects duplicate coordinates and stale element identifiers
+ok 21 - multi-field compiler rejects duplicate coordinates and stale element identifiers
+  ---
+  duration_ms: 2.120102
+  type: 'test'
+  ...
+# Subtest: safe Russian formatters produce deterministic display values
+ok 22 - safe Russian formatters produce deterministic display values
+  ---
+  duration_ms: 35.195034
+  type: 'test'
+  ...
+# Subtest: default formatters are explicit and versioned
+ok 23 - default formatters are explicit and versioned
+  ---
+  duration_ms: 1.489994
+  type: 'test'
+  ...
+# Subtest: legacy formatter preserves already activated display contracts
+ok 24 - legacy formatter preserves already activated display contracts
+  ---
+  duration_ms: 0.26795
+  type: 'test'
+  ...
+# Subtest: formatter parser rejects unsupported and incompatible contracts
+ok 25 - formatter parser rejects unsupported and incompatible contracts
+  ---
+  duration_ms: 1.101829
+  type: 'test'
+  ...
+# Subtest: Russian personal-name formatter supports common and custom variants
+ok 26 - Russian personal-name formatter supports common and custom variants
+  ---
+  duration_ms: 5.385694
+  type: 'test'
+  ...
+# Subtest: personal-name formatter rejects scripts and unknown tokens
+ok 27 - personal-name formatter rejects scripts and unknown tokens
+  ---
+  duration_ms: 0.5944
+  type: 'test'
+  ...
+# Subtest: DOCX trial render writes and reads back text while preserving other content
+ok 28 - DOCX trial render writes and reads back text while preserving other content
+  ---
+  duration_ms: 52.635342
+  type: 'test'
+  ...
+# Subtest: DOCX text-range render preserves the label and suffix
+ok 29 - DOCX text-range render preserves the label and suffix
+  ---
+  duration_ms: 24.624632
+  type: 'test'
+  ...
+# Subtest: XLSX trial render supports text, numbers and booleans and preserves cell style
+ok 30 - XLSX trial render supports text, numbers and booleans and preserves cell style
+  ---
+  duration_ms: 173.747614
+  type: 'test'
+  ...
+# Subtest: XLSX renderer rejects changed _AI_META and keeps legacy templates working
+ok 31 - XLSX renderer rejects changed _AI_META and keeps legacy templates working
+  ---
+  duration_ms: 57.810232
+  type: 'test'
+  ...
+# Subtest: XLSX renderer rejects partial or inconsistent _AI_META artifacts
+ok 32 - XLSX renderer rejects partial or inconsistent _AI_META artifacts
+  ---
+  duration_ms: 164.241677
+  type: 'test'
+  ...
+# Subtest: trial render refuses to overwrite an XLSX formula
+ok 33 - trial render refuses to overwrite an XLSX formula
+  ---
+  duration_ms: 24.931275
+  type: 'test'
+  ...
+# Subtest: trial render validates dates, integers and binding pairs
+ok 34 - trial render validates dates, integers and binding pairs
+  ---
+  duration_ms: 10.913463
+  type: 'test'
+  ...
+# Subtest: XLSX render rejects unknown, redirected and downgraded technical bindings
+ok 35 - XLSX render rejects unknown, redirected and downgraded technical bindings
+  ---
+  duration_ms: 19.391427
+  type: 'test'
+  ...
+# Subtest: production fallback renders a missing optional value as an empty string
+ok 36 - production fallback renders a missing optional value as an empty string
+  ---
+  duration_ms: 23.498836
+  type: 'test'
+  ...
+# Subtest: text fields apply the selected personal-name format before DOCX rendering
+ok 37 - text fields apply the selected personal-name format before DOCX rendering
+  ---
+  duration_ms: 23.066231
+  type: 'test'
+  ...
+# Subtest: DOCX repeats an empty four-cell row created by desktop Word
+ok 38 - DOCX repeats an empty four-cell row created by desktop Word
+  ---
+  duration_ms: 124.040005
+  type: 'test'
+  ...
+# Subtest: safe XLSX formulas translate only relative references in the sample row
+ok 39 - safe XLSX formulas translate only relative references in the sample row
+  ---
+  duration_ms: 2.977944
+  type: 'test'
+  ...
+# Subtest: unsafe XLSX formula syntax and functions fail closed
+ok 40 - unsafe XLSX formula syntax and functions fail closed
+  ---
+  duration_ms: 0.832145
+  type: 'test'
+  ...
+# Subtest: XLSX repeat clones a styled row, formulas and merges deterministically
+ok 41 - XLSX repeat clones a styled row, formulas and merges deterministically
+  ---
+  duration_ms: 240.990598
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects mixed legacy and _AI_META field bindings
+ok 42 - XLSX repeat rejects mixed legacy and _AI_META field bindings
+  ---
+  duration_ms: 93.088916
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects an unsafe formula before compilation
+ok 43 - XLSX repeat rejects an unsafe formula before compilation
+  ---
+  duration_ms: 56.567314
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects formulas outside the repeated row
+ok 44 - XLSX repeat rejects formulas outside the repeated row
+  ---
+  duration_ms: 50.797548
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a quoted global defined name
+ok 45 - XLSX repeat rejects a quoted global defined name
+  ---
+  duration_ms: 49.990463
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a bare-sheet global defined name
+ok 46 - XLSX repeat rejects a bare-sheet global defined name
+  ---
+  duration_ms: 42.720041
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a localSheetId defined name
+ok 47 - XLSX repeat rejects a localSheetId defined name
+  ---
+  duration_ms: 47.362038
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects an external relationship
+ok 48 - XLSX repeat rejects an external relationship
+  ---
+  duration_ms: 55.836584
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a shared formula
+ok 49 - XLSX repeat rejects a shared formula
+  ---
+  duration_ms: 42.549336
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects an array formula
+ok 50 - XLSX repeat rejects an array formula
+  ---
+  duration_ms: 49.275561
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a package signature
+ok 51 - XLSX repeat rejects a package signature
+  ---
+  duration_ms: 52.321365
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a spoofed SpreadsheetML namespace
+ok 52 - XLSX repeat rejects a spoofed SpreadsheetML namespace
+  ---
+  duration_ms: 33.925239
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a nested default namespace spoof
+ok 53 - XLSX repeat rejects a nested default namespace spoof
+  ---
+  duration_ms: 37.320039
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects an invalid worksheet content type
+ok 54 - XLSX repeat rejects an invalid worksheet content type
+  ---
+  duration_ms: 34.183426
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects an out-of-range cell style
+ok 55 - XLSX repeat rejects an out-of-range cell style
+  ---
+  duration_ms: 33.347597
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects an out-of-range shared string
+ok 56 - XLSX repeat rejects an out-of-range shared string
+  ---
+  duration_ms: 49.554485
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects duplicate cells
+ok 57 - XLSX repeat rejects duplicate cells
+  ---
+  duration_ms: 49.474231
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects duplicate rows
+ok 58 - XLSX repeat rejects duplicate rows
+  ---
+  duration_ms: 29.930777
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a hidden sample row
+ok 59 - XLSX repeat rejects a hidden sample row
+  ---
+  duration_ms: 30.020252
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rechecks unsafe compiled part xl/vbaProject.bin
+ok 60 - XLSX repeat rechecks unsafe compiled part xl/vbaProject.bin
+  ---
+  duration_ms: 56.844464
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rechecks unsafe compiled part xl/activeX/activeX1.bin
+ok 61 - XLSX repeat rechecks unsafe compiled part xl/activeX/activeX1.bin
+  ---
+  duration_ms: 62.711147
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rechecks unsafe compiled part xl/embeddings/oleObject1.bin
+ok 62 - XLSX repeat rechecks unsafe compiled part xl/embeddings/oleObject1.bin
+  ---
+  duration_ms: 39.721792
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects an invalid worksheet relationship type
+ok 63 - XLSX repeat rejects an invalid worksheet relationship type
+  ---
+  duration_ms: 41.055505
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects an invalid worksheet relationship target
+ok 64 - XLSX repeat rejects an invalid worksheet relationship target
+  ---
+  duration_ms: 49.064872
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects a range that cuts through a merged cell
+ok 65 - XLSX repeat rejects a range that cuts through a merged cell
+  ---
+  duration_ms: 38.484343
+  type: 'test'
+  ...
+# Subtest: XLSX repeat enforces the audience size boundary
+ok 66 - XLSX repeat enforces the audience size boundary
+  ---
+  duration_ms: 43.149026
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects invalid audience members
+ok 67 - XLSX repeat rejects invalid audience members
+  ---
+  duration_ms: 46.160706
+  type: 'test'
+  ...
+# Subtest: XLSX repeat rejects rows beyond the worksheet boundary
+ok 68 - XLSX repeat rejects rows beyond the worksheet boundary
+  ---
+  duration_ms: 39.808777
+  type: 'test'
+  ...
+1..68
+# tests 68
+# suites 0
+# pass 68
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18242.406323
+
+> @docomator/api@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+TAP version 13
+# (node:2913) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: health endpoint reports the API service
+ok 1 - health endpoint reports the API service
+  ---
+  duration_ms: 518.303593
+  type: 'test'
+  ...
+# Subtest: release identity distinguishes development from an installed release
+ok 2 - release identity distinguishes development from an installed release
+  ---
+  duration_ms: 570.909348
+  type: 'test'
+  ...
+# Subtest: release identity rejects metadata for another installed version
+ok 3 - release identity rejects metadata for another installed version
+  ---
+  duration_ms: 230.707801
+  type: 'test'
+  ...
+# Subtest: readiness stays degraded before migrations create the database
+ok 4 - readiness stays degraded before migrations create the database
+  ---
+  duration_ms: 209.323741
+  type: 'test'
+  ...
+# Subtest: readiness stays degraded until employee update idempotency migration is applied
+ok 5 - readiness stays degraded until employee update idempotency migration is applied
+  ---
+  duration_ms: 578.059769
+  type: 'test'
+  ...
+# Subtest: readiness stays degraded until template formatter migration is applied
+ok 6 - readiness stays degraded until template formatter migration is applied
+  ---
+  duration_ms: 571.349078
+  type: 'test'
+  ...
+# Subtest: readiness stays degraded until DOCX repeat migration is applied
+ok 7 - readiness stays degraded until DOCX repeat migration is applied
+  ---
+  duration_ms: 611.350917
+  type: 'test'
+  ...
+# Subtest: readiness stays degraded until XLSX repeat migration is registered
+ok 8 - readiness stays degraded until XLSX repeat migration is registered
+  ---
+  duration_ms: 585.701718
+  type: 'test'
+  ...
+# (node:2914) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: keyless API plans and imports employees without returning generated keys
+ok 9 - keyless API plans and imports employees without returning generated keys
+  ---
+  duration_ms: 1088.631281
+  type: 'test'
+  ...
+# Subtest: API reports duplicate update values in Russian during planning
+ok 10 - API reports duplicate update values in Russian during planning
+  ---
+  duration_ms: 622.203041
+  type: 'test'
+  ...
+# Subtest: explicit technical import contract remains available for automation
+ok 11 - explicit technical import contract remains available for automation
+  ---
+  duration_ms: 640.939793
+  type: 'test'
+  ...
+# (node:2920) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: document intake API returns a Russian compatibility report
+ok 12 - document intake API returns a Russian compatibility report
+  ---
+  duration_ms: 589.61691
+  type: 'test'
+  ...
+# Subtest: document intake API reports macros as a blocked compatibility result
+ok 13 - document intake API reports macros as a blocked compatibility result
+  ---
+  duration_ms: 315.482648
+  type: 'test'
+  ...
+# Subtest: document intake API rejects malformed binary data with a clear Russian error
+ok 14 - document intake API rejects malformed binary data with a clear Russian error
+  ---
+  duration_ms: 250.524859
+  type: 'test'
+  ...
+# Subtest: document intake API requires a file name
+ok 15 - document intake API requires a file name
+  ---
+  duration_ms: 235.889225
+  type: 'test'
+  ...
+# (node:2945) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: explicit confirmation quarantines an accepted document and lists it
+ok 16 - explicit confirmation quarantines an accepted document and lists it
+  ---
+  duration_ms: 1057.013909
+  type: 'test'
+  ...
+# Subtest: a rejected document cannot be placed in quarantine
+ok 17 - a rejected document cannot be placed in quarantine
+  ---
+  duration_ms: 663.444168
+  type: 'test'
+  ...
+# Subtest: quarantine lookup does not expose a record through another space
+ok 18 - quarantine lookup does not expose a record through another space
+  ---
+  duration_ms: 681.912022
+  type: 'test'
+  ...
+# (node:2957) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: generation downloads use the shared result state and AUD-003 log
+ok 19 - generation downloads use the shared result state and AUD-003 log
+  ---
+  duration_ms: 253.091094
+  type: 'test'
+  ...
+# Subtest: archive download is collected and audited as an archive
+ok 20 - archive download is collected and audited as an archive
+  ---
+  duration_ms: 69.639152
+  type: 'test'
+  ...
+# Subtest: a missing object does not collect or audit a result
+ok 21 - a missing object does not collect or audit a result
+  ---
+  duration_ms: 64.701045
+  type: 'test'
+  ...
+# Subtest: a checksum mismatch does not collect or audit a result
+ok 22 - a checksum mismatch does not collect or audit a result
+  ---
+  duration_ms: 52.110369
+  type: 'test'
+  ...
+# Subtest: audit failure rolls back collection and the outbox event
+ok 23 - audit failure rolls back collection and the outbox event
+  ---
+  duration_ms: 48.515999
+  type: 'test'
+  ...
+# Subtest: deleted results stay closed through canonical and legacy links
+ok 24 - deleted results stay closed through canonical and legacy links
+  ---
+  duration_ms: 64.900004
+  type: 'test'
+  ...
+# (node:2974) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: structure API returns stable Russian DOCX coordinates
+ok 25 - structure API returns stable Russian DOCX coordinates
+  ---
+  duration_ms: 569.989502
+  type: 'test'
+  ...
+# Subtest: structure API reports a bounded result without hiding totals
+ok 26 - structure API reports a bounded result without hiding totals
+  ---
+  duration_ms: 277.736308
+  type: 'test'
+  ...
+# Subtest: structure API rejects unsafe XML with a clear message
+ok 27 - structure API rejects unsafe XML with a clear message
+  ---
+  duration_ms: 173.689969
+  type: 'test'
+  ...
+# (node:2986) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: employee API creates, lists, reads and updates a profile without machine keys
+ok 28 - employee API creates, lists, reads and updates a profile without machine keys
+  ---
+  duration_ms: 971.359037
+  type: 'test'
+  ...
+# Subtest: employee API keeps explicit property compatibility and denies cross-space access
+ok 29 - employee API keeps explicit property compatibility and denies cross-space access
+  ---
+  duration_ms: 689.919673
+  type: 'test'
+  ...
+# (node:2993) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: recipient and schedule POST accept omitted machine keys
+ok 30 - recipient and schedule POST accept omitted machine keys
+  ---
+  duration_ms: 900.903281
+  type: 'test'
+  ...
+# (node:3002) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: knowledge API creates typed data with outbox and audit
+ok 31 - knowledge API creates typed data with outbox and audit
+  ---
+  duration_ms: 1042.897567
+  type: 'test'
+  ...
+# Subtest: knowledge API returns stable validation and conflict errors
+ok 32 - knowledge API returns stable validation and conflict errors
+  ---
+  duration_ms: 736.546593
+  type: 'test'
+  ...
+# (node:3011) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: API creates, reads and downloads a complete multi-field tested version
+ok 33 - API creates, reads and downloads a complete multi-field tested version
+  ---
+  duration_ms: 1282.63325
+  type: 'test'
+  ...
+# Subtest: API compiles and freezes a DOCX audience repeat row
+ok 34 - API compiles and freezes a DOCX audience repeat row
+  ---
+  duration_ms: 827.948126
+  type: 'test'
+  ...
+# Subtest: API compiles and freezes an XLSX audience repeat row
+ok 35 - API compiles and freezes an XLSX audience repeat row
+  ---
+  duration_ms: 870.903859
+  type: 'test'
+  ...
+# Subtest: API rejects incomplete, duplicate and foreign field sets
+ok 36 - API rejects incomplete, duplicate and foreign field sets
+  ---
+  duration_ms: 602.459102
+  type: 'test'
+  ...
+# (node:3027) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: operation center API returns a no-store space-scoped projection
+ok 37 - operation center API returns a no-store space-scoped projection
+  ---
+  duration_ms: 584.292147
+  type: 'test'
+  ...
+# Subtest: operation center API rejects unknown spaces and invalid query values
+ok 38 - operation center API rejects unknown spaces and invalid query values
+  ---
+  duration_ms: 253.184599
+  type: 'test'
+  ...
+# Subtest: operation center API does not expose raw stored errors
+ok 39 - operation center API does not expose raw stored errors
+  ---
+  duration_ms: 179.651145
+  type: 'test'
+  ...
+# Subtest: valid correlation and actor identifiers are preserved
+ok 40 - valid correlation and actor identifiers are preserved
+  ---
+  duration_ms: 5.55751
+  type: 'test'
+  ...
+# Subtest: unsafe context headers are replaced with the internal request ID
+ok 41 - unsafe context headers are replaced with the internal request ID
+  ---
+  duration_ms: 0.316962
+  type: 'test'
+  ...
+# (node:3046) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: spaces API isolates entities and creates aggregate target plan
+ok 42 - spaces API isolates entities and creates aggregate target plan
+  ---
+  duration_ms: 960.744664
+  type: 'test'
+  ...
+# Subtest: spaces API rejects invalid colors
+ok 43 - spaces API rejects invalid colors
+  ---
+  duration_ms: 667.968605
+  type: 'test'
+  ...
+# Subtest: spaces API rejects cross-space group membership
+ok 44 - spaces API rejects cross-space group membership
+  ---
+  duration_ms: 611.468284
+  type: 'test'
+  ...
+# Subtest: spaces API exposes one shared workspace without IAM filters
+ok 45 - spaces API exposes one shared workspace without IAM filters
+  ---
+  duration_ms: 612.733059
+  type: 'test'
+  ...
+# (node:3070) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: API safely updates, remaps and removes fields of a repeat row
+ok 46 - API safely updates, remaps and removes fields of a repeat row
+  ---
+  duration_ms: 1057.993082
+  type: 'test'
+  ...
+# (node:3082) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: API creates a draft from quarantined bytes and saves a verified field
+ok 47 - API creates a draft from quarantined bytes and saves a verified field
+  ---
+  duration_ms: 947.888559
+  type: 'test'
+  ...
+# Subtest: API stores a verified DOCX text range without changing Document IR
+ok 48 - API stores a verified DOCX text range without changing Document IR
+  ---
+  duration_ms: 670.575278
+  type: 'test'
+  ...
+# Subtest: API derives and stores safe formatter contracts from field settings
+ok 49 - API derives and stores safe formatter contracts from field settings
+  ---
+  duration_ms: 701.157053
+  type: 'test'
+  ...
+# Subtest: API derives one DOCX repeat row and keeps every field inside it
+ok 50 - API derives one DOCX repeat row and keeps every field inside it
+  ---
+  duration_ms: 578.637555
+  type: 'test'
+  ...
+# Subtest: API derives a used XLSX row from server-side element identifiers
+ok 51 - API derives a used XLSX row from server-side element identifiers
+  ---
+  duration_ms: 640.577973
+  type: 'test'
+  ...
+# Subtest: API rejects an element that is absent from the server structure
+ok 52 - API rejects an element that is absent from the server structure
+  ---
+  duration_ms: 629.023588
+  type: 'test'
+  ...
+# Subtest: API hides a draft from another space and rejects a duplicate element
+ok 53 - API hides a draft from another space and rejects a duplicate element
+  ---
+  duration_ms: 529.366676
+  type: 'test'
+  ...
+# (node:3094) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: API exposes persistent preview state, PDF, activation and active catalog
+ok 54 - API exposes persistent preview state, PDF, activation and active catalog
+  ---
+  duration_ms: 989.098087
+  type: 'test'
+  ...
+# Subtest: API saves a tested template without generating PDF
+ok 55 - API saves a tested template without generating PDF
+  ---
+  duration_ms: 717.643837
+  type: 'test'
+  ...
+# Subtest: API retries a failed preview and hides requests from another space
+ok 56 - API retries a failed preview and hides requests from another space
+  ---
+  duration_ms: 612.386365
+  type: 'test'
+  ...
+# (node:3106) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: API previews and activates a multi-field tested version
+ok 57 - API previews and activates a multi-field tested version
+  ---
+  duration_ms: 1027.414634
+  type: 'test'
+  ...
+# (node:3119) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: trial endpoint compiles, renders, reads back and stores immutable files
+ok 58 - trial endpoint compiles, renders, reads back and stores immutable files
+  ---
+  duration_ms: 1136.328129
+  type: 'test'
+  ...
+# Subtest: XLSX trial endpoint stores and returns a verified _AI_META contract
+ok 59 - XLSX trial endpoint stores and returns a verified _AI_META contract
+  ---
+  duration_ms: 773.265377
+  type: 'test'
+  ...
+# Subtest: trial endpoint rejects an unknown field and hides versions across spaces
+ok 60 - trial endpoint rejects an unknown field and hides versions across spaces
+  ---
+  duration_ms: 527.230524
+  type: 'test'
+  ...
+# (node:3132) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: UI shell is served locally with security headers
+ok 61 - UI shell is served locally with security headers
+  ---
+  duration_ms: 554.621381
+  type: 'test'
+  ...
+# Subtest: UI assets are served without external runtime dependencies
+ok 62 - UI assets are served without external runtime dependencies
+  ---
+  duration_ms: 288.612416
+  type: 'test'
+  ...
+# Subtest: ordinary employee flow does not ask for machine keys
+ok 63 - ordinary employee flow does not ask for machine keys
+  ---
+  duration_ms: 243.894514
+  type: 'test'
+  ...
+# Subtest: template connection is a space-scoped sequential wizard
+ok 64 - template connection is a space-scoped sequential wizard
+  ---
+  duration_ms: 229.179816
+  type: 'test'
+  ...
+# Subtest: domain validation messages are translated into clear Russian text
+ok 65 - domain validation messages are translated into clear Russian text
+  ---
+  duration_ms: 7.912011
+  type: 'test'
+  ...
+# Subtest: database errors do not expose raw English diagnostics
+ok 66 - database errors do not expose raw English diagnostics
+  ---
+  duration_ms: 1.215597
+  type: 'test'
+  ...
+# Subtest: already Russian messages are preserved
+ok 67 - already Russian messages are preserved
+  ---
+  duration_ms: 3.196813
+  type: 'test'
+  ...
+# Subtest: unknown diagnostics are replaced with a safe Russian fallback
+ok 68 - unknown diagnostics are replaced with a safe Russian fallback
+  ---
+  duration_ms: 0.668527
+  type: 'test'
+  ...
+# Subtest: XLSX import converts Excel dates and preserves zero-padded identifiers
+ok 69 - XLSX import converts Excel dates and preserves zero-padded identifiers
+  ---
+  duration_ms: 18.58615
+  type: 'test'
+  ...
+# Subtest: XLSX import respects the 1904 date system and cached date-time values
+ok 70 - XLSX import respects the 1904 date system and cached date-time values
+  ---
+  duration_ms: 6.980651
+  type: 'test'
+  ...
+1..70
+# tests 70
+# suites 0
+# pass 70
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13988.161371
+
+> @docomator/worker@0.1.0-alpha.0 test
+> node --test dist/*.test.js
+
+TAP version 13
+# (node:3180) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: expired document generation lease is reclaimed without duplicate output
+ok 1 - expired document generation lease is reclaimed without duplicate output
+  ---
+  duration_ms: 475.558544
+  type: 'test'
+  ...
+# Subtest: graceful interruption keeps generation retryable and the next worker finishes it
+ok 2 - graceful interruption keeps generation retryable and the next worker finishes it
+  ---
+  duration_ms: 464.265782
+  type: 'test'
+  ...
+# Subtest: aggregate generation uses the activated user DOCX repeat row
+ok 3 - aggregate generation uses the activated user DOCX repeat row
+  ---
+  duration_ms: 545.475455
+  type: 'test'
+  ...
+# Subtest: aggregate generation uses the activated XLSX repeat row
+ok 4 - aggregate generation uses the activated XLSX repeat row
+  ---
+  duration_ms: 312.793941
+  type: 'test'
+  ...
+# Subtest: converter uses an isolated profile and returns a bounded PDF
+ok 5 - converter uses an isolated profile and returns a bounded PDF
+  ---
+  duration_ms: 53.440373
+  type: 'test'
+  ...
+# Subtest: converter rejects a non-PDF output
+ok 6 - converter rejects a non-PDF output
+  ---
+  duration_ms: 45.533699
+  type: 'test'
+  ...
+# Subtest: converter terminates an aborted process
+ok 7 - converter terminates an aborted process
+  ---
+  duration_ms: 58.142219
+  type: 'test'
+  ...
+# Subtest: converter explains a missing LibreOffice binary
+ok 8 - converter explains a missing LibreOffice binary
+  ---
+  duration_ms: 6.006249
+  type: 'test'
+  ...
+# Subtest: worker loop stops after abort
+ok 9 - worker loop stops after abort
+  ---
+  duration_ms: 4.902155
+  type: 'test'
+  ...
+# (node:3212) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: processor completes a registered job
+ok 10 - processor completes a registered job
+  ---
+  duration_ms: 405.077533
+  type: 'test'
+  ...
+# Subtest: processor retries transient errors with deterministic backoff
+ok 11 - processor retries transient errors with deterministic backoff
+  ---
+  duration_ms: 393.833459
+  type: 'test'
+  ...
+# Subtest: unknown or permanent jobs are dead-lettered without repeated execution
+ok 12 - unknown or permanent jobs are dead-lettered without repeated execution
+  ---
+  duration_ms: 411.107164
+  type: 'test'
+  ...
+# (node:3238) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: worker completes preview, stores PDF and completes the queue job
+ok 13 - worker completes preview, stores PDF and completes the queue job
+  ---
+  duration_ms: 445.448243
+  type: 'test'
+  ...
+# Subtest: worker records a Russian failure and dead-letters a permanent conversion error
+ok 14 - worker records a Russian failure and dead-letters a permanent conversion error
+  ---
+  duration_ms: 432.66325
+  type: 'test'
+  ...
+# Subtest: disabled preview is persisted as a recoverable user-facing failure
+ok 15 - disabled preview is persisted as a recoverable user-facing failure
+  ---
+  duration_ms: 481.924434
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1970.664986
+TAP version 13
+# Subtest: example validator accepts only the generated safe corpus
+ok 1 - example validator accepts only the generated safe corpus
+  ---
+  duration_ms: 126.500829
+  type: 'test'
+  ...
+# Subtest: example validator rejects a CSV formula-like value
+ok 2 - example validator rejects a CSV formula-like value
+  ---
+  duration_ms: 9.998759
+  type: 'test'
+  ...
+# Subtest: example validator rejects a Word field with an alternate prefix
+ok 3 - example validator rejects a Word field with an alternate prefix
+  ---
+  duration_ms: 35.615247
+  type: 'test'
+  ...
+# Subtest: example validator rejects XLSX cell and named formulas
+ok 4 - example validator rejects XLSX cell and named formulas
+  ---
+  duration_ms: 58.913329
+  type: 'test'
+  ...
+# Subtest: example validator rejects external and altered relationships
+ok 5 - example validator rejects external and altered relationships
+  ---
+  duration_ms: 29.010614
+  type: 'test'
+  ...
+# Subtest: example validator rejects macro and extra OOXML parts
+ok 6 - example validator rejects macro and extra OOXML parts
+  ---
+  duration_ms: 37.747033
+  type: 'test'
+  ...
+# Subtest: final contour exposes target acceptance and release evidence commands
+ok 7 - final contour exposes target acceptance and release evidence commands
+  ---
+  duration_ms: 6.495606
+  type: 'test'
+  ...
+# Subtest: full bundle contains and verifies the target acceptance launcher
+ok 8 - full bundle contains and verifies the target acceptance launcher
+  ---
+  duration_ms: 3.316955
+  type: 'test'
+  ...
+# Subtest: pilot evidence is bound to the exact backup manifest
+ok 9 - pilot evidence is bound to the exact backup manifest
+  ---
+  duration_ms: 1.751206
+  type: 'test'
+  ...
+# Subtest: final documentation uses the red Astra marker and strict gate
+ok 10 - final documentation uses the red Astra marker and strict gate
+  ---
+  duration_ms: 1.963703
+  type: 'test'
+  ...
+# Subtest: temporary finalization workflows and payload are absent
+ok 11 - temporary finalization workflows and payload are absent
+  ---
+  duration_ms: 2.200014
+  type: 'test'
+  ...
+# Subtest: LibreOffice corpus has the exact five positive Writer and Calc examples
+ok 12 - LibreOffice corpus has the exact five positive Writer and Calc examples
+  ---
+  duration_ms: 11.470216
+  type: 'test'
+  ...
+# Subtest: LibreOffice corpus rejects changed bytes and incomplete manifests
+    # Subtest: changed file bytes
+    ok 1 - changed file bytes
+      ---
+      duration_ms: 35.501922
+      type: 'test'
+      ...
+    # Subtest: missing selected manifest entry
+    ok 2 - missing selected manifest entry
+      ---
+      duration_ms: 34.786468
+      type: 'test'
+      ...
+    1..2
+ok 13 - LibreOffice corpus rejects changed bytes and incomplete manifests
+  ---
+  duration_ms: 71.181998
+  type: 'test'
+  ...
+# Subtest: LibreOffice corpus rejects duplicate and traversal manifest paths
+    # Subtest: duplicate path
+    ok 1 - duplicate path
+      ---
+      duration_ms: 17.093064
+      type: 'test'
+      ...
+    # Subtest: parent traversal
+    ok 2 - parent traversal
+      ---
+      duration_ms: 30.397029
+      type: 'test'
+      ...
+    1..2
+ok 14 - LibreOffice corpus rejects duplicate and traversal manifest paths
+  ---
+  duration_ms: 48.530012
+  type: 'test'
+  ...
+# Subtest: LibreOffice corpus rejects symbolic file and directory components
+    # Subtest: symbolic file
+    ok 1 - symbolic file
+      ---
+      duration_ms: 28.378074
+      type: 'test'
+      ...
+    # Subtest: symbolic directory
+    ok 2 - symbolic directory
+      ---
+      duration_ms: 16.857175
+      type: 'test'
+      ...
+    1..2
+ok 15 - LibreOffice corpus rejects symbolic file and directory components
+  ---
+  duration_ms: 46.513613
+  type: 'test'
+  ...
+# Subtest: LibreOffice gate converts the fixed checksum-verified example set
+ok 16 - LibreOffice gate converts the fixed checksum-verified example set
+  ---
+  duration_ms: 317.363776
+  type: 'test'
+  ...
+# Subtest: recovery act accepts exact counts and rejects data loss
+ok 17 - recovery act accepts exact counts and rejects data loss
+  ---
+  duration_ms: 2.368718
+  type: 'test'
+  ...
+# Subtest: office compatibility requires 20 DOCX and 20 XLSX opened in both suites
+ok 18 - office compatibility requires 20 DOCX and 20 XLSX opened in both suites
+  ---
+  duration_ms: 2.398054
+  type: 'test'
+  ...
+# Subtest: blocker register must be empty
+ok 19 - blocker register must be empty
+  ---
+  duration_ms: 0.463905
+  type: 'test'
+  ...
+# Subtest: evidence init creates an explicit incomplete skeleton
+ok 20 - evidence init creates an explicit incomplete skeleton
+  ---
+  duration_ms: 20.407918
+  type: 'test'
+  ...
+# Subtest: full bundle builder exposes the Debian/Astra contract
+ok 21 - full bundle builder exposes the Debian/Astra contract
+  ---
+  duration_ms: 17.959981
+  type: 'test'
+  ...
+# Subtest: full bundle commands select exact target profiles
+ok 22 - full bundle commands select exact target profiles
+  ---
+  duration_ms: 5.660779
+  type: 'test'
+  ...
+# Subtest: Astra full build rejects an implicit Chromium profile
+ok 23 - Astra full build rejects an implicit Chromium profile
+  ---
+  duration_ms: 16.5488
+  type: 'test'
+  ...
+# Subtest: offline bundle explicitly requires the release-bound pilot runtime
+ok 24 - offline bundle explicitly requires the release-bound pilot runtime
+  ---
+  duration_ms: 9.357795
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects each missing pilot release-binding module
+ok 25 - offline verifier rejects each missing pilot release-binding module
+  ---
+  duration_ms: 69.491816
+  type: 'test'
+  ...
+# Subtest: target acceptance exposes one strict Debian/Astra command
+ok 26 - target acceptance exposes one strict Debian/Astra command
+  ---
+  duration_ms: 12.544523
+  type: 'test'
+  ...
+# Subtest: target acceptance binds all mandatory target gates and artifacts
+ok 27 - target acceptance binds all mandatory target gates and artifacts
+  ---
+  duration_ms: 2.658018
+  type: 'test'
+  ...
+# Subtest: offline UX gate has fixed package and release preflights
+ok 28 - offline UX gate has fixed package and release preflights
+  ---
+  duration_ms: 6.212949
+  type: 'test'
+  ...
+# Subtest: offline UX gate creates bound evidence in a new protected directory
+ok 29 - offline UX gate creates bound evidence in a new protected directory
+  ---
+  duration_ms: 1558.634915
+  type: 'test'
+  ...
+# Subtest: offline UX gate rejects remote origins and disabled profiles without output
+ok 30 - offline UX gate rejects remote origins and disabled profiles without output
+  ---
+  duration_ms: 204.451467
+  type: 'test'
+  ...
+# Subtest: UX gate binds the target profile and installed release identity
+ok 31 - UX gate binds the target profile and installed release identity
+  ---
+  duration_ms: 8.405619
+  type: 'test'
+  ...
+# Subtest: offline verifier accepts the exact bundle inventory
+ok 32 - offline verifier accepts the exact bundle inventory
+  ---
+  duration_ms: 216.445633
+  type: 'test'
+  ...
+# Subtest: offline verifier accepts a preview profile with an exact LibreOffice set
+ok 33 - offline verifier accepts a preview profile with an exact LibreOffice set
+  ---
+  duration_ms: 285.156128
+  type: 'test'
+  ...
+# Subtest: offline verifier accepts the separate offline UX acceptance profile
+ok 34 - offline verifier accepts the separate offline UX acceptance profile
+  ---
+  duration_ms: 313.96396
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a missing or extra UX E2E file
+ok 35 - offline verifier rejects a missing or extra UX E2E file
+  ---
+  duration_ms: 373.005994
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects UX package and Chromium metadata drift
+ok 36 - offline verifier rejects UX package and Chromium metadata drift
+  ---
+  duration_ms: 554.368057
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects acceptance payload when its profile is disabled
+ok 37 - offline verifier rejects acceptance payload when its profile is disabled
+  ---
+  duration_ms: 222.037009
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a preview profile without a required LibreOffice package
+ok 38 - offline verifier rejects a preview profile without a required LibreOffice package
+  ---
+  duration_ms: 272.506995
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects package metadata that does not match the deb
+ok 39 - offline verifier rejects package metadata that does not match the deb
+  ---
+  duration_ms: 193.777459
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a path-like release version
+ok 40 - offline verifier rejects a path-like release version
+  ---
+  duration_ms: 104.785219
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a bundle without a target gate
+ok 41 - offline verifier rejects a bundle without a target gate
+  ---
+  duration_ms: 33.056949
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a bundle without release notes
+ok 42 - offline verifier rejects a bundle without release notes
+  ---
+  duration_ms: 37.384431
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects changed release notes
+ok 43 - offline verifier rejects changed release notes
+  ---
+  duration_ms: 48.954299
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a bundle without the support matrix
+ok 44 - offline verifier rejects a bundle without the support matrix
+  ---
+  duration_ms: 37.783431
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a changed support matrix
+ok 45 - offline verifier rejects a changed support matrix
+  ---
+  duration_ms: 48.763616
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects an unlisted extra file
+ok 46 - offline verifier rejects an unlisted extra file
+  ---
+  duration_ms: 45.201324
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects changed example bytes and nested manifest
+ok 47 - offline verifier rejects changed example bytes and nested manifest
+  ---
+  duration_ms: 96.06998
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects absolute and parent paths in the nested manifest
+ok 48 - offline verifier rejects absolute and parent paths in the nested manifest
+  ---
+  duration_ms: 239.867801
+  type: 'test'
+  ...
+# Subtest: offline verifier ignores an inherited TMPDIR
+ok 49 - offline verifier ignores an inherited TMPDIR
+  ---
+  duration_ms: 115.008281
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a symlink escaping the bundle
+ok 50 - offline verifier rejects a symlink escaping the bundle
+  ---
+  duration_ms: 57.085061
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a changed internal symlink target
+ok 51 - offline verifier rejects a changed internal symlink target
+  ---
+  duration_ms: 202.013773
+  type: 'test'
+  ...
+# Subtest: offline verifier rejects a symlink inside examples
+ok 52 - offline verifier rejects a symlink inside examples
+  ---
+  duration_ms: 56.617433
+  type: 'test'
+  ...
+# Subtest: install and update verify the bundle before target mutations
+ok 53 - install and update verify the bundle before target mutations
+  ---
+  duration_ms: 1.655329
+  type: 'test'
+  ...
+# Subtest: target LibreOffice gate follows the immutable bundle profile
+ok 54 - target LibreOffice gate follows the immutable bundle profile
+  ---
+  duration_ms: 1.017679
+  type: 'test'
+  ...
+# Subtest: target OS profile requires exact id, version and architecture
+ok 55 - target OS profile requires exact id, version and architecture
+  ---
+  duration_ms: 72.14753
+  type: 'test'
+  ...
+# Subtest: OS package collector rejects option-like package specifications
+ok 56 - OS package collector rejects option-like package specifications
+  ---
+  duration_ms: 0.884531
+  type: 'test'
+  ...
+# Subtest: trusted bundle guard rejects unsafe ownership, modes and ancestors
+ok 57 - trusted bundle guard rejects unsafe ownership, modes and ancestors
+  ---
+  duration_ms: 156.619439
+  type: 'test'
+  ...
+# (node:3455) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: backup is verifiable and restore replaces database, objects, and config
+ok 58 - backup is verifiable and restore replaces database, objects, and config
+  ---
+  duration_ms: 84.015261
+  type: 'test'
+  ...
+# Subtest: verification detects modified backup files
+ok 59 - verification detects modified backup files
+  ---
+  duration_ms: 31.478989
+  type: 'test'
+  ...
+# Subtest: verification rejects a tampered file omitted from checksum inventory
+ok 60 - verification rejects a tampered file omitted from checksum inventory
+  ---
+  duration_ms: 21.727922
+  type: 'test'
+  ...
+# Subtest: verification rejects unlisted files and duplicate checksum entries
+ok 61 - verification rejects unlisted files and duplicate checksum entries
+  ---
+  duration_ms: 26.706744
+  type: 'test'
+  ...
+# Subtest: verification rejects a listed file that is missing
+ok 62 - verification rejects a listed file that is missing
+  ---
+  duration_ms: 14.800728
+  type: 'test'
+  ...
+# Subtest: verification rejects non-canonical manifest paths
+ok 63 - verification rejects non-canonical manifest paths
+  ---
+  duration_ms: 12.848899
+  type: 'test'
+  ...
+# Subtest: verification rejects symbolic links and special filesystem entries
+ok 64 - verification rejects symbolic links and special filesystem entries
+  ---
+  duration_ms: 23.381284
+  type: 'test'
+  ...
+# Subtest: verification rejects listed symbolic links and symbolic-link parents
+ok 65 - verification rejects listed symbolic links and symbolic-link parents
+  ---
+  duration_ms: 15.017348
+  type: 'test'
+  ...
+# Subtest: verification rejects a symbolic link used as the backup root
+ok 66 - verification rejects a symbolic link used as the backup root
+  ---
+  duration_ms: 13.755448
+  type: 'test'
+  ...
+# Subtest: verification validates manifest object count and database size
+ok 67 - verification validates manifest object count and database size
+  ---
+  duration_ms: 18.201952
+  type: 'test'
+  ...
+# Subtest: verification rejects config presence that contradicts manifest schema
+ok 68 - verification rejects config presence that contradicts manifest schema
+  ---
+  duration_ms: 23.9092
+  type: 'test'
+  ...
+# Subtest: verification rejects malformed manifest boundary values
+    # Subtest: null root
+    ok 1 - null root
+      ---
+      duration_ms: 15.926638
+      type: 'test'
+      ...
+    # Subtest: unknown root key
+    ok 2 - unknown root key
+      ---
+      duration_ms: 16.013823
+      type: 'test'
+      ...
+    # Subtest: invalid creation timestamp
+    ok 3 - invalid creation timestamp
+      ---
+      duration_ms: 15.536629
+      type: 'test'
+      ...
+    # Subtest: relative source directory
+    ok 4 - relative source directory
+      ---
+      duration_ms: 16.903986
+      type: 'test'
+      ...
+    # Subtest: redirected database path
+    ok 5 - redirected database path
+      ---
+      duration_ms: 14.281342
+      type: 'test'
+      ...
+    # Subtest: invalid database checksum
+    ok 6 - invalid database checksum
+      ---
+      duration_ms: 15.318491
+      type: 'test'
+      ...
+    # Subtest: negative object count
+    ok 7 - negative object count
+      ---
+      duration_ms: 16.349307
+      type: 'test'
+      ...
+    1..7
+ok 69 - verification rejects malformed manifest boundary values
+  ---
+  duration_ms: 111.859269
+  type: 'test'
+  ...
+# Subtest: failed restore rolls database and objects back and removes temporary files
+ok 70 - failed restore rolls database and objects back and removes temporary files
+  ---
+  duration_ms: 60.330489
+  type: 'test'
+  ...
+# Subtest: staging creation failure releases the lock and permits a retry
+ok 71 - staging creation failure releases the lock and permits a retry
+  ---
+  duration_ms: 37.81909
+  type: 'test'
+  ...
+# Subtest: cleanup failure after commit cannot remove installed data
+ok 72 - cleanup failure after commit cannot remove installed data
+  ---
+  duration_ms: 34.020816
+  type: 'test'
+  ...
+# Subtest: lock cleanup failure is reported without reverting a successful restore
+ok 73 - lock cleanup failure is reported without reverting a successful restore
+  ---
+  duration_ms: 27.570561
+  type: 'test'
+  ...
+# (node:3700) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: bootstrap migration is repeatable
+ok 74 - bootstrap migration is repeatable
+  ---
+  duration_ms: 159.937189
+  type: 'test'
+  ...
+# Subtest: formatter and repeat migrations preserve rows and constrain new contracts
+ok 75 - formatter and repeat migrations preserve rows and constrain new contracts
+  ---
+  duration_ms: 333.452694
+  type: 'test'
+  ...
+# Subtest: control backup accepts only a new verified backup of the current release
+ok 76 - control backup accepts only a new verified backup of the current release
+  ---
+  duration_ms: 1.723766
+  type: 'test'
+  ...
+# Subtest: control backup rejects an old backup even when systemctl returned success
+ok 77 - control backup rejects an old backup even when systemctl returned success
+  ---
+  duration_ms: 0.267309
+  type: 'test'
+  ...
+# Subtest: control backup rejects a backup of another release
+ok 78 - control backup rejects a backup of another release
+  ---
+  duration_ms: 0.226222
+  type: 'test'
+  ...
+# Subtest: control backup rejects missing evidence after a successful service start
+ok 79 - control backup rejects missing evidence after a successful service start
+  ---
+  duration_ms: 1.22202
+  type: 'test'
+  ...
+# Subtest: control backup rejects evidence without exact manifest SHA-256
+ok 80 - control backup rejects evidence without exact manifest SHA-256
+  ---
+  duration_ms: 0.268841
+  type: 'test'
+  ...
+# Subtest: control backup preserves the systemd failure as a blocking result
+ok 81 - control backup preserves the systemd failure as a blocking result
+  ---
+  duration_ms: 0.207497
+  type: 'test'
+  ...
+# Subtest: pilot check publishes only a release-bound final report
+ok 82 - pilot check publishes only a release-bound final report
+  ---
+  duration_ms: 217.497961
+  type: 'test'
+  ...
+# Subtest: development identity publishes a blocking report
+ok 83 - development identity publishes a blocking report
+  ---
+  duration_ms: 191.515442
+  type: 'test'
+  ...
+# Subtest: pilot check delegates help without creating report files
+ok 84 - pilot check delegates help without creating report files
+  ---
+  duration_ms: 121.410807
+  type: 'test'
+  ...
+# Subtest: installed release identity is strict and version-bound
+ok 85 - installed release identity is strict and version-bound
+  ---
+  duration_ms: 3.580158
+  type: 'test'
+  ...
+# Subtest: release identity is fetched from the installed API endpoint
+ok 86 - release identity is fetched from the installed API endpoint
+  ---
+  duration_ms: 37.827791
+  type: 'test'
+  ...
+# Subtest: release identity fetch rejects oversized and invalid responses
+ok 87 - release identity fetch rejects oversized and invalid responses
+  ---
+  duration_ms: 18.171125
+  type: 'test'
+  ...
+# Subtest: pilot report records the release binding and remains idempotent
+ok 88 - pilot report records the release binding and remains idempotent
+  ---
+  duration_ms: 1.145356
+  type: 'test'
+  ...
+# Subtest: missing release identity blocks the pilot report
+ok 89 - missing release identity blocks the pilot report
+  ---
+  duration_ms: 0.401629
+  type: 'test'
+  ...
+# Subtest: axe reporter writes one structured aggregate and rejects malformed attachments
+ok 90 - axe reporter writes one structured aggregate and rejects malformed attachments
+  ---
+  duration_ms: 13.007383
+  type: 'test'
+  ...
+# Subtest: automation collector fills only machine evidence and stays idempotent
+ok 91 - automation collector fills only machine evidence and stays idempotent
+  ---
+  duration_ms: 45.62517
+  type: 'test'
+  ...
+# Subtest: collector derives the new shape from an unchanged legacy v1 act
+ok 92 - collector derives the new shape from an unchanged legacy v1 act
+  ---
+  duration_ms: 20.286541
+  type: 'test'
+  ...
+# Subtest: unresolved axe findings require an explicit manual review
+ok 93 - unresolved axe findings require an explicit manual review
+  ---
+  duration_ms: 30.088478
+  type: 'test'
+  ...
+# Subtest: axe review is bound to the exact report bytes and review time
+ok 94 - axe review is bound to the exact report bytes and review time
+  ---
+  duration_ms: 41.215584
+  type: 'test'
+  ...
+# Subtest: automation collector fails closed and leaves the act unchanged
+ok 95 - automation collector fails closed and leaves the act unchanged
+  ---
+  duration_ms: 50.464059
+  type: 'test'
+  ...
+# Subtest: collector creates one immutable derived act under concurrent calls
+ok 96 - collector creates one immutable derived act under concurrent calls
+  ---
+  duration_ms: 26.722951
+  type: 'test'
+  ...
+# Subtest: collector never overwrites an input or an independently edited output
+ok 97 - collector never overwrites an input or an independently edited output
+  ---
+  duration_ms: 29.70919
+  type: 'test'
+  ...
+# Subtest: collector rejects replaceable and symlinked evidence directories
+ok 98 - collector rejects replaceable and symlinked evidence directories
+  ---
+  duration_ms: 9.995114
+  type: 'test'
+  ...
+# Subtest: collector rejects a symlinked output act
+ok 99 - collector rejects a symlinked output act
+  ---
+  duration_ms: 2.981014
+  type: 'test'
+  ...
+# Subtest: collect-automation CLI reports that human acceptance is still incomplete
+ok 100 - collect-automation CLI reports that human acceptance is still incomplete
+  ---
+  duration_ms: 77.511515
+  type: 'test'
+  ...
+# Subtest: UX acceptance template is intentionally incomplete
+ok 101 - UX acceptance template is intentionally incomplete
+  ---
+  duration_ms: 2.65211
+  type: 'test'
+  ...
+# Subtest: UX acceptance requires two complete independent sessions and evidence
+ok 102 - UX acceptance requires two complete independent sessions and evidence
+  ---
+  duration_ms: 4.100653
+  type: 'test'
+  ...
+# Subtest: UX acceptance detects changed evidence files
+ok 103 - UX acceptance detects changed evidence files
+  ---
+  duration_ms: 48.385813
+  type: 'test'
+  ...
+# Subtest: UX acceptance CLI creates without overwrite and reports incomplete
+ok 104 - UX acceptance CLI creates without overwrite and reports incomplete
+  ---
+  duration_ms: 161.348771
+  type: 'test'
+  ...
+1..104
+# tests 117
+# suites 0
+# pass 117
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4372.026986
+
+> docomator@0.1.0-alpha.0 check:examples
+> node scripts/ci/check-examples.mjs
+
+Проверены детерминированные примеры CSV/DOCX/XLSX: 10.
+
+> docomator@0.1.0-alpha.0 test:release-gate
+> node scripts/ci/release-gate.mjs
+
+(node:5105) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Release gate passed: HTTP import/intake, 10 personal DOCX + ZIP, repeat DOCX, repeat XLSX, recovered lease, worker restart.
+
+> docomator@0.1.0-alpha.0 test:release-gate:libreoffice
+> node scripts/ci/libreoffice-release-gate.mjs
+
+LibreOffice release gate: SKIPPED (local executable is unavailable).
+
+> docomator@0.1.0-alpha.0 check:docs
+> node scripts/ci/check-doc-links.mjs
+
+Checked 44 Markdown files.
+
+> docomator@0.1.0-alpha.0 check:no-iam
+> node scripts/ci/check-no-iam.mjs
+
+Исполнимая и пользовательская модель IAM отсутствует; разделы остаются общей организационной структурой.
+
+> docomator@0.1.0-alpha.0 check:shell
+> bash scripts/ci/validate-shell.sh
+
+Validated 16 shell scripts.
+
+> docomator@0.1.0-alpha.0 check:runtime
+> node --check scripts/runtime/automatic-backup.mjs && node --check scripts/runtime/pilot-backup-evidence.mjs && node --check scripts/runtime/pilot-check.mjs && node --check scripts/runtime/pilot-readiness.mjs && node --check scripts/runtime/pilot-release-identity.mjs && node --check scripts/runtime/restore.mjs && node --check scripts/runtime/ux-acceptance.mjs && node --check scripts/runtime/ux-acceptance-lib.mjs && node --check scripts/runtime/ux-acceptance-report-contracts.mjs && node --check scripts/runtime/ux-acceptance-automation.mjs && node --check scripts/ci/release-evidence-gate.mjs && node --check scripts/ci/release-gate.mjs && node --check scripts/ci/release-gate-crash-worker.mjs && node --check scripts/ci/libreoffice-release-gate.mjs && node --check scripts/offline/http-check.mjs && node --check scripts/offline/ux-acceptance-gate.mjs && node --check scripts/offline/verify-release.mjs
+
+
+> docomator@0.1.0-alpha.0 check:ui
+> node --check apps/api/ui/app.js && node --check apps/api/ui/workspace-switcher.js && node --check apps/api/ui/interface-hierarchy.js && node --check apps/api/ui/help-center.js && node --check apps/api/ui/document-intake.js && node --check apps/api/ui/document-structure.js && node --check apps/api/ui/template-repeat-assistant.js && node --check apps/api/ui/template-trial.js && node --check apps/api/ui/template-multi-trial.js && node --check apps/api/ui/template-activation.js && node --check apps/api/ui/document-generation.js && node --check apps/api/ui/document-generation-preflight.js && node --check apps/api/ui/document-data-correction.js && node --check apps/api/ui/document-generation-retry.js && node --check apps/api/ui/document-delivery.js && node --check apps/api/ui/document-email-delivery.js && node --check apps/api/ui/email-recipients.js && node --check apps/api/ui/document-schedules.js && node --check apps/api/ui/document-schedule-network.js && node --check apps/api/ui/shared-document-results.js && node --check apps/api/ui/shared-document-view-labels.js && node --check apps/api/ui/shared-corporate-mode.js && node --check apps/api/ui/storage-maintenance.js && node --check apps/api/ui/bulk-data-import.js && node --check apps/api/ui/bulk-data-import-v2.js && node --check apps/api/ui/operation-center.js && node --check apps/api/ui/operations-readiness.js && node --check apps/api/ui/group-management-v2.js && node --check apps/api/ui/template-placement-guidance.js && node --check apps/api/ui/template-row-editor-v2.js && node --check apps/api/ui/template-multi-trial-recovery.js && node --check apps/api/ui/template-row-flow.js && node scripts/ci/check-ui-bundles.mjs && node scripts/ci/check-ui-csp.mjs
+
+Пользовательские UI-бандлы прошли синтаксическую проверку.
+UI не содержит встроенных стилей, запрещённых CSP.
+
+> docomator@0.1.0-alpha.0 check:language
+> node scripts/ci/check-user-facing-language.mjs
+
+Пользовательские тексты прошли проверку русской терминологии.

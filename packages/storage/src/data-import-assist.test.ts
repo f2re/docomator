@@ -218,3 +218,100 @@ test("closed imported list rejects a value outside configured options without cr
     fixture.cleanup();
   }
 });
+
+
+test("assisted import resolves equal labels inside the selected arbitrary entity type", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const knowledge = new KnowledgeRegistry(fixture.store);
+    const imports = new AssistedDataImportRegistry(fixture.store, { spaces, knowledge });
+    knowledge.createEntityType(
+      { key: "room", label: "Аудитория", description: "Учебное помещение" },
+      context("corr-room-type")
+    );
+    knowledge.createEntityType(
+      { key: "article", label: "Научная статья" },
+      context("corr-article-type")
+    );
+    const roomNumber = knowledge.createPropertyDefinition(
+      {
+        key: "room.number",
+        label: "Номер",
+        valueType: "string",
+        sensitivity: "internal",
+        appliesTo: ["room"]
+      },
+      context("corr-room-number")
+    );
+    knowledge.createPropertyDefinition(
+      {
+        key: "article.number",
+        label: "Номер",
+        valueType: "string",
+        sensitivity: "internal",
+        appliesTo: ["article"]
+      },
+      context("corr-article-number")
+    );
+    const space = spaces.createSpace(
+      { key: "campus", name: "Учебный корпус" },
+      context("corr-campus")
+    );
+    const input: AssistedExecuteDataImportInput = {
+      entityTypeKey: "room",
+      fileName: "аудитории.csv",
+      fileFormat: "csv",
+      sourceSha256: "d".repeat(64),
+      identityColumn: "Код",
+      displayNameColumn: "Название",
+      headers: ["Код", "Название", "Номер", "Вместимость"],
+      rows: [
+        {
+          "Код": "ROOM-101",
+          "Название": "Аудитория 101",
+          "Номер": "101",
+          "Вместимость": "32"
+        }
+      ],
+      mappings: [
+        {
+          column: "Номер",
+          createIfMissing: true,
+          label: "Номер",
+          valueType: "string"
+        },
+        {
+          column: "Вместимость",
+          createIfMissing: true,
+          label: "Вместимость",
+          valueType: "integer"
+        }
+      ]
+    };
+
+    const result = imports.execute(space.id, input, context("corr-room-import"));
+    assert.equal(result.createdCount, 1);
+    assert.equal(result.failedCount, 0);
+    assert.equal(
+      result.mappingResolutions.find((item) => item.column === "Номер")?.propertyKey,
+      roomNumber.key
+    );
+    assert.equal(
+      result.mappingResolutions.find((item) => item.column === "Номер")?.matchedBy,
+      "label"
+    );
+    const capacity = knowledge
+      .listPropertyDefinitions()
+      .find((definition) => definition.label === "Вместимость");
+    assert.ok(capacity);
+    assert.deepEqual(capacity.appliesTo, ["room"]);
+    assert.equal(capacity.sensitivity, "internal");
+    assert.deepEqual(
+      spaces.listEntities(space.id).map((entity) => entity.entityTypeKey),
+      ["room"]
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
