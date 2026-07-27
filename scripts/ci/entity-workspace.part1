@@ -1,0 +1,230 @@
+{
+  const entityWorkspaceState = {
+    ready: false,
+    loading: false,
+    types: [],
+    properties: [],
+    entities: [],
+    selectedTypeKey: "",
+    selectedEntityId: "",
+    search: "",
+    importPreview: null,
+    importPlan: null,
+    importBusy: false
+  };
+
+  const entityWorkspaceSupportedTypes = new Set([
+    "string",
+    "text",
+    "number",
+    "integer",
+    "boolean",
+    "date",
+    "date-time",
+    "enum"
+  ]);
+
+  function entityWorkspaceEscape(value) {
+    return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "'": "&#39;",
+      '"': "&quot;"
+    })[character]);
+  }
+
+  function entityWorkspaceNormalize(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .toLocaleLowerCase("ru-RU")
+      .replace(/ё/gu, "е")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+  }
+
+  function entityWorkspaceSpaceId() {
+    return String(globalThis.docomatorCurrentSpaceId || "").trim();
+  }
+
+  function entityWorkspaceType() {
+    return (
+      entityWorkspaceState.types.find(
+        (type) => type.key === entityWorkspaceState.selectedTypeKey
+      ) || null
+    );
+  }
+
+  function entityWorkspaceTypeLabel(key) {
+    return entityWorkspaceState.types.find((type) => type.key === key)?.label || key;
+  }
+
+  function entityWorkspaceProperties(typeKey = entityWorkspaceState.selectedTypeKey) {
+    return entityWorkspaceState.properties
+      .filter((property) => entityWorkspaceSupportedTypes.has(property.valueType))
+      .filter((property) => {
+        const appliesTo = Array.isArray(property.appliesTo) ? property.appliesTo : [];
+        return appliesTo.length === 0 || appliesTo.includes(typeKey);
+      })
+      .sort((left, right) => left.label.localeCompare(right.label, "ru-RU"));
+  }
+
+  function entityWorkspaceValueTypeLabel(valueType) {
+    return ({
+      string: "Короткий текст",
+      text: "Длинный текст",
+      number: "Число",
+      integer: "Целое число",
+      boolean: "Да или нет",
+      date: "Дата",
+      "date-time": "Дата и время",
+      enum: "Список вариантов"
+    })[valueType] || "Значение";
+  }
+
+  async function entityWorkspaceFetch(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        accept: "application/json",
+        ...(options.body === undefined ? {} : { "content-type": "application/json" }),
+        "x-correlation-id": globalThis.crypto?.randomUUID?.() || `entity-ui-${Date.now()}`,
+        "x-actor-id": "local-ui",
+        ...(options.headers || {})
+      }
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      const error = new Error(
+        body?.error?.message || `Сервер вернул код ${response.status}.`
+      );
+      error.correlationId =
+        body?.correlationId || response.headers.get("x-correlation-id") || "";
+      throw error;
+    }
+    return body;
+  }
+
+  function entityWorkspaceEnsureDialogs() {
+    if (!document.querySelector("#entityTypeDialog")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<dialog class="create-dialog entity-workspace-dialog" id="entityTypeDialog" aria-labelledby="entityTypeDialogTitle">
+          <form id="entityTypeForm" novalidate>
+            <header class="dialog-header"><div><p class="eyebrow">Новый тип объектов</p><h2 id="entityTypeDialogTitle">Создать тип</h2><p>Тип определяет, какие поля доступны объектам. Например, «Аудитория», «Научная статья» или «Оборудование».</p></div><button class="icon-button" type="button" data-entity-dialog-close="entityTypeDialog" aria-label="Закрыть">×</button></header>
+            <div class="dialog-body">
+              <div class="field"><label for="entityTypeLabel">Название <span class="required-marker">*</span></label><input id="entityTypeLabel" type="text" maxlength="160" required placeholder="Аудитория" /><small>Техническое обозначение система создаст сама.</small></div>
+              <div class="field"><label for="entityTypeDescription">Описание</label><textarea id="entityTypeDescription" maxlength="2000" placeholder="Учебное помещение с номером, вместимостью и оборудованием"></textarea></div>
+            </div>
+            <div class="form-error" id="entityTypeError" role="alert" hidden></div>
+            <footer class="dialog-footer"><p class="save-explanation">Тип станет доступен во всех пространствах, а сами объекты останутся внутри выбранного пространства.</p><div><button class="secondary-button" type="button" data-entity-dialog-close="entityTypeDialog">Отмена</button><button class="primary-button" type="submit">Создать тип</button></div></footer>
+          </form>
+        </dialog>`
+      );
+      document
+        .querySelector("#entityTypeForm")
+        ?.addEventListener("submit", entityWorkspaceCreateType);
+    }
+
+    if (!document.querySelector("#entityPropertyDialog")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<dialog class="create-dialog entity-workspace-dialog" id="entityPropertyDialog" aria-labelledby="entityPropertyDialogTitle">
+          <form id="entityPropertyForm" novalidate>
+            <header class="dialog-header"><div><p class="eyebrow">Новое поле</p><h2 id="entityPropertyDialogTitle">Добавить параметр</h2><p id="entityPropertyDialogDescription"></p></div><button class="icon-button" type="button" data-entity-dialog-close="entityPropertyDialog" aria-label="Закрыть">×</button></header>
+            <div class="dialog-body">
+              <div class="field"><label for="entityPropertyLabel">Название <span class="required-marker">*</span></label><input id="entityPropertyLabel" type="text" maxlength="300" required placeholder="Вместимость" /></div>
+              <div class="field"><label for="entityPropertyType">Тип значения</label><select id="entityPropertyType"><option value="string">Короткий текст</option><option value="text">Длинный текст</option><option value="integer">Целое число</option><option value="number">Число</option><option value="boolean">Да или нет</option><option value="date">Дата</option><option value="date-time">Дата и время</option><option value="enum">Список вариантов</option></select></div>
+              <div class="field" id="entityPropertyEnumField" hidden><label for="entityPropertyEnum">Варианты</label><textarea id="entityPropertyEnum" placeholder="Проектор\nИнтерактивная доска\nНет оборудования"></textarea><small>По одному варианту в строке. При импорте список можно расширить.</small></div>
+              <div class="field"><label for="entityPropertyUnit">Единица измерения</label><input id="entityPropertyUnit" type="text" maxlength="80" placeholder="мест, м², руб." /></div>
+              <div class="field"><label for="entityPropertySensitivity">Класс данных</label><select id="entityPropertySensitivity"><option value="internal">Внутренние</option><option value="public">Открытые</option><option value="personal">Персональные</option><option value="restricted">Ограниченные</option></select></div>
+            </div>
+            <div class="form-error" id="entityPropertyError" role="alert" hidden></div>
+            <footer class="dialog-footer"><p class="save-explanation">Поле будет применяться только к выбранному типу объектов.</p><div><button class="secondary-button" type="button" data-entity-dialog-close="entityPropertyDialog">Отмена</button><button class="primary-button" type="submit">Создать поле</button></div></footer>
+          </form>
+        </dialog>`
+      );
+      document
+        .querySelector("#entityPropertyType")
+        ?.addEventListener("change", (event) => {
+          const field = document.querySelector("#entityPropertyEnumField");
+          if (field) field.hidden = event.target.value !== "enum";
+        });
+      document
+        .querySelector("#entityPropertyForm")
+        ?.addEventListener("submit", entityWorkspaceCreateProperty);
+    }
+
+    if (!document.querySelector("#entityRecordDialog")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<dialog class="create-dialog entity-workspace-dialog entity-record-dialog" id="entityRecordDialog" aria-labelledby="entityRecordDialogTitle">
+          <form id="entityRecordForm" novalidate>
+            <header class="dialog-header"><div><p class="eyebrow" id="entityRecordEyebrow">Новый объект</p><h2 id="entityRecordDialogTitle">Добавить объект</h2><p id="entityRecordDialogDescription"></p></div><button class="icon-button" type="button" data-entity-dialog-close="entityRecordDialog" aria-label="Закрыть">×</button></header>
+            <div class="dialog-body entity-record-body">
+              <div class="field"><label for="entityRecordName">Отображаемое название <span class="required-marker">*</span></label><input id="entityRecordName" type="text" maxlength="500" required /><small>Это название будет видно в списках и при создании документов.</small></div>
+              <div id="entityRecordFields" class="entity-record-fields"></div>
+              <button class="field-add-button" id="entityRecordAddProperty" type="button"><span aria-hidden="true">＋</span><span>Создать новое поле для типа</span></button>
+            </div>
+            <div class="form-error" id="entityRecordError" role="alert" hidden></div>
+            <footer class="dialog-footer"><p class="save-explanation">Сохраняются только заполненные значения. Новые значения образуют проверяемую историю изменений.</p><div><button class="secondary-button" type="button" data-entity-dialog-close="entityRecordDialog">Отмена</button><button class="primary-button" id="entityRecordSubmit" type="submit">Сохранить объект</button></div></footer>
+          </form>
+        </dialog>`
+      );
+      document
+        .querySelector("#entityRecordForm")
+        ?.addEventListener("submit", entityWorkspaceSaveRecord);
+      document
+        .querySelector("#entityRecordAddProperty")
+        ?.addEventListener("click", () => entityWorkspaceOpenPropertyDialog());
+    }
+
+    if (!document.querySelector("#entityImportDialog")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<dialog class="create-dialog entity-workspace-dialog entity-import-dialog" id="entityImportDialog" aria-labelledby="entityImportDialogTitle">
+          <form id="entityImportForm" novalidate>
+            <header class="dialog-header"><div><p class="eyebrow">Массовое добавление</p><h2 id="entityImportDialogTitle">Импортировать объекты</h2><p id="entityImportDialogDescription"></p></div><button class="icon-button" type="button" data-entity-dialog-close="entityImportDialog" aria-label="Закрыть">×</button></header>
+            <div class="dialog-body entity-import-body">
+              <ol class="bulk-import-steps" aria-label="Шаги импорта"><li class="is-current" data-entity-import-step="1">1. Файл</li><li data-entity-import-step="2">2. Колонки</li><li data-entity-import-step="3">3. Проверка</li><li data-entity-import-step="4">4. Готово</li></ol>
+              <div class="field"><label for="entityImportFile">CSV или XLSX</label><input id="entityImportFile" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><small>До 8 МБ и 1000 строк. В XLSX используется первый лист.</small></div>
+              <button class="primary-button" id="entityImportPreviewButton" type="button">Прочитать файл</button>
+              <div id="entityImportMessage" class="bulk-import-message" role="status" aria-live="polite">Выберите файл со строкой заголовков.</div>
+              <div id="entityImportWorkspace"></div>
+            </div>
+            <footer class="dialog-footer"><p class="save-explanation">Перед записью выполняется предварительная проверка без изменения базы.</p><div><button class="secondary-button" type="button" data-entity-dialog-close="entityImportDialog">Закрыть</button></div></footer>
+          </form>
+        </dialog>`
+      );
+      document
+        .querySelector("#entityImportPreviewButton")
+        ?.addEventListener("click", entityWorkspacePreviewImport);
+      document
+        .querySelector("#entityImportWorkspace")
+        ?.addEventListener("change", entityWorkspaceImportChanged);
+      document
+        .querySelector("#entityImportWorkspace")
+        ?.addEventListener("input", entityWorkspaceImportChanged);
+      document
+        .querySelector("#entityImportWorkspace")
+        ?.addEventListener("click", entityWorkspaceImportClicked);
+    }
+
+    document.querySelectorAll("[data-entity-dialog-close]").forEach((button) => {
+      if (button.dataset.entityCloseBound === "true") return;
+      button.dataset.entityCloseBound = "true";
+      button.addEventListener("click", () => {
+        document.querySelector(`#${CSS.escape(button.dataset.entityDialogClose)}`)?.close();
+      });
+    });
+  }
+
+  function entityWorkspaceFieldControl(property, value = "") {
+    const id = `entity-value-${property.key.replace(/[^a-z0-9_-]/giu, "-")}`;
+    const common = `id="${entityWorkspaceEscape(id)}" data-entity-property="${entityWorkspaceEscape(property.key)}" data-value-type="${entityWorkspaceEscape(property.valueType)}"`;
+    let control = "";
+    if (property.valueType === "text") {
+      control = `<textarea ${common} maxlength="20000">${entityWorkspaceEscape(value)}</textarea>`;
+    } else if (property.valueType === "boolean") {
+      control = `<select ${common}><option value="">Не указано</option><option value="true"${value === true ? " selected" : ""}>Да</option><option value="false"${value === false ? " selected" : ""}>Нет</option></select>`;
+    } else if (property.valueType === "enum") {
