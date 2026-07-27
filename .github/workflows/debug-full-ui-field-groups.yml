@@ -1,0 +1,64 @@
+name: Диагностика общего UI после группировки
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/debug-full-ui-field-groups.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - id: node
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Подготовить базу
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-diagnostic-data
+        run: npm run migrate
+      - name: Запустить приложение
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-diagnostic-data
+          DOCOMATOR_PORT: 18080
+        shell: bash
+        run: |
+          npm run start:api > "$RUNNER_TEMP/docomator-diagnostic-api.log" 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-diagnostic-api.log"
+          exit 1
+      - name: Найти первые регрессии
+        id: diagnose
+        continue-on-error: true
+        shell: bash
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        run: |
+          set -o pipefail
+          npx playwright test --config tests/e2e/playwright.config.mjs --project=chromium-1440 --reporter=line --trace=off --max-failures=8 2>&1 | tee ui-diagnostic.log
+      - name: Сохранить короткий журнал
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: field-groups-full-ui-log
+          path: |
+            ui-diagnostic.log
+            ${{ runner.temp }}/docomator-diagnostic-api.log
+          retention-days: 3
+      - if: steps.diagnose.outcome == 'failure'
+        run: exit 1
