@@ -1,3 +1,44 @@
+.workspace-switcher-host,
+[data-space-tone="blue"] {
+  --space-color: #5b8def;
+  --space-color-rgb: 91 141 239;
+}
+
+[data-space-tone="violet"] {
+  --space-color: #7568e8;
+  --space-color-rgb: 117 104 232;
+}
+
+[data-space-tone="pink"] {
+  --space-color: #bf5f8a;
+  --space-color-rgb: 191 95 138;
+}
+
+[data-space-tone="terracotta"] {
+  --space-color: #cf7047;
+  --space-color-rgb: 207 112 71;
+}
+
+[data-space-tone="gold"] {
+  --space-color: #b58b2e;
+  --space-color-rgb: 181 139 46;
+}
+
+[data-space-tone="green"] {
+  --space-color: #3d9472;
+  --space-color-rgb: 61 148 114;
+}
+
+[data-space-tone="teal"] {
+  --space-color: #2b8f9f;
+  --space-color-rgb: 43 143 159;
+}
+
+[data-space-tone="graphite"] {
+  --space-color: #6b7280;
+  --space-color-rgb: 107 114 128;
+}
+
 .workspace-switcher-host {
   position: relative;
   display: inline-flex;
@@ -293,22 +334,22 @@
   white-space: nowrap;
 }
 
-.workspace-list-item[style] .workspace-avatar {
+.workspace-list-item[data-space-tone] .workspace-avatar {
   color: var(--space-color);
   background: rgb(var(--space-color-rgb) / .12);
   border-color: rgb(var(--space-color-rgb) / .24);
 }
 
-.workspace-list-item[style].is-active {
+.workspace-list-item[data-space-tone].is-active {
   background: rgb(var(--space-color-rgb) / .13);
   box-shadow: inset 3px 0 0 var(--space-color);
 }
 
-.workspace-list-item[style] .current-marker {
+.workspace-list-item[data-space-tone] .current-marker {
   color: var(--space-color);
 }
 
-.workspace-summary[style] {
+.workspace-summary[data-space-tone] {
   border-color: rgb(var(--space-color-rgb) / .24);
   box-shadow: inset 4px 0 0 var(--space-color), var(--shadow);
 }
