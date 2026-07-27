@@ -3,7 +3,7 @@ name: Применить поддержку произвольных сущно�
 on:
   push:
     branches:
-      - main
+      - feature/generic-entities-offline-audit
     paths:
       - scripts/ci/apply-generic-entities-backend.py
       - .github/workflows/apply-generic-entities-backend.yml
@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: feature/generic-entities-offline-audit
           fetch-depth: 0
       - name: Применить изменения
         run: python3 scripts/ci/apply-generic-entities-backend.py
@@ -40,4 +40,4 @@ jobs:
           git add --all
           git diff --cached --check
           git commit -m 'Поддержать импорт и группы произвольных сущностей'
-          git push origin HEAD:main
+          git push origin HEAD:feature/generic-entities-offline-audit
