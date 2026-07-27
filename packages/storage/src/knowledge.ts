@@ -18,6 +18,13 @@ import {
 export type EntityStatus = "active" | "inactive" | "archived";
 export type PropertyCardinality = "single" | "multiple";
 export type PropertySensitivity = "public" | "internal" | "personal" | "restricted";
+export const PROPERTY_UI_GROUPS = [
+  "common",
+  "teacher",
+  "student",
+  "unassigned"
+] as const;
+export type PropertyUiGroup = (typeof PROPERTY_UI_GROUPS)[number];
 
 export interface MutationContext {
   correlationId: string;
@@ -331,6 +338,34 @@ function sensitivity(value: string): PropertySensitivity {
     return value;
   }
   throw new KnowledgeValidationError(`Unsupported property sensitivity: ${value}`);
+}
+
+export function normalizePropertyUiGroup(value: string): PropertyUiGroup {
+  if (PROPERTY_UI_GROUPS.includes(value as PropertyUiGroup)) {
+    return value as PropertyUiGroup;
+  }
+  throw new KnowledgeValidationError(`Unsupported property UI group: ${value}`);
+}
+
+export function propertyUiGroupFromValidation(value: JsonValue): PropertyUiGroup {
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    return "unassigned";
+  }
+  const candidate = value["uiGroup"];
+  return typeof candidate === "string" &&
+    PROPERTY_UI_GROUPS.includes(candidate as PropertyUiGroup)
+    ? (candidate as PropertyUiGroup)
+    : "unassigned";
+}
+
+function validationWithPropertyUiGroup(
+  validation: JsonValue,
+  uiGroup: PropertyUiGroup
+): JsonValue {
+  if (validation === null || Array.isArray(validation) || typeof validation !== "object") {
+    throw new KnowledgeValidationError("validation must be a JSON object");
+  }
+  return toJsonValue({ ...validation, uiGroup });
 }
 
 function propertyValueType(value: string): PropertyValueType {
@@ -718,6 +753,63 @@ export class KnowledgeRegistry {
         .prepare("SELECT * FROM property_definitions ORDER BY key ASC LIMIT ?")
         .all(limit) as unknown as PropertyDefinitionRow[];
       return rows.map(mapPropertyDefinition);
+    });
+  }
+
+  updatePropertyDefinitionUiGroup(
+    keyValue: string,
+    uiGroupValue: string,
+    contextInput: MutationContext
+  ): PropertyDefinitionRecord {
+    const key = stableKey(keyValue, "key");
+    const uiGroup = normalizePropertyUiGroup(uiGroupValue);
+    const context = mutationContext(contextInput);
+    return this.store.transaction((connection) => {
+      const current = propertyByKey(connection, key);
+      if (current === undefined) {
+        throw new KnowledgeNotFoundError(`Property definition was not found: ${key}`);
+      }
+      const validation = validationWithPropertyUiGroup(
+        parseJson(current.validation_json),
+        uiGroup
+      );
+      connection
+        .prepare(`
+          UPDATE property_definitions
+          SET validation_json = ?, version = version + 1, updated_at = ?
+          WHERE id = ?
+        `)
+        .run(stringifyJson(validation), context.now, current.id);
+      this.outbox.append(
+        {
+          eventType: "property_definition.ui_group_changed",
+          schemaVersion: 1,
+          source: "knowledge-registry",
+          occurredAt: context.now,
+          payload: { id: current.id, key, uiGroup },
+          dedupeKey: `property_definition.ui_group_changed:${current.id}:v${current.version + 1}`,
+          now: context.now
+        },
+        connection
+      );
+      this.audit.record(
+        {
+          occurredAt: context.now,
+          actorType: context.actorType,
+          actorId: context.actorId,
+          action: "change_ui_group",
+          objectType: "property_definition",
+          objectId: current.id,
+          correlationId: context.correlationId,
+          details: { key, uiGroup, version: current.version + 1 }
+        },
+        connection
+      );
+      const updated = propertyByKey(connection, key);
+      if (updated === undefined) {
+        throw new Error(`Updated property definition was not found: ${key}`);
+      }
+      return mapPropertyDefinition(updated);
     });
   }
 
