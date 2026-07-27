@@ -16,6 +16,11 @@ function context(correlationId: string) {
   };
 }
 
+function validationObject(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as Record<string, unknown>;
+}
+
 test("same-label teacher and student fields remain separate definitions", () => {
   const fixture = createMigratedTestStore();
   try {
@@ -56,13 +61,13 @@ test("same-label teacher and student fields remain separate definitions", () => 
       context("teacher-field")
     ).profile;
 
-    const studentKey = student.fields[0]?.definition.key;
-    const teacherKey = teacher.fields[0]?.definition.key;
-    assert.ok(studentKey);
-    assert.ok(teacherKey);
-    assert.notEqual(studentKey, teacherKey);
-    assert.equal(student.fields[0]?.definition.validation["uiGroup"], "student");
-    assert.equal(teacher.fields[0]?.definition.validation["uiGroup"], "teacher");
+    const studentDefinition = student.fields[0]?.definition;
+    const teacherDefinition = teacher.fields[0]?.definition;
+    assert.ok(studentDefinition);
+    assert.ok(teacherDefinition);
+    assert.notEqual(studentDefinition.key, teacherDefinition.key);
+    assert.equal(validationObject(studentDefinition.validation).uiGroup, "student");
+    assert.equal(validationObject(teacherDefinition.validation).uiGroup, "teacher");
 
     const secondTeacher = employees.create(
       "default",
@@ -81,7 +86,7 @@ test("same-label teacher and student fields remain separate definitions", () => 
       },
       context("teacher-field-reuse")
     ).profile;
-    assert.equal(secondTeacher.fields[0]?.definition.key, teacherKey);
+    assert.equal(secondTeacher.fields[0]?.definition.key, teacherDefinition.key);
     assert.equal(knowledge.listPropertyDefinitions().length, 2);
 
     assert.throws(
