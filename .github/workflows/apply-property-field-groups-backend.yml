@@ -7,12 +7,14 @@ on:
     paths:
       - .github/workflows/apply-property-field-groups-backend.yml
       - scripts/ci/apply-property-field-groups-backend.py
+      - scripts/ci/repair-property-field-groups-backend-patch.py
   pull_request:
     branches:
       - main
     paths:
       - .github/workflows/apply-property-field-groups-backend.yml
       - scripts/ci/apply-property-field-groups-backend.py
+      - scripts/ci/repair-property-field-groups-backend-patch.py
 
 permissions:
   contents: write
@@ -28,7 +30,9 @@ jobs:
           fetch-depth: 0
           show-progress: false
       - name: Применить серверные изменения
-        run: python3 scripts/ci/apply-property-field-groups-backend.py
+        run: |
+          python3 scripts/ci/repair-property-field-groups-backend-patch.py
+          python3 scripts/ci/apply-property-field-groups-backend.py
       - name: Проверить TypeScript
         run: |
           npm ci --ignore-scripts
@@ -39,6 +43,7 @@ jobs:
           set -Eeuo pipefail
           rm -f \
             scripts/ci/apply-property-field-groups-backend.py \
+            scripts/ci/repair-property-field-groups-backend-patch.py \
             .github/workflows/apply-property-field-groups-backend.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
