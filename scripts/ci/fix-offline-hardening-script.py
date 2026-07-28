@@ -5,6 +5,7 @@ value = path.read_text(encoding="utf-8")
 replacements = {
     "    new_verify_package_set,\n    lib,": "    lambda _match: new_verify_package_set,\n    lib,",
     "    new_verify_target,\n    lib,": "    lambda _match: new_verify_target,\n    lib,",
+    'OS_VERSION_ID="12"\\nDEB_ARCHITECTURE': 'OS_VERSION_ID=12\\nDEB_ARCHITECTURE',
 }
 for old, new in replacements.items():
     count = value.count(old)
