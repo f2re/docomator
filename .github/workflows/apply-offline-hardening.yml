@@ -29,8 +29,14 @@ jobs:
           ref: feature/generic-entities-offline-audit
           fetch-depth: 0
       - name: Исправить сценарий применения
-        run: python3 scripts/ci/fix-offline-hardening-script.py
+        id: fixer
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/ci/fix-offline-hardening-script.py 2>&1 | tee offline-hardening-fixer.log
       - name: Применить исправления
+        if: steps.fixer.outcome == 'success'
         id: apply
         continue-on-error: true
         shell: bash
@@ -38,10 +44,10 @@ jobs:
           set -o pipefail
           python3 scripts/ci/apply-offline-hardening.py 2>&1 | tee offline-hardening-apply.log
       - name: Установить зависимости
-        if: steps.apply.outcome == 'success'
+        if: steps.fixer.outcome == 'success' && steps.apply.outcome == 'success'
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Проверить shell и JavaScript
-        if: steps.apply.outcome == 'success'
+        if: steps.fixer.outcome == 'success' && steps.apply.outcome == 'success'
         run: |
           bash -n scripts/offline/collect-os-packages.sh
           bash -n scripts/offline/lib.sh
@@ -50,7 +56,7 @@ jobs:
           bash -n scripts/offline/verify-bundle.sh
           node --check scripts/offline/verify-target-profile.mjs
       - name: Проверить репозиторий
-        if: steps.apply.outcome == 'success'
+        if: steps.fixer.outcome == 'success' && steps.apply.outcome == 'success'
         id: check
         continue-on-error: true
         shell: bash
@@ -58,17 +64,18 @@ jobs:
           set -o pipefail
           npm run check 2>&1 | tee offline-hardening-check.log
       - name: Сохранить диагностику
-        if: steps.apply.outcome == 'failure' || steps.check.outcome == 'failure'
+        if: steps.fixer.outcome == 'failure' || steps.apply.outcome == 'failure' || steps.check.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: offline-hardening-diagnostic
           path: |
+            offline-hardening-fixer.log
             offline-hardening-apply.log
             offline-hardening-check.log
           if-no-files-found: warn
           retention-days: 3
       - name: Остановиться после ошибки
-        if: steps.apply.outcome == 'failure' || steps.check.outcome == 'failure'
+        if: steps.fixer.outcome == 'failure' || steps.apply.outcome == 'failure' || steps.check.outcome == 'failure'
         run: exit 1
       - name: Зафиксировать исправления
         shell: bash
@@ -78,6 +85,7 @@ jobs:
             scripts/ci/apply-offline-hardening.py \
             scripts/ci/fix-offline-hardening-script.py \
             .github/workflows/apply-offline-hardening.yml \
+            offline-hardening-fixer.log \
             offline-hardening-apply.log \
             offline-hardening-check.log
           git config user.name 'github-actions[bot]'
