@@ -373,6 +373,12 @@ test("groups and document snapshots keep one arbitrary entity type", () => {
       [room.entityId],
       context("corr-room-group")
     );
+    const typedGroup = spaces.listGroups(space.id).find(
+      (candidate) => candidate.id === group.id
+    );
+    assert.ok(typedGroup);
+    assert.equal(typedGroup.entityTypeKey, "room");
+    assert.equal(typedGroup.entityTypeLabel, "Аудитория");
     const grouped = spaces.createAudienceSnapshot(
       space.id,
       { source: { kind: "group", groupId: group.id }, targetMode: "aggregate" },

@@ -84,6 +84,8 @@ export interface AudienceGroupRecord {
   status: SpaceStatus;
   version: number;
   memberCount: number;
+  entityTypeKey: string | null;
+  entityTypeLabel: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -207,6 +209,8 @@ interface AudienceGroupRow {
   status: string;
   version: number;
   member_count: number;
+  entity_type_key: string | null;
+  entity_type_label: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -417,6 +421,8 @@ function mapGroup(row: AudienceGroupRow): AudienceGroupRecord {
     status: spaceStatus(row.status),
     version: row.version,
     memberCount: Number(row.member_count),
+    entityTypeKey: row.entity_type_key,
+    entityTypeLabel: row.entity_type_label,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -477,7 +483,25 @@ function groupRowById(connection: SqliteExecutor, id: string): AudienceGroupRow 
   return connection
     .prepare(`
       SELECT g.*,
-             (SELECT COUNT(*) FROM audience_group_members gm WHERE gm.group_id = g.id) AS member_count
+             (SELECT COUNT(*) FROM audience_group_members gm WHERE gm.group_id = g.id) AS member_count,
+             (
+               SELECT et.key
+               FROM audience_group_members gm
+               JOIN entities e ON e.id = gm.entity_id
+               JOIN entity_types et ON et.id = e.entity_type_id
+               WHERE gm.group_id = g.id
+               ORDER BY gm.position ASC, gm.entity_id ASC
+               LIMIT 1
+             ) AS entity_type_key,
+             (
+               SELECT et.label
+               FROM audience_group_members gm
+               JOIN entities e ON e.id = gm.entity_id
+               JOIN entity_types et ON et.id = e.entity_type_id
+               WHERE gm.group_id = g.id
+               ORDER BY gm.position ASC, gm.entity_id ASC
+               LIMIT 1
+             ) AS entity_type_label
       FROM audience_groups g
       WHERE g.id = ?
     `)
@@ -1089,7 +1113,25 @@ export class SpaceRegistry {
       const rows = connection
         .prepare(`
           SELECT g.*,
-                 (SELECT COUNT(*) FROM audience_group_members gm WHERE gm.group_id = g.id) AS member_count
+                 (SELECT COUNT(*) FROM audience_group_members gm WHERE gm.group_id = g.id) AS member_count,
+                 (
+                   SELECT et.key
+                   FROM audience_group_members gm
+                   JOIN entities e ON e.id = gm.entity_id
+                   JOIN entity_types et ON et.id = e.entity_type_id
+                   WHERE gm.group_id = g.id
+                   ORDER BY gm.position ASC, gm.entity_id ASC
+                   LIMIT 1
+                 ) AS entity_type_key,
+                 (
+                   SELECT et.label
+                   FROM audience_group_members gm
+                   JOIN entities e ON e.id = gm.entity_id
+                   JOIN entity_types et ON et.id = e.entity_type_id
+                   WHERE gm.group_id = g.id
+                   ORDER BY gm.position ASC, gm.entity_id ASC
+                   LIMIT 1
+                 ) AS entity_type_label
           FROM audience_groups g
           WHERE g.space_id = ?
           ORDER BY CASE g.status WHEN 'active' THEN 0 ELSE 1 END, g.name ASC, g.id ASC

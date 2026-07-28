@@ -43,6 +43,7 @@ function createSpaceState(employeeCount = 0, activeTemplate = false) {
     entities: employees.map((employee) => ({
       entityId: employee.entityId,
       displayName: employee.displayName,
+      entityTypeKey: "person",
       entityTypeLabel: "Человек",
       status: employee.status
     })),
@@ -289,6 +290,9 @@ export function createDocomatorScenario(options = {}) {
     primary,
     secondary,
     includeSecondSpace: Boolean(options.secondSpace),
+    entityTypes: Array.isArray(options.entityTypes)
+      ? options.entityTypes.map((type) => structuredClone(type))
+      : [{ key: "person", label: "Человек", description: "Сотрудник" }],
     properties: Array.isArray(options.properties) ? options.properties.map((property) => structuredClone(property)) : [],
     failTrialRemaining: options.failTrialOnce ? 1 : 0,
     failOperationsRemaining: options.failOperationsOnce ? 1 : 0,
@@ -395,8 +399,20 @@ export async function installDocomatorApiMock(page, options = {}) {
         cleanupCandidateBytes: 0,
         cutoff: "2026-07-09T09:00:00.000Z"
       };
+    } else if (
+      path === "/api/v1/knowledge/entity-types" &&
+      method === "POST"
+    ) {
+      const payload = await jsonBody(request);
+      const type = {
+        key: `entity_type_e2e_${state.entityTypes.length + 1}`,
+        label: payload.label,
+        description: payload.description || null
+      };
+      state.entityTypes.push(type);
+      data = type;
     } else if (path === "/api/v1/knowledge/entity-types") {
-      data = [{ key: "person", label: "Человек", description: "Сотрудник" }];
+      data = state.entityTypes;
     } else if (
       path === "/api/v1/knowledge/property-definitions" &&
       method === "GET"
@@ -504,6 +520,7 @@ export async function installDocomatorApiMock(page, options = {}) {
       space.entities.push({
         entityId: id,
         displayName: employee.displayName,
+        entityTypeKey: "person",
         entityTypeLabel: "Человек",
         status: employee.status
       });
@@ -532,6 +549,11 @@ export async function installDocomatorApiMock(page, options = {}) {
       if (group) {
         group.memberIds = [...new Set(payload.entityIds || [])];
         group.memberCount = group.memberIds.length;
+        const firstEntity = space.entities.find(
+          (entity) => entity.entityId === group.memberIds[0]
+        );
+        group.entityTypeKey = firstEntity?.entityTypeKey || null;
+        group.entityTypeLabel = firstEntity?.entityTypeLabel || null;
         group.version += 1;
       }
       state.groupMemberRequests.push({
@@ -572,6 +594,8 @@ export async function installDocomatorApiMock(page, options = {}) {
         status: "active",
         version: 1,
         memberCount: 0,
+        entityTypeKey: null,
+        entityTypeLabel: null,
         memberIds: []
       };
       space.groups.push(group);
@@ -642,7 +666,11 @@ export async function installDocomatorApiMock(page, options = {}) {
         space.entities.push({
           entityId: id,
           displayName: employee.displayName,
-          entityTypeLabel: "Человек",
+          entityTypeKey: payload.entityTypeKey || "person",
+          entityTypeLabel:
+            payload.entityTypeKey && payload.entityTypeKey !== "person"
+              ? state.entityTypes.find((type) => type.key === payload.entityTypeKey)?.label || payload.entityTypeKey
+              : "Человек",
           status: "active"
         });
       }
