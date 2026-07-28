@@ -36,8 +36,16 @@ require_command sort
 [[ -x "$BUNDLE_ROOT/target-acceptance.sh" ]] || \
   die "В комплекте отсутствует единый сценарий целевой приёмки"
 [[ -f "$BUNDLE_ROOT/verify-release.mjs" ]] || die "В комплекте отсутствует проверка release metadata"
+[[ -f "$BUNDLE_ROOT/verify-target-profile.mjs" ]] || die "В комплекте отсутствует проверка target-профиля"
 [[ -f "$BUNDLE_ROOT/payload/config/docomator.env.example" ]] || \
   die "В комплекте отсутствует шаблон настроек"
+[[ -f "$BUNDLE_ROOT/payload/app/README.md" ]] || die "В комплекте отсутствует README"
+[[ -f "$BUNDLE_ROOT/payload/app/docs/README.md" ]] || die "В комплекте отсутствует индекс документации"
+[[ -f "$BUNDLE_ROOT/payload/app/docs/OFFLINE_DEPLOYMENT.md" ]] || die "В комплекте отсутствует руководство автономной установки"
+[[ -f "$BUNDLE_ROOT/payload/app/docs/ENTITY_MODEL_AND_IMPORT.md" ]] || die "В комплекте отсутствует описание произвольных объектов"
+[[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/entity-workspace.js" ]] || die "В комплекте отсутствует интерфейс произвольных объектов"
+[[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/generic-template-entities.js" ]] || die "В комплекте отсутствует выбор типа объектов шаблона"
+[[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/generic-document-generation.js" ]] || die "В комплекте отсутствует выпуск документов по объектам"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/ci/release-gate.mjs" ]] || \
   die "В комплекте отсутствует обязательный core release-gate"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/ci/release-gate-crash-worker.mjs" ]] || \
@@ -105,6 +113,9 @@ cmp -s "$BUNDLE_ROOT/manifest.symlinks" "$TEMP_DIR/actual-symlinks" || \
 info "Проверяем профиль и метаданные автономного выпуска"
 "$BUNDLE_ROOT/payload/runtime/node/bin/node" \
   "$BUNDLE_ROOT/verify-release.mjs" \
+  "$BUNDLE_ROOT"
+"$BUNDLE_ROOT/payload/runtime/node/bin/node" \
+  "$BUNDLE_ROOT/verify-target-profile.mjs" \
   "$BUNDLE_ROOT"
 
 PREVIEW_ENABLED="$(read_env_value \

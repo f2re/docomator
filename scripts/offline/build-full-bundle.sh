@@ -291,6 +291,7 @@ MODEL_FILE="$(absolute_path "$MODEL_FILE")"
 prepare_arguments=(
   --output "$BUNDLE_OUTPUT_DIR"
   --target-arch "$TARGET_ARCH"
+  --target-profile "$TARGET"
   --llama-server "$LLAMA_SERVER"
   --model "$MODEL_FILE"
   --with-preview
@@ -319,8 +320,25 @@ ARCHIVE="$BUNDLE_OUTPUT_DIR/docomator-${VERSION}-linux-${NODE_ARCH}.tar.gz"
 CHECKSUM="$ARCHIVE.sha256"
 [[ -f "$ARCHIVE" && -f "$CHECKSUM" ]] || \
   die "Сборщик завершился без ожидаемого архива или SHA-256."
+(
+  cd "$(dirname "$ARCHIVE")"
+  sha256sum --check --strict --quiet "$(basename "$CHECKSUM")"
+)
+ARCHIVE_TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/docomator-archive-check.XXXXXX")"
+TEMPORARY_DIRECTORY="$ARCHIVE_TEST_DIR"
+while IFS= read -r member; do
+  [[ -n "$member" && "$member" != /* && "$member" != *$'\n'* && "$member" != *$'\r'* ]] || \
+    die "Архив содержит небезопасное имя."
+  case "/$member/" in
+    */../*) die "Архив содержит выход за пределы каталога." ;;
+  esac
+done < <(tar -tzf "$ARCHIVE")
+tar -xzf "$ARCHIVE" -C "$ARCHIVE_TEST_DIR"
+EXTRACTED_BUNDLE="$ARCHIVE_TEST_DIR/docomator-${VERSION}-linux-${NODE_ARCH}"
+[[ -d "$EXTRACTED_BUNDLE" ]] || die "После распаковки не найден корень комплекта."
+"$EXTRACTED_BUNDLE/verify-bundle.sh" "$EXTRACTED_BUNDLE"
 
-info "Полный offline bundle для $TARGET создан."
+info "Полный offline bundle для $TARGET создан и повторно проверен после распаковки."
 printf 'Профиль: %s %s %s\n' "$OS_ID" "$OS_VERSION_ID" "$DEB_ARCHITECTURE"
 printf 'Архив: %s\n' "$ARCHIVE"
 printf 'SHA-256: %s\n' "$CHECKSUM"
