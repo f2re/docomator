@@ -2,7 +2,8 @@ from pathlib import Path
 
 path = Path(__file__).resolve().with_name("finalize-generic-release.py")
 value = path.read_text(encoding="utf-8")
-old = '''# Exact example inventories inside the release builder and verifier.
+
+old_examples = '''# Exact example inventories inside the release builder and verifier.
 for relative in [
     "scripts/offline/prepare-bundle.sh",
     "scripts/offline/verify-bundle.sh",
@@ -17,7 +18,7 @@ for relative in [
     )
     write(relative, value)
 '''
-new = '''# Exact example inventories inside the release builder and verifier.
+new_examples = '''# Exact example inventories inside the release builder and verifier.
 example_inventory_patches = [
     (
         "scripts/offline/prepare-bundle.sh",
@@ -47,7 +48,51 @@ for relative, old_item, new_items, expected_count in example_inventory_patches:
         )
     write(relative, value.replace(old_item, new_items, expected_count))
 '''
-if value.count(old) != 1:
+if value.count(old_examples) != 1:
     raise RuntimeError("example inventory patch block not found")
-path.write_text(value.replace(old, new, 1), encoding="utf-8")
+value = value.replace(old_examples, new_examples, 1)
+
+old_e2e = '''# Include the new E2E scenario in the exact offline acceptance inventory.
+for relative in [
+    "scripts/offline/prepare-bundle.sh",
+    "scripts/offline/verify-release.mjs",
+    "scripts/offline/verify-bundle.test.mjs",
+]:
+    value = read(relative)
+    value = replace_in(
+        value,
+        '    "employee-card.spec.mjs",\\n',
+        '    "employee-card.spec.mjs",\\n    "generic-entities.spec.mjs",\\n',
+        f"{relative} E2E inventory"
+    )
+    write(relative, value)
+'''
+new_e2e = '''# Include the new E2E scenario in the exact offline acceptance inventory.
+e2e_inventory_patches = [
+    (
+        "scripts/offline/prepare-bundle.sh",
+        '    "employee-card.spec.mjs"\\n',
+        '    "employee-card.spec.mjs"\\n    "generic-entities.spec.mjs"\\n',
+    ),
+    (
+        "scripts/offline/verify-release.mjs",
+        '    "employee-card.spec.mjs",\\n',
+        '    "employee-card.spec.mjs",\\n    "generic-entities.spec.mjs",\\n',
+    ),
+    (
+        "scripts/offline/verify-bundle.test.mjs",
+        '  "employee-card.spec.mjs",\\n',
+        '  "employee-card.spec.mjs",\\n  "generic-entities.spec.mjs",\\n',
+    ),
+]
+for relative, old_item, new_items in e2e_inventory_patches:
+    value = read(relative)
+    value = replace_in(value, old_item, new_items, f"{relative} E2E inventory")
+    write(relative, value)
+'''
+if value.count(old_e2e) != 1:
+    raise RuntimeError("E2E inventory patch block not found")
+value = value.replace(old_e2e, new_e2e, 1)
+
+path.write_text(value, encoding="utf-8")
 print("final generic release script fixed")
