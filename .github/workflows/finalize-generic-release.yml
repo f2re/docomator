@@ -1,0 +1,149 @@
+name: Финализировать произвольные объекты и автономную поставку
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/ci/finalize-generic-release.py
+      - .github/workflows/finalize-generic-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-generic-release
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/generic-entities-offline-audit
+          fetch-depth: 0
+
+      - name: Применить финальные изменения
+        id: apply
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/ci/finalize-generic-release.py 2>&1 | tee finalize-generic-release-apply.log
+
+      - name: Прочитать версию Node.js
+        if: steps.apply.outcome == 'success'
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        if: steps.apply.outcome == 'success'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Установить зависимости
+        if: steps.apply.outcome == 'success'
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Пересобрать детерминированные примеры
+        if: steps.apply.outcome == 'success'
+        run: |
+          npm run build
+          npm run generate:examples
+          npm run check:examples
+
+      - name: Проверить репозиторий
+        if: steps.apply.outcome == 'success'
+        id: check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee finalize-generic-release-check.log
+
+      - name: Установить Chromium
+        if: steps.apply.outcome == 'success' && steps.check.outcome == 'success'
+        run: npx playwright install --with-deps chromium
+
+      - name: Проверить браузерные сценарии
+        if: steps.apply.outcome == 'success' && steps.check.outcome == 'success'
+        id: e2e
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee finalize-generic-release-e2e.log
+
+      - name: Собрать и распаковать универсальный автономный архив
+        if: steps.apply.outcome == 'success' && steps.check.outcome == 'success' && steps.e2e.outcome == 'success'
+        id: bundle
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_RUNTIME_ROOT="$(dirname "$(dirname "$(command -v node)")")"
+          scripts/offline/prepare-bundle.sh \
+            --target-profile generic \
+            --node-runtime-dir "$NODE_RUNTIME_ROOT" \
+            --without-llm \
+            --without-preview \
+            --without-ux-acceptance \
+            --skip-tests \
+            --force 2>&1 | tee finalize-generic-release-bundle.log
+          VERSION="$(cat VERSION)"
+          case "$(dpkg --print-architecture)" in
+            amd64) NODE_ARCH=x64 ;;
+            arm64) NODE_ARCH=arm64 ;;
+            *) exit 1 ;;
+          esac
+          ARCHIVE="offline-bundles/docomator-${VERSION}-linux-${NODE_ARCH}.tar.gz"
+          (cd "$(dirname "$ARCHIVE")" && sha256sum --check --strict --quiet "$(basename "$ARCHIVE.sha256")")
+          EXTRACTED="$RUNNER_TEMP/final-generic-bundle"
+          mkdir -p "$EXTRACTED"
+          tar -xzf "$ARCHIVE" -C "$EXTRACTED"
+          "$EXTRACTED/docomator-${VERSION}-linux-${NODE_ARCH}/verify-bundle.sh" \
+            "$EXTRACTED/docomator-${VERSION}-linux-${NODE_ARCH}"
+
+      - name: Сохранить диагностику
+        if: steps.apply.outcome == 'failure' || steps.check.outcome == 'failure' || steps.e2e.outcome == 'failure' || steps.bundle.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: finalize-generic-release-diagnostic
+          path: |
+            finalize-generic-release-apply.log
+            finalize-generic-release-check.log
+            finalize-generic-release-e2e.log
+            finalize-generic-release-bundle.log
+            tests/e2e/.tmp/playwright-report
+            tests/e2e/.tmp/playwright-results
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Остановиться после ошибки
+        if: steps.apply.outcome == 'failure' || steps.check.outcome == 'failure' || steps.e2e.outcome == 'failure' || steps.bundle.outcome == 'failure'
+        run: exit 1
+
+      - name: Зафиксировать финальную версию
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf offline-bundles
+          rm -f \
+            scripts/ci/finalize-generic-release.py \
+            .github/workflows/finalize-generic-release.yml \
+            finalize-generic-release-apply.log \
+            finalize-generic-release-check.log \
+            finalize-generic-release-e2e.log \
+            finalize-generic-release-bundle.log
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Завершить произвольные сущности и автономную поставку'
+          git push origin HEAD:feature/generic-entities-offline-audit
