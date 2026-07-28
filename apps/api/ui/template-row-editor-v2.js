@@ -298,7 +298,7 @@
           <div class="roster-new-property" data-row-editor-new hidden>
             <label><span>Название поля</span><input data-row-editor-label type="text" maxlength="500" value="${structureEscape(header.startsWith("Колонка ") ? "" : header)}" placeholder="Например, Номер зачётной книжки" /></label>
             <label><span>Тип значения</span><select data-row-editor-type>${fieldTypeOptions()}</select></label>
-            <small>Новое поле будет создано один раз и станет доступно объектам выбранного типа.</small>
+            <small>${rowEditorIsPerson() ? "Новое поле будет создано один раз и появится в карточках участников." : "Новое поле будет создано один раз и станет доступно объектам выбранного типа."}</small>
           </div>
           ${rowEditorNameOptions(settings)}
         </div>
@@ -383,7 +383,9 @@
             ? "Сохранённая связь будет удалена после подтверждения."
             : "Колонка останется без изменений."
           : mode === "system:position"
-            ? "Система сама проставит 1, 2, 3… по порядку объектов."
+            ? rowEditorIsPerson()
+              ? "Система сама проставит 1, 2, 3… по порядку участников."
+              : "Система сама проставит 1, 2, 3… по порядку объектов."
             : mode === "system:name"
               ? rowEditorIsPerson()
                 ? "ФИО берётся из имени карточки и приводится к выбранному виду."
@@ -392,7 +394,9 @@
                 ? rowEditorIsPerson()
                   ? `Будет создано поле в разделе «${globalThis.docomatorFieldGroups.label(card.querySelector("[data-row-editor-group]")?.value || "common")}».`
                   : "Будет создано поле выбранного типа объектов."
-                : "Значение будет взято из выбранного поля объекта.";
+                : rowEditorIsPerson()
+                  ? "Значение будет взято из выбранного поля карточки."
+                  : "Значение будет взято из выбранного поля объекта.";
     }
     rowEditorUpdateNamePreview(card);
     rowEditorUpdateSummary();
@@ -453,7 +457,7 @@
       return structureEffectiveDefinition(
         {
           key: "__system_display_name__",
-          label: rowEditorIsPerson() ? "ФИО участника" : "Название объекта",
+          label: rowEditorIsPerson() ? "ФИО сотрудника" : "Название объекта",
           valueType: "string",
           systemSource: "display-name"
         },
@@ -654,7 +658,7 @@
       latest = await rowEditorLatestDraft(spaceId, draft.id);
       structureDraft = latest;
       panel.innerHTML = `
-        <div class="roster-assistant-finished"><span aria-hidden="true">✓</span><div><h3>Строка сохранена</h3><p>Заполняются ${latest.fields.length} полей. Создано: ${createdCount}, изменено: ${updatedCount}, удалено: ${deletedCount}. При сводном выпуске эта строка повторится для каждого объекта.</p></div></div>
+        <div class="roster-assistant-finished"><span aria-hidden="true">✓</span><div><h3>Строка сохранена</h3><p>Заполняются ${latest.fields.length} полей. Создано: ${createdCount}, изменено: ${updatedCount}, удалено: ${deletedCount}. При сводном выпуске эта строка повторится для каждого ${rowEditorIsPerson() ? "участника" : "объекта"}.</p></div></div>
         <div class="roster-assistant-actions"><button class="secondary-button" id="rowEditorContinueEditing" type="button">Вернуться к строке</button><button class="primary-button" id="rowEditorContinueTrial" type="button">Перейти к проверке шаблона</button></div>`;
       panel.querySelector("#rowEditorContinueEditing")?.addEventListener("click", () =>
         rowEditorOpen(selectedStructureElement)
@@ -716,11 +720,11 @@
     panel.id = "rowEditorPanel";
     panel.className = "roster-assistant-panel row-editor-panel";
     panel.innerHTML = `
-      <div class="roster-assistant-heading"><div><p class="eyebrow">Таблица Word</p><h3>${structureDraft?.repeatBinding ? "Изменить повторяемую строку" : "Настроить строку для списка объектов"}</h3><p>Для каждой колонки выберите источник значения. Уже сохранённые связи загружены в форму и могут быть изменены.</p></div><button class="icon-button" id="rowEditorClose" type="button" aria-label="Закрыть">×</button></div>
-      <div class="row-editor-explanation"><strong>Как это работает</strong><ol><li>В этой строке задаются колонки будущего списка.</li><li>При сводном выпуске Word скопирует строку по одному разу для каждого объекта группы.</li><li>Поля берутся из карточки объекта; номер строки система считает сама.</li></ol></div>
+      <div class="roster-assistant-heading"><div><p class="eyebrow">Таблица Word</p><h3>${structureDraft?.repeatBinding ? "Изменить повторяемую строку" : rowEditorIsPerson() ? "Настроить строку для списка участников" : "Настроить строку для списка объектов"}</h3><p>Для каждой колонки выберите источник значения. Уже сохранённые связи загружены в форму и могут быть изменены.</p></div><button class="icon-button" id="rowEditorClose" type="button" aria-label="Закрыть">×</button></div>
+      <div class="row-editor-explanation"><strong>Как это работает</strong><ol><li>В этой строке задаются колонки будущего списка.</li><li>При сводном выпуске Word скопирует строку по одному разу для каждого ${rowEditorIsPerson() ? "участника группы" : "объекта группы"}.</li><li>Поля берутся из карточки ${rowEditorIsPerson() ? "участника" : "объекта"}; номер строки система считает сама.</li></ol></div>
       <p id="rowEditorSummary" class="row-editor-summary"></p>
       <div class="roster-assistant-columns">${rows.map(rowEditorCard).join("")}</div>
-      <div class="roster-assistant-preview"><span aria-hidden="true">✓</span><div><strong>Ожидаемый результат</strong><p>Заголовок таблицы останется один раз, а настроенная строка повторится по числу выбранных объектов.</p></div></div>
+      <div class="roster-assistant-preview"><span aria-hidden="true">✓</span><div><strong>Ожидаемый результат</strong><p>Заголовок таблицы останется один раз, а настроенная строка повторится по числу выбранных ${rowEditorIsPerson() ? "участников" : "объектов"}.</p></div></div>
       <div class="form-error" id="rowEditorError" role="alert" hidden></div>
       <div class="roster-assistant-actions"><button class="secondary-button" id="rowEditorCancel" type="button">Отмена</button><button class="primary-button" id="rowEditorSave" type="button">Сохранить настройки строки</button></div>`;
     detail.prepend(panel);
@@ -754,7 +758,7 @@
     entry.id = "rowEditorEntry";
     entry.className = "roster-assistant-entry";
     entry.innerHTML = `
-      <div><strong>${linked ? `Строка уже настроена: ${linked} из ${rows.length} колонок` : "Заполнить всю строку как список объектов"}</strong><p>${linked ? (rowEditorIsPerson() ? "Откройте редактор, чтобы изменить поле, формат ФИО, обязательность или исключить колонку." : "Откройте редактор, чтобы изменить поле, обязательность или исключить колонку.") : "Подходит для реестров аудиторий, статей, оборудования, студентов и других однотипных объектов."}</p></div>
+      <div><strong>${linked ? `Строка уже настроена: ${linked} из ${rows.length} колонок` : rowEditorIsPerson() ? "Заполнить всю строку как список участников" : "Заполнить всю строку как список объектов"}</strong><p>${linked ? (rowEditorIsPerson() ? "Откройте редактор, чтобы изменить поле, формат ФИО, обязательность или исключить колонку." : "Откройте редактор, чтобы изменить поле, обязательность или исключить колонку.") : rowEditorIsPerson() ? "Удобно для реестров, списков студентов и таблиц сотрудников: одна настройка для всех колонок строки." : "Подходит для реестров аудиторий, статей, оборудования и других однотипных объектов."}</p></div>
       <button class="secondary-button" id="rowEditorOpen" type="button">${linked ? "Изменить строку" : "Настроить строку"}</button>`;
     detail.prepend(entry);
     entry.querySelector("#rowEditorOpen")?.addEventListener("click", () => rowEditorOpen(element));
