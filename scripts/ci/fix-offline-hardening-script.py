@@ -31,12 +31,8 @@ for old, new in (
         raise RuntimeError(f"expected one occurrence, found {count}: {old!r}")
     value = value.replace(old, new, 1)
 
-quoted_version = 'OS_VERSION_ID="12"\\nDEB_ARCHITECTURE'
-plain_version = 'OS_VERSION_ID=12\\nDEB_ARCHITECTURE'
-count = value.count(quoted_version)
-if count != 1:
-    raise RuntimeError(f"expected one quoted fixture version, found {count}")
-value = value.replace(quoted_version, plain_version, 1)
+value = value.replace('OS_VERSION_ID="12"', 'OS_VERSION_ID=12')
+value = value.replace('OS_VERSION_ID=\\"12\\"', 'OS_VERSION_ID=12')
 
 path.write_text(value, encoding="utf-8")
 print("offline hardening script fixed")
