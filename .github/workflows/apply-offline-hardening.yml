@@ -1,9 +1,9 @@
 name: Усилить автономный комплект
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/generic-entities-offline-audit
+      - main
     paths:
       - scripts/ci/apply-offline-hardening.py
       - .github/workflows/apply-offline-hardening.yml
