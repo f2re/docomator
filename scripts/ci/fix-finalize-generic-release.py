@@ -94,5 +94,11 @@ if value.count(old_e2e) != 1:
     raise RuntimeError("E2E inventory patch block not found")
 value = value.replace(old_e2e, new_e2e, 1)
 
+value = value.replace(
+    '    "# Пространства и аудитории документов\\n",',
+    '    "# Пространства, группы и аудитории документов\\n",',
+    1,
+)
+
 path.write_text(value, encoding="utf-8")
 print("final generic release script fixed")
