@@ -21,6 +21,10 @@
     return `docomator.generation-entity-type:${currentGenerationSpaceId() || "default"}`;
   }
 
+  function genericGenerationIsPerson() {
+    return genericGenerationTypeKey === "person";
+  }
+
   function genericGenerationEnsureType() {
     const types = genericGenerationTypes();
     const stored = localStorage.getItem(genericGenerationStorageKey()) || "";
@@ -47,7 +51,7 @@
   }
 
   function genericGenerationReplaceText(root) {
-    if (!root) return;
+    if (!root || genericGenerationIsPerson()) return;
     const replacements = [
       [/сотрудников/giu, "объектов"],
       [/сотрудника/giu, "объекта"],
@@ -104,11 +108,17 @@
     }
     const sourceSelect = form.querySelector("#generationSourceKind");
     if (sourceSelect) {
-      const labels = {
-        all_space: "Для всех объектов выбранного типа",
-        group: "Для сохранённой группы",
-        selected: "Для выбранных объектов"
-      };
+      const labels = genericGenerationIsPerson()
+        ? {
+            all_space: "Для всех сотрудников",
+            group: "Для группы сотрудников",
+            selected: "Для выбранных сотрудников"
+          }
+        : {
+            all_space: "Для всех объектов выбранного типа",
+            group: "Для сохранённой группы",
+            selected: "Для выбранных объектов"
+          };
       for (const option of sourceSelect.options) {
         if (labels[option.value]) option.textContent = labels[option.value];
       }
@@ -172,7 +182,13 @@
     }
     if (kind === "selected") {
       const entityIds = selectedEntityIds();
-      if (entityIds.length === 0) throw new Error("Выберите хотя бы один объект.");
+      if (entityIds.length === 0) {
+        throw new Error(
+          genericGenerationIsPerson()
+            ? "Выберите хотя бы одного сотрудника."
+            : "Выберите хотя бы один объект."
+        );
+      }
       return { kind: "selected", entityIds };
     }
     if (!genericGenerationTypeKey) {
@@ -186,6 +202,5 @@
     genericGenerationTypeKey = "";
   });
 
-  genericGenerationReplaceText(document.querySelector("#documentGenerationPanel"));
   if (currentGenerationSpaceId()) void loadGenerationWorkspace();
 }
