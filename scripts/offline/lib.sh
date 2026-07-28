@@ -136,8 +136,9 @@ verify_os_package_set() (
   local package_root="$1"
   local require_libreoffice="${2:-0}"
   local validation_dir line sha256 package version architecture filename extra
-  local actual_package actual_version actual_architecture source_os_id
-  local source_os_version_id source_deb_architecture
+  local actual_package actual_version actual_architecture source_os_family source_os_id
+  local source_os_version_id source_deb_architecture dependency_closure
+  local install_recommends requested_packages_sha256 requested_package
 
   require_command cmp
   require_command dpkg-deb
@@ -147,22 +148,34 @@ verify_os_package_set() (
   require_command sort
 
   [[ -d "$package_root" ]] || die "Не найден каталог пакетов ОС: $package_root"
-  [[ -f "$package_root/manifest.sha256" && ! -L "$package_root/manifest.sha256" ]] || \
-    die "В наборе пакетов ОС отсутствует manifest.sha256"
-  [[ -f "$package_root/packages.tsv" && ! -L "$package_root/packages.tsv" ]] || \
-    die "В наборе пакетов ОС отсутствует packages.tsv"
-  [[ -f "$package_root/source-os.env" && ! -L "$package_root/source-os.env" ]] || \
-    die "В наборе пакетов ОС отсутствует source-os.env"
+  for metadata in manifest.sha256 packages.tsv requested-packages.txt source-os.env; do
+    [[ -f "$package_root/$metadata" && ! -L "$package_root/$metadata" ]] || \
+      die "В наборе пакетов ОС отсутствует $metadata"
+  done
 
+  source_os_family="$(read_env_value "$package_root/source-os.env" OS_FAMILY)"
   source_os_id="$(read_env_value "$package_root/source-os.env" OS_ID)"
   source_os_version_id="$(read_env_value "$package_root/source-os.env" OS_VERSION_ID)"
   source_deb_architecture="$(read_env_value "$package_root/source-os.env" DEB_ARCHITECTURE)"
+  dependency_closure="$(read_env_value "$package_root/source-os.env" DEPENDENCY_CLOSURE)"
+  install_recommends="$(read_env_value "$package_root/source-os.env" APT_INSTALL_RECOMMENDS)"
+  requested_packages_sha256="$(read_env_value "$package_root/source-os.env" REQUESTED_PACKAGES_SHA256)"
+  [[ "$source_os_family" == "debian" || "$source_os_family" == "astra" ]] || \
+    die "Некорректный OS_FAMILY в source-os.env"
   [[ "$source_os_id" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || \
     die "Некорректный OS_ID в source-os.env"
   [[ "$source_os_version_id" =~ ^[A-Za-z0-9][A-Za-z0-9.+:~_-]*$ ]] || \
     die "Некорректный OS_VERSION_ID в source-os.env"
   [[ "$source_deb_architecture" =~ ^[a-z0-9][a-z0-9-]*$ ]] || \
     die "Некорректный DEB_ARCHITECTURE в source-os.env"
+  [[ "$dependency_closure" == "full" ]] || \
+    die "Набор .deb не подтверждает полное замыкание зависимостей"
+  [[ "$install_recommends" == "false" ]] || \
+    die "Набор .deb должен быть рассчитан без необязательных recommends"
+  [[ "$requested_packages_sha256" =~ ^[a-f0-9]{64}$ ]] || \
+    die "Некорректный REQUESTED_PACKAGES_SHA256 в source-os.env"
+  [[ "$(sha256_of "$package_root/requested-packages.txt")" == "$requested_packages_sha256" ]] || \
+    die "Checksum requested-packages.txt не совпадает с source-os.env"
 
   if find "$package_root" -mindepth 1 ! -type d ! -type f -print -quit | grep -q .; then
     die "В наборе пакетов ОС найден запрещённый объект"
@@ -176,14 +189,12 @@ verify_os_package_set() (
 
   (
     cd "$package_root"
-    find . -maxdepth 1 -type f -print \
-      | LC_ALL=C sort > "$validation_dir/actual-files"
-    find . -maxdepth 1 -type f -name '*.deb' -print \
-      | LC_ALL=C sort > "$validation_dir/actual-debs"
+    find . -maxdepth 1 -type f -print | LC_ALL=C sort > "$validation_dir/actual-files"
+    find . -maxdepth 1 -type f -name '*.deb' -print | LC_ALL=C sort > "$validation_dir/actual-debs"
   )
   [[ -s "$validation_dir/actual-debs" ]] || die "В наборе пакетов ОС нет файлов .deb"
   {
-    printf '%s\n' './manifest.sha256' './packages.tsv' './source-os.env'
+    printf '%s\n' './manifest.sha256' './packages.tsv' './requested-packages.txt' './source-os.env'
     cat "$validation_dir/actual-debs"
   } | LC_ALL=C sort > "$validation_dir/expected-files"
   cmp -s "$validation_dir/expected-files" "$validation_dir/actual-files" || \
@@ -197,6 +208,19 @@ verify_os_package_set() (
     cd "$package_root"
     sha256sum --check --strict --quiet manifest.sha256
   )
+
+  : > "$validation_dir/requested-normalized"
+  while IFS= read -r requested_package; do
+    [[ -n "$requested_package" ]] || die "Пустая строка запрещена в requested-packages.txt"
+    [[ "$requested_package" =~ ^[a-z0-9][a-z0-9+.-]*$ ]] || \
+      die "Некорректное имя в requested-packages.txt: $requested_package"
+    printf '%s\n' "$requested_package" >> "$validation_dir/requested-normalized"
+  done < "$package_root/requested-packages.txt"
+  [[ -s "$validation_dir/requested-normalized" ]] || \
+    die "requested-packages.txt не содержит пакетов"
+  LC_ALL=C sort -u "$validation_dir/requested-normalized" > "$validation_dir/requested-sorted"
+  cmp -s "$validation_dir/requested-normalized" "$validation_dir/requested-sorted" || \
+    die "requested-packages.txt должен быть отсортирован и не содержать повторов"
 
   IFS= read -r line < "$package_root/packages.tsv" || true
   [[ "$line" == $'sha256\tpackage\tversion\tarchitecture\tfilename' ]] || \
@@ -241,6 +265,10 @@ verify_os_package_set() (
   if [[ "$(LC_ALL=C sort "$validation_dir/package-names" | uniq -d | head -n 1)" != "" ]]; then
     die "В наборе пакетов ОС обнаружено несколько версий одного пакета"
   fi
+  while IFS= read -r requested_package; do
+    grep -Fx "$requested_package" "$validation_dir/package-names" >/dev/null || \
+      die "В полном наборе отсутствует запрошенный пакет: $requested_package"
+  done < "$package_root/requested-packages.txt"
 
   if ((require_libreoffice == 1)); then
     for package in libreoffice-core libreoffice-writer libreoffice-calc; do
@@ -255,34 +283,50 @@ verify_target_os_package_profile() (
   local package_root="$1"
   local os_release_file="${2:-/etc/os-release}"
   local target_architecture="${3:-}"
-  local source_os_id source_os_version_id source_architecture
-  local target_os_id target_os_version_id
+  local source_os_family source_os_id source_os_version_id source_architecture
+  local target_os_family target_os_id target_os_version_id target_os_name
+  local target_os_pretty_name target_os_id_like target_description
 
   [[ -f "$package_root/source-os.env" ]] || \
     die "В наборе пакетов ОС отсутствует source-os.env"
   [[ -f "$os_release_file" ]] || \
     die "Не найден доверенный файл сведений о целевой ОС: $os_release_file"
 
+  source_os_family="$(read_env_value "$package_root/source-os.env" OS_FAMILY)"
   source_os_id="$(read_env_value "$package_root/source-os.env" OS_ID)"
   source_os_version_id="$(read_env_value "$package_root/source-os.env" OS_VERSION_ID)"
   source_architecture="$(read_env_value "$package_root/source-os.env" DEB_ARCHITECTURE)"
   target_os_id="$(sed -n -E 's/^ID="?([^"[:space:]]+)"?$/\1/p' "$os_release_file" | head -n 1)"
   target_os_version_id="$(sed -n -E 's/^VERSION_ID="?([^"[:space:]]+)"?$/\1/p' "$os_release_file" | head -n 1)"
+  target_os_name="$(sed -n -E 's/^NAME="?(.*)"?$/\1/p' "$os_release_file" | head -n 1 | sed -E 's/^"|"$//g')"
+  target_os_pretty_name="$(sed -n -E 's/^PRETTY_NAME="?(.*)"?$/\1/p' "$os_release_file" | head -n 1 | sed -E 's/^"|"$//g')"
+  target_os_id_like="$(sed -n -E 's/^ID_LIKE="?(.*)"?$/\1/p' "$os_release_file" | head -n 1 | sed -E 's/^"|"$//g')"
+  target_description="${target_os_id,,} ${target_os_name,,} ${target_os_pretty_name,,} ${target_os_id_like,,}"
+  if [[ "$target_description" == *astra* ]]; then
+    target_os_family="astra"
+  elif [[ "$target_os_id" == "debian" || " ${target_os_id_like,,} " == *" debian "* ]]; then
+    target_os_family="debian"
+  else
+    die "Целевая ОС не относится к поддерживаемым Debian/Astra Linux"
+  fi
   if [[ -z "$target_architecture" ]]; then
     require_command dpkg
     target_architecture="$(dpkg --print-architecture)"
   fi
 
+  [[ "$source_os_family" == "debian" || "$source_os_family" == "astra" ]] || \
+    die "Некорректный OS_FAMILY набора пакетов"
   [[ "$target_os_id" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || \
     die "Некорректный ID целевой ОС"
   [[ "$target_os_version_id" =~ ^[A-Za-z0-9][A-Za-z0-9.+:~_-]*$ ]] || \
     die "Некорректный VERSION_ID целевой ОС"
   [[ "$target_architecture" =~ ^[a-z0-9][a-z0-9-]*$ ]] || \
     die "Некорректная архитектура целевой ОС"
-  [[ "$target_os_id" == "$source_os_id" && \
+  [[ "$target_os_family" == "$source_os_family" && \
+     "$target_os_id" == "$source_os_id" && \
      "$target_os_version_id" == "$source_os_version_id" && \
      "$target_architecture" == "$source_architecture" ]] || \
-    die "Целевая ОС не совпадает с профилем пакетов: требуется ${source_os_id} ${source_os_version_id} ${source_architecture}, обнаружено ${target_os_id} ${target_os_version_id} ${target_architecture}"
+    die "Целевая ОС не совпадает с профилем пакетов: требуется ${source_os_family}/${source_os_id} ${source_os_version_id} ${source_architecture}, обнаружено ${target_os_family}/${target_os_id} ${target_os_version_id} ${target_architecture}"
 )
 
 render_template() {

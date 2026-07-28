@@ -131,3 +131,64 @@ jobs:
             ${{ runner.temp }}/docomator-browser-api.log
           if-no-files-found: warn
           retention-days: 3
+
+  offline-bundle:
+    name: Assemble and verify offline archive
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Assemble generic offline archive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          NODE_RUNTIME_ROOT="$(dirname "$(dirname "$(command -v node)")")"
+          scripts/offline/prepare-bundle.sh \
+            --target-profile generic \
+            --node-runtime-dir "$NODE_RUNTIME_ROOT" \
+            --without-llm \
+            --without-preview \
+            --without-ux-acceptance \
+            --skip-tests \
+            --force
+
+      - name: Verify archive after extraction
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          VERSION="$(cat VERSION)"
+          case "$(dpkg --print-architecture)" in
+            amd64) NODE_ARCH=x64 ;;
+            arm64) NODE_ARCH=arm64 ;;
+            *) exit 1 ;;
+          esac
+          ARCHIVE="offline-bundles/docomator-${VERSION}-linux-${NODE_ARCH}.tar.gz"
+          CHECKSUM="${ARCHIVE}.sha256"
+          (cd "$(dirname "$ARCHIVE")" && sha256sum --check --strict --quiet "$(basename "$CHECKSUM")")
+          EXTRACTED="$RUNNER_TEMP/docomator-offline-extracted"
+          mkdir -p "$EXTRACTED"
+          while IFS= read -r member; do
+            [[ -n "$member" && "$member" != /* ]] || exit 1
+            case "/$member/" in */../*) exit 1 ;; esac
+          done < <(tar -tzf "$ARCHIVE")
+          tar -xzf "$ARCHIVE" -C "$EXTRACTED"
+          BUNDLE="$EXTRACTED/docomator-${VERSION}-linux-${NODE_ARCH}"
+          "$BUNDLE/verify-bundle.sh" "$BUNDLE"

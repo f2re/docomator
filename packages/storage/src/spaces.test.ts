@@ -321,3 +321,92 @@ test("legacy space memberships do not create or restrict application access", ()
     fixture.cleanup();
   }
 });
+
+
+test("groups and document snapshots keep one arbitrary entity type", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const knowledge = new KnowledgeRegistry(fixture.store);
+    const spaces = new SpaceRegistry(fixture.store);
+    knowledge.createEntityType(
+      { key: "room", label: "Аудитория" },
+      context("corr-room-type")
+    );
+    knowledge.createEntityType(
+      { key: "article", label: "Научная статья" },
+      context("corr-article-type")
+    );
+    const space = spaces.createSpace(
+      { key: "generic", name: "Произвольные объекты" },
+      context("corr-generic-space")
+    );
+    const room = spaces.createEntity(
+      space.id,
+      { entityTypeKey: "room", displayName: "Аудитория 101" },
+      context("corr-room")
+    );
+    const article = spaces.createEntity(
+      space.id,
+      { entityTypeKey: "article", displayName: "Статья о прогнозе" },
+      context("corr-article")
+    );
+    const group = spaces.createGroup(
+      space.id,
+      { key: "rooms", name: "Аудитории" },
+      context("corr-group")
+    );
+
+    assert.throws(
+      () =>
+        spaces.replaceGroupMembers(
+          space.id,
+          group.id,
+          [room.entityId, article.entityId],
+          context("corr-mixed-group")
+        ),
+      SpaceValidationError
+    );
+
+    spaces.replaceGroupMembers(
+      space.id,
+      group.id,
+      [room.entityId],
+      context("corr-room-group")
+    );
+    const typedGroup = spaces.listGroups(space.id).find(
+      (candidate) => candidate.id === group.id
+    );
+    assert.ok(typedGroup);
+    assert.equal(typedGroup.entityTypeKey, "room");
+    assert.equal(typedGroup.entityTypeLabel, "Аудитория");
+    const grouped = spaces.createAudienceSnapshot(
+      space.id,
+      { source: { kind: "group", groupId: group.id }, targetMode: "aggregate" },
+      context("corr-room-snapshot")
+    );
+    assert.equal(grouped.snapshot.entityTypeKey, "room");
+    assert.deepEqual(grouped.snapshot.members.map((member) => member.entityTypeKey), ["room"]);
+
+    assert.throws(
+      () =>
+        spaces.createAudienceSnapshot(
+          space.id,
+          { source: { kind: "all_space" }, targetMode: "aggregate" },
+          context("corr-mixed-snapshot")
+        ),
+      SpaceValidationError
+    );
+    const filtered = spaces.createAudienceSnapshot(
+      space.id,
+      {
+        source: { kind: "all_space", entityTypeKey: "article" },
+        targetMode: "one_per_member"
+      },
+      context("corr-article-snapshot")
+    );
+    assert.equal(filtered.snapshot.entityTypeKey, "article");
+    assert.deepEqual(filtered.snapshot.members.map((member) => member.entityId), [article.entityId]);
+  } finally {
+    fixture.cleanup();
+  }
+});

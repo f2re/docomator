@@ -43,6 +43,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "styles.css",
     appendFileNames: [
       "searchable-select.css",
+      "entity-workspace.css",
       "spaces.css",
       "workspace-switcher.css",
       "intake.css",
@@ -81,6 +82,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     appendFileNames: [
       "searchable-select.js",
       "app.js",
+      "entity-workspace.js",
       "operator-workflows.js",
       "operator-workflows-recovery.js",
       "group-management-v2.js",
@@ -96,6 +98,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "document-intake.js",
     appendFileNames: [
       "document-structure.js",
+      "generic-template-entities.js",
       "template-placement-guidance.js",
       "template-repeat-assistant.js",
       "template-row-editor-v2.js",
@@ -104,6 +107,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "template-multi-trial-recovery.js",
       "template-activation.js",
       "document-generation.js",
+      "generic-document-generation.js",
       "document-generation-preflight.js",
       "document-data-correction.js",
       "document-generation-retry.js",

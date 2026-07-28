@@ -30,6 +30,9 @@
           <button class="nav-item" type="button" data-view-target="employees">
             <span class="nav-symbol" aria-hidden="true">◎</span><span>Сотрудники</span>
           </button>
+          <button class="nav-item" type="button" data-view-target="entities">
+            <span class="nav-symbol" aria-hidden="true">◇</span><span>Объекты</span>
+          </button>
           <button class="nav-item" type="button" data-view-target="templates">
             <span class="nav-symbol" aria-hidden="true">▤</span><span>Шаблоны</span>
           </button>
@@ -118,9 +121,14 @@
           <div id="employeeList" class="employee-list" aria-live="polite"></div>
         </section>
 
+        <section class="view" data-view="entities" aria-labelledby="entities-heading">
+          <h2 class="visually-hidden" id="entities-heading">Объекты пространства</h2>
+          <div id="entityWorkspace" aria-live="polite"></div>
+        </section>
+
         <section class="view" data-view="spaces" aria-labelledby="spaces-heading">
           <div class="section-intro">
-            <div><p class="eyebrow">Организация общих данных</p><h2 id="spaces-heading">Разделы, участники и группы</h2><p>Разделы группируют участников, шаблоны и процессы. Все пользователи корпоративного сервиса могут работать с любым разделом.</p></div>
+            <div><p class="eyebrow">Организация общих данных</p><h2 id="spaces-heading">Разделы, объекты и группы</h2><p>Разделы группируют объекты, шаблоны и процессы. Все пользователи корпоративного сервиса могут работать с любым разделом.</p></div>
             <button class="primary-button" type="button" data-create="space"><span aria-hidden="true">＋</span><span>Создать пространство</span></button>
           </div>
 
@@ -134,19 +142,19 @@
               <article class="panel workspace-summary" id="spaceSummary">
                 <div><p class="eyebrow">Текущий раздел</p><h2 id="spaceName">Загружаем…</h2><p id="spaceDescription">Получаем состав и группы выбранного раздела.</p></div>
                 <div class="summary-actions">
-                  <button class="primary-button" type="button" data-create="space-entity">Добавить человека</button>
+                  <button class="primary-button" type="button" data-view-target="entities">Добавить объект</button>
                 </div>
               </article>
 
               <div class="segmented-control workspace-tabs" role="tablist" aria-label="Раздел пространства">
-                <button type="button" role="tab" aria-selected="true" data-space-tab="members">Участники</button>
+                <button type="button" role="tab" aria-selected="true" data-space-tab="members">Объекты</button>
                 <button type="button" role="tab" aria-selected="false" data-space-tab="groups">Группы</button>
                 <button type="button" role="tab" aria-selected="false" data-space-tab="audience">Документ</button>
               </div>
 
               <section class="space-pane is-visible" data-space-pane="members">
                 <div class="panel-heading compact-heading">
-                  <div><h2>Участники</h2><p>Отметьте людей для разового документа или будущей группы.</p></div>
+                  <div><h2>Объекты пространства</h2><p>Отметьте однотипные объекты для разового документа или будущей группы.</p></div>
                   <div class="selection-actions"><span class="selection-count" id="selectedCount">0 отмечено</span><button class="quiet-button" id="selectAllButton" type="button">Выбрать всех</button><button class="quiet-button" id="clearSelectionButton" type="button">Снять выбор</button></div>
                 </div>
                 <div class="inline-hint"><span aria-hidden="true">ⓘ</span><p>Выбор остаётся локальным в браузере, пока вы не создадите группу или неизменяемый снимок аудитории.</p></div>
@@ -163,7 +171,7 @@
 
               <section class="space-pane" data-space-pane="audience">
                 <article class="panel audience-builder">
-                  <div class="panel-heading"><div><p class="eyebrow">Предварительный план</p><h2>Для кого формировать документ?</h2><p>Система фиксирует состав и строит исполнимый план. Для выпуска готовых файлов перейдите в «Создать документы».</p></div><span class="large-emoji" aria-hidden="true">📋</span></div>
+                  <div class="panel-heading"><div><p class="eyebrow">Предварительный план</p><h2>Для каких объектов формировать документ?</h2><p>Система фиксирует однородный состав и строит исполнимый план. Для выпуска готовых файлов перейдите в «Создать документы».</p></div><span class="large-emoji" aria-hidden="true">📋</span></div>
                   <div class="audience-form-grid">
                     <div class="field"><label for="audienceSource">Источник участников</label><select id="audienceSource"></select><small>Все активные участники, сохранённая группа или отмеченные вручную.</small></div>
                     <fieldset class="mode-fieldset"><legend>Форма результата</legend>
@@ -300,7 +308,8 @@
           <div class="section-intro"><div><p class="eyebrow">Дополнительные возможности</p><h2 id="settings-heading">Настройки</h2><p>Организация данных и диагностика доступны здесь и не мешают ежедневной работе.</p></div></div>
           <div class="settings-grid">
             <button class="settings-row" type="button" data-view-target="automations"><span><strong>Расписания</strong><small>Повторные выпуски и состояние запланированных запусков</small></span><span aria-hidden="true">›</span></button>
-            <button class="settings-row" type="button" data-view-target="spaces"><span><strong>Разделы данных и группы</strong><small>Подразделения, проекты и сохранённые составы</small></span><span aria-hidden="true">›</span></button>
+            <button class="settings-row" type="button" data-view-target="spaces"><span><strong>Разделы данных и группы</strong><small>Проекты, пространства и сохранённые однородные составы</small></span><span aria-hidden="true">›</span></button>
+            <button class="settings-row" type="button" data-view-target="entities"><span><strong>Типы объектов и импорт</strong><small>Аудитории, статьи, оборудование и другие произвольные записи</small></span><span aria-hidden="true">›</span></button>
             <button class="settings-row" type="button" data-view-target="knowledge"><span><strong>Дополнительные типы записей</strong><small>Расширенная настройка нестандартных данных</small></span><span aria-hidden="true">›</span></button>
           </div>
         </section>

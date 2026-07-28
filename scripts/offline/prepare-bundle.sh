@@ -16,6 +16,7 @@ LLAMA_SERVER=""
 MODEL_FILE=""
 OS_PACKAGES_DIR=""
 TARGET_ARCH="$(uname -m)"
+TARGET_PROFILE=""
 PREVIEW_PROFILE=""
 UX_ACCEPTANCE_PROFILE=""
 UX_CHROMIUM_PACKAGE=""
@@ -42,6 +43,7 @@ usage() {
   --node-archive FILE          Use a local official Node.js .tar.xz archive
   --node-sha256 SHA256         Expected checksum for --node-archive
   --target-arch ARCH           x86_64 or aarch64 (default: current host)
+  --target-profile PROFILE      generic, debian or astra
   --llama-server FILE          Prebuilt target-compatible llama-server binary
   --model FILE                 GGUF model to include
   --without-llm                Explicitly create a bundle without LLM assets
@@ -68,6 +70,7 @@ while (($# > 0)); do
     --node-archive) NODE_ARCHIVE="$2"; shift 2 ;;
     --node-sha256) NODE_SHA256="$2"; shift 2 ;;
     --target-arch) TARGET_ARCH="$2"; shift 2 ;;
+    --target-profile) TARGET_PROFILE="$2"; shift 2 ;;
     --llama-server) LLAMA_SERVER="$2"; shift 2 ;;
     --model) MODEL_FILE="$2"; shift 2 ;;
     --without-llm) WITHOUT_LLM=1; shift ;;
@@ -115,6 +118,20 @@ require_command xargs
   "Укажите --with-preview или --without-preview; preview-профиль не выбирается неявно."
 [[ -n "$UX_ACCEPTANCE_PROFILE" ]] || die \
   "Укажите --with-ux-acceptance или --without-ux-acceptance; профиль UX-приёмки не выбирается неявно."
+if [[ -z "$TARGET_PROFILE" ]]; then
+  if [[ -n "$OS_PACKAGES_DIR" || "$PREVIEW_PROFILE" == "with" || "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
+    die "Для комплекта с пакетами ОС укажите --target-profile debian или --target-profile astra."
+  fi
+  TARGET_PROFILE="generic"
+fi
+[[ "$TARGET_PROFILE" == "generic" || "$TARGET_PROFILE" == "debian" || "$TARGET_PROFILE" == "astra" ]] || \
+  die "Неподдерживаемый target-profile: $TARGET_PROFILE"
+if [[ "$TARGET_PROFILE" == "generic" && -n "$OS_PACKAGES_DIR" ]]; then
+  die "Профиль generic не должен содержать пакеты конкретной ОС."
+fi
+if [[ "$TARGET_PROFILE" != "generic" && -z "$OS_PACKAGES_DIR" ]]; then
+  die "Профиль $TARGET_PROFILE требует --os-packages-dir с полным замыканием зависимостей."
+fi
 
 if [[ "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
   UX_CHROMIUM_PACKAGE="${UX_CHROMIUM_PACKAGE:-chromium}"
@@ -152,7 +169,10 @@ if [[ -n "$OS_PACKAGES_DIR" ]]; then
   verify_os_package_set \
     "$OS_PACKAGES_DIR" \
     "$([[ "$PREVIEW_PROFILE" == "with" ]] && printf 1 || printf 0)"
+  SOURCE_OS_FAMILY="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" OS_FAMILY)"
   SOURCE_DEB_ARCHITECTURE="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" DEB_ARCHITECTURE)"
+  [[ "$TARGET_PROFILE" != "generic" && "$SOURCE_OS_FAMILY" == "$TARGET_PROFILE" ]] || \
+    die "--target-profile не совпадает с OS_FAMILY набора .deb"
   EXPECTED_DEB_ARCHITECTURE="$([[ "$NODE_ARCH" == "x64" ]] && printf amd64 || printf arm64)"
   [[ "$SOURCE_DEB_ARCHITECTURE" == "$EXPECTED_DEB_ARCHITECTURE" ]] || \
     die "Архитектура набора .deb не совпадает с --target-arch"
@@ -266,6 +286,7 @@ mkdir -p \
   "$BUNDLE_DIR/payload/app/scripts/runtime" \
   "$BUNDLE_DIR/payload/app/scripts/ci" \
   "$BUNDLE_DIR/payload/app/examples" \
+  "$BUNDLE_DIR/payload/app/docs" \
   "$BUNDLE_DIR/payload/runtime/node" \
   "$BUNDLE_DIR/payload/runtime/llama" \
   "$BUNDLE_DIR/payload/models" \
@@ -281,7 +302,8 @@ if [[ "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
 fi
 
 cp "$ROOT_DIR/package.json" "$ROOT_DIR/package-lock.json" "$ROOT_DIR/VERSION" \
-  "$BUNDLE_DIR/payload/app/"
+  "$ROOT_DIR/README.md" "$BUNDLE_DIR/payload/app/"
+cp -a "$ROOT_DIR/docs/." "$BUNDLE_DIR/payload/app/docs/"
 cp -a "$ROOT_DIR/migrations" "$BUNDLE_DIR/payload/app/"
 cp -a "$ROOT_DIR/scripts/runtime/." "$BUNDLE_DIR/payload/app/scripts/runtime/"
 cp "$ROOT_DIR/scripts/ci/release-gate.mjs" \
@@ -307,6 +329,7 @@ if [[ "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
     "accessibility-audit.spec.mjs"
     "bulk-import.spec.mjs"
     "employee-card.spec.mjs"
+    "generic-entities.spec.mjs"
     "fixtures/docomator-api.mjs"
     "fixtures/test.mjs"
     "navigation-and-accessibility.spec.mjs"
@@ -339,7 +362,9 @@ fi
 EXAMPLE_FILES=(
   "README.md"
   "manifest.sha256"
+  "data/auditoriums.csv"
   "data/employees.csv"
+  "data/scientific-articles.csv"
   "fixtures/header-field.docx"
   "fixtures/rejected/macro-part.docx"
   "fixtures/scalar-fields.xlsx"
@@ -378,7 +403,7 @@ if [[ -n "$OS_PACKAGES_DIR" ]]; then
     cp "$package_file" "$BUNDLE_DIR/payload/os-packages/"
   done < <(
     find "$OS_PACKAGES_DIR" -maxdepth 1 -type f \
-      \( -name '*.deb' -o -name 'manifest.sha256' -o -name 'packages.tsv' -o -name 'source-os.env' \) \
+      \( -name '*.deb' -o -name 'manifest.sha256' -o -name 'packages.tsv' -o -name 'requested-packages.txt' -o -name 'source-os.env' \) \
       -print0 | LC_ALL=C sort -z
   )
 fi
@@ -406,6 +431,7 @@ cp "$SCRIPT_DIR/lib.sh" \
   "$SCRIPT_DIR/ux-acceptance-gate.sh" \
   "$SCRIPT_DIR/ux-acceptance-gate.mjs" \
   "$SCRIPT_DIR/verify-release.mjs" \
+  "$SCRIPT_DIR/verify-target-profile.mjs" \
   "$BUNDLE_DIR/"
 cp "$ROOT_DIR/docs/RELEASE_NOTES.md" "$BUNDLE_DIR/RELEASE_NOTES.md"
 cp "$ROOT_DIR/docs/SUPPORT_MATRIX.md" "$BUNDLE_DIR/SUPPORT_MATRIX.md"
@@ -441,10 +467,11 @@ if [[ -n "$OS_PACKAGES_DIR" ]]; then
   OS_PACKAGES_INCLUDED=true
   OS_PACKAGES_MANIFEST_SHA256="$(sha256_of "$OS_PACKAGES_DIR/manifest.sha256")"
   OS_PACKAGES_INVENTORY_SHA256="$(sha256_of "$OS_PACKAGES_DIR/packages.tsv")"
+  SOURCE_OS_FAMILY="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" OS_FAMILY)"
   SOURCE_OS_ID="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" OS_ID)"
   SOURCE_OS_VERSION_ID="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" OS_VERSION_ID)"
   SOURCE_DEB_ARCHITECTURE="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" DEB_ARCHITECTURE)"
-  OS_PACKAGE_SOURCE_JSON="{\"id\":\"$SOURCE_OS_ID\",\"versionId\":\"$SOURCE_OS_VERSION_ID\",\"architecture\":\"$SOURCE_DEB_ARCHITECTURE\"}"
+  OS_PACKAGE_SOURCE_JSON="{\"family\":\"$SOURCE_OS_FAMILY\",\"id\":\"$SOURCE_OS_ID\",\"versionId\":\"$SOURCE_OS_VERSION_ID\",\"architecture\":\"$SOURCE_DEB_ARCHITECTURE\",\"dependencyClosure\":\"full\"}"
 fi
 
 UX_ACCEPTANCE_INCLUDED=false
@@ -473,6 +500,9 @@ cat > "$BUNDLE_DIR/release.json" <<EOF_JSON
 {
   "name": "docomator",
   "version": "$VERSION",
+  "bundleSchemaVersion": 2,
+  "targetProfile": "$TARGET_PROFILE",
+  "dependencyClosure": "$([[ "$OS_PACKAGES_INCLUDED" == "true" ]] && printf full || printf not-applicable)",
   "builtAt": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
   "gitCommit": "$GIT_COMMIT",
   "targetArchitecture": "$NODE_ARCH",

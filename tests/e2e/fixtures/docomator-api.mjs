@@ -43,6 +43,7 @@ function createSpaceState(employeeCount = 0, activeTemplate = false) {
     entities: employees.map((employee) => ({
       entityId: employee.entityId,
       displayName: employee.displayName,
+      entityTypeKey: "person",
       entityTypeLabel: "Человек",
       status: employee.status
     })),
@@ -53,6 +54,7 @@ function createSpaceState(employeeCount = 0, activeTemplate = false) {
     multiTrialVersions: [],
     groups: [],
     previewRequest: null,
+    propertyValues: new Map(),
     generationCreated: false,
     resultCollected: false,
     operations: []
@@ -289,12 +291,18 @@ export function createDocomatorScenario(options = {}) {
     primary,
     secondary,
     includeSecondSpace: Boolean(options.secondSpace),
+    entityTypes: Array.isArray(options.entityTypes)
+      ? options.entityTypes.map((type) => structuredClone(type))
+      : [{ key: "person", label: "Человек", description: "Сотрудник" }],
     properties: Array.isArray(options.properties) ? options.properties.map((property) => structuredClone(property)) : [],
     failTrialRemaining: options.failTrialOnce ? 1 : 0,
     failOperationsRemaining: options.failOperationsOnce ? 1 : 0,
     operationRequests: [],
     importBodies: [],
     importRuns: [],
+    importPreview: options.importPreview
+      ? structuredClone(options.importPreview)
+      : null,
     resultDownloadPaths: [],
     resultListDelayMs: Number(options.resultListDelayOnceMs || 0),
     resultListDelayRemaining: options.resultListDelayOnceMs ? 1 : 0,
@@ -395,8 +403,20 @@ export async function installDocomatorApiMock(page, options = {}) {
         cleanupCandidateBytes: 0,
         cutoff: "2026-07-09T09:00:00.000Z"
       };
+    } else if (
+      path === "/api/v1/knowledge/entity-types" &&
+      method === "POST"
+    ) {
+      const payload = await jsonBody(request);
+      const type = {
+        key: `entity_type_e2e_${state.entityTypes.length + 1}`,
+        label: payload.label,
+        description: payload.description || null
+      };
+      state.entityTypes.push(type);
+      data = type;
     } else if (path === "/api/v1/knowledge/entity-types") {
-      data = [{ key: "person", label: "Человек", description: "Сотрудник" }];
+      data = state.entityTypes;
     } else if (
       path === "/api/v1/knowledge/property-definitions" &&
       method === "GET"
@@ -407,8 +427,9 @@ export async function installDocomatorApiMock(page, options = {}) {
       method === "POST"
     ) {
       const payload = await jsonBody(request);
+      const typeKey = payload.appliesTo?.[0] || "person";
       const definition = {
-        key: `person.e2e_field_${state.properties.length + 1}`,
+        key: `${typeKey}.e2e_field_${state.properties.length + 1}`,
         label: payload.label,
         valueType: payload.valueType || "string",
         sensitivity: payload.sensitivity || "personal",
@@ -504,6 +525,7 @@ export async function installDocomatorApiMock(page, options = {}) {
       space.entities.push({
         entityId: id,
         displayName: employee.displayName,
+        entityTypeKey: "person",
         entityTypeLabel: "Человек",
         status: employee.status
       });
@@ -515,14 +537,14 @@ export async function installDocomatorApiMock(page, options = {}) {
       const groupId = decodeURIComponent(path.split("/").at(-2));
       const group = space.groups.find((candidate) => candidate.id === groupId);
       data = (group?.memberIds || []).map((entityId, position) => {
-        const employee = space.employees.find((candidate) => candidate.id === entityId);
+        const entity = space.entities.find((candidate) => candidate.entityId === entityId);
         return {
           entityId,
           position,
-          displayName: employee?.displayName || entityId,
-          entityTypeKey: "person",
-          entityTypeLabel: "Человек",
-          status: employee?.status || "active"
+          displayName: entity?.displayName || entityId,
+          entityTypeKey: entity?.entityTypeKey || "person",
+          entityTypeLabel: entity?.entityTypeLabel || "Человек",
+          status: entity?.status || "active"
         };
       });
     } else if (/\/groups\/[^/]+\/members$/.test(path) && method === "PUT") {
@@ -532,24 +554,28 @@ export async function installDocomatorApiMock(page, options = {}) {
       if (group) {
         group.memberIds = [...new Set(payload.entityIds || [])];
         group.memberCount = group.memberIds.length;
+        const firstEntity = space.entities.find(
+          (entity) => entity.entityId === group.memberIds[0]
+        );
+        group.entityTypeKey = firstEntity?.entityTypeKey || null;
+        group.entityTypeLabel = firstEntity?.entityTypeLabel || null;
         group.version += 1;
       }
       state.groupMemberRequests.push({
         groupId,
         entityIds: [...new Set(payload.entityIds || [])]
       });
-      data = (group?.memberIds || []).map((entityId, position) => ({
-        entityId,
-        position,
-        displayName:
-          space.employees.find((candidate) => candidate.id === entityId)?.displayName ||
+      data = (group?.memberIds || []).map((entityId, position) => {
+        const entity = space.entities.find((candidate) => candidate.entityId === entityId);
+        return {
           entityId,
-        entityTypeKey: "person",
-        entityTypeLabel: "Человек",
-        status:
-          space.employees.find((candidate) => candidate.id === entityId)?.status ||
-          "active"
-      }));
+          position,
+          displayName: entity?.displayName || entityId,
+          entityTypeKey: entity?.entityTypeKey || "person",
+          entityTypeLabel: entity?.entityTypeLabel || "Человек",
+          status: entity?.status || "active"
+        };
+      });
     } else if (/\/groups\/[^/]+$/.test(path) && method === "PUT") {
       const groupId = decodeURIComponent(path.split("/").pop());
       const payload = await jsonBody(request);
@@ -572,55 +598,103 @@ export async function installDocomatorApiMock(page, options = {}) {
         status: "active",
         version: 1,
         memberCount: 0,
+        entityTypeKey: null,
+        entityTypeLabel: null,
         memberIds: []
       };
       space.groups.push(group);
       data = group;
     } else if (/\/groups$/.test(path) && method === "GET") {
       data = space.groups.map(({ memberIds: _memberIds, ...group }) => group);
-    } else if (/\/entities$/.test(path)) {
+    } else if (
+      /\/knowledge\/entities\/[^/]+\/property-values$/.test(path) &&
+      method === "GET"
+    ) {
+      const entityId = decodeURIComponent(path.split("/").at(-2));
+      data = state.primary.propertyValues.get(entityId) || [];
+    } else if (
+      /\/knowledge\/entities\/[^/]+\/properties\/[^/]+$/.test(path) &&
+      method === "PUT"
+    ) {
+      const entityId = decodeURIComponent(path.split("/").at(-3));
+      const propertyKey = decodeURIComponent(path.split("/").pop());
+      const payload = await jsonBody(request);
+      const values = state.primary.propertyValues.get(entityId) || [];
+      const record = {
+        id: `property-value-e2e-${values.length + 1}`,
+        entityId,
+        propertyKey,
+        propertyLabel:
+          state.properties.find((property) => property.key === propertyKey)?.label ||
+          propertyKey,
+        value: payload.value,
+        valueType:
+          state.properties.find((property) => property.key === propertyKey)?.valueType ||
+          "string",
+        createdAt: "2026-07-28T06:00:00.000Z"
+      };
+      values.unshift(record);
+      state.primary.propertyValues.set(entityId, values);
+      data = record;
+    } else if (/\/entities$/.test(path) && method === "POST") {
+      const payload = await jsonBody(request);
+      const entity = {
+        entityId: `entity-e2e-${space.entities.length + 1}`,
+        displayName: payload.displayName,
+        entityTypeKey: payload.entityTypeKey,
+        entityTypeLabel:
+          state.entityTypes.find((type) => type.key === payload.entityTypeKey)?.label ||
+          payload.entityTypeKey,
+        status: payload.status || "active"
+      };
+      space.entities.push(entity);
+      data = entity;
+    } else if (/\/entities$/.test(path) && method === "GET") {
       data = space.entities;
     } else if (/\/audience-snapshots$/.test(path) && method === "GET") {
       data = [];
     } else if (/\/active-templates$/.test(path)) {
       data = space.activeTemplates;
     } else if (/\/data-import\/preview$/.test(path) && method === "POST") {
-      data = {
-        fileName: url.searchParams.get("fileName") || "Сотрудники.csv",
-        fileFormat: "csv",
-        sourceSha256: "e2e-import-source-sha256",
-        previewToken: "e2e-import-preview-token",
-        headers: ["ФИО", "Табельный номер", "Должность"],
-        columnCount: 3,
-        rowCount: 2,
-        rows: [
-          {
-            "ФИО": "Анна Смирнова",
-            "Табельный номер": "T-001",
-            "Должность": "Инженер"
-          },
-          {
-            "ФИО": "Иван Петров",
-            "Табельный номер": "T-002",
-            "Должность": "Аналитик"
-          }
-        ],
-        sampleRows: [
-          {
-            "ФИО": "Анна Смирнова",
-            "Табельный номер": "T-001",
-            "Должность": "Инженер"
-          },
-          {
-            "ФИО": "Иван Петров",
-            "Табельный номер": "T-002",
-            "Должность": "Аналитик"
-          }
-        ]
-      };
+      data =
+        state.importPreview ||
+        {
+          fileName: url.searchParams.get("fileName") || "Сотрудники.csv",
+          fileFormat: "csv",
+          sourceSha256: "e2e-import-source-sha256",
+          previewToken: "e2e-import-preview-token",
+          headers: ["ФИО", "Табельный номер", "Должность"],
+          columnCount: 3,
+          rowCount: 2,
+          rows: [
+            {
+              "ФИО": "Анна Смирнова",
+              "Табельный номер": "T-001",
+              "Должность": "Инженер"
+            },
+            {
+              "ФИО": "Иван Петров",
+              "Табельный номер": "T-002",
+              "Должность": "Аналитик"
+            }
+          ],
+          sampleRows: [
+            {
+              "ФИО": "Анна Смирнова",
+              "Табельный номер": "T-001",
+              "Должность": "Инженер"
+            },
+            {
+              "ФИО": "Иван Петров",
+              "Табельный номер": "T-002",
+              "Должность": "Аналитик"
+            }
+          ]
+        };
     } else if (/\/data-import\/plan$/.test(path) && method === "POST") {
+      const payload = await jsonBody(request);
       data = {
-        createdCount: 2,
+        createdCount: payload.rows?.length || 0,
         updatedCount: 0,
         unchangedCount: 0,
         failedCount: 0,
@@ -629,33 +703,61 @@ export async function installDocomatorApiMock(page, options = {}) {
     } else if (/\/data-import\/execute$/.test(path) && method === "POST") {
       const payload = await jsonBody(request);
       state.importBodies.push(payload);
+      const importedIds = [];
       for (const row of payload.rows || []) {
-        const id = `imported-employee-${space.employees.length + 1}`;
-        const employee = {
-          id,
-          entityId: id,
-          displayName: row[payload.displayNameColumn],
-          status: "active",
-          fields: []
-        };
-        space.employees.push(employee);
+        const typeKey = payload.entityTypeKey || "person";
+        const id =
+          typeKey === "person"
+            ? `imported-employee-${space.employees.length + 1}`
+            : `imported-entity-${space.entities.length + 1}`;
+        const displayName = row[payload.displayNameColumn];
+        if (typeKey === "person") {
+          space.employees.push({
+            id,
+            entityId: id,
+            displayName,
+            status: "active",
+            fields: []
+          });
+        }
         space.entities.push({
           entityId: id,
-          displayName: employee.displayName,
-          entityTypeLabel: "Человек",
+          displayName,
+          entityTypeKey: typeKey,
+          entityTypeLabel:
+            state.entityTypes.find((type) => type.key === typeKey)?.label || typeKey,
           status: "active"
+        });
+        importedIds.push(id);
+      }
+      if (payload.group?.name) {
+        space.groups.push({
+          id: `group-e2e-${space.groups.length + 1}`,
+          spaceId,
+          key: `group_e2e_${space.groups.length + 1}`,
+          name: payload.group.name,
+          description: payload.group.description || null,
+          status: "active",
+          version: 1,
+          memberCount: importedIds.length,
+          entityTypeKey: payload.entityTypeKey || "person",
+          entityTypeLabel:
+            state.entityTypes.find(
+              (type) => type.key === (payload.entityTypeKey || "person")
+            )?.label || payload.entityTypeKey || "Человек",
+          memberIds: importedIds
         });
       }
       const result = {
         id: "data-import-run-e2e",
         state: "completed",
         fileName: payload.fileName,
-        createdCount: 2,
+        createdCount: payload.rows?.length || 0,
         updatedCount: 0,
         unchangedCount: 0,
         failedCount: 0,
         errors: [],
-        groupName: null,
+        groupName: payload.group?.name || null,
         createdAt: "2026-07-15T08:45:00.000Z"
       };
       state.importRuns = [result];

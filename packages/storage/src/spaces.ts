@@ -84,6 +84,8 @@ export interface AudienceGroupRecord {
   status: SpaceStatus;
   version: number;
   memberCount: number;
+  entityTypeKey: string | null;
+  entityTypeLabel: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -207,6 +209,8 @@ interface AudienceGroupRow {
   status: string;
   version: number;
   member_count: number;
+  entity_type_key: string | null;
+  entity_type_label: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -417,6 +421,8 @@ function mapGroup(row: AudienceGroupRow): AudienceGroupRecord {
     status: spaceStatus(row.status),
     version: row.version,
     memberCount: Number(row.member_count),
+    entityTypeKey: row.entity_type_key,
+    entityTypeLabel: row.entity_type_label,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -477,7 +483,25 @@ function groupRowById(connection: SqliteExecutor, id: string): AudienceGroupRow 
   return connection
     .prepare(`
       SELECT g.*,
-             (SELECT COUNT(*) FROM audience_group_members gm WHERE gm.group_id = g.id) AS member_count
+             (SELECT COUNT(*) FROM audience_group_members gm WHERE gm.group_id = g.id) AS member_count,
+             (
+               SELECT et.key
+               FROM audience_group_members gm
+               JOIN entities e ON e.id = gm.entity_id
+               JOIN entity_types et ON et.id = e.entity_type_id
+               WHERE gm.group_id = g.id
+               ORDER BY gm.position ASC, gm.entity_id ASC
+               LIMIT 1
+             ) AS entity_type_key,
+             (
+               SELECT et.label
+               FROM audience_group_members gm
+               JOIN entities e ON e.id = gm.entity_id
+               JOIN entity_types et ON et.id = e.entity_type_id
+               WHERE gm.group_id = g.id
+               ORDER BY gm.position ASC, gm.entity_id ASC
+               LIMIT 1
+             ) AS entity_type_label
       FROM audience_groups g
       WHERE g.id = ?
     `)
@@ -1089,7 +1113,25 @@ export class SpaceRegistry {
       const rows = connection
         .prepare(`
           SELECT g.*,
-                 (SELECT COUNT(*) FROM audience_group_members gm WHERE gm.group_id = g.id) AS member_count
+                 (SELECT COUNT(*) FROM audience_group_members gm WHERE gm.group_id = g.id) AS member_count,
+                 (
+                   SELECT et.key
+                   FROM audience_group_members gm
+                   JOIN entities e ON e.id = gm.entity_id
+                   JOIN entity_types et ON et.id = e.entity_type_id
+                   WHERE gm.group_id = g.id
+                   ORDER BY gm.position ASC, gm.entity_id ASC
+                   LIMIT 1
+                 ) AS entity_type_key,
+                 (
+                   SELECT et.label
+                   FROM audience_group_members gm
+                   JOIN entities e ON e.id = gm.entity_id
+                   JOIN entity_types et ON et.id = e.entity_type_id
+                   WHERE gm.group_id = g.id
+                   ORDER BY gm.position ASC, gm.entity_id ASC
+                   LIMIT 1
+                 ) AS entity_type_label
           FROM audience_groups g
           WHERE g.space_id = ?
           ORDER BY CASE g.status WHEN 'active' THEN 0 ELSE 1 END, g.name ASC, g.id ASC
@@ -1112,8 +1154,15 @@ export class SpaceRegistry {
     return this.store.transaction((connection) => {
       const space = requireSpace(connection, spaceIdentity);
       const group = requireGroup(connection, space.id, groupIdValue);
+      const entityTypes = new Set<string>();
       for (const entityId of entityIds) {
-        requireEntityInSpace(connection, space.id, entityId);
+        const entity = requireEntityInSpace(connection, space.id, entityId);
+        entityTypes.add(entity.entity_type_key);
+      }
+      if (entityTypes.size > 1) {
+        throw new SpaceValidationError(
+          "Одна группа может содержать только объекты одного типа. Создайте отдельные группы для разных типов данных."
+        );
       }
 
       connection.prepare("DELETE FROM audience_group_members WHERE group_id = ?").run(group.id);
@@ -1262,9 +1311,16 @@ export class SpaceRegistry {
 
       if (rows.length === 0) {
         throw new SpaceValidationError(
-          "Audience is empty. Select at least one active member before creating a snapshot."
+          "Состав пуст. Выберите хотя бы один активный объект перед созданием снимка."
         );
       }
+      const entityTypes = [...new Set(rows.map((row) => row.entity_type_key))];
+      if (entityTypes.length > 1) {
+        throw new SpaceValidationError(
+          "Один выпуск документов может использовать только объекты одного типа. Выберите тип данных или создайте отдельные группы."
+        );
+      }
+      entityTypeKey = entityTypes[0] ?? entityTypeKey;
 
       const criteria = toJsonValue({
         source: input.source,

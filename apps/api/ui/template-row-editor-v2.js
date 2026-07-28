@@ -1,6 +1,14 @@
 {
   let rowEditorBusy = false;
 
+  function rowEditorEntityTypeKey() {
+    return globalThis.docomatorTemplateEntityTypeKey || "person";
+  }
+
+  function rowEditorIsPerson() {
+    return rowEditorEntityTypeKey() === "person";
+  }
+
   function rowEditorNormalize(value) {
     return String(value || "")
       .normalize("NFKC")
@@ -71,7 +79,7 @@
     if (/^(?:#|№)$/u.test(raw)) return "position";
     const value = rowEditorNormalize(header);
     if (/^(?:n|номер|п п|порядковый номер)$/u.test(value)) return "position";
-    if (/\bфио\b|фамил|полное имя|студент|сотрудник/u.test(value)) return "name";
+    if (/\bфио\b|фамил|полное имя|студент|сотрудник|назван|наимен|заголов/u.test(value)) return "name";
     if (/тем.*(?:работ|исслед|вкр)|научн.*тем/u.test(value)) return "topic";
     if (/руковод|научрук|научн.*рук/u.test(value)) return "supervisor";
     if (/зачетк|зачетн.*книж|номер.*зачет/u.test(value)) return "student-number";
@@ -135,6 +143,7 @@
   }
 
   function rowEditorSuggestedGroup(element, existing) {
+    if (!rowEditorIsPerson()) return "common";
     if (existing) {
       const property = structurePropertyDefinitions.find(
         (definition) => definition.key === existing.key
@@ -153,8 +162,9 @@
         ? definition.appliesTo
         : [];
       return (
-        (appliesTo.length === 0 || appliesTo.includes("person")) &&
+        (appliesTo.length === 0 || appliesTo.includes(rowEditorEntityTypeKey())) &&
         (definition.key === existingKey ||
+          !rowEditorIsPerson() ||
           globalThis.docomatorFieldGroups.allowed(definition, group, {
             includeUnassigned: true
           }))
@@ -180,32 +190,47 @@
 
   function rowEditorPropertyOptions(selected, existing, group) {
     const applicable = rowEditorApplicableProperties(group, existing);
-    const grouped = globalThis.docomatorFieldGroups.grouped(
-      applicable,
-      group,
-      { includeUnassigned: true }
-    );
-    const order = [...new Set(["common", group, "unassigned"])];
     const options = [
       '<optgroup label="Управление колонкой">',
       `<option value="skip"${selected === "skip" ? " selected" : ""}>Не заполнять эту колонку</option>`,
       `<option value="system:position"${selected === "system:position" ? " selected" : ""}>Номер строки · 1, 2, 3…</option>`,
-      `<option value="system:name"${selected === "system:name" ? " selected" : ""}>ФИО участника · с выбором записи</option>`,
-      "</optgroup>",
-      ...order
-        .filter((item) => grouped.get(item)?.length)
-        .map(
-          (item) =>
-            `<optgroup label="${structureEscape(globalThis.docomatorFieldGroups.label(item))}">${grouped
-              .get(item)
-              .map(
-                (definition) =>
-                  `<option value="existing:${structureEscape(definition.key)}" data-search-terms="${structureEscape(`${definition.label} ${(definition.aliases || []).join(" ")}`)}"${selected === `existing:${definition.key}` ? " selected" : ""}>${structureEscape(definition.label)} · ${structureEscape(structureFieldTypeLabel(definition.valueType))}</option>`
-              )
-              .join("")}</optgroup>`
-        ),
-      `<optgroup label="Действия"><option value="new"${selected === "new" ? " selected" : ""}>Создать новое поле в разделе «${structureEscape(globalThis.docomatorFieldGroups.label(group))}»…</option></optgroup>`
+      `<option value="system:name"${selected === "system:name" ? " selected" : ""}>${rowEditorIsPerson() ? "ФИО участника · с выбором записи" : "Название объекта"}</option>`,
+      "</optgroup>"
     ];
+    if (rowEditorIsPerson()) {
+      const grouped = globalThis.docomatorFieldGroups.grouped(
+        applicable,
+        group,
+        { includeUnassigned: true }
+      );
+      const order = [...new Set(["common", group, "unassigned"])];
+      options.push(
+        ...order
+          .filter((item) => grouped.get(item)?.length)
+          .map(
+            (item) =>
+              `<optgroup label="${structureEscape(globalThis.docomatorFieldGroups.label(item))}">${grouped
+                .get(item)
+                .map(
+                  (definition) =>
+                    `<option value="existing:${structureEscape(definition.key)}" data-search-terms="${structureEscape(`${definition.label} ${(definition.aliases || []).join(" ")}`)}"${selected === `existing:${definition.key}` ? " selected" : ""}>${structureEscape(definition.label)} · ${structureEscape(structureFieldTypeLabel(definition.valueType))}</option>`
+                )
+                .join("")}</optgroup>`
+          )
+      );
+    } else if (applicable.length) {
+      options.push(
+        `<optgroup label="Поля выбранного типа">${applicable
+          .map(
+            (definition) =>
+              `<option value="existing:${structureEscape(definition.key)}" data-search-terms="${structureEscape(`${definition.label} ${(definition.aliases || []).join(" ")}`)}"${selected === `existing:${definition.key}` ? " selected" : ""}>${structureEscape(definition.label)} · ${structureEscape(structureFieldTypeLabel(definition.valueType))}</option>`
+          )
+          .join("")}</optgroup>`
+      );
+    }
+    options.push(
+      `<optgroup label="Действия"><option value="new"${selected === "new" ? " selected" : ""}>Создать новое поле для выбранного типа…</option></optgroup>`
+    );
     if (existing && selected.startsWith("current:")) {
       options.splice(options.length - 1, 0, `<optgroup label="Сохранённая связь"><option value="${structureEscape(selected)}" selected>${structureEscape(existing.label)}</option></optgroup>`);
     }
@@ -213,6 +238,9 @@
   }
 
   function rowEditorNameSettings(field, selectedMode) {
+    if (!rowEditorIsPerson()) {
+      return { presentation: "identity", sourceOrder: "family-given-patronymic", pattern: "" };
+    }
     const formatter = field?.formatter;
     const pattern = formatter?.kind === "person-name.ru" ? formatter.pattern : "{Фамилия} {Имя} {Отчество}";
     const sourceOrder =
@@ -229,6 +257,7 @@
   }
 
   function rowEditorNameOptions(settings) {
+    if (!rowEditorIsPerson()) return "";
     return `
       <div class="row-editor-name" data-row-editor-name${settings.presentation === "identity" ? " hidden" : ""}>
         <label><span>Как записать ФИО?</span><select data-row-name-presentation>
@@ -263,13 +292,13 @@
         <span class="roster-assistant-column-number">${index + 1}</span>
         <div class="roster-assistant-column-body">
           <div class="row-editor-column-title"><strong>${structureEscape(header)}</strong><p>${structureEscape(element.text || "Пустая ячейка")}</p>${existing ? `<span class="row-editor-saved">Сохранено: ${structureEscape(existing.label)}</span>` : ""}</div>
-          <label><span>К кому относится колонка?</span><select data-row-editor-group>${structureGroupSelectOptions(group)}</select><small>Выбранный раздел ограничивает предложения и не смешивает поля преподавателей со студентами.</small></label>
+          ${rowEditorIsPerson() ? `<label><span>К кому относится колонка?</span><select data-row-editor-group>${structureGroupSelectOptions(group)}</select><small>Выбранный раздел ограничивает предложения и не смешивает поля преподавателей со студентами.</small></label>` : `<input data-row-editor-group type="hidden" value="common" />`}
           <label><span>Что подставлять?</span><select data-row-editor-mode data-searchable-select data-searchable-placeholder="Выберите поле" data-searchable-search-placeholder="Найти поле для колонки">${rowEditorPropertyOptions(selected, existing, group)}</select><small data-row-editor-mode-hint></small></label>
           <label class="structure-required-field row-editor-required"><input data-row-editor-required type="checkbox"${existing?.required ? " checked" : ""} /><span><strong>Обязательное</strong><small>Без значения выпуск будет остановлен.</small></span></label>
           <div class="roster-new-property" data-row-editor-new hidden>
             <label><span>Название поля</span><input data-row-editor-label type="text" maxlength="500" value="${structureEscape(header.startsWith("Колонка ") ? "" : header)}" placeholder="Например, Номер зачётной книжки" /></label>
             <label><span>Тип значения</span><select data-row-editor-type>${fieldTypeOptions()}</select></label>
-            <small>Новое поле будет создано один раз и появится в карточках участников.</small>
+            <small>${rowEditorIsPerson() ? "Новое поле будет создано один раз и появится в карточках участников." : "Новое поле будет создано один раз и станет доступно объектам выбранного типа."}</small>
           </div>
           ${rowEditorNameOptions(settings)}
         </div>
@@ -354,12 +383,20 @@
             ? "Сохранённая связь будет удалена после подтверждения."
             : "Колонка останется без изменений."
           : mode === "system:position"
-            ? "Система сама проставит 1, 2, 3… по порядку участников."
+            ? rowEditorIsPerson()
+              ? "Система сама проставит 1, 2, 3… по порядку участников."
+              : "Система сама проставит 1, 2, 3… по порядку объектов."
             : mode === "system:name"
-              ? "ФИО берётся из имени карточки и приводится к выбранному виду."
+              ? rowEditorIsPerson()
+                ? "ФИО берётся из имени карточки и приводится к выбранному виду."
+                : "Будет использовано отображаемое название объекта."
               : mode === "new"
-                ? `Будет создано поле в разделе «${globalThis.docomatorFieldGroups.label(card.querySelector("[data-row-editor-group]")?.value || "common")}».`
-                : "Значение будет взято из выбранного поля карточки.";
+                ? rowEditorIsPerson()
+                  ? `Будет создано поле в разделе «${globalThis.docomatorFieldGroups.label(card.querySelector("[data-row-editor-group]")?.value || "common")}».`
+                  : "Будет создано поле выбранного типа объектов."
+                : rowEditorIsPerson()
+                  ? "Значение будет взято из выбранного поля карточки."
+                  : "Значение будет взято из выбранного поля объекта.";
     }
     rowEditorUpdateNamePreview(card);
     rowEditorUpdateSummary();
@@ -391,6 +428,7 @@
   }
 
   function rowEditorPersonName(card) {
+    if (!rowEditorIsPerson()) return undefined;
     if (card.querySelector("[data-row-editor-mode]")?.value !== "system:name") {
       return undefined;
     }
@@ -419,7 +457,7 @@
       return structureEffectiveDefinition(
         {
           key: "__system_display_name__",
-          label: "ФИО участника",
+          label: rowEditorIsPerson() ? "ФИО сотрудника" : "Название объекта",
           valueType: "string",
           systemSource: "display-name"
         },
@@ -432,7 +470,7 @@
         (candidate) => candidate.key === key
       );
       if (!definition) throw new Error("Выбранное поле карточки больше не найдено. Обновите страницу.");
-      if (structurePropertyGroup(definition) === "unassigned" && fieldGroup !== "unassigned") {
+      if (rowEditorIsPerson() && structurePropertyGroup(definition) === "unassigned" && fieldGroup !== "unassigned") {
         const classified = await structureFetchJson(
           `/api/v1/knowledge/property-definitions/${encodeURIComponent(definition.key)}/group`,
           {
@@ -453,7 +491,7 @@
       return { key: existing.key, label: existing.label, valueType: existing.valueType };
     }
     if (mode !== "new") return null;
-    if (fieldGroup === "unassigned") {
+    if (rowEditorIsPerson() && fieldGroup === "unassigned") {
       throw new Error(
         "Для нового поля выберите конкретный раздел: общие сведения, преподаватель или студент."
       );
@@ -464,7 +502,9 @@
     const matches = structurePropertyDefinitions.filter(
       (candidate) =>
         rowEditorNormalize(candidate.label) === rowEditorNormalize(label) &&
-        structurePropertyGroup(candidate) === fieldGroup
+        (rowEditorIsPerson()
+          ? structurePropertyGroup(candidate) === fieldGroup
+          : (candidate.appliesTo || []).includes(rowEditorEntityTypeKey()))
     );
     if (matches.length > 1) {
       throw new Error(
@@ -485,9 +525,9 @@
       body: JSON.stringify({
         label,
         valueType,
-        sensitivity: "personal",
-        appliesTo: ["person"],
-        validation: { uiGroup: fieldGroup }
+        sensitivity: rowEditorIsPerson() ? "personal" : "internal",
+        appliesTo: [rowEditorEntityTypeKey()],
+        validation: rowEditorIsPerson() ? { uiGroup: fieldGroup } : {}
       })
     });
     const definition = created.data;
@@ -618,7 +658,7 @@
       latest = await rowEditorLatestDraft(spaceId, draft.id);
       structureDraft = latest;
       panel.innerHTML = `
-        <div class="roster-assistant-finished"><span aria-hidden="true">✓</span><div><h3>Строка сохранена</h3><p>Заполняются ${latest.fields.length} полей. Создано: ${createdCount}, изменено: ${updatedCount}, удалено: ${deletedCount}. При сводном выпуске эта строка повторится для каждого участника.</p></div></div>
+        <div class="roster-assistant-finished"><span aria-hidden="true">✓</span><div><h3>Строка сохранена</h3><p>Заполняются ${latest.fields.length} полей. Создано: ${createdCount}, изменено: ${updatedCount}, удалено: ${deletedCount}. При сводном выпуске эта строка повторится для каждого ${rowEditorIsPerson() ? "участника" : "объекта"}.</p></div></div>
         <div class="roster-assistant-actions"><button class="secondary-button" id="rowEditorContinueEditing" type="button">Вернуться к строке</button><button class="primary-button" id="rowEditorContinueTrial" type="button">Перейти к проверке шаблона</button></div>`;
       panel.querySelector("#rowEditorContinueEditing")?.addEventListener("click", () =>
         rowEditorOpen(selectedStructureElement)
@@ -680,11 +720,11 @@
     panel.id = "rowEditorPanel";
     panel.className = "roster-assistant-panel row-editor-panel";
     panel.innerHTML = `
-      <div class="roster-assistant-heading"><div><p class="eyebrow">Таблица Word</p><h3>${structureDraft?.repeatBinding ? "Изменить повторяемую строку" : "Настроить строку для списка участников"}</h3><p>Для каждой колонки выберите источник значения. Уже сохранённые связи загружены в форму и могут быть изменены.</p></div><button class="icon-button" id="rowEditorClose" type="button" aria-label="Закрыть">×</button></div>
-      <div class="row-editor-explanation"><strong>Как это работает</strong><ol><li>В этой строке задаются колонки будущего списка.</li><li>При сводном выпуске Word скопирует строку по одному разу для каждого участника группы.</li><li>Поля берутся из карточки участника; номер строки система считает сама.</li></ol></div>
+      <div class="roster-assistant-heading"><div><p class="eyebrow">Таблица Word</p><h3>${structureDraft?.repeatBinding ? "Изменить повторяемую строку" : rowEditorIsPerson() ? "Настроить строку для списка участников" : "Настроить строку для списка объектов"}</h3><p>Для каждой колонки выберите источник значения. Уже сохранённые связи загружены в форму и могут быть изменены.</p></div><button class="icon-button" id="rowEditorClose" type="button" aria-label="Закрыть">×</button></div>
+      <div class="row-editor-explanation"><strong>Как это работает</strong><ol><li>В этой строке задаются колонки будущего списка.</li><li>При сводном выпуске Word скопирует строку по одному разу для каждого ${rowEditorIsPerson() ? "участника группы" : "объекта группы"}.</li><li>Поля берутся из карточки ${rowEditorIsPerson() ? "участника" : "объекта"}; номер строки система считает сама.</li></ol></div>
       <p id="rowEditorSummary" class="row-editor-summary"></p>
       <div class="roster-assistant-columns">${rows.map(rowEditorCard).join("")}</div>
-      <div class="roster-assistant-preview"><span aria-hidden="true">✓</span><div><strong>Ожидаемый результат</strong><p>Заголовок таблицы останется один раз, а настроенная строка повторится по числу выбранных участников.</p></div></div>
+      <div class="roster-assistant-preview"><span aria-hidden="true">✓</span><div><strong>Ожидаемый результат</strong><p>Заголовок таблицы останется один раз, а настроенная строка повторится по числу выбранных ${rowEditorIsPerson() ? "участников" : "объектов"}.</p></div></div>
       <div class="form-error" id="rowEditorError" role="alert" hidden></div>
       <div class="roster-assistant-actions"><button class="secondary-button" id="rowEditorCancel" type="button">Отмена</button><button class="primary-button" id="rowEditorSave" type="button">Сохранить настройки строки</button></div>`;
     detail.prepend(panel);
@@ -718,7 +758,7 @@
     entry.id = "rowEditorEntry";
     entry.className = "roster-assistant-entry";
     entry.innerHTML = `
-      <div><strong>${linked ? `Строка уже настроена: ${linked} из ${rows.length} колонок` : "Заполнить всю строку как список участников"}</strong><p>${linked ? "Откройте редактор, чтобы изменить поле, формат ФИО, обязательность или исключить колонку." : "Удобно для реестров, списков студентов и таблиц сотрудников: одна настройка для всех колонок строки."}</p></div>
+      <div><strong>${linked ? `Строка уже настроена: ${linked} из ${rows.length} колонок` : rowEditorIsPerson() ? "Заполнить всю строку как список участников" : "Заполнить всю строку как список объектов"}</strong><p>${linked ? (rowEditorIsPerson() ? "Откройте редактор, чтобы изменить поле, формат ФИО, обязательность или исключить колонку." : "Откройте редактор, чтобы изменить поле, обязательность или исключить колонку.") : rowEditorIsPerson() ? "Удобно для реестров, списков студентов и таблиц сотрудников: одна настройка для всех колонок строки." : "Подходит для реестров аудиторий, статей, оборудования и других однотипных объектов."}</p></div>
       <button class="secondary-button" id="rowEditorOpen" type="button">${linked ? "Изменить строку" : "Настроить строку"}</button>`;
     detail.prepend(entry);
     entry.querySelector("#rowEditorOpen")?.addEventListener("click", () => rowEditorOpen(element));

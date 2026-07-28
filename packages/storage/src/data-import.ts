@@ -484,7 +484,7 @@ export class DataImportRegistry {
     );
     if (!headers.includes(identityColumn) || !headers.includes(displayNameColumn)) {
       throw new DataImportValidationError(
-        "Выбранные колонки для поиска сотрудника и его ФИО должны присутствовать в файле."
+        "Выбранные колонки для поиска объекта и его отображаемого названия должны присутствовать в файле."
       );
     }
     const entityType = this.knowledge.getEntityType(entityTypeKey);
@@ -566,7 +566,7 @@ export class DataImportRegistry {
             `Поле «${property.label}» уже существует с другим типом данных.`
           );
         }
-        propertyKey = property?.key ?? generateOpaqueStableKey("employee_field");
+        propertyKey = property?.key ?? generateOpaqueStableKey(entityTypeKey === "person" ? "employee_field" : "entity_field");
       } else {
         propertyKey = stableKey(mappingInput.propertyKey, "mapping.propertyKey");
       }
@@ -647,8 +647,8 @@ export class DataImportRegistry {
           externalKey: externalKey || null,
           message:
             externalKey.length === 0
-              ? `Не заполнена колонка «${identityColumn}», выбранная для поиска сотрудника.`
-              : `Не заполнена колонка «${displayNameColumn}» с ФИО сотрудника.`
+              ? `Не заполнена колонка «${identityColumn}», выбранная для поиска объекта.`
+              : `Не заполнена колонка «${displayNameColumn}» с отображаемым названием объекта.`
         });
         return;
       }
@@ -704,7 +704,7 @@ export class DataImportRegistry {
       }
       return {
         existing: nameMatches[0] ?? null,
-        key: nameMatches[0]?.key ?? generateOpaqueStableKey("employee_group"),
+        key: nameMatches[0]?.key ?? generateOpaqueStableKey(entityTypeKey === "person" ? "employee_group" : "entity_group"),
         name: groupName,
         description
       };
@@ -761,7 +761,7 @@ export class DataImportRegistry {
               ) as unknown as ImportKeyRow[];
             if (matches.length > 1) {
               throw new DataImportConflictError(
-                "Найдено несколько сотрудников с одинаковым значением выбранной колонки."
+                "Найдено несколько объектов с одинаковым значением выбранной колонки."
               );
             }
             return matches[0]?.entity_id ?? null;

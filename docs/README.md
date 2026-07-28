@@ -7,6 +7,7 @@
 | [USER_GUIDE.md](USER_GUIDE.md) | полный порядок работы: данные, шаблоны, выпуск, расписания, доставка и диагностика |
 | [USE_CASES.md](USE_CASES.md) | практические кейсы и выбор правильного рабочего потока |
 | [IMPORT_AND_WORD_ROSTERS.md](IMPORT_AND_WORD_ROSTERS.md) | массовый импорт людей, студентов, заполненных полей и повторяемые строки Word |
+| [ENTITY_MODEL_AND_IMPORT.md](ENTITY_MODEL_AND_IMPORT.md) | произвольные объекты, типы, параметры, однородные группы и гибкий CSV/XLSX-импорт |
 | [OFFLINE_DEPLOYMENT.md](OFFLINE_DEPLOYMENT.md) | подготовка, установка, обновление и откат автономного комплекта |
 | [OPERATIONS.md](OPERATIONS.md) | эксплуатация, резервные копии, готовность и диагностика |
 

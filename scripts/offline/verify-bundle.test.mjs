@@ -29,6 +29,10 @@ const VERIFY = path.join(ROOT, "scripts/offline/verify-bundle.sh");
 const INSTALL = path.join(ROOT, "scripts/offline/install.sh");
 const UPDATE = path.join(ROOT, "scripts/offline/update.sh");
 const VERIFY_RELEASE = path.join(ROOT, "scripts/offline/verify-release.mjs");
+const VERIFY_TARGET_PROFILE = path.join(
+  ROOT,
+  "scripts/offline/verify-target-profile.mjs"
+);
 const TARGET_RELEASE_GATE = path.join(
   ROOT,
   "scripts/offline/target-release-gate.sh"
@@ -49,7 +53,9 @@ const API_SYSTEMD_UNIT = path.join(
 const EXAMPLE_FILES = [
   "README.md",
   "manifest.sha256",
+  "data/auditoriums.csv",
   "data/employees.csv",
+  "data/scientific-articles.csv",
   "expected/personal-card-filled.docx",
   "expected/team-register-filled.docx",
   "expected/team-register-filled.xlsx",
@@ -65,6 +71,7 @@ const UX_E2E_FILES = [
   "accessibility-audit.spec.mjs",
   "bulk-import.spec.mjs",
   "employee-card.spec.mjs",
+  "generic-entities.spec.mjs",
   "fixtures/docomator-api.mjs",
   "fixtures/test.mjs",
   "navigation-and-accessibility.spec.mjs",
@@ -198,6 +205,9 @@ function releaseMetadata(overrides = {}) {
     version: "0.1.0-test",
     builtAt: "2026-07-19T00:00:00Z",
     gitCommit: "test",
+    bundleSchemaVersion: 2,
+    targetProfile: "generic",
+    dependencyClosure: "not-applicable",
     targetArchitecture: process.arch === "arm64" ? "arm64" : "x64",
     nodeVersion: process.version,
     previewEnabled: false,
@@ -257,8 +267,12 @@ async function enablePreview(bundle, packageNames = [
     writeFile(path.join(packageRoot, "manifest.sha256"), manifest),
     writeFile(path.join(packageRoot, "packages.tsv"), inventory),
     writeFile(
+      path.join(packageRoot, "requested-packages.txt"),
+      `${[...packageNames].sort().join("\n")}\n`
+    ),
+    writeFile(
       path.join(packageRoot, "source-os.env"),
-      `OS_ID=debian\nOS_VERSION_ID=12\nDEB_ARCHITECTURE=${debArchitecture}\n`
+      `OS_FAMILY=debian\nOS_ID=debian\nOS_VERSION_ID=12\nDEB_ARCHITECTURE=${debArchitecture}\nDEPENDENCY_CLOSURE=full\nAPT_INSTALL_RECOMMENDS=false\nREQUESTED_PACKAGES_SHA256=${createHash("sha256").update(`${[...packageNames].sort().join("\n")}\n`).digest("hex")}\n`
     ),
     writeFile(
       path.join(bundle, "payload/config/docomator.env.example"),
@@ -272,6 +286,8 @@ async function enablePreview(bundle, packageNames = [
     bundle,
     releaseMetadata({
       previewEnabled: true,
+      targetProfile: "debian",
+      dependencyClosure: "full",
       osPackagesIncluded: true,
       osPackagesManifestSha256: createHash("sha256")
         .update(manifest)
@@ -280,9 +296,11 @@ async function enablePreview(bundle, packageNames = [
         .update(inventory)
         .digest("hex"),
       osPackageSource: {
+        family: "debian",
         id: "debian",
         versionId: "12",
-        architecture: debArchitecture
+        architecture: debArchitecture,
+        dependencyClosure: "full"
       }
     })
   );
@@ -358,6 +376,13 @@ async function fixture() {
     "payload/app/scripts/runtime/automatic-backup.mjs",
     "payload/app/scripts/runtime/pilot-readiness.mjs",
     "payload/app/scripts/runtime/pilot-check.sh",
+    "payload/app/README.md",
+    "payload/app/docs/README.md",
+    "payload/app/docs/OFFLINE_DEPLOYMENT.md",
+    "payload/app/docs/ENTITY_MODEL_AND_IMPORT.md",
+    "payload/app/apps/api/ui/entity-workspace.js",
+    "payload/app/apps/api/ui/generic-template-entities.js",
+    "payload/app/apps/api/ui/generic-document-generation.js",
     "payload/runtime/node/bin/node",
     "payload/deploy/systemd/docomator-backup.service.in",
     "payload/deploy/systemd/docomator-backup.timer.in",
@@ -378,6 +403,10 @@ async function fixture() {
   await chmod(path.join(bundle, "target-acceptance.sh"), 0o755);
   await chmod(path.join(bundle, "ux-acceptance-gate.sh"), 0o755);
   await copyFile(VERIFY_RELEASE, path.join(bundle, "verify-release.mjs"));
+  await copyFile(
+    VERIFY_TARGET_PROFILE,
+    path.join(bundle, "verify-target-profile.mjs")
+  );
   await writeFile(
     path.join(bundle, "payload/config/docomator.env.example"),
     "DOCOMATOR_PREVIEW_ENABLED=false\n" +
@@ -680,7 +709,9 @@ test("offline verifier rejects an unlisted extra file", async () => {
 
 test("offline verifier rejects changed example bytes and nested manifest", async () => {
   for (const relative of [
-    "data/employees.csv",
+    "data/auditoriums.csv",
+  "data/employees.csv",
+  "data/scientific-articles.csv",
     "manifest.sha256"
   ]) {
     const bundle = await fixture();
