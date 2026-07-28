@@ -84,7 +84,7 @@ value = value.replace(
 )
 
 marker = 'print("final generic release patch applied")\n'
-injection = r'''# The application dispatches view changes on window. The catalog used document,
+injection = r"""# The application dispatches view changes on window. The catalog used document,
 # so its first load was silently skipped after navigation.
 entity_workspace = read("apps/api/ui/entity-workspace.js")
 entity_workspace = replace_in(
@@ -119,7 +119,7 @@ entity_workspace = replace_in(
 )
 write("apps/api/ui/entity-workspace.js", entity_workspace)
 
-'''
+"""
 if value.count(marker) != 1:
     raise RuntimeError("final marker not found")
 value = value.replace(marker, injection + marker, 1)
