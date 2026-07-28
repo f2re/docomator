@@ -9,6 +9,7 @@ on:
       - .github/workflows/apply-offline-hardening.yml
       - scripts/offline/collect-os-packages.sh
       - scripts/offline/verify-target-profile.mjs
+  workflow_dispatch:
 
 permissions:
   contents: write
