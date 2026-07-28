@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - scripts/ci/apply-offline-hardening.py
+      - scripts/ci/fix-offline-hardening-script.py
       - .github/workflows/apply-offline-hardening.yml
       - scripts/offline/collect-os-packages.sh
       - scripts/offline/verify-target-profile.mjs
@@ -27,6 +28,8 @@ jobs:
         with:
           ref: feature/generic-entities-offline-audit
           fetch-depth: 0
+      - name: Исправить сценарий применения
+        run: python3 scripts/ci/fix-offline-hardening-script.py
       - name: Применить исправления
         id: apply
         continue-on-error: true
@@ -73,6 +76,7 @@ jobs:
           set -Eeuo pipefail
           rm -f \
             scripts/ci/apply-offline-hardening.py \
+            scripts/ci/fix-offline-hardening-script.py \
             .github/workflows/apply-offline-hardening.yml \
             offline-hardening-apply.log \
             offline-hardening-check.log
