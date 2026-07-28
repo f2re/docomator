@@ -35,7 +35,7 @@ example_inventory_patches = [
         "scripts/offline/verify-bundle.test.mjs",
         '  "data/employees.csv",\\n',
         '  "data/auditoriums.csv",\\n  "data/employees.csv",\\n  "data/scientific-articles.csv",\\n',
-        1,
+        2,
     ),
 ]
 for relative, old_item, new_items, expected_count in example_inventory_patches:
