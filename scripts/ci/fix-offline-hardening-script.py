@@ -2,33 +2,41 @@ from pathlib import Path
 
 path = Path(__file__).resolve().with_name("apply-offline-hardening.py")
 value = path.read_text(encoding="utf-8")
-replacements = {
-    "    new_verify_package_set,\n    lib,": "    lambda _match: new_verify_package_set,\n    lib,",
-    "    new_verify_target,\n    lib,": "    lambda _match: new_verify_target,\n    lib,",
-    'OS_VERSION_ID="12"\\nDEB_ARCHITECTURE': 'OS_VERSION_ID=12\\nDEB_ARCHITECTURE',
-}
-for old, new in replacements.items():
+
+helper_old = '''def replace_once(value: str, old: str, new: str, label: str) -> str:
+    count = value.count(old)
+    if count != 1:
+        raise RuntimeError(f"{label}: expected one occurrence, found {count}: {old[:180]!r}")
+    return value.replace(old, new, 1)
+'''
+helper_new = '''def replace_once(value: str, old: str, new: str, label: str) -> str:
+    count = value.count(old)
+    if label == "prepare source family":
+        if count < 1:
+            raise RuntimeError(f"{label}: expected at least one occurrence, found {count}: {old[:180]!r}")
+    elif count != 1:
+        raise RuntimeError(f"{label}: expected one occurrence, found {count}: {old[:180]!r}")
+    return value.replace(old, new, 1)
+'''
+if value.count(helper_old) != 1:
+    raise RuntimeError("replace_once helper not found")
+value = value.replace(helper_old, helper_new, 1)
+
+for old, new in (
+    ("    new_verify_package_set,\n    lib,", "    lambda _match: new_verify_package_set,\n    lib,"),
+    ("    new_verify_target,\n    lib,", "    lambda _match: new_verify_target,\n    lib,"),
+):
     count = value.count(old)
     if count != 1:
         raise RuntimeError(f"expected one occurrence, found {count}: {old!r}")
     value = value.replace(old, new, 1)
 
-old_block = '''prepare = replace_once(
-    prepare,
-    '  SOURCE_DEB_ARCHITECTURE="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" DEB_ARCHITECTURE)"\\n',
-    '  SOURCE_OS_FAMILY="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" OS_FAMILY)"\\n  SOURCE_DEB_ARCHITECTURE="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" DEB_ARCHITECTURE)"\\n  [[ "$TARGET_PROFILE" != "generic" && "$SOURCE_OS_FAMILY" == "$TARGET_PROFILE" ]] || \\\\\\n    die "--target-profile не совпадает с OS_FAMILY набора .deb"\\n',
-    "prepare source family",
-)
-'''
-new_block = '''prepare = prepare.replace(
-    '  SOURCE_DEB_ARCHITECTURE="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" DEB_ARCHITECTURE)"\\n',
-    '  SOURCE_OS_FAMILY="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" OS_FAMILY)"\\n  SOURCE_DEB_ARCHITECTURE="$(read_env_value "$OS_PACKAGES_DIR/source-os.env" DEB_ARCHITECTURE)"\\n  [[ "$TARGET_PROFILE" != "generic" && "$SOURCE_OS_FAMILY" == "$TARGET_PROFILE" ]] || \\\\\\n    die "--target-profile не совпадает с OS_FAMILY набора .deb"\\n',
-    1,
-)
-'''
-if value.count(old_block) != 1:
-    raise RuntimeError("prepare source family patch block not found")
-value = value.replace(old_block, new_block, 1)
+quoted_version = 'OS_VERSION_ID="12"\\nDEB_ARCHITECTURE'
+plain_version = 'OS_VERSION_ID=12\\nDEB_ARCHITECTURE'
+count = value.count(quoted_version)
+if count != 1:
+    raise RuntimeError(f"expected one quoted fixture version, found {count}")
+value = value.replace(quoted_version, plain_version, 1)
 
 path.write_text(value, encoding="utf-8")
 print("offline hardening script fixed")
