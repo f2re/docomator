@@ -83,6 +83,19 @@ value = value.replace(
     1,
 )
 
+old_ci_finish = r'''if "  offline-bundle:\n" in ci:
+    raise RuntimeError("offline-bundle job already exists")
+ci += offline_job
+write(".github/workflows/ci.yml", ci)
+'''
+new_ci_finish = r'''if "  offline-bundle:\n" not in ci:
+    ci += offline_job
+    write(".github/workflows/ci.yml", ci)
+'''
+if value.count(old_ci_finish) != 1:
+    raise RuntimeError("offline CI patch block not found")
+value = value.replace(old_ci_finish, new_ci_finish, 1)
+
 marker = 'print("final generic release patch applied")\n'
 injection = r"""# The application dispatches view changes on window. The catalog used document,
 # so its first load was silently skipped after navigation.
