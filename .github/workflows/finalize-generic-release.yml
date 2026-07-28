@@ -81,10 +81,37 @@ jobs:
         if: steps.fixer.outcome == 'success' && steps.apply.outcome == 'success' && steps.check.outcome == 'success'
         run: npx playwright install --with-deps chromium
 
+      - name: Подготовить браузерную базу
+        if: steps.fixer.outcome == 'success' && steps.apply.outcome == 'success' && steps.check.outcome == 'success'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-final-browser-data
+        run: npm run migrate
+
+      - name: Запустить локальное приложение
+        if: steps.fixer.outcome == 'success' && steps.apply.outcome == 'success' && steps.check.outcome == 'success'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-final-browser-data
+          DOCOMATOR_PORT: 18080
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run start:api > "$RUNNER_TEMP/docomator-final-browser-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/docomator-final-browser-api.pid"
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-final-browser-api.log"
+          exit 1
+
       - name: Проверить браузерные сценарии
         if: steps.fixer.outcome == 'success' && steps.apply.outcome == 'success' && steps.check.outcome == 'success'
         id: e2e
         continue-on-error: true
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
         shell: bash
         run: |
           set -o pipefail
@@ -133,6 +160,7 @@ jobs:
             finalize-generic-release-bundle.log
             tests/e2e/.tmp/playwright-report
             tests/e2e/.tmp/playwright-results
+            ${{ runner.temp }}/docomator-final-browser-api.log
           if-no-files-found: warn
           retention-days: 3
 
