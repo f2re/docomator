@@ -101,7 +101,7 @@ value = value.replace(
 )
 
 old_finish = 'print("final generic release patch applied")\n'
-new_finish = '''# The application dispatches view changes on window. The catalog used document,
+new_finish = """# The application dispatches view changes on window. The catalog used document,
 # so its first load was silently skipped after navigation.
 entity_workspace = read("apps/api/ui/entity-workspace.js")
 entity_workspace = replace_in(
@@ -137,7 +137,7 @@ entity_workspace = replace_in(
 write("apps/api/ui/entity-workspace.js", entity_workspace)
 
 print("final generic release patch applied")
-'''
+"""
 if value.count(old_finish) != 1:
     raise RuntimeError("final marker not found")
 value = value.replace(old_finish, new_finish, 1)
