@@ -18,18 +18,28 @@ for relative in [
     write(relative, value)
 '''
 new = '''# Exact example inventories inside the release builder and verifier.
-for relative, expected_count in [
-    ("scripts/offline/prepare-bundle.sh", 1),
-    ("scripts/offline/verify-bundle.sh", 2),
-    ("scripts/offline/verify-bundle.test.mjs", 1),
-]:
+example_inventory_patches = [
+    (
+        "scripts/offline/prepare-bundle.sh",
+        '  "data/employees.csv"\\n',
+        '  "data/auditoriums.csv"\\n  "data/employees.csv"\\n  "data/scientific-articles.csv"\\n',
+        1,
+    ),
+    (
+        "scripts/offline/verify-bundle.sh",
+        '  "data/employees.csv"\\n',
+        '  "data/auditoriums.csv"\\n  "data/employees.csv"\\n  "data/scientific-articles.csv"\\n',
+        2,
+    ),
+    (
+        "scripts/offline/verify-bundle.test.mjs",
+        '  "data/employees.csv",\\n',
+        '  "data/auditoriums.csv",\\n  "data/employees.csv",\\n  "data/scientific-articles.csv",\\n',
+        1,
+    ),
+]
+for relative, old_item, new_items, expected_count in example_inventory_patches:
     value = read(relative)
-    old_item = '  "data/employees.csv"\\n'
-    new_items = (
-        '  "data/auditoriums.csv"\\n'
-        '  "data/employees.csv"\\n'
-        '  "data/scientific-articles.csv"\\n'
-    )
     actual_count = value.count(old_item)
     if actual_count != expected_count:
         raise RuntimeError(
