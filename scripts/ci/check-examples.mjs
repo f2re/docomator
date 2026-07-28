@@ -107,6 +107,13 @@ assert.deepEqual(table.headers, [
 ]);
 assert.equal(table.rowCount, 3);
 assert.equal(table.rows[0]?.["Табельный номер"], "0001");
+for (const fileName of ["auditoriums.csv", "scientific-articles.csv"]) {
+  const asset = EXAMPLE_ASSETS.find((candidate) => candidate.path === `data/${fileName}`);
+  assert.ok(asset);
+  const parsed = await parseDataImportBuffer({ buffer: asset.content, fileName });
+  assert.equal(parsed.rowCount, 3);
+  assert.equal(parsed.headers.length >= 6, true);
+}
 assert.equal(table.rows[2]?.ФИО, "Сидоров Максим Олегович");
 assert.equal(
   table.rows.some((row) =>
@@ -118,7 +125,7 @@ assert.equal(
 
 const safeExampleAssets = createSafeExampleAssets();
 const rejectedExampleAssets = createRejectedExampleAssets();
-assert.equal(safeExampleAssets.length, 9);
+assert.equal(safeExampleAssets.length, 11);
 assert.equal(rejectedExampleAssets.length, 1);
 await validateSafeExampleAssets(safeExampleAssets);
 

@@ -53,7 +53,9 @@ const API_SYSTEMD_UNIT = path.join(
 const EXAMPLE_FILES = [
   "README.md",
   "manifest.sha256",
+  "data/auditoriums.csv",
   "data/employees.csv",
+  "data/scientific-articles.csv",
   "expected/personal-card-filled.docx",
   "expected/team-register-filled.docx",
   "expected/team-register-filled.xlsx",
@@ -69,6 +71,7 @@ const UX_E2E_FILES = [
   "accessibility-audit.spec.mjs",
   "bulk-import.spec.mjs",
   "employee-card.spec.mjs",
+  "generic-entities.spec.mjs",
   "fixtures/docomator-api.mjs",
   "fixtures/test.mjs",
   "navigation-and-accessibility.spec.mjs",
@@ -706,7 +709,9 @@ test("offline verifier rejects an unlisted extra file", async () => {
 
 test("offline verifier rejects changed example bytes and nested manifest", async () => {
   for (const relative of [
-    "data/employees.csv",
+    "data/auditoriums.csv",
+  "data/employees.csv",
+  "data/scientific-articles.csv",
     "manifest.sha256"
   ]) {
     const bundle = await fixture();

@@ -2,9 +2,9 @@
 
 ## 1. Модель поставки
 
-Autonomous release bundle создаётся на подключённом **reference host** и переносится в закрытый контур как один `.tar.gz`.
+Автономный комплект выпуска создаётся на подключённом **эталонном сервере** и переносится в закрытый контур как один `.tar.gz`.
 
-Reference host должен совпадать с target по:
+Reference host должен совпадать с целевой сервер по:
 
 - архитектуре CPU;
 - версии/совместимости `glibc`;
@@ -12,7 +12,7 @@ Reference host должен совпадать с target по:
 - ожидаемым CPU instructions для `llama-server`.
 
 > [!IMPORTANT]
-> Не собирайте `llama-server` с инструкциями CPU, отсутствующими на target. Для разнородного парка используйте консервативный build либо отдельные bundles.
+> Не собирайте `llama-server` с инструкциями CPU, отсутствующими на целевой сервер. Для разнородного парка используйте консервативный build либо отдельные bundles.
 
 ## 2. Состав bundle
 
@@ -28,19 +28,22 @@ docomator-<version>-linux-<arch>/
 ├── update.sh
 ├── verify-bundle.sh
 ├── smoke-test.sh
-├── target-release-gate.sh
+├── целевой сервер-release-gate.sh
 ├── ux-acceptance-gate.sh
 ├── ux-acceptance-gate.mjs
 ├── lib.sh
 ├── healthcheck.mjs
 ├── http-check.mjs
 ├── verify-release.mjs
+├── verify-target-profile.mjs
 └── payload/
     ├── app/
     │   ├── apps/*/dist
     │   ├── packages/*/dist
     │   ├── node_modules
     │   ├── migrations
+    │   ├── README.md
+    │   ├── docs/
     │   ├── scripts/runtime
     │   ├── scripts/ci/{release-gate,release-gate-crash-worker,libreoffice-release-gate}.mjs
     │   └── examples/
@@ -61,11 +64,12 @@ docomator-<version>-linux-<arch>/
     └── os-packages/
         ├── manifest.sha256
         ├── packages.tsv
+        ├── requested-packages.txt
         ├── source-os.env
         └── *.deb
 ```
 
-`RELEASE_NOTES.md` содержит тот же честный перечень реализованного объёма и незакрытых ограничений, который опубликован в репозитории; соседний `SUPPORT_MATRIX.md` оставляет кандидатные платформы в состоянии `не проверено` до фактических актов. Verifier требует оба файла и их точные контрольные суммы, поэтому локальная ссылка из примечаний на матрицу остаётся рабочей и не может незаметно указывать на отсутствующее свидетельство. `manifest.sha256` покрывает все обычные файлы, кроме самого корневого manifest, включая вложенные manifests и manifest символических ссылок. `manifest.symlinks` фиксирует точный относительный target каждой разрешённой ссылки; ссылка наружу, добавленный файл или объект неподдерживаемого типа блокируют проверку. Для каждого `.deb` verifier дополнительно сверяет checksum, имя, версию и архитектуру через `dpkg-deb`; `release.json` связывает preview-профиль, пределы преобразования, SHA package inventory и опциональный профиль UX-приёмки. Перед package-manager preflight installer требует точного совпадения `ID`, `VERSION_ID` и Debian-архитектуры target с `source-os.env`.
+`RELEASE_NOTES.md` содержит тот же честный перечень реализованного объёма и незакрытых ограничений, который опубликован в репозитории; соседний `SUPPORT_MATRIX.md` оставляет кандидатные платформы в состоянии `не проверено` до фактических актов. Verifier требует оба файла и их точные контрольные суммы, поэтому локальная ссылка из примечаний на матрицу остаётся рабочей и не может незаметно указывать на отсутствующее свидетельство. `manifest.sha256` покрывает все обычные файлы, кроме самого корневого manifest, включая вложенные manifests и manifest символических ссылок. `manifest.symlinks` фиксирует точный относительный целевой сервер каждой разрешённой ссылки; ссылка наружу, добавленный файл или объект неподдерживаемого типа блокируют проверку. Для каждого `.deb` verifier дополнительно сверяет checksum, имя, версию и архитектуру через `dpkg-deb`; `release.json` связывает preview-профиль, пределы преобразования, SHA package inventory и опциональный профиль UX-приёмки. Перед package-manager preflight installer требует точного совпадения `ID`, `VERSION_ID` и Debian-архитектуры target с `source-os.env`.
 
 `payload/acceptance` отделён от production-приложения: `install.sh` копирует только `payload/app`, `payload/runtime` и `payload/deploy`, поэтому Playwright/axe не становятся runtime-зависимостями `/opt/docomator`. QA-набор остаётся в проверенном распакованном bundle и запускается только явной командой оператора.
 
@@ -98,7 +102,7 @@ sudo /opt/docomator/current/first-run.sh \
 sudo scripts/offline/collect-os-packages.sh --apt-update
 ```
 
-Список задаётся в [`config/os-packages.txt`](../config/os-packages.txt). Полный кандидатный профиль включает Chromium для P5; для Astra допустим другой пакет и путь, но их нужно явно передать сборщику bundle. Сборщик создаёт точный `manifest.sha256`, `packages.tsv` с Debian metadata и `source-os.env` с выпуском reference VM и архитектурой. Набор с повтором имени пакета, другой архитектурой или несовпадающим metadata не принимается.
+Список задаётся в [`config/os-packages.txt`](../config/os-packages.txt). Полный кандидатный профиль включает Chromium для P5; для Astra допустим другой пакет и путь, но их нужно явно передать сборщику bundle. Сборщик разрешает зависимости с пустым состоянием `dpkg`, поэтому в каталог загружается полное обязательное транзитивное замыкание независимо от уже установленных пакетов эталонной машины. `--no-install-recommends` исключает только необязательные рекомендации. Создаются `manifest.sha256`, `packages.tsv`, отсортированный `requested-packages.txt` и `source-os.env` с семейством ОС, точным выпуском, архитектурой, признаком `DEPENDENCY_CLOSURE=full` и контрольной суммой исходного списка. Неполный или смешанный набор отклоняется.
 
 Свой список:
 
@@ -109,8 +113,8 @@ sudo scripts/offline/collect-os-packages.sh \
   --apt-update
 ```
 
-> [!WARNING]
-> `apt-get --download-only` зависит от состояния reference VM. Проверяйте полный набор на чистой offline VM. Astra repositories и package pins должны совпадать с target.
+> [!IMPORTANT]
+> Репозитории, приоритеты пакетов и закреплённые версии эталонной Debian/Astra Linux должны совпадать с целевым сервером. Полное замыкание устраняет зависимость от установленных пакетов эталонной машины, но не делает пакеты одного выпуска совместимыми с другим выпуском ОС.
 
 ## 4. Подготовка application bundle
 
@@ -119,6 +123,7 @@ sudo scripts/offline/collect-os-packages.sh \
 ```bash
 scripts/offline/prepare-bundle.sh \
   --llama-server /srv/build/llama.cpp/llama-server \
+  --target-profile debian \
   --model /srv/models/qwen-or-phi-q4.gguf \
   --with-preview \
   --with-ux-acceptance \
@@ -134,14 +139,15 @@ Script:
 5. выполняет `npm ci --omit=dev` в payload;
 6. добавляет точный проверенный список учебных примеров, `llama-server`, модель, целевые gate-скрипты, проверенный набор `.deb` и, для UX-профиля, отдельный точный Playwright/axe-набор;
 7. создаёт release metadata с preview/UX-профилями, версиями Chromium/Playwright/axe и SHA package inventory, общий SHA-256 manifest и manifest символических ссылок;
-8. повторно проверяет bundle;
-9. создаёт `.tar.gz`.
+8. проверяет точный профиль ОС, полноту зависимостей, документацию и интерфейс произвольных объектов;
+9. создаёт `.tar.gz`, проверяет его SHA-256, безопасно распаковывает во временный каталог и повторно запускает внутренний verifier.
 
 ### Bundle с заранее распакованным Node.js
 
 ```bash
 scripts/offline/prepare-bundle.sh \
   --node-runtime-dir /srv/runtime/node-v24.18.0-linux-x64 \
+  --target-profile debian \
   --llama-server /srv/runtime/llama-server \
   --model /srv/models/model.gguf \
   --with-preview \
@@ -154,6 +160,7 @@ scripts/offline/prepare-bundle.sh \
 ```bash
 scripts/offline/prepare-bundle.sh \
   --node-archive /srv/cache/node-v24.18.0-linux-x64.tar.xz \
+  --target-profile debian \
   --node-sha256 '<expected-sha256>' \
   --llama-server /srv/runtime/llama-server \
   --model /srv/models/model.gguf \
@@ -173,7 +180,7 @@ scripts/offline/prepare-bundle.sh \
   --without-ux-acceptance
 ```
 
-Script не создаёт молча неполный bundle: требуется либо пара `--llama-server`/`--model`, либо `--without-llm`, ровно один из профилей `--with-preview`/`--without-preview` и ровно один из `--with-ux-acceptance`/`--without-ux-acceptance`. Preview-профиль требует `--os-packages-dir` и наличие `libreoffice-core`, `libreoffice-writer`, `libreoffice-calc`. UX-профиль требует чистый зафиксированный Git checkout, проверенный `.deb`-набор и единственный указанный Chromium package; по умолчанию это `chromium` и `/usr/bin/chromium`, для Astra задаются `--ux-chromium-package` и `--ux-chromium-bin`. Профиль без preview записывает `DOCOMATOR_PREVIEW_ENABLED=false` в новый шаблон и предназначен только для явно согласованного развёртывания без PDF-предпросмотра. Bundle без UX-профиля пригоден для технических проверок, но не может создать обязательные P5 Playwright/axe-свидетельства.
+Сценарий не создаёт молча неполный комплект: требуется либо пара `--llama-server`/`--model`, либо `--without-llm`, ровно один из профилей `--with-preview`/`--without-preview` и ровно один из `--with-ux-acceptance`/`--without-ux-acceptance`. Preview-профиль требует `--os-packages-dir` и наличие `libreoffice-core`, `libreoffice-writer`, `libreoffice-calc`. UX-профиль требует чистый зафиксированный Git checkout, проверенный `.deb`-набор и единственный указанный Chromium package; по умолчанию это `chromium` и `/usr/bin/chromium`, для Astra задаются `--ux-chromium-package` и `--ux-chromium-bin`. Профиль без preview записывает `DOCOMATOR_PREVIEW_ENABLED=false` в новый шаблон и предназначен только для явно согласованного развёртывания без PDF-предпросмотра. Bundle без UX-профиля пригоден для технических проверок, но не может создать обязательные P5 Playwright/axe-свидетельства.
 
 ## 4.1. Единый прогон целевой приёмки
 
@@ -479,3 +486,22 @@ Installer делает rollback автоматически при failed health-
 5. запустить services и проверить `/readyz`.
 
 Не запускайте старый код на новой несовместимой схеме без восстановления database backup.
+
+
+## 9. Проверка актуальности перед переносом
+
+Для каждого изменения `main` CI собирает профиль `generic` без LLM, LibreOffice и браузерного набора. Это подтверждает, что исходники, production-зависимости, документация, интерфейс и внутренние manifests действительно образуют устанавливаемый архив. Полные профили Debian и Astra Linux собираются только на эталонной машине соответствующего выпуска:
+
+```bash
+npm run bundle:offline:debian -- \
+  --llama-server /srv/runtime/llama-server \
+  --model /srv/models/model.gguf
+
+npm run bundle:offline:astra -- \
+  --llama-server /srv/runtime/llama-server \
+  --model /srv/models/model.gguf \
+  --ux-chromium-package chromium-gost \
+  --ux-chromium-bin /usr/bin/chromium-gost
+```
+
+Параметры Chromium для Astra являются примером и должны соответствовать фактическому пакету эталонной машины. После установки обязательна команда `target-acceptance.sh`; без её акта строка платформы в матрице остаётся «не проверено».

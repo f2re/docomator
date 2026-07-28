@@ -126,6 +126,12 @@ if [[ -z "$TARGET_PROFILE" ]]; then
 fi
 [[ "$TARGET_PROFILE" == "generic" || "$TARGET_PROFILE" == "debian" || "$TARGET_PROFILE" == "astra" ]] || \
   die "Неподдерживаемый target-profile: $TARGET_PROFILE"
+if [[ "$TARGET_PROFILE" == "generic" && -n "$OS_PACKAGES_DIR" ]]; then
+  die "Профиль generic не должен содержать пакеты конкретной ОС."
+fi
+if [[ "$TARGET_PROFILE" != "generic" && -z "$OS_PACKAGES_DIR" ]]; then
+  die "Профиль $TARGET_PROFILE требует --os-packages-dir с полным замыканием зависимостей."
+fi
 
 if [[ "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
   UX_CHROMIUM_PACKAGE="${UX_CHROMIUM_PACKAGE:-chromium}"
@@ -323,6 +329,7 @@ if [[ "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
     "accessibility-audit.spec.mjs"
     "bulk-import.spec.mjs"
     "employee-card.spec.mjs"
+    "generic-entities.spec.mjs"
     "fixtures/docomator-api.mjs"
     "fixtures/test.mjs"
     "navigation-and-accessibility.spec.mjs"
@@ -355,7 +362,9 @@ fi
 EXAMPLE_FILES=(
   "README.md"
   "manifest.sha256"
+  "data/auditoriums.csv"
   "data/employees.csv"
+  "data/scientific-articles.csv"
   "fixtures/header-field.docx"
   "fixtures/rejected/macro-part.docx"
   "fixtures/scalar-fields.xlsx"

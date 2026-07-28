@@ -350,6 +350,7 @@ if (release.uxAcceptanceIncluded) {
     "accessibility-audit.spec.mjs",
     "bulk-import.spec.mjs",
     "employee-card.spec.mjs",
+    "generic-entities.spec.mjs",
     "fixtures/docomator-api.mjs",
     "fixtures/test.mjs",
     "navigation-and-accessibility.spec.mjs",

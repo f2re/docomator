@@ -132,7 +132,9 @@ fi
 
 EXAMPLE_FILES=(
   "README.md"
+  "data/auditoriums.csv"
   "data/employees.csv"
+  "data/scientific-articles.csv"
   "expected/personal-card-filled.docx"
   "expected/team-register-filled.docx"
   "expected/team-register-filled.xlsx"
@@ -145,7 +147,9 @@ EXAMPLE_FILES=(
   "templates/team-register.xlsx"
 )
 EXAMPLE_HASHED_FILES=(
+  "data/auditoriums.csv"
   "data/employees.csv"
+  "data/scientific-articles.csv"
   "expected/personal-card-filled.docx"
   "expected/team-register-filled.docx"
   "expected/team-register-filled.xlsx"

@@ -837,7 +837,7 @@
         entityWorkspaceRenderList();
       }
     });
-    document.addEventListener("docomator:view-changed", (event) => {
+    window.addEventListener("docomator:view-changed", (event) => {
       if (event.detail?.view === "entities") void entityWorkspaceLoad();
     });
     document.addEventListener("docomator:space-changed", () => {
@@ -846,6 +846,8 @@
       entityWorkspaceState.search = "";
       if (state.view === "entities") void entityWorkspaceLoad();
     });
+    globalThis.docomatorEntityWorkspaceReload = entityWorkspaceLoad;
+    if (state.view === "entities") void entityWorkspaceLoad();
   }
 
   const entityWorkspaceBaseRenderMembers = renderMembers;
