@@ -7,6 +7,11 @@ export interface ParsedCsvImportRow {
   cells: string[];
 }
 
+export interface ParsedCsvImport {
+  rows: ParsedCsvImportRow[];
+  delimiter: string;
+}
+
 const MAX_LOGICAL_ROWS = 1_001;
 
 function countDelimiter(record: string, delimiter: string): number {
@@ -43,10 +48,7 @@ function firstLogicalRecord(text: string): string {
   return text;
 }
 
-export function parseCsvImport(buffer: Uint8Array): {
-  rows: ParsedCsvImportRow[];
-  delimiter: string;
-} {
+export function parseCsvImportRows(buffer: Uint8Array): ParsedCsvImport {
   let text = Buffer.from(buffer).toString("utf8");
   if (text.startsWith("\ufeff")) text = text.slice(1);
   if (text.includes("\ufffd")) {
@@ -130,4 +132,8 @@ export function parseCsvImport(buffer: Uint8Array): {
   }
 
   return { rows, delimiter: delimiter.candidate };
+}
+
+export function parseCsvImport(buffer: Uint8Array): string[][] {
+  return parseCsvImportRows(buffer).rows.map((row) => row.cells);
 }
