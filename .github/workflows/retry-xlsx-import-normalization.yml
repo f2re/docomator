@@ -1,0 +1,163 @@
+name: Повторно завершить импорт XLSX и инструмент БД
+
+on:
+  push:
+    branches:
+      - feature/xlsx-import-normalization-db-admin
+    paths:
+      - scripts/ci/repair-xlsx-import-normalization.py
+      - .github/workflows/retry-xlsx-import-normalization.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: retry-xlsx-import-normalization
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/xlsx-import-normalization-db-admin
+          fetch-depth: 0
+
+      - name: Применить или проверить интеграцию
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! grep -Fq '"import-normalization.js"' apps/api/src/ui-routes.ts; then
+            python3 scripts/ci/apply-xlsx-import-normalization-db-admin.py
+            python3 scripts/ci/apply-import-normalization-offline.py
+          fi
+          python3 scripts/ci/repair-xlsx-import-normalization.py
+
+      - name: Прочитать версию Node.js
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Обновить lock-файл и установить зависимости
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить репозиторий
+        id: check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee retry-import-check.log
+
+      - name: Установить Chromium
+        if: steps.check.outcome == 'success'
+        run: npx playwright install --with-deps chromium
+
+      - name: Подготовить браузерную базу
+        if: steps.check.outcome == 'success'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-import-retry-data
+        run: npm run migrate
+
+      - name: Запустить приложение
+        if: steps.check.outcome == 'success'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-import-retry-data
+          DOCOMATOR_PORT: 18080
+        shell: bash
+        run: |
+          npm run start:api > "$RUNNER_TEMP/docomator-import-retry-api.log" 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-import-retry-api.log"
+          exit 1
+
+      - name: Проверить Chromium
+        if: steps.check.outcome == 'success'
+        id: e2e
+        continue-on-error: true
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee retry-import-e2e.log
+
+      - name: Собрать автономный архив
+        if: steps.check.outcome == 'success' && steps.e2e.outcome == 'success'
+        id: bundle
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_RUNTIME_ROOT="$(dirname "$(dirname "$(command -v node)")")"
+          scripts/offline/prepare-bundle.sh \
+            --target-profile generic \
+            --node-runtime-dir "$NODE_RUNTIME_ROOT" \
+            --without-llm \
+            --without-preview \
+            --without-ux-acceptance \
+            --skip-tests \
+            --force 2>&1 | tee retry-import-bundle.log
+
+      - name: Сохранить диагностику
+        if: steps.check.outcome == 'failure' || steps.e2e.outcome == 'failure' || steps.bundle.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: retry-xlsx-import-normalization-diagnostic
+          path: |
+            retry-import-check.log
+            retry-import-e2e.log
+            retry-import-bundle.log
+            tests/e2e/.tmp/playwright-report
+            tests/e2e/.tmp/playwright-results
+            ${{ runner.temp }}/docomator-import-retry-api.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Остановиться после ошибки
+        if: steps.check.outcome == 'failure' || steps.e2e.outcome == 'failure' || steps.bundle.outcome == 'failure'
+        run: exit 1
+
+      - name: Очистить одноразовые сценарии
+        shell: bash
+        run: |
+          rm -f \
+            scripts/ci/apply-xlsx-import-normalization-db-admin.py \
+            scripts/ci/apply-import-normalization-offline.py \
+            scripts/ci/repair-xlsx-import-normalization.py \
+            .github/workflows/apply-xlsx-import-normalization-db-admin.yml \
+            .github/workflows/finalize-xlsx-import-normalization.yml \
+            .github/workflows/retry-xlsx-import-normalization.yml \
+            retry-import-check.log retry-import-e2e.log retry-import-bundle.log
+
+      - name: Зафиксировать проверенную ветку
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Исправить XLSX-импорт и добавить управление данными'
+          git push origin HEAD:feature/xlsx-import-normalization-db-admin
+
+      - name: Включить автоматическое слияние
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr ready 59 || true
+          gh pr merge 59 --squash --auto
