@@ -348,7 +348,7 @@ function parseWorksheetRows(input: {
       const explicitRow = reference === undefined ? -1 : rowIndex(reference);
       if (explicitRow > 0 && explicitRow !== sourceRowNumber) {
         throw new XlsxImportParseError(
-          `Ячейка «${reference}» записана внутри строки ${sourceRowNumber}. Исправьте структуру XLSX."
+          `Ячейка «${reference}» записана внутри строки ${sourceRowNumber}. Исправьте структуру XLSX.`
         );
       }
       const index = explicitColumn >= 0 ? explicitColumn : nextColumn;
