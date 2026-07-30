@@ -35,8 +35,9 @@ jobs:
           python3 scripts/ci/apply-import-normalization-core.py
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('apps/api/src/data-import-routes.ts')
-          value = path.read_text(encoding='utf-8')
+
+          routes = Path('apps/api/src/data-import-routes.ts')
+          value = routes.read_text(encoding='utf-8')
           old = '''  const expectedToken = createImportPreviewToken({
               sourceSha256: body.sourceSha256.toLowerCase(),
               headers: body.headers,
@@ -53,7 +54,33 @@ jobs:
             });'''
           if value.count(old) != 1:
               raise RuntimeError(f'preview token block count: {value.count(old)}')
-          path.write_text(value.replace(old, new, 1), encoding='utf-8')
+          routes.write_text(value.replace(old, new, 1), encoding='utf-8')
+
+          xlsx = Path('apps/api/src/xlsx-import-parser.ts')
+          value = xlsx.read_text(encoding='utf-8')
+          old = 'export async function parseXlsxImport(buffer: Uint8Array): Promise<ParsedXlsxImport> {'
+          new = 'export async function parseXlsxImportRows(buffer: Uint8Array): Promise<ParsedXlsxImport> {'
+          if value.count(old) != 1:
+              raise RuntimeError(f'xlsx export count: {value.count(old)}')
+          value = value.replace(old, new, 1)
+          value += '''\nexport async function parseXlsxImport(buffer: Uint8Array): Promise<string[][]> {\n  return (await parseXlsxImportRows(buffer)).rows.map((row) => row.cells);\n}\n'''
+          xlsx.write_text(value, encoding='utf-8')
+
+          parser = Path('apps/api/src/data-import-parser.ts')
+          value = parser.read_text(encoding='utf-8')
+          value = value.replace(
+              'import { parseCsvImport, type ParsedCsvImportRow } from "./csv-import-parser.js";',
+              'import { parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";',
+              1,
+          )
+          value = value.replace(
+              'import { parseXlsxImport, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";',
+              'import { parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";',
+              1,
+          )
+          value = value.replace('const parsed = parseCsvImport(buffer);', 'const parsed = parseCsvImportRows(buffer);', 1)
+          value = value.replace('const parsed = await parseXlsxImport(buffer);', 'const parsed = await parseXlsxImportRows(buffer);', 1)
+          parser.write_text(value, encoding='utf-8')
           PY
       - name: Установить зависимости
         run: npm ci --ignore-scripts --no-audit --no-fund
