@@ -157,15 +157,12 @@ async function verifyEmployeeInSecondContext(page, displayName, fieldLabel, fiel
   await expect(employeeRow).toContainText("Заполнено дополнительных полей: 1");
   await employeeRow.click();
 
-  const dialog = page.locator("#employeeDialog");
+  const dialog = page.getByRole("dialog", { name: "Карточка сотрудника" });
   await expect(dialog).toBeVisible();
-  await expect(page.locator("#employeeFields")).toContainText(fieldLabel, {
-    timeout: 20_000
-  });
-  await expect(page.locator("[data-employee-existing-field]").first()).toHaveValue(
-    fieldValue
-  );
-  await dialog.locator('[data-employee-action="close"]').click();
+  const fieldControl = dialog.getByRole("combobox", { name: fieldLabel });
+  await expect(fieldControl).toBeVisible({ timeout: 20_000 });
+  await expect(fieldControl).toHaveValue(fieldValue);
+  await dialog.getByRole("button", { name: "Закрыть" }).click();
   await expect(dialog).not.toBeVisible();
 
   await app.openView("documents");
