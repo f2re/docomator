@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/ci/apply-import-normalization-core.py
       - .github/workflows/apply-import-normalization-core.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/ci/apply-import-normalization-core.py
+      - .github/workflows/apply-import-normalization-core.yml
 
 permissions:
   contents: write
