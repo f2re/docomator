@@ -1,0 +1,159 @@
+name: Интегрировать устойчивый XLSX-импорт и инструмент БД
+
+on:
+  push:
+    branches:
+      - feature/xlsx-import-normalization-db-admin
+    paths:
+      - scripts/ci/apply-xlsx-import-normalization-db-admin.py
+      - scripts/ci/apply-import-normalization-offline.py
+      - .github/workflows/apply-xlsx-import-normalization-db-admin.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-xlsx-import-normalization-db-admin
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/xlsx-import-normalization-db-admin
+          fetch-depth: 0
+
+      - name: Применить изменения
+        id: apply
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/ci/apply-xlsx-import-normalization-db-admin.py 2>&1 | tee import-normalization-apply.log
+          python3 scripts/ci/apply-import-normalization-offline.py 2>&1 | tee -a import-normalization-apply.log
+
+      - name: Прочитать версию Node.js
+        if: steps.apply.outcome == 'success'
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Установить Node.js
+        if: steps.apply.outcome == 'success'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Обновить lock-файл и установить зависимости
+        if: steps.apply.outcome == 'success'
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Проверить репозиторий
+        if: steps.apply.outcome == 'success'
+        id: check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee import-normalization-check.log
+
+      - name: Установить Chromium
+        if: steps.apply.outcome == 'success' && steps.check.outcome == 'success'
+        run: npx playwright install --with-deps chromium
+
+      - name: Подготовить браузерную базу
+        if: steps.apply.outcome == 'success' && steps.check.outcome == 'success'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-import-browser-data
+        run: npm run migrate
+
+      - name: Запустить локальное приложение
+        if: steps.apply.outcome == 'success' && steps.check.outcome == 'success'
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-import-browser-data
+          DOCOMATOR_PORT: 18080
+        shell: bash
+        run: |
+          npm run start:api > "$RUNNER_TEMP/docomator-import-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/docomator-import-api.pid"
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-import-api.log"
+          exit 1
+
+      - name: Проверить браузерные сценарии
+        if: steps.apply.outcome == 'success' && steps.check.outcome == 'success'
+        id: e2e
+        continue-on-error: true
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee import-normalization-e2e.log
+
+      - name: Собрать и проверить универсальный автономный архив
+        if: steps.apply.outcome == 'success' && steps.check.outcome == 'success' && steps.e2e.outcome == 'success'
+        id: bundle
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_RUNTIME_ROOT="$(dirname "$(dirname "$(command -v node)")")"
+          scripts/offline/prepare-bundle.sh \
+            --target-profile generic \
+            --node-runtime-dir "$NODE_RUNTIME_ROOT" \
+            --without-llm \
+            --without-preview \
+            --without-ux-acceptance \
+            --skip-tests \
+            --force 2>&1 | tee import-normalization-bundle.log
+
+      - name: Сохранить диагностику
+        if: steps.apply.outcome == 'failure' || steps.check.outcome == 'failure' || steps.e2e.outcome == 'failure' || steps.bundle.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xlsx-import-normalization-db-admin-diagnostic
+          path: |
+            import-normalization-apply.log
+            import-normalization-check.log
+            import-normalization-e2e.log
+            import-normalization-bundle.log
+            tests/e2e/.tmp/playwright-report
+            tests/e2e/.tmp/playwright-results
+            ${{ runner.temp }}/docomator-import-api.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Остановиться после ошибки
+        if: steps.apply.outcome == 'failure' || steps.check.outcome == 'failure' || steps.e2e.outcome == 'failure' || steps.bundle.outcome == 'failure'
+        run: exit 1
+
+      - name: Зафиксировать проверенную реализацию
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f \
+            scripts/ci/apply-xlsx-import-normalization-db-admin.py \
+            scripts/ci/apply-import-normalization-offline.py \
+            .github/workflows/apply-xlsx-import-normalization-db-admin.yml \
+            import-normalization-apply.log \
+            import-normalization-check.log \
+            import-normalization-e2e.log \
+            import-normalization-bundle.log
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Исправить XLSX-импорт и добавить управление данными'
+          git push origin HEAD:feature/xlsx-import-normalization-db-admin
