@@ -8,6 +8,7 @@ on:
       - scripts/ci/apply-database-admin-integration.py
       - scripts/ci/fix-db-admin-count-casts.py
       - scripts/ci/fix-bulk-v3-template.py
+      - scripts/ci/fix-db-admin-limits.py
       - .github/workflows/apply-database-admin-integration.yml
   pull_request:
     branches:
@@ -16,6 +17,7 @@ on:
       - scripts/ci/apply-database-admin-integration.py
       - scripts/ci/fix-db-admin-count-casts.py
       - scripts/ci/fix-bulk-v3-template.py
+      - scripts/ci/fix-db-admin-limits.py
       - .github/workflows/apply-database-admin-integration.yml
 
 permissions:
@@ -39,6 +41,7 @@ jobs:
           python3 scripts/ci/apply-database-admin-integration.py
           python3 scripts/ci/fix-db-admin-count-casts.py
           python3 scripts/ci/fix-bulk-v3-template.py
+          python3 scripts/ci/fix-db-admin-limits.py
       - name: Установить зависимости
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Проверить сборку и синтаксис
@@ -55,6 +58,7 @@ jobs:
             scripts/ci/apply-database-admin-integration.py \
             scripts/ci/fix-db-admin-count-casts.py \
             scripts/ci/fix-bulk-v3-template.py \
+            scripts/ci/fix-db-admin-limits.py \
             .github/workflows/apply-database-admin-integration.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
