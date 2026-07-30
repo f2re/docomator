@@ -17,6 +17,7 @@ import {
 } from "./knowledge.js";
 import { OperatorAssistRegistry } from "./operator-assist.js";
 import { SpaceRegistry } from "./spaces.js";
+import type { DataImportValueTransform } from "./data-import-normalization.js";
 
 export interface AssistedDataImportPropertyMapping
   extends DataImportPropertyMapping {
@@ -310,7 +311,13 @@ export class AssistedDataImportRegistry {
             ...(source.label === undefined ? {} : { label: source.label }),
             ...(source.valueType === undefined
               ? {}
-              : { valueType: source.valueType })
+              : { valueType: source.valueType }),
+            ...(source.caseInsensitive === undefined
+              ? {}
+              : { caseInsensitive: source.caseInsensitive }),
+            ...(source.transform === undefined
+              ? {}
+              : { transform: source.transform })
           });
           continue;
         }
@@ -367,7 +374,16 @@ export class AssistedDataImportRegistry {
         byKey.set(definition.key, definition);
       }
 
-      preparedMappings.push({ column, propertyKey: definition.key });
+      preparedMappings.push({
+        column,
+        propertyKey: definition.key,
+        ...(source.caseInsensitive === undefined
+          ? {}
+          : { caseInsensitive: source.caseInsensitive }),
+        ...(source.transform === undefined
+          ? {}
+          : { transform: source.transform })
+      });
       const aliasesAdded = definition.aliases.filter(
         (alias) =>
           !definitions
@@ -394,6 +410,80 @@ export class AssistedDataImportRegistry {
       });
     }
 
+    if (input.personName?.split === true) {
+      if (entityTypeKey !== "person") {
+        throw new DataImportValidationError(
+          "Разделение ФИО доступно только для типа «Человек»."
+        );
+      }
+      const derived: Array<{
+        label: string;
+        transform: DataImportValueTransform;
+      }> = [
+        { label: "Фамилия", transform: "person-family" },
+        { label: "Имя", transform: "person-given" },
+        { label: "Отчество", transform: "person-patronymic" }
+      ];
+      for (const part of derived) {
+        const matches = byLabel.get(normalizeIdentity(part.label)) ?? [];
+        if (matches.length > 1) {
+          throw new KnowledgeConflictError(
+            `Найдено несколько полей «${part.label}». Оставьте одно поле или отключите разделение ФИО.`
+          );
+        }
+        let definition = matches[0];
+        let created = false;
+        if (definition === undefined) {
+          definition = this.knowledge.createPropertyDefinition(
+            {
+              label: part.label,
+              valueType: "string",
+              sensitivity: "personal",
+              appliesTo: ["person"],
+              aliases: [],
+              validation: toJsonValue({ uiGroup: "common" })
+            },
+            context
+          );
+          definitions.push(definition);
+          byKey.set(definition.key, definition);
+          byLabel.set(normalizeIdentity(definition.label), [definition]);
+          created = true;
+        } else if (definition.valueType !== "string") {
+          throw new DataImportValidationError(
+            `Поле «${part.label}» должно иметь тип «Короткий текст».`
+          );
+        }
+        if (
+          preparedMappings.some(
+            (mapping) => mapping.propertyKey === definition?.key
+          )
+        ) {
+          throw new DataImportValidationError(
+            `Поле «${part.label}» уже сопоставлено с другой колонкой. Отключите ручное сопоставление либо разделение ФИО.`
+          );
+        }
+        preparedMappings.push({
+          column: input.displayNameColumn,
+          propertyKey: definition.key,
+          caseInsensitive: true,
+          transform: part.transform
+        });
+        resolutions.push({
+          column: `${input.displayNameColumn} → ${part.label}`,
+          propertyKey: definition.key,
+          propertyLabel: definition.label,
+          valueType: definition.valueType,
+          sensitivity: definition.sensitivity,
+          created,
+          matchedBy: created ? "created" : "label",
+          aliasesAdded: [],
+          optionCount: null,
+          allowCustom: null
+        });
+      }
+    }
+
     const preparedInput: ExecuteDataImportInput = {
       fileName: input.fileName,
       fileFormat: input.fileFormat,
@@ -403,6 +493,15 @@ export class AssistedDataImportRegistry {
       headers: input.headers,
       rows: input.rows,
       mappings: preparedMappings,
+      ...(input.sourceRowNumbers === undefined
+        ? {}
+        : { sourceRowNumbers: input.sourceRowNumbers }),
+      ...(input.identityCaseInsensitive === undefined
+        ? {}
+        : { identityCaseInsensitive: input.identityCaseInsensitive }),
+      ...(input.personName === undefined
+        ? {}
+        : { personName: input.personName }),
       ...(input.entityTypeKey === undefined
         ? {}
         : { entityTypeKey: input.entityTypeKey }),

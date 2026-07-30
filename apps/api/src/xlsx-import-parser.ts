@@ -376,7 +376,7 @@ function parseWorksheetRows(input: {
   return rows;
 }
 
-export async function parseXlsxImport(buffer: Uint8Array): Promise<ParsedXlsxImport> {
+export async function parseXlsxImportRows(buffer: Uint8Array): Promise<ParsedXlsxImport> {
   const entries = await readOoxmlPackage(buffer, {
     maxEntries: 512,
     maxEntryBytes: 8 * 1024 * 1024,
@@ -426,4 +426,8 @@ export async function parseXlsxImport(buffer: Uint8Array): Promise<ParsedXlsxImp
     );
   }
   return { rows, warnings };
+}
+
+export async function parseXlsxImport(buffer: Uint8Array): Promise<string[][]> {
+  return (await parseXlsxImportRows(buffer)).rows.map((row) => row.cells);
 }

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { parseCsvImport, type ParsedCsvImportRow } from "./csv-import-parser.js";
-import { parseXlsxImport, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";
+import { parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";
+import { parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";
 
 export interface ParsedDataImportTable {
   fileName: string;
@@ -168,7 +168,7 @@ export async function parseDataImportBuffer(input: {
   const extension = /\.([^.]+)$/u.exec(fileName)?.[1]?.toLowerCase();
   const sourceSha256 = createHash("sha256").update(buffer).digest("hex");
   if (extension === "csv") {
-    const parsed = parseCsvImport(buffer);
+    const parsed = parseCsvImportRows(buffer);
     return buildTable({
       fileName,
       fileFormat: "csv",
@@ -180,7 +180,7 @@ export async function parseDataImportBuffer(input: {
     });
   }
   if (extension === "xlsx") {
-    const parsed = await parseXlsxImport(buffer);
+    const parsed = await parseXlsxImportRows(buffer);
     return buildTable({
       fileName,
       fileFormat: "xlsx",
