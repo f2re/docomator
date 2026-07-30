@@ -16,11 +16,28 @@ on:
 permissions:
   contents: write
 jobs:
-  delete:
+  delete-merged-branch:
     if: >-
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       startsWith(github.event.pull_request.head.ref, 'agent/')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete merged agent branch
+        env:
+          HEAD_BRANCH: \${{ github.event.pull_request.head.ref }}
+          DEFAULT_BRANCH: \${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$HEAD_BRANCH" == agent/* ]]
+          [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]
+          if git ls-remote --exit-code --heads origin "refs/heads/$HEAD_BRANCH" >/dev/null 2>&1; then
+            git push origin --delete "$HEAD_BRANCH"
+          else
+            echo "Branch $HEAD_BRANCH is already absent."
+          fi
 `;
 
 test("разрешает обычный workflow только для чтения", () => {
@@ -33,14 +50,14 @@ test("разрешает обычный workflow только для чтени�
   );
 });
 
-test("разрешает только защищённое удаление слитой agent-ветки", () => {
+test("разрешает только точный защищённый workflow удаления слитой agent-ветки", () => {
   assert.deepEqual(
     inspectWorkflow("delete-merged-agent-branch.yml", safeWriteWorkflow),
     []
   );
 });
 
-test("запрещает новый workflow с записью в репозиторий", () => {
+test("запрещает новый workflow с блочным правом записи", () => {
   assert.deepEqual(
     inspectWorkflow(
       "apply-patch.yml",
@@ -50,12 +67,75 @@ test("запрещает новый workflow с записью в репозит
   );
 });
 
-test("запрещает запуск workflow из комментария", () => {
-  const findings = inspectWorkflow(
-    "comment-command.yml",
-    "name: Command\non:\n  issue_comment:\n    types: [created]\npermissions:\n  contents: read\n"
+test("запрещает встроенное право записи", () => {
+  assert.deepEqual(
+    inspectWorkflow(
+      "inline.yml",
+      "name: Inline\non: push\npermissions: { contents: write, issues: read }\n"
+    ),
+    ["неразрешённые права записи: contents"]
   );
-  assert.deepEqual(findings, ["запрещён триггер issue_comment"]);
+});
+
+test("запрещает permissions: write-all", () => {
+  assert.deepEqual(
+    inspectWorkflow(
+      "write-all.yml",
+      "name: All\non: push\npermissions: write-all\n"
+    ),
+    ["запрещено общее право permissions: write-all"]
+  );
+});
+
+test("запрещает блочный и скалярный запуск из комментария", () => {
+  assert.deepEqual(
+    inspectWorkflow(
+      "comment-block.yml",
+      "name: Command\non:\n  issue_comment:\n    types: [created]\npermissions:\n  contents: read\n"
+    ),
+    ["запрещён триггер issue_comment"]
+  );
+  assert.deepEqual(
+    inspectWorkflow(
+      "comment-scalar.yml",
+      "name: Command\non: issue_comment\npermissions:\n  contents: read\n"
+    ),
+    ["запрещён триггер issue_comment"]
+  );
+});
+
+test("не принимает защитные строки, оставленные только в комментариях", () => {
+  const unsafe = safeWriteWorkflow
+    .replace(
+      '          [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]',
+      '          # [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]'
+    );
+  assert.match(
+    inspectWorkflow("delete-merged-agent-branch.yml", unsafe).join("\n"),
+    /утратил обязательное защитное условие/u
+  );
+});
+
+test("запрещает дополнительную команду в разрешённом write-workflow", () => {
+  const unsafe = safeWriteWorkflow.replace(
+    "          set -Eeuo pipefail",
+    "          set -Eeuo pipefail\n          git commit -am 'неразрешённое изменение'"
+  );
+  assert.match(
+    inspectWorkflow("delete-merged-agent-branch.yml", unsafe).join("\n"),
+    /неразрешённую команду: git commit/u
+  );
+});
+
+test("запрещает дополнительное стороннее action в разрешённом write-workflow", () => {
+  const unsafe = safeWriteWorkflow.replace(
+    "      - uses: actions/checkout@v4",
+    "      - uses: actions/checkout@v4\n      - uses: example/untrusted-action@v1"
+  );
+  assert.match(
+    inspectWorkflow("delete-merged-agent-branch.yml", unsafe).join("\n"),
+    /может использовать только actions\/checkout@v4/u
+  );
 });
 
 test("проверяет весь каталог workflow", async () => {

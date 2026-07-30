@@ -98,27 +98,45 @@ jobs:
           DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
         run: npm run migrate
 
-      - name: Start local application
+      - name: Start local application and worker
         env:
           DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
           DOCOMATOR_PORT: 18080
+          DOCOMATOR_PREVIEW_ENABLED: "false"
         shell: bash
         run: |
+          set -Eeuo pipefail
           npm run start:api > "$RUNNER_TEMP/docomator-browser-api.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/docomator-browser-api.pid"
+          ready=false
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
-              exit 0
+              ready=true
+              break
             fi
             sleep 1
           done
-          cat "$RUNNER_TEMP/docomator-browser-api.log"
-          exit 1
+          if [[ "$ready" != "true" ]]; then
+            cat "$RUNNER_TEMP/docomator-browser-api.log"
+            exit 1
+          fi
+          npm run start:worker > "$RUNNER_TEMP/docomator-browser-worker.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/docomator-browser-worker.pid"
+          sleep 1
+          if ! kill -0 "$(cat "$RUNNER_TEMP/docomator-browser-worker.pid")" 2>/dev/null; then
+            cat "$RUNNER_TEMP/docomator-browser-worker.log"
+            exit 1
+          fi
 
       - name: Run Chromium user flows
         env:
           DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
         run: npm run test:e2e
+
+      - name: Run real-stack Chromium smoke
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        run: npm run test:e2e:real-stack
 
       - name: Upload browser diagnostics
         if: failure()
@@ -129,6 +147,7 @@ jobs:
             tests/e2e/.tmp/playwright-report
             tests/e2e/.tmp/playwright-results
             ${{ runner.temp }}/docomator-browser-api.log
+            ${{ runner.temp }}/docomator-browser-worker.log
           if-no-files-found: warn
           retention-days: 3
 

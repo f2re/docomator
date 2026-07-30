@@ -9,6 +9,7 @@ const artifactDirectory = process.env.DOCOMATOR_E2E_ARTIFACT_DIR
 const evidenceContractVersion = 2;
 const chromiumExecutable = process.env.DOCOMATOR_E2E_CHROMIUM_BIN;
 const acceptanceRun = process.env.DOCOMATOR_E2E_ACCEPTANCE === "1";
+const realStackRun = process.env.DOCOMATOR_E2E_REAL_STACK === "1";
 
 const baseURL =
   process.env.DOCOMATOR_E2E_BASE_URL || "http://127.0.0.1:18080";
@@ -26,10 +27,11 @@ export default defineConfig({
       process.env.DOCOMATOR_E2E_BROWSER_VERSION || "development"
   },
   testDir: ".",
-  testMatch: "**/*.spec.mjs",
+  testMatch: realStackRun ? "**/real-stack-document-flow.spec.mjs" : "**/*.spec.mjs",
+  testIgnore: realStackRun ? [] : "**/real-stack-document-flow.spec.mjs",
   fullyParallel: false,
   forbidOnly: acceptanceRun || Boolean(process.env.CI),
-  retries: acceptanceRun ? 0 : process.env.CI ? 1 : 0,
+  retries: realStackRun ? 0 : acceptanceRun ? 0 : process.env.CI ? 1 : 0,
   workers: 1,
   timeout: 30_000,
   expect: {

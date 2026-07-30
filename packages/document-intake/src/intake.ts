@@ -247,37 +247,12 @@ function addSafely(left: number, right: number, code: string): number {
   return total;
 }
 
-async function readSmallXml(
-  zipFile: ZipFile,
-  entry: Entry,
-  limit: number
-): Promise<string> {
-  if (entry.uncompressedSize > limit) {
-    throw new DocumentIntakeError(
-      "xml_part_too_large",
-      413,
-      `Служебная XML-часть «${entry.fileName}» превышает допустимый размер.`
-    );
-  }
-  const stream = await zipFile.openReadStreamPromise(entry);
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const rawChunk of stream) {
-    const chunk = Buffer.isBuffer(rawChunk)
-      ? rawChunk
-      : Buffer.from(rawChunk as Uint8Array);
-    total = addSafely(total, chunk.length, "xml_part_too_large");
-    if (total > limit) {
-      stream.destroy();
-      throw new DocumentIntakeError(
-        "xml_part_too_large",
-        413,
-        `Служебная XML-часть «${entry.fileName}» превышает допустимый размер.`
-      );
-    }
-    chunks.push(chunk);
-  }
-  const content = Buffer.concat(chunks);
+interface VerifiedEntryRead {
+  totalReadBytes: number;
+  xml: string | null;
+}
+
+function decodeXml(content: Buffer): string {
   if (content.length >= 2 && content[0] === 0xff && content[1] === 0xfe) {
     return content.subarray(2).toString("utf16le");
   }
@@ -290,6 +265,99 @@ async function readSmallXml(
     return swapped.toString("utf16le");
   }
   return content.toString("utf8");
+}
+
+async function readVerifiedEntry(
+  zipFile: ZipFile,
+  entry: Entry,
+  limits: IntakeLimits,
+  currentTotalReadBytes: number,
+  captureXml: boolean
+): Promise<VerifiedEntryRead> {
+  if (captureXml && entry.uncompressedSize > limits.maxXmlPartBytes) {
+    throw new DocumentIntakeError(
+      "xml_part_too_large",
+      413,
+      `Служебная XML-часть «${entry.fileName}» превышает допустимый размер.`
+    );
+  }
+
+  const stream = await zipFile.openReadStreamPromise(entry);
+  const chunks: Buffer[] | null = captureXml ? [] : null;
+  let entryReadBytes = 0;
+  let totalReadBytes = currentTotalReadBytes;
+  try {
+    for await (const rawChunk of stream) {
+      const chunk = Buffer.isBuffer(rawChunk)
+        ? rawChunk
+        : Buffer.from(rawChunk as Uint8Array);
+      entryReadBytes = addSafely(
+        entryReadBytes,
+        chunk.length,
+        "package_part_too_large"
+      );
+      if (entryReadBytes > limits.maxEntryUncompressedBytes) {
+        stream.destroy();
+        throw new DocumentIntakeError(
+          "package_part_too_large",
+          413,
+          `Часть «${entry.fileName}» превышает допустимый фактически распакованный размер.`
+        );
+      }
+      totalReadBytes = addSafely(
+        totalReadBytes,
+        chunk.length,
+        "expanded_archive_too_large"
+      );
+      if (totalReadBytes > limits.maxTotalUncompressedBytes) {
+        stream.destroy();
+        throw new DocumentIntakeError(
+          "expanded_archive_too_large",
+          413,
+          "Суммарный фактически распакованный размер документа превышает допустимый предел."
+        );
+      }
+      if (chunks !== null) {
+        if (entryReadBytes > limits.maxXmlPartBytes) {
+          stream.destroy();
+          throw new DocumentIntakeError(
+            "xml_part_too_large",
+            413,
+            `Служебная XML-часть «${entry.fileName}» превышает допустимый размер.`
+          );
+        }
+        chunks.push(chunk);
+      }
+    }
+  } catch (error) {
+    stream.destroy();
+    throw error;
+  }
+
+  if (
+    entryReadBytes > 0 &&
+    (entry.compressedSize === 0 ||
+      entryReadBytes / entry.compressedSize > limits.maxCompressionRatio)
+  ) {
+    throw new DocumentIntakeError(
+      "suspicious_compression_ratio",
+      413,
+      `Часть «${entry.fileName}» имеет подозрительно высокую фактическую степень сжатия.`
+    );
+  }
+
+  if (entryReadBytes !== entry.uncompressedSize) {
+    throw new DocumentIntakeError(
+      "package_size_mismatch",
+      422,
+      `Фактический распакованный размер части «${entry.fileName}» не совпадает с заявленным. Файл отклонён.`
+    );
+  }
+
+  return {
+    totalReadBytes,
+    xml: chunks === null ? null : decodeXml(Buffer.concat(chunks))
+  };
 }
 
 function countExternalRelationships(xml: string): number {
@@ -437,7 +505,7 @@ export async function inspectOoxmlBuffer(
   try {
     zipFile = await yauzl.fromBufferPromise(input.buffer, {
       decodeStrings: true,
-      validateEntrySizes: true,
+      validateEntrySizes: false,
       strictFileNames: true
     });
   } catch {
@@ -456,7 +524,8 @@ export async function inspectOoxmlBuffer(
   let fileCount = 0;
   let directoryCount = 0;
   let compressedBytes = 0;
-  let uncompressedBytes = 0;
+  let declaredUncompressedBytes = 0;
+  let verifiedUncompressedBytes = 0;
   let relationshipFiles = 0;
   let externalRelationships = 0;
   let contentTypes = "";
@@ -537,12 +606,12 @@ export async function inspectOoxmlBuffer(
         entry.compressedSize,
         "archive_too_large"
       );
-      uncompressedBytes = addSafely(
-        uncompressedBytes,
+      declaredUncompressedBytes = addSafely(
+        declaredUncompressedBytes,
         entry.uncompressedSize,
         "expanded_archive_too_large"
       );
-      if (uncompressedBytes > limits.maxTotalUncompressedBytes) {
+      if (declaredUncompressedBytes > limits.maxTotalUncompressedBytes) {
         throw new DocumentIntakeError(
           "expanded_archive_too_large",
           413,
@@ -566,16 +635,28 @@ export async function inspectOoxmlBuffer(
         crc32: entry.crc32 >>> 0
       });
 
+      let verifiedXml: string | null = null;
+      if (!directory) {
+        const captureXml =
+          entry.fileName === "[Content_Types].xml" ||
+          entry.fileName.toLowerCase().endsWith(".rels");
+        const verified = await readVerifiedEntry(
+          zipFile,
+          entry,
+          limits,
+          verifiedUncompressedBytes,
+          captureXml
+        );
+        verifiedUncompressedBytes = verified.totalReadBytes;
+        verifiedXml = verified.xml;
+      }
+
       if (!directory && entry.fileName === "[Content_Types].xml") {
-        contentTypes = await readSmallXml(zipFile, entry, limits.maxXmlPartBytes);
+        contentTypes = verifiedXml ?? "";
       }
       if (!directory && entry.fileName.toLowerCase().endsWith(".rels")) {
         relationshipFiles += 1;
-        const relationships = await readSmallXml(
-          zipFile,
-          entry,
-          limits.maxXmlPartBytes
-        );
+        const relationships = verifiedXml ?? "";
         const count = countExternalRelationships(relationships);
         externalRelationships += count;
         if (count > 0) {
@@ -662,7 +743,7 @@ export async function inspectOoxmlBuffer(
       fileCount,
       directoryCount,
       compressedBytes,
-      uncompressedBytes,
+      uncompressedBytes: verifiedUncompressedBytes,
       relationshipFiles,
       externalRelationships,
       hasMacros: issues.some((issue) =>

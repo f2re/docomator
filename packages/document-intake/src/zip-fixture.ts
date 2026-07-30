@@ -6,6 +6,7 @@ export interface ZipFixtureEntry {
   compress?: boolean;
   encrypted?: boolean;
   externalFileAttributes?: number;
+  centralUncompressedSize?: number;
 }
 
 const CRC_TABLE = (() => {
@@ -56,7 +57,8 @@ function centralHeader(
   flags: number,
   checksum: number,
   offset: number,
-  externalFileAttributes: number
+  externalFileAttributes: number,
+  declaredUncompressedSize: number
 ): Buffer {
   const header = Buffer.alloc(46);
   header.writeUInt32LE(0x02014b50, 0);
@@ -66,7 +68,7 @@ function centralHeader(
   header.writeUInt16LE(method, 10);
   header.writeUInt32LE(checksum, 16);
   header.writeUInt32LE(compressed.length, 20);
-  header.writeUInt32LE(content.length, 24);
+  header.writeUInt32LE(declaredUncompressedSize, 24);
   header.writeUInt16LE(name.length, 28);
   header.writeUInt32LE(externalFileAttributes >>> 0, 38);
   header.writeUInt32LE(offset, 42);
@@ -96,7 +98,8 @@ export function buildZipFixture(entries: readonly ZipFixtureEntry[]): Buffer {
       flags,
       checksum,
       offset,
-      entry.externalFileAttributes ?? 0
+      entry.externalFileAttributes ?? 0,
+      entry.centralUncompressedSize ?? content.length
     );
     localParts.push(local);
     centralParts.push(central);

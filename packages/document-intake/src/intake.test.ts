@@ -23,6 +23,15 @@ test("accepts a minimal DOCX package and inventories its parts", async () => {
   assert.equal(report.format, "docx");
   assert.equal(report.decision, "accepted");
   assert.equal(report.summary.fileCount, 3);
+  assert.equal(
+    report.summary.uncompressedBytes,
+    minimalDocxEntries().reduce((total, entry) => {
+      const content = Buffer.isBuffer(entry.content)
+        ? entry.content
+        : Buffer.from(entry.content ?? "", "utf8");
+      return total + content.length;
+    }, 0)
+  );
   assert.equal(report.summary.externalRelationships, 0);
   assert.equal(report.issues.length, 0);
   assert.equal(report.sha256.length, 64);
@@ -198,5 +207,85 @@ test("rejects unsupported extensions and invalid ZIP signatures with Russian mes
       error instanceof DocumentIntakeError &&
       error.code === "invalid_zip_signature" &&
       /не является корректным/u.test(error.userMessage)
+  );
+});
+
+test("rejects a part whose actual stream exceeds an understated central size", async () => {
+  await assert.rejects(
+    inspectOoxmlBuffer({
+      buffer: buildZipFixture([
+        ...minimalDocxEntries(),
+        {
+          name: "word/understated.bin",
+          content: Buffer.alloc(4_096, 0x41),
+          centralUncompressedSize: 1
+        }
+      ]),
+      fileName: "Заниженный-размер.docx",
+      limits: {
+        maxEntryUncompressedBytes: 1_024,
+        maxCompressionRatio: 10_000
+      }
+    }),
+    (error: unknown) =>
+      error instanceof DocumentIntakeError &&
+      error.code === "package_part_too_large" &&
+      /фактически распакованный размер/u.test(error.userMessage)
+  );
+});
+
+
+test("rejects a part when the actual stream differs from the declared ZIP size", async () => {
+  await assert.rejects(
+    inspectOoxmlBuffer({
+      buffer: buildZipFixture([
+        ...minimalDocxEntries(),
+        {
+          name: "word/mismatch.bin",
+          content: Buffer.alloc(512, 0x44),
+          centralUncompressedSize: 1
+        }
+      ]),
+      fileName: "Несовпадающий-размер.docx",
+      limits: {
+        maxEntryUncompressedBytes: 1_024,
+        maxCompressionRatio: 10_000
+      }
+    }),
+    (error: unknown) =>
+      error instanceof DocumentIntakeError &&
+      error.code === "package_size_mismatch" &&
+      /не совпадает с заявленным/u.test(error.userMessage)
+  );
+});
+
+
+test("rejects an archive whose actual total exceeds understated central sizes", async () => {
+  await assert.rejects(
+    inspectOoxmlBuffer({
+      buffer: buildZipFixture([
+        ...minimalDocxEntries(),
+        {
+          name: "word/understated-a.bin",
+          content: Buffer.alloc(700, 0x42),
+          centralUncompressedSize: 1
+        },
+        {
+          name: "word/understated-b.bin",
+          content: Buffer.alloc(700, 0x43),
+          centralUncompressedSize: 1
+        }
+      ]),
+      fileName: "Заниженная-сумма.docx",
+      limits: {
+        maxEntryUncompressedBytes: 1_024,
+        maxTotalUncompressedBytes: 1_200,
+        maxCompressionRatio: 10_000
+      }
+    }),
+    (error: unknown) =>
+      error instanceof DocumentIntakeError &&
+      error.code === "expanded_archive_too_large" &&
+      /фактически распакованный размер/u.test(error.userMessage)
   );
 });

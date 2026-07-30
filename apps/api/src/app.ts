@@ -79,6 +79,7 @@ import Fastify, {
 } from "fastify";
 
 import { registerDatabaseAdminRoutes } from "./database-admin-routes.js";
+import { registerDataImportRoutes } from "./data-import-routes.js";
 import { registerDocumentDeliveryRoutes } from "./document-delivery-routes.js";
 import { registerDocumentEmailRoutes } from "./document-email-routes.js";
 import { registerDocumentGenerationRoutes } from "./document-generation-routes.js";
@@ -605,6 +606,7 @@ export function buildApp(
     documentEmailDeliveryRegistry
   );
   registerDocumentIntakeRoutes(app, quarantineRegistry, spaceRegistry);
+  registerDataImportRoutes(app, spaceRegistry);
   registerTemplateDraftRoutes(
     app,
     quarantineRegistry,
