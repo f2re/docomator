@@ -147,6 +147,7 @@ jobs:
             tests/e2e/.tmp/playwright-report
             tests/e2e/.tmp/playwright-results
             ${{ runner.temp }}/docomator-browser-api.log
+            ${{ runner.temp }}/docomator-browser-worker.log
           if-no-files-found: warn
           retention-days: 3
 
