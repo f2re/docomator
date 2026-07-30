@@ -1,0 +1,69 @@
+name: Исправить открытие обзора руководства
+
+on:
+  push:
+    branches:
+      - agent/audit-remediation-p0
+    paths:
+      - .github/workflows/repair-help-center-landing.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-help-center-landing
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Получить рабочую ветку
+        uses: actions/checkout@v4
+        with:
+          ref: agent/audit-remediation-p0
+          fetch-depth: 0
+
+      - name: Исправить вход в полное руководство
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("apps/api/ui/help-center.js")
+          source = path.read_text(encoding="utf-8")
+          old = '''    if (helpCenterCurrentArticle) helpCenterRenderArticle(helpCenterCurrentArticle);
+              else helpCenterShowIndex();'''
+          new = '''    helpCenterCurrentArticle = null;
+              helpCenterQuery = "";
+              helpCenterCategory = "all";
+              const search = document.querySelector("#helpCenterSearch");
+              if (search) search.value = "";
+              document.querySelectorAll("[data-help-category]").forEach((button) =>
+                button.setAttribute(
+                  "aria-selected",
+                  String(button.dataset.helpCategory === "all")
+                )
+              );
+              helpCenterShowIndex();'''
+          if source.count(old) != 1:
+              raise SystemExit("Не найден точный обработчик открытия руководства")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+          rm -f .github/workflows/repair-help-center-landing.yml
+          git diff --check
+          node --check apps/api/ui/help-center.js
+          node --check tests/e2e/help-center.spec.mjs
+
+      - name: Зафиксировать чистую ветку
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Открывать руководство с обзора всех документов'
+          git push origin HEAD:agent/audit-remediation-p0
