@@ -15,7 +15,8 @@ const bundles = {
     "workspace-switcher.js",
     "help-center.js",
     "help-project-documents.js",
-    "interface-hierarchy.js"
+    "interface-hierarchy.js",
+    "database-admin.js"
   ],
   "document-intake.js": [
     "document-intake.js",
@@ -43,6 +44,7 @@ const bundles = {
     "storage-maintenance.js",
     "bulk-data-import.js",
     "bulk-data-import-v2.js",
+    "bulk-data-import-v3.js",
     "operation-center.js",
     "operations-readiness.js",
     "template-row-flow.js"

@@ -1,0 +1,200 @@
+.database-admin-view.is-visible {
+  display: grid;
+  gap: 18px;
+}
+
+.database-admin-intro {
+  align-items: flex-start;
+}
+
+.database-admin-actions,
+.database-admin-export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.database-admin-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(220px, 1fr) minmax(180px, .8fr) minmax(150px, .6fr) minmax(140px, .5fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.database-admin-export {
+  grid-column: 1 / -1;
+}
+
+.database-admin-check {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.database-admin-check.is-success {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 25%, var(--border));
+  background: var(--success-soft);
+}
+
+.database-admin-check.is-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 25%, var(--border));
+  background: var(--danger-soft);
+}
+
+.database-admin-data {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.database-admin-data-heading,
+.database-admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.database-admin-data-heading {
+  border-bottom: 1px solid var(--border);
+}
+
+.database-admin-data-heading h3,
+.database-admin-data-heading p {
+  margin: 0;
+}
+
+.database-admin-data-heading p {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.database-admin-table-wrap {
+  max-height: min(62vh, 720px);
+  overflow: auto;
+}
+
+.database-admin-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: .78rem;
+}
+
+.database-admin-table th,
+.database-admin-table td {
+  min-width: 140px;
+  max-width: 360px;
+  padding: 9px 11px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.database-admin-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: left;
+  background: var(--surface-2);
+}
+
+.database-admin-table th button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.database-admin-table th small {
+  display: block;
+  margin-top: 3px;
+  color: var(--hint);
+  font-weight: 500;
+}
+
+.database-admin-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface-2) 58%, transparent);
+}
+
+.database-admin-null {
+  color: var(--hint);
+  font-style: italic;
+}
+
+.database-admin-pagination {
+  border-top: 1px solid var(--border);
+}
+
+.database-admin-dialog {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.database-admin-property-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.database-admin-property-grid .field:last-child {
+  grid-column: 1 / -1;
+}
+
+.database-admin-property-grid textarea {
+  min-height: 90px;
+}
+
+@media (max-width: 980px) {
+  .database-admin-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .database-admin-toolbar,
+  .database-admin-property-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .database-admin-property-grid .field:last-child {
+    grid-column: auto;
+  }
+
+  .database-admin-actions,
+  .database-admin-export {
+    width: 100%;
+  }
+
+  .database-admin-actions button,
+  .database-admin-export button {
+    flex: 1 1 140px;
+  }
+
+  .database-admin-data-heading,
+  .database-admin-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .database-admin-dialog {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+  }
+}

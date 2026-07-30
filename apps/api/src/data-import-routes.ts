@@ -45,6 +45,13 @@ interface ExecuteImportBody {
   identityPropertyKey?: string;
   headers: string[];
   rows: Array<Record<string, string>>;
+  sourceRowNumbers?: number[];
+  identityCaseInsensitive?: boolean;
+  personName?: {
+    normalizeCase?: boolean;
+    split?: boolean;
+    sourceOrder?: "family-given-patronymic" | "given-patronymic-family";
+  };
   mappings: AssistedDataImportPropertyMapping[];
   group?: ImportGroupBody | null;
 }
@@ -118,7 +125,10 @@ function validatePreviewToken(body: ExecuteImportBody): void {
   const expectedToken = createImportPreviewToken({
     sourceSha256: body.sourceSha256.toLowerCase(),
     headers: body.headers,
-    rows: body.rows
+    rows: body.rows,
+    ...(body.sourceRowNumbers === undefined
+      ? {}
+      : { sourceRowNumbers: body.sourceRowNumbers })
   });
   if (expectedToken !== body.previewToken.toLowerCase()) {
     throw new SpaceConflictError(
@@ -137,6 +147,15 @@ function registryInput(body: ExecuteImportBody) {
     headers: body.headers,
     rows: body.rows,
     mappings: body.mappings,
+    ...(body.sourceRowNumbers === undefined
+      ? {}
+      : { sourceRowNumbers: body.sourceRowNumbers }),
+    ...(body.identityCaseInsensitive === undefined
+      ? {}
+      : { identityCaseInsensitive: body.identityCaseInsensitive }),
+    ...(body.personName === undefined
+      ? {}
+      : { personName: body.personName }),
     ...(body.entityTypeKey === undefined
       ? {}
       : { entityTypeKey: body.entityTypeKey }),
@@ -224,6 +243,25 @@ const executeImportBodySchema = {
         additionalProperties: { type: "string", maxLength: 20_000 }
       }
     },
+    sourceRowNumbers: {
+      type: "array",
+      minItems: 1,
+      maxItems: 1_000,
+      items: { type: "integer", minimum: 1, maximum: 1_048_576 }
+    },
+    identityCaseInsensitive: { type: "boolean" },
+    personName: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        normalizeCase: { type: "boolean" },
+        split: { type: "boolean" },
+        sourceOrder: {
+          type: "string",
+          enum: ["family-given-patronymic", "given-patronymic-family"]
+        }
+      }
+    },
     mappings: {
       type: "array",
       minItems: 0,
@@ -266,7 +304,12 @@ const executeImportBodySchema = {
             uniqueItems: true,
             items: { type: "string", minLength: 1, maxLength: 160 }
           },
-          allowCustom: { type: "boolean" }
+          allowCustom: { type: "boolean" },
+          caseInsensitive: { type: "boolean" },
+          transform: {
+            type: "string",
+            enum: ["person-family", "person-given", "person-patronymic"]
+          }
         }
       }
     },

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { parseCsvImport } from "./csv-import-parser.js";
-import { parseXlsxImport } from "./xlsx-import-parser.js";
+import { parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";
+import { parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";
 
 export interface ParsedDataImportTable {
   fileName: string;
@@ -10,7 +10,9 @@ export interface ParsedDataImportTable {
   previewToken: string;
   headers: string[];
   rows: Array<Record<string, string>>;
+  sourceRowNumbers: number[];
   sampleRows: Array<Record<string, string>>;
+  sampleRowNumbers: number[];
   rowCount: number;
   columnCount: number;
   warnings: string[];
@@ -22,6 +24,7 @@ export class DataImportParseError extends Error {
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_COLUMNS = 100;
+const MAX_DATA_ROWS = 1_000;
 const MAX_CELL_CHARS = 20_000;
 
 function normalizeCell(value: string): string {
@@ -51,13 +54,16 @@ export function createImportPreviewToken(input: {
   sourceSha256: string;
   headers: readonly string[];
   rows: readonly Record<string, string>[];
+  sourceRowNumbers?: readonly number[];
 }): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
         sourceSha256: input.sourceSha256,
         headers: input.headers,
-        rows: input.rows
+        rows: input.rows,
+        sourceRowNumbers:
+          input.sourceRowNumbers ?? input.rows.map((_row, index) => index + 2)
       })
     )
     .digest("hex");
@@ -67,35 +73,70 @@ function buildTable(input: {
   fileName: string;
   fileFormat: "csv" | "xlsx";
   sourceSha256: string;
-  matrix: readonly string[][];
+  sourceRows: readonly (ParsedCsvImportRow | ParsedXlsxImportRow)[];
   warnings: string[];
 }): ParsedDataImportTable {
-  const matrix = input.matrix
-    .map((row) => row.map((value) => normalizeCell(value ?? "")))
-    .filter((row) => row.some((value) => value.length > 0));
-  if (matrix.length < 2) {
+  const normalizedRows = input.sourceRows.map((row) => ({
+    rowNumber: row.rowNumber,
+    cells: row.cells.map((value) => normalizeCell(value ?? ""))
+  }));
+  const populatedRows = normalizedRows.filter((row) =>
+    row.cells.some((value) => value.length > 0)
+  );
+  if (populatedRows.length < 2) {
     throw new DataImportParseError(
       "Файл должен содержать строку заголовков и хотя бы одну строку данных."
     );
   }
-  const width = Math.max(...matrix.map((row) => row.length));
+  const headerRow = populatedRows[0];
+  if (headerRow === undefined) {
+    throw new DataImportParseError("В файле не найдена строка заголовков.");
+  }
+  const dataRows = populatedRows.slice(1);
+  if (dataRows.length > MAX_DATA_ROWS) {
+    throw new DataImportParseError(
+      `Файл содержит более ${MAX_DATA_ROWS} строк данных.`
+    );
+  }
+  const width = Math.max(
+    headerRow.cells.length,
+    ...dataRows.map((row) => row.cells.length)
+  );
   if (width < 1 || width > MAX_COLUMNS) {
     throw new DataImportParseError(
       `Файл должен содержать от 1 до ${MAX_COLUMNS} колонок.`
     );
   }
   const headers = uniqueHeaders(
-    Array.from({ length: width }, (_item, index) => matrix[0]?.[index] ?? "")
+    Array.from({ length: width }, (_item, index) => headerRow.cells[index] ?? "")
   );
-  const rows = matrix.slice(1).map((row) =>
+  const rows = dataRows.map((row) =>
     Object.fromEntries(
-      headers.map((header, index) => [header, row[index] ?? ""])
+      headers.map((header, index) => [header, row.cells[index] ?? ""])
     )
   );
+  const sourceRowNumbers = dataRows.map((row) => row.rowNumber);
+  const skippedBlankRows = Math.max(
+    0,
+    normalizedRows.filter((row) => row.rowNumber > headerRow.rowNumber).length -
+      dataRows.length
+  );
+  const warnings = [...input.warnings];
+  if (headerRow.rowNumber > 1) {
+    warnings.push(
+      `Строка заголовков найдена в строке ${headerRow.rowNumber}; предыдущие пустые строки пропущены.`
+    );
+  }
+  if (skippedBlankRows > 0) {
+    warnings.push(
+      `Полностью пустые строки пропущены: ${skippedBlankRows}. Номера остальных строк сохранены.`
+    );
+  }
   const previewToken = createImportPreviewToken({
     sourceSha256: input.sourceSha256,
     headers,
-    rows
+    rows,
+    sourceRowNumbers
   });
   return {
     fileName: input.fileName,
@@ -104,10 +145,12 @@ function buildTable(input: {
     previewToken,
     headers,
     rows,
+    sourceRowNumbers,
     sampleRows: rows.slice(0, 20),
+    sampleRowNumbers: sourceRowNumbers.slice(0, 20),
     rowCount: rows.length,
     columnCount: headers.length,
-    warnings: input.warnings
+    warnings
   };
 }
 
@@ -125,24 +168,25 @@ export async function parseDataImportBuffer(input: {
   const extension = /\.([^.]+)$/u.exec(fileName)?.[1]?.toLowerCase();
   const sourceSha256 = createHash("sha256").update(buffer).digest("hex");
   if (extension === "csv") {
-    const parsed = parseCsvImport(buffer);
+    const parsed = parseCsvImportRows(buffer);
     return buildTable({
       fileName,
       fileFormat: "csv",
       sourceSha256,
-      matrix: parsed.matrix,
+      sourceRows: parsed.rows,
       warnings: [
         `Разделитель CSV: ${parsed.delimiter === "\t" ? "табуляция" : parsed.delimiter}`
       ]
     });
   }
   if (extension === "xlsx") {
+    const parsed = await parseXlsxImportRows(buffer);
     return buildTable({
       fileName,
       fileFormat: "xlsx",
       sourceSha256,
-      matrix: await parseXlsxImport(buffer),
-      warnings: ["Импортируется первый рабочий лист XLSX."]
+      sourceRows: parsed.rows,
+      warnings: parsed.warnings
     });
   }
   throw new DataImportParseError("Поддерживаются файлы CSV и XLSX.");

@@ -11,6 +11,8 @@ import type {
 import { DocumentIntakeError } from "@docomator/document-intake";
 import {
   ContentAddressedObjectStore,
+  DatabaseAdminRegistry,
+  DatabaseAdminValidationError,
   DocumentDeliveryConflictError,
   DocumentDeliveryNotFoundError,
   DocumentDeliveryRegistry,
@@ -76,6 +78,7 @@ import Fastify, {
   type FastifyInstance
 } from "fastify";
 
+import { registerDatabaseAdminRoutes } from "./database-admin-routes.js";
 import { registerDocumentDeliveryRoutes } from "./document-delivery-routes.js";
 import { registerDocumentEmailRoutes } from "./document-email-routes.js";
 import { registerDocumentGenerationRoutes } from "./document-generation-routes.js";
@@ -108,6 +111,7 @@ export interface AppDependencies {
   store?: SqliteStore;
   objectStore?: ContentAddressedObjectStore;
   knowledgeRegistry?: KnowledgeRegistry;
+  databaseAdminRegistry?: DatabaseAdminRegistry;
   spaceRegistry?: SpaceRegistry;
   documentDeliveryRegistry?: DocumentDeliveryRegistry;
   documentEmailDeliveryRegistry?: DocumentEmailDeliveryRegistry;
@@ -224,6 +228,9 @@ export function buildApp(
     new ContentAddressedObjectStore(path.join(config.dataDir, "objects"));
   const knowledgeRegistry =
     dependencies.knowledgeRegistry ?? new KnowledgeRegistry(store);
+  const databaseAdminRegistry =
+    dependencies.databaseAdminRegistry ??
+    new DatabaseAdminRegistry(store, knowledgeRegistry);
   const spaceRegistry = dependencies.spaceRegistry ?? new SpaceRegistry(store);
   const documentDeliveryRegistry =
     dependencies.documentDeliveryRegistry ?? new DocumentDeliveryRegistry(store);
@@ -454,6 +461,10 @@ export function buildApp(
       statusCode = 409;
       code = "knowledge_conflict";
       message = toUserMessage(error);
+    } else if (error instanceof DatabaseAdminValidationError) {
+      statusCode = 400;
+      code = "database_admin_validation_failed";
+      message = toUserMessage(error);
     } else if (error instanceof SpaceValidationError) {
       statusCode = 400;
       code = "space_validation_failed";
@@ -562,6 +573,7 @@ export function buildApp(
   }));
 
   registerUiRoutes(app, dependencies.uiDirectory);
+  registerDatabaseAdminRoutes(app, databaseAdminRegistry);
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
   registerEmployeeRoutes(app, employeeRegistry);

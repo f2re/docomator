@@ -675,6 +675,9 @@
       displayNameColumn: document.querySelector("#entityImportDisplayColumn")?.value || "",
       headers: preview.headers,
       rows: preview.rows,
+      sourceRowNumbers:
+        preview.sourceRowNumbers ?? preview.rows.map((_row, index) => index + 2),
+      identityCaseInsensitive: true,
       mappings: entityWorkspaceCollectImportMappings(),
       group: createGroup ? { name: document.querySelector("#entityImportGroupName")?.value.trim() || "Импорт" } : null
     };

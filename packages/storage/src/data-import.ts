@@ -5,12 +5,19 @@ import { SqliteStore } from "./database.js";
 import {
   KnowledgeConflictError,
   KnowledgeRegistry,
-  stringifyJson,
-  toJsonValue,
   type MutationContext,
   type PropertyDefinitionRecord
 } from "./index-internal.js";
 import { generateOpaqueStableKey } from "./knowledge.js";
+import {
+  canonicalEnumImportValue,
+  caseInsensitiveImportKey,
+  equalImportValues,
+  normalizeImportPersonDisplayName,
+  transformedPersonNameValue,
+  type DataImportPersonNameOptions,
+  type DataImportValueTransform
+} from "./data-import-normalization.js";
 import { SpaceRegistry, type AudienceGroupRecord } from "./spaces.js";
 
 export type DataImportFormat = "csv" | "xlsx";
@@ -21,6 +28,8 @@ export interface DataImportPropertyMapping {
   createIfMissing?: boolean;
   label?: string;
   valueType?: string;
+  caseInsensitive?: boolean;
+  transform?: DataImportValueTransform;
 }
 
 export interface DataImportGroupInput {
@@ -39,6 +48,9 @@ export interface ExecuteDataImportInput {
   identityPropertyKey?: string;
   headers: readonly string[];
   rows: readonly Record<string, string>[];
+  sourceRowNumbers?: readonly number[];
+  identityCaseInsensitive?: boolean;
+  personName?: DataImportPersonNameOptions;
   mappings: readonly DataImportPropertyMapping[];
   group?: DataImportGroupInput | null;
 }
@@ -86,13 +98,20 @@ export interface DataImportRunRecord {
 interface PreparedMapping {
   column: string;
   property: PropertyDefinitionRecord;
+  caseInsensitive: boolean;
+  transform?: DataImportValueTransform;
 }
 
 interface PreparedRow {
   rowNumber: number;
   externalKey: string;
+  lookupKey: string;
   displayName: string;
-  values: Array<{ property: PropertyDefinitionRecord; value: unknown }>;
+  values: Array<{
+    property: PropertyDefinitionRecord;
+    value: unknown;
+    caseInsensitive: boolean;
+  }>;
 }
 
 interface PreparedImportGroup {
@@ -104,6 +123,8 @@ interface PreparedImportGroup {
 
 interface ImportKeyRow {
   entity_id: string;
+  external_key?: string;
+  value_text?: string | null;
 }
 
 interface PropertyValueRow {
@@ -284,12 +305,35 @@ function parseDate(raw: string): string {
   return candidate;
 }
 
-function convertValue(property: PropertyDefinitionRecord, raw: string): unknown {
+function propertyEnumValues(property: PropertyDefinitionRecord): string[] {
+  if (
+    property.validation === null ||
+    Array.isArray(property.validation) ||
+    typeof property.validation !== "object"
+  ) {
+    return [];
+  }
+  const values = property.validation["enum"];
+  return Array.isArray(values) && values.every((value) => typeof value === "string")
+    ? values
+    : [];
+}
+
+function convertValue(
+  property: PropertyDefinitionRecord,
+  raw: string,
+  caseInsensitive: boolean
+): unknown {
   switch (property.valueType) {
     case "string":
     case "text":
-    case "enum":
       return raw;
+    case "enum":
+      return canonicalEnumImportValue(
+        raw,
+        propertyEnumValues(property),
+        caseInsensitive
+      );
     case "number":
       return parseNumber(raw);
     case "integer": {
@@ -333,7 +377,7 @@ function currentPropertyValue(
   store: SqliteStore,
   entityId: string,
   propertyId: string
-): string | null {
+): unknown | undefined {
   return store.execute((connection) => {
     const row = connection
       .prepare(`
@@ -344,7 +388,29 @@ function currentPropertyValue(
         LIMIT 1
       `)
       .get(entityId, propertyId) as PropertyValueRow | undefined;
-    return row?.value_json ?? null;
+    return row === undefined ? undefined : JSON.parse(row.value_json);
+  });
+}
+
+function normalizeSourceRowNumbers(
+  values: readonly number[] | undefined,
+  rowCount: number
+): number[] {
+  if (values === undefined) {
+    return Array.from({ length: rowCount }, (_item, index) => index + 2);
+  }
+  if (!Array.isArray(values) || values.length !== rowCount) {
+    throw new DataImportValidationError(
+      "Номера исходных строк не соответствуют строкам предварительного просмотра."
+    );
+  }
+  return values.map((value, index) => {
+    if (!Number.isInteger(value) || value < 1 || value > 1_048_576) {
+      throw new DataImportValidationError(
+        `Номер исходной строки ${index + 1} заполнен некорректно.`
+      );
+    }
+    return value;
   });
 }
 
@@ -476,6 +542,16 @@ export class DataImportRegistry {
         : stableKey(explicitIdentityPropertyKey, "identityPropertyKey");
     const headers = normalizeHeaders(input.headers);
     const rows = normalizeRows(input.rows, headers);
+    const sourceRowNumbers = normalizeSourceRowNumbers(
+      input.sourceRowNumbers,
+      rows.length
+    );
+    const identityCaseInsensitive = input.identityCaseInsensitive === true;
+    if (input.personName !== undefined && entityTypeKey !== "person") {
+      throw new DataImportValidationError(
+        "Нормализация и разделение ФИО доступны только для типа «Человек»."
+      );
+    }
     const identityColumn = requiredText(input.identityColumn, "identityColumn", 300);
     const displayNameColumn = requiredText(
       input.displayNameColumn,
@@ -608,7 +684,14 @@ export class DataImportRegistry {
           `Свойство «${property.label}» не применяется к типу «${entityType.label}».`
         );
       }
-      preparedMappings.push({ column, property });
+      preparedMappings.push({
+        column,
+        property,
+        caseInsensitive: mappingInput.caseInsensitive === true,
+        ...(mappingInput.transform === undefined
+          ? {}
+          : { transform: mappingInput.transform })
+      });
     }
 
     const identityProperty = hasExplicitIdentityProperty
@@ -625,7 +708,8 @@ export class DataImportRegistry {
     ) {
       preparedMappings.unshift({
         column: identityColumn,
-        property: identityProperty
+        property: identityProperty,
+        caseInsensitive: identityCaseInsensitive
       });
     }
 
@@ -634,14 +718,14 @@ export class DataImportRegistry {
     const errors: DataImportRowError[] = [];
     let skippedCount = 0;
     rows.forEach((row, index) => {
-      const rowNumber = index + 2;
+      const rowNumber = sourceRowNumbers[index] ?? index + 2;
       const externalKey = (row[identityColumn] ?? "").trim();
-      const displayName = (row[displayNameColumn] ?? "").trim();
+      const sourceDisplayName = (row[displayNameColumn] ?? "").trim();
       if (Object.values(row).every((value) => value.length === 0)) {
         skippedCount += 1;
         return;
       }
-      if (externalKey.length === 0 || displayName.length === 0) {
+      if (externalKey.length === 0 || sourceDisplayName.length === 0) {
         errors.push({
           rowNumber,
           externalKey: externalKey || null,
@@ -652,22 +736,49 @@ export class DataImportRegistry {
         });
         return;
       }
-      if (seenExternalKeys.has(externalKey)) {
+      const lookupKey = identityCaseInsensitive
+        ? caseInsensitiveImportKey(externalKey)
+        : externalKey;
+      if (seenExternalKeys.has(lookupKey)) {
         errors.push({
           rowNumber,
           externalKey,
-          message: `Значение «${externalKey}» в колонке «${identityColumn}» повторяется внутри файла.`
+          message: `Значение «${externalKey}» в колонке «${identityColumn}» повторяется внутри файла с учётом выбранной нормализации.`
         });
         return;
       }
-      seenExternalKeys.add(externalKey);
+      seenExternalKeys.add(lookupKey);
       try {
-        const values = preparedMappings.flatMap(({ column, property }) => {
-          const raw = (row[column] ?? "").trim();
+        const displayName = entityTypeKey === "person"
+          ? normalizeImportPersonDisplayName(sourceDisplayName, input.personName)
+          : sourceDisplayName;
+        const values = preparedMappings.flatMap((mapping) => {
+          let raw = (row[mapping.column] ?? "").trim();
+          if (mapping.transform !== undefined) {
+            raw = transformedPersonNameValue(
+              raw,
+              mapping.transform,
+              input.personName
+            );
+          }
           if (raw.length === 0) return [];
-          return [{ property, value: convertValue(property, raw) }];
+          return [{
+            property: mapping.property,
+            value: convertValue(
+              mapping.property,
+              raw,
+              mapping.caseInsensitive
+            ),
+            caseInsensitive: mapping.caseInsensitive
+          }];
         });
-        preparedRows.push({ rowNumber, externalKey, displayName, values });
+        preparedRows.push({
+          rowNumber,
+          externalKey,
+          lookupKey,
+          displayName,
+          values
+        });
       } catch (error) {
         errors.push({
           rowNumber,
@@ -719,22 +830,50 @@ export class DataImportRegistry {
     for (const row of preparedRows) {
       try {
         const outcome = this.store.transaction(() => {
-          let entityId = this.store.execute((connection) => {
-            const keyRow = connection
+          const keyMatch = this.store.execute((connection) => {
+            const exact = connection
               .prepare(`
-                SELECT entity_id
+                SELECT entity_id, external_key
                 FROM entity_import_keys
                 WHERE space_id = ? AND entity_type_id = ? AND external_key = ?
               `)
-              .get(space.id, entityType.id, row.externalKey) as
+              .get(space.id, entityType.id, row.lookupKey) as
               | ImportKeyRow
               | undefined;
-            if (keyRow !== undefined) return keyRow.entity_id;
-            if (!hasExplicitIdentityProperty) return null;
+            if (exact !== undefined) {
+              return { entityId: exact.entity_id, externalKey: exact.external_key ?? row.lookupKey };
+            }
+            if (identityCaseInsensitive) {
+              const compatible = (connection
+                .prepare(`
+                  SELECT entity_id, external_key
+                  FROM entity_import_keys
+                  WHERE space_id = ? AND entity_type_id = ?
+                `)
+                .all(space.id, entityType.id) as unknown as ImportKeyRow[])
+                .filter((candidate) =>
+                  caseInsensitiveImportKey(candidate.external_key ?? "") === row.lookupKey
+                );
+              const entityIds = [...new Set(compatible.map((candidate) => candidate.entity_id))];
+              if (entityIds.length > 1) {
+                throw new DataImportConflictError(
+                  "Найдено несколько объектов с одинаковым ключом после нормализации регистра."
+                );
+              }
+              if (compatible[0] !== undefined) {
+                return {
+                  entityId: compatible[0].entity_id,
+                  externalKey: compatible[0].external_key ?? row.lookupKey
+                };
+              }
+            }
+            if (!hasExplicitIdentityProperty) {
+              return { entityId: null, externalKey: row.lookupKey };
+            }
 
-            const matches = connection
+            const candidates = connection
               .prepare(`
-                SELECT DISTINCT e.id AS entity_id
+                SELECT DISTINCT e.id AS entity_id, v.value_text
                 FROM entities e
                 JOIN space_entity_ownership seo ON seo.entity_id = e.id
                 JOIN entity_property_values v ON v.entity_id = e.id
@@ -750,22 +889,25 @@ export class DataImportRegistry {
                 WHERE seo.space_id = ?
                   AND e.entity_type_id = ?
                   AND p.key = ?
-                  AND v.value_text = ?
-                LIMIT 2
               `)
-              .all(
-                space.id,
-                entityType.id,
-                identityPropertyKey,
-                row.externalKey
-              ) as unknown as ImportKeyRow[];
-            if (matches.length > 1) {
+              .all(space.id, entityType.id, identityPropertyKey) as unknown as ImportKeyRow[];
+            const matches = candidates.filter((candidate) => {
+              const value = candidate.value_text ?? "";
+              return identityCaseInsensitive
+                ? caseInsensitiveImportKey(value) === row.lookupKey
+                : value === row.externalKey;
+            });
+            if (new Set(matches.map((candidate) => candidate.entity_id)).size > 1) {
               throw new DataImportConflictError(
                 "Найдено несколько объектов с одинаковым значением выбранной колонки."
               );
             }
-            return matches[0]?.entity_id ?? null;
+            return {
+              entityId: matches[0]?.entity_id ?? null,
+              externalKey: row.lookupKey
+            };
           });
+          let entityId = keyMatch.entityId;
 
           let created = false;
           let changed = false;
@@ -791,7 +933,7 @@ export class DataImportRegistry {
                 | undefined;
               if (current === undefined) {
                 throw new DataImportConflictError(
-                  "Сотрудник, найденный по выбранной колонке, больше не существует."
+                  "Объект, найденный по выбранной колонке, больше не существует."
                 );
               }
               if (
@@ -826,7 +968,7 @@ export class DataImportRegistry {
               .run(
                 space.id,
                 entityType.id,
-                row.externalKey,
+                keyMatch.externalKey,
                 entityId,
                 context.now,
                 context.now
@@ -834,10 +976,18 @@ export class DataImportRegistry {
           });
 
           for (const item of row.values) {
-            const encodedJson = stringifyJson(toJsonValue(item.value));
+            const current = currentPropertyValue(
+              this.store,
+              entityId,
+              item.property.id
+            );
             if (
-              currentPropertyValue(this.store, entityId, item.property.id) ===
-              encodedJson
+              current !== undefined &&
+              equalImportValues(
+                current,
+                item.value,
+                item.caseInsensitive
+              )
             ) {
               continue;
             }

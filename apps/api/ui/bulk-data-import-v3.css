@@ -1,0 +1,77 @@
+.bulk-v3-normalization {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.bulk-v3-normalization h3,
+.bulk-v3-normalization p {
+  margin: 0;
+}
+
+.bulk-v3-normalization > div > p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.bulk-v3-normalization .operator-check {
+  align-items: flex-start;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.bulk-v3-normalization .operator-check strong,
+.bulk-v3-normalization .operator-check small {
+  display: block;
+}
+
+.bulk-v3-normalization .operator-check small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.bulk-v3-case-option {
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--surface-subtle);
+}
+
+.bulk-v3-case-option strong,
+.bulk-v3-case-option small {
+  display: block;
+}
+
+.bulk-v3-case-option small {
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.bulk-v3-parser-warnings {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 25%, var(--border));
+  border-radius: 12px;
+  background: var(--warning-soft);
+}
+
+.bulk-v3-parser-warnings p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 620px) {
+  .bulk-v3-normalization {
+    padding: 13px;
+  }
+}

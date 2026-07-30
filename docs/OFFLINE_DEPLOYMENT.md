@@ -358,6 +358,37 @@ Update:
 9. ожидает `/readyz`;
 10. откатывает symlink, БД и config при ошибке.
 
+### 8.1. Обновление без повреждения базы
+
+Перед переносом новой версии выполните дополнительную операторскую копию и проверку:
+
+```bash
+sudo -u docomator env DOCOMATOR_DATA_DIR=/var/lib/docomator \
+  /opt/docomator/current/runtime/node/bin/node \
+  /opt/docomator/current/app/scripts/runtime/backup.mjs
+
+sudo -u docomator env DOCOMATOR_DATA_DIR=/var/lib/docomator \
+  /opt/docomator/current/runtime/node/bin/node \
+  /opt/docomator/current/app/scripts/runtime/database-admin.mjs check
+```
+
+После этого применяйте только распакованный и проверенный новый комплект командой `update.sh`. Не копируйте новую базу поверх `/var/lib/docomator/docomator.db`, не запускайте миграции вручную из другого исходного дерева и не используйте `--install-os-packages` для действующей установки.
+
+`update.sh` вызывает `install.sh --upgrade`. Перед миграцией службы останавливаются, а конфигурация и согласованный набор `docomator.db`, `docomator.db-wal`, `docomator.db-shm` копируются в `backups/pre-update-*`. Новая версия устанавливается в отдельный неизменяемый каталог. Ссылка `current` переключается только после успешной миграции; при ошибке запуска или `/readyz` сценарий возвращает прежнюю ссылку, БД и конфигурацию.
+
+После успешного обновления:
+
+```bash
+systemctl --no-pager --full status docomator-api.service docomator-worker.service
+curl --fail --silent --show-error http://127.0.0.1:8080/readyz
+
+sudo -u docomator env DOCOMATOR_DATA_DIR=/var/lib/docomator \
+  /opt/docomator/current/runtime/node/bin/node \
+  /opt/docomator/current/app/scripts/runtime/database-admin.mjs check
+```
+
+Затем выполните `target-acceptance.sh` из того же проверенного комплекта и сохраните акт. Каталог прежней версии и копию `pre-update-*` не удаляйте до завершения приёмки. Пакеты ОС для Debian или 🟥 Astra Linux обновляются отдельно по утверждённой процедуре со снимком виртуальной машины; приложение намеренно не пытается включить их в SQLite-откат.
+
 > [!NOTE]
 > Object storage не копируется перед каждым update, поскольку outputs immutable и обычно велики. Он должен входить в регулярную backup policy.
 
