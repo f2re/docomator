@@ -54,6 +54,33 @@ jobs:
           rm -f .github/workflows/apply-audit-remediation-p0b.yml
           rm -f .audit-p0bc-payload.part-*
 
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/AUDIT_REMEDIATION_PLAN_2026-07-30.md")
+          source = path.read_text(encoding="utf-8")
+          normalizations = [
+              (
+                  "Текущий пакет: **PR №61, очередь P0-A и часть P0-B**",
+                  "Текущий пакет: **PR №61, очередь P0-A**",
+              ),
+              (
+                  "| P0-06 | Исправить устаревшие встроенные подсказки | справка не описывает работающие функции как будущие | браузерная регрессия и проверка языка | вход в обзор исправлен; аудит остальных текстов — P0-B |",
+                  "| P0-06 | Исправить устаревшие встроенные подсказки | справка не описывает работающие функции как будущие | браузерная регрессия и проверка языка | запланировано |",
+              ),
+              (
+                  "2. **P0-B:** аудит оставшихся текстов справки и независимая регистрация импорта.",
+                  "2. **P0-B:** актуальная справка, независимая регистрация импорта, удаление устаревших PR.",
+              ),
+          ]
+          for current, baseline in normalizations:
+              if current in source:
+                  source = source.replace(current, baseline, 1)
+              elif baseline not in source:
+                  raise SystemExit(f"Не найдено ожидаемое состояние плана: {current}")
+          path.write_text(source, encoding="utf-8")
+          PY
+
           python3 "$PACKAGE_ROOT/apply-p0bc.py" "$PWD" --check-only
           python3 "$PACKAGE_ROOT/apply-p0bc.py" "$PWD"
           git diff --check
