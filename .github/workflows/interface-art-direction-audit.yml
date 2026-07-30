@@ -72,16 +72,16 @@ jobs:
       - name: Run static audit
         shell: bash
         run: |
-          mkdir -p .art-direction-audit
+          mkdir -p art-direction-audit
           node "$RUNNER_TEMP/better-art-direction/skills/better-art-direction/scripts/static-audit.mjs" \
             apps/api/ui \
             --format markdown \
-            --out .art-direction-audit/static-report.md \
+            --out art-direction-audit/static-report.md \
             --no-fail
           node "$RUNNER_TEMP/better-art-direction/skills/better-art-direction/scripts/static-audit.mjs" \
             apps/api/ui \
             --format json \
-            --out .art-direction-audit/static-report.json \
+            --out art-direction-audit/static-report.json \
             --no-fail
 
       - name: Run rendered audit
@@ -93,7 +93,7 @@ jobs:
             --widths 320,768,1440 \
             --schemes light,dark \
             --height 900 \
-            --out .art-direction-audit/rendered \
+            --out art-direction-audit/rendered \
             --format markdown \
             --no-fail
 
@@ -102,7 +102,7 @@ jobs:
         with:
           name: interface-art-direction-audit
           path: |
-            .art-direction-audit
+            art-direction-audit
             ${{ runner.temp }}/docomator-art-direction-api.log
           if-no-files-found: error
           retention-days: 7
