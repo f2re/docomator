@@ -166,9 +166,19 @@ async function verifyEmployeeInSecondContext(page, displayName, fieldLabel, fiel
   await expect(dialog).not.toBeVisible();
 
   await app.openView("documents");
+  await expect(page.locator("#sharedDocumentCollectedCount")).toHaveText("1", {
+    timeout: 20_000
+  });
+  await page.getByRole("button", { name: "Забранные" }).click();
+  const storedResult = page
+    .locator("[data-shared-result-id]")
+    .filter({ hasText: "personal-card" })
+    .first();
+  await expect(storedResult).toBeVisible({ timeout: 20_000 });
+  await expect(storedResult).toContainText("Забран");
   await expect(
-    page.getByRole("link", { name: "Скачать документ" }).first()
-  ).toBeVisible({ timeout: 20_000 });
+    storedResult.getByRole("link", { name: "Скачать документ" })
+  ).toBeVisible();
 }
 
 test("настоящий UI → API → SQLite → worker формирует и сохраняет DOCX", async ({
