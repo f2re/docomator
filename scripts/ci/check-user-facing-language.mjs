@@ -32,6 +32,8 @@ const files = [
   "apps/api/ui/shared-corporate-mode.js",
   "apps/api/ui/storage-maintenance.js",
   "apps/api/ui/bulk-data-import.js",
+  "apps/api/ui/bulk-data-import-v3.js",
+  "apps/api/ui/database-admin.js",
   "apps/api/ui/operation-center.js",
   "apps/api/ui/operations-readiness.js",
   "apps/api/src/user-message.ts",

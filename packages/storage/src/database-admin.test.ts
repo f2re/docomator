@@ -74,7 +74,7 @@ test("database admin lists, searches, sorts and exports only validated tables", 
     });
     assert.equal(csv.contentType, "text/csv; charset=utf-8");
     assert.ok(csv.content.startsWith("\ufeff"));
-    assert.match(csv.content, /'\=ОПАСНАЯ ФОРМУЛА/u);
+    assert.match(csv.content, /'=ОПАСНАЯ ФОРМУЛА/u);
 
     const json = registry.exportTable({
       table: "entities",

@@ -38,11 +38,11 @@ interface CreatePropertyBody {
   aliases?: string[];
 }
 
-const querySchema = {
+const pageQuerySchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    limit: { type: "integer", minimum: 1, maximum: 10_000 },
+    limit: { type: "integer", minimum: 1, maximum: 200 },
     offset: { type: "integer", minimum: 0, maximum: 10_000_000 },
     sortColumn: { type: "string", minLength: 1, maxLength: 160 },
     sortDirection: { type: "string", enum: ["asc", "desc"] },
@@ -70,7 +70,7 @@ export function registerDatabaseAdminRoutes(
             table: { type: "string", minLength: 1, maxLength: 160 }
           }
         },
-        querystring: querySchema
+        querystring: pageQuerySchema
       }
     },
     async (request) => ({
@@ -108,9 +108,10 @@ export function registerDatabaseAdminRoutes(
           }
         },
         querystring: {
-          ...querySchema,
+          ...pageQuerySchema,
           properties: {
-            ...querySchema.properties,
+            ...pageQuerySchema.properties,
+            limit: { type: "integer", minimum: 1, maximum: 10_000 },
             format: { type: "string", enum: ["csv", "json"] }
           }
         }

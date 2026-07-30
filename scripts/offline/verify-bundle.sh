@@ -46,12 +46,16 @@ require_command sort
 [[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/entity-workspace.js" ]] || die "В комплекте отсутствует интерфейс произвольных объектов"
 [[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/generic-template-entities.js" ]] || die "В комплекте отсутствует выбор типа объектов шаблона"
 [[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/generic-document-generation.js" ]] || die "В комплекте отсутствует выпуск документов по объектам"
+[[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/database-admin.js" ]] || die "В комплекте отсутствует интерфейс администратора базы данных"
+[[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/bulk-data-import-v3.js" ]] || die "В комплекте отсутствует нормализация массового импорта"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/ci/release-gate.mjs" ]] || \
   die "В комплекте отсутствует обязательный core release-gate"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/ci/release-gate-crash-worker.mjs" ]] || \
   die "В комплекте отсутствует crash-worker release-gate"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/ci/libreoffice-release-gate.mjs" ]] || \
   die "В комплекте отсутствует LibreOffice release-gate"
+[[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/database-admin.mjs" ]] || \
+  die "В комплекте отсутствует инструмент администратора базы данных"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/automatic-backup.mjs" ]] || \
   die "В комплекте отсутствует сценарий автоматического резервирования"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/runtime/pilot-readiness.mjs" ]] || \

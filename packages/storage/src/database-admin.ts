@@ -1,5 +1,5 @@
 import { KnowledgeRegistry, type MutationContext, type PropertyDefinitionRecord } from "./knowledge.js";
-import { SqliteStore } from "./database.js";
+import { SqliteStore, type SqliteExecutor } from "./database.js";
 
 export class DatabaseAdminValidationError extends Error {
   override readonly name = "DatabaseAdminValidationError";
@@ -110,7 +110,7 @@ export class DatabaseAdminRegistry {
         rowCount: (
           database
             .prepare(`SELECT COUNT(*) AS count FROM ${quotedIdentifier(table.name)}`)
-            .get() as SqliteCountRow
+            .get() as unknown as SqliteCountRow
         ).count,
         columns: this.#columns(database, table.name)
       }));
@@ -124,7 +124,7 @@ export class DatabaseAdminRegistry {
       rowCount: (
         database
           .prepare(`SELECT COUNT(*) AS count FROM ${quotedIdentifier(name)}`)
-          .get() as SqliteCountRow
+          .get() as unknown as SqliteCountRow
       ).count,
       columns: this.#columns(database, name)
     }));
@@ -139,7 +139,7 @@ export class DatabaseAdminRegistry {
     search?: string;
   }): DatabaseAdminPage {
     const table = this.#validatedTableName(input.table);
-    const limit = normalizedLimit(input.limit, 200);
+    const limit = normalizedLimit(input.limit, 10_000);
     const offset = normalizedOffset(input.offset);
     const direction = input.sortDirection === "desc" ? "desc" : "asc";
     const search = String(input.search ?? "").normalize("NFKC").trim().slice(0, 300);
@@ -172,7 +172,7 @@ export class DatabaseAdminRegistry {
           .prepare(
             `SELECT COUNT(*) AS count FROM ${quotedIdentifier(table)}${where}`
           )
-          .get(...parameters) as SqliteCountRow
+          .get(...parameters) as unknown as SqliteCountRow
       ).count;
       const rawRows = database
         .prepare(`
@@ -286,7 +286,7 @@ export class DatabaseAdminRegistry {
   }
 
   #columns(
-    database: Parameters<Parameters<SqliteStore["execute"]>[0]>[0],
+    database: SqliteExecutor,
     table: string
   ): DatabaseAdminColumn[] {
     return (database
