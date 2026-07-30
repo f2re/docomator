@@ -25,6 +25,7 @@
 | [SPACES_AND_AUDIENCES.md](SPACES_AND_AUDIENCES.md) | разделы данных, группы, выбор участников и снимки состава |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | последовательность реализации и Definition of Done |
 | [ROADMAP.md](ROADMAP.md) | состояние этапов и ближайший backlog |
+| [AUDIT_REMEDIATION_PLAN_2026-07-30.md](AUDIT_REMEDIATION_PLAN_2026-07-30.md) | приоритетный план устранения выявленных рисков и выхода к первому RC |
 | [adr/](adr/) | принятые архитектурные решения |
 
 При конфликте документов действует следующий приоритет:

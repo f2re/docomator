@@ -744,8 +744,18 @@ npm run restore</code></pre>
     if (description) description.textContent = "Все рабочие потоки, кейсы, ограничения и действия при ошибках.";
     if (primary) primary.hidden = true;
     window.history.replaceState(null, "", "#help");
-    if (helpCenterCurrentArticle) helpCenterRenderArticle(helpCenterCurrentArticle);
-    else helpCenterShowIndex();
+    helpCenterCurrentArticle = null;
+    helpCenterQuery = "";
+    helpCenterCategory = "all";
+    const search = document.querySelector("#helpCenterSearch");
+    if (search) search.value = "";
+    document.querySelectorAll("[data-help-category]").forEach((button) =>
+      button.setAttribute(
+        "aria-selected",
+        String(button.dataset.helpCategory === "all")
+      )
+    );
+    helpCenterShowIndex();
     document.querySelector("#helpCenterHeading")?.focus?.();
     window.dispatchEvent(new CustomEvent("docomator:help-opened"));
   }
