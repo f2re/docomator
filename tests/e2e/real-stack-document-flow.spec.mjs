@@ -144,6 +144,36 @@ async function generateAndDownload(page) {
   expect(info.size, "Сформированный DOCX не должен быть пустым").toBeGreaterThan(0);
 }
 
+async function verifyEmployeeInSecondContext(page, displayName, fieldLabel, fieldValue) {
+  const app = new DocomatorPage(page);
+  await app.open();
+  await app.openView("employees");
+
+  const employeeRow = page
+    .locator("[data-employee-id]")
+    .filter({ hasText: displayName })
+    .first();
+  await expect(employeeRow).toBeVisible({ timeout: 20_000 });
+  await expect(employeeRow).toContainText("Заполнено дополнительных полей: 1");
+  await employeeRow.click();
+
+  const dialog = page.locator("#employeeDialog");
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#employeeFields")).toContainText(fieldLabel, {
+    timeout: 20_000
+  });
+  await expect(page.locator("[data-employee-existing-field]").first()).toHaveValue(
+    fieldValue
+  );
+  await dialog.locator('[data-employee-action="close"]').click();
+  await expect(dialog).not.toBeVisible();
+
+  await app.openView("documents");
+  await expect(
+    page.getByRole("link", { name: "Скачать документ" }).first()
+  ).toBeVisible({ timeout: 20_000 });
+}
+
 test("настоящий UI → API → SQLite → worker формирует и сохраняет DOCX", async ({
   baseURL,
   browser,
@@ -190,17 +220,12 @@ test("настоящий UI → API → SQLite → worker формирует и 
   });
   try {
     const secondPage = await secondContext.newPage();
-    const secondApp = new DocomatorPage(secondPage);
-    await secondApp.open();
-    await secondApp.openView("employees");
-    await expect(secondPage.locator("#employeeList")).toContainText(displayName);
-    await expect(secondPage.locator("#employeeList")).toContainText(
-      `${fieldLabel}: ${fieldValue}`
+    await verifyEmployeeInSecondContext(
+      secondPage,
+      displayName,
+      fieldLabel,
+      fieldValue
     );
-    await secondApp.openView("documents");
-    await expect(
-      secondPage.getByRole("link", { name: "Скачать документ" }).first()
-    ).toBeVisible({ timeout: 20_000 });
   } finally {
     await secondContext.close();
   }
