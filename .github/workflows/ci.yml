@@ -2,9 +2,6 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -14,11 +11,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apply-p0b:
-    if: github.event_name == 'pull_request' && github.head_ref == 'agent/audit-remediation-p0b'
-    name: Apply audit remediation P0-B
+  apply-p0bc:
+    if: github.head_ref == 'agent/audit-remediation-p0b'
+    name: Apply validated P0-B/P0-C package
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
     permissions:
       contents: write
 
@@ -30,38 +27,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Apply checked-in fail-closed transformation
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          workflow = Path('.github/workflows/apply-audit-remediation-p0b.yml')
-          source = workflow.read_text(encoding='utf-8')
-          opening = "          python3 - <<'PY'\n"
-          closing = "\n          PY"
-          start = source.find(opening)
-          if start < 0:
-              raise SystemExit('Не найдено начало встроенного преобразования P0-B')
-          start += len(opening)
-          end = source.find(closing, start)
-          if end < 0:
-              raise SystemExit('Не найден конец встроенного преобразования P0-B')
-          lines = source[start:end].splitlines()
-          script = '\n'.join(
-              line[10:] if line.startswith('          ') else line
-              for line in lines
-          ) + '\n'
-          namespace = {'__name__': '__main__'}
-          exec(compile(script, str(workflow), 'exec'), namespace, namespace)
-          PY
-          rm -f .github/workflows/apply-audit-remediation-p0b.yml
-          git fetch --no-tags origin main
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          git diff --check
-          test ! -e .github/workflows/apply-audit-remediation-p0b.yml
-
       - name: Read Node.js version
         id: node
         shell: bash
@@ -73,199 +38,41 @@ jobs:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
 
+      - name: Reconstruct and apply fail-closed package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ARCHIVE="$RUNNER_TEMP/docomator-p0bc-followup.tar.gz"
+          PACKAGE_ROOT="$RUNNER_TEMP/docomator-p0bc-followup"
+          cat .audit-p0bc-payload.part-* | base64 --decode > "$ARCHIVE"
+          mkdir -p "$PACKAGE_ROOT"
+          tar -xzf "$ARCHIVE" -C "$PACKAGE_ROOT" --strip-components=1
+          bash "$PACKAGE_ROOT/validate-package.sh"
+
+          git fetch --no-tags origin main
+          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+          rm -f .github/workflows/apply-audit-remediation-p0b.yml
+          rm -f .audit-p0bc-payload.part-*
+
+          python3 "$PACKAGE_ROOT/apply-p0bc.py" "$PWD" --check-only
+          python3 "$PACKAGE_ROOT/apply-p0bc.py" "$PWD"
+          git diff --check
+
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Verify transformed repository
+      - name: Verify complete repository
         run: npm run check
 
       - name: Commit clean implementation
         shell: bash
         run: |
           set -Eeuo pipefail
+          test ! -e .github/workflows/apply-audit-remediation-p0b.yml
+          test -z "$(find . -maxdepth 1 -name '.audit-p0bc-payload.part-*' -print -quit)"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
           git diff --cached --check
-          git commit -m 'Развязать импорт и актуализировать справку'
+          git commit -m 'Завершить P0-B и P0-C после аудита'
           git push origin HEAD:agent/audit-remediation-p0b
-
-  verify:
-    name: Build, test, docs, and shell
-    needs: apply-p0b
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Read Node.js version
-        id: node
-        shell: bash
-        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ steps.node.outputs.version }}
-          cache: npm
-
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-
-      - name: Verify repository
-        id: repository_check
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run check 2>&1 | tee repository-check.log
-
-      - name: Upload repository-check diagnostic
-        if: steps.repository_check.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: repository-check-diagnostic
-          path: repository-check.log
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Stop after failed repository check
-        if: steps.repository_check.outcome == 'failure'
-        run: exit 1
-
-      - name: Smoke-test migration on a fresh database
-        env:
-          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-data
-        run: npm run migrate
-
-  browser-e2e:
-    name: Chromium user flows
-    needs: verify
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Read Node.js version
-        id: node
-        shell: bash
-        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ steps.node.outputs.version }}
-          cache: npm
-
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-
-      - name: Install locked Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Build application
-        run: npm run build
-
-      - name: Prepare browser database
-        env:
-          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
-        run: npm run migrate
-
-      - name: Start local application
-        env:
-          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
-          DOCOMATOR_PORT: 18080
-        shell: bash
-        run: |
-          npm run start:api > "$RUNNER_TEMP/docomator-browser-api.log" 2>&1 &
-          echo "$!" > "$RUNNER_TEMP/docomator-browser-api.pid"
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat "$RUNNER_TEMP/docomator-browser-api.log"
-          exit 1
-
-      - name: Run Chromium user flows
-        env:
-          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
-        run: npm run test:e2e
-
-      - name: Upload browser diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: browser-e2e-diagnostic
-          path: |
-            tests/e2e/.tmp/playwright-report
-            tests/e2e/.tmp/playwright-results
-            ${{ runner.temp }}/docomator-browser-api.log
-          if-no-files-found: warn
-          retention-days: 3
-
-  offline-bundle:
-    name: Assemble and verify offline archive
-    needs: verify
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Read Node.js version
-        id: node
-        shell: bash
-        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ steps.node.outputs.version }}
-          cache: npm
-
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-
-      - name: Assemble generic offline archive
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          NODE_RUNTIME_ROOT="$(dirname "$(dirname "$(command -v node)")")"
-          scripts/offline/prepare-bundle.sh \
-            --target-profile generic \
-            --node-runtime-dir "$NODE_RUNTIME_ROOT" \
-            --without-llm \
-            --without-preview \
-            --without-ux-acceptance \
-            --skip-tests \
-            --force
-
-      - name: Verify archive after extraction
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          VERSION="$(cat VERSION)"
-          case "$(dpkg --print-architecture)" in
-            amd64) NODE_ARCH=x64 ;;
-            arm64) NODE_ARCH=arm64 ;;
-            *) exit 1 ;;
-          esac
-          ARCHIVE="offline-bundles/docomator-${VERSION}-linux-${NODE_ARCH}.tar.gz"
-          CHECKSUM="${ARCHIVE}.sha256"
-          (cd "$(dirname "$ARCHIVE")" && sha256sum --check --strict --quiet "$(basename "$CHECKSUM")")
-          EXTRACTED="$RUNNER_TEMP/docomator-offline-extracted"
-          mkdir -p "$EXTRACTED"
-          while IFS= read -r member; do
-            [[ -n "$member" && "$member" != /* ]] || exit 1
-            case "/$member/" in */../*) exit 1 ;; esac
-          done < <(tar -tzf "$ARCHIVE")
-          tar -xzf "$ARCHIVE" -C "$EXTRACTED"
-          BUNDLE="$EXTRACTED/docomator-${VERSION}-linux-${NODE_ARCH}"
-          "$BUNDLE/verify-bundle.sh" "$BUNDLE"
