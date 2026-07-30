@@ -1,3 +1,12 @@
+/* Финальные гарантии спокойного рабочего интерфейса. */
+.view {
+  animation: none;
+}
+
+.status-ribbon.is-routine:not(.is-user-expanded) {
+  display: none !important;
+}
+
 /* Понятная структура таблиц и полноширинный редактор повторяемой строки. */
 .structure-element-list.is-row-flow-structured {
   gap: 1rem;
