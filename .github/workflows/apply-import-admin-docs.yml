@@ -1,0 +1,51 @@
+name: Актуализировать документацию импорта и БД
+
+on:
+  push:
+    branches:
+      - feature/import-normalization-db-admin
+    paths:
+      - scripts/ci/apply-import-admin-docs.py
+      - .github/workflows/apply-import-admin-docs.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/ci/apply-import-admin-docs.py
+      - .github/workflows/apply-import-admin-docs.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-import-admin-docs
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/import-normalization-db-admin
+          fetch-depth: 0
+      - name: Применить документацию
+        run: python3 scripts/ci/apply-import-admin-docs.py
+      - name: Установить зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Проверить документацию и терминологию
+        run: |
+          npm run check:docs
+          npm run check:language
+      - name: Зафиксировать документацию
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f scripts/ci/apply-import-admin-docs.py .github/workflows/apply-import-admin-docs.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Актуализировать импорт, администрирование БД и безопасное обновление'
+          git push origin HEAD:feature/import-normalization-db-admin
