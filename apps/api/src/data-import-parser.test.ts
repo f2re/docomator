@@ -94,6 +94,24 @@ test("XLSX preserves embedded newlines and physical source row numbers", async (
   assert.match(parsed.warnings.join(" "), /строке 2/u);
 });
 
+test("XLSX assigns stable names to blank and duplicate headers", async () => {
+  const source = xlsxFixture(
+    `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">${inlineCell("A1", "Код")}${inlineCell("C1", "Код")}</row><row r="2">${inlineCell("A2", "1")}${inlineCell("B2", "2")}${inlineCell("C2", "3")}</row><row r="3"></row><row r="4">${inlineCell("A4", "4")}${inlineCell("C4", "6")}</row></sheetData></worksheet>`
+  );
+  const parsed = await parseDataImportBuffer({
+    buffer: source,
+    fileName: "headers.xlsx"
+  });
+
+  assert.deepEqual(parsed.headers, ["Код", "Колонка 2", "Код #2"]);
+  assert.deepEqual(parsed.rows, [
+    { "Код": "1", "Колонка 2": "2", "Код #2": "3" },
+    { "Код": "4", "Колонка 2": "", "Код #2": "6" }
+  ]);
+  assert.deepEqual(parsed.sourceRowNumbers, [2, 4]);
+  assert.match(parsed.warnings.join(" "), /пустые строки/u);
+});
+
 test("CSV preserves the starting physical line of a quoted multiline record", async () => {
   const source = Buffer.from(
     'Код;ФИО;Примечание\r\nA-1;"ИВАНОВ ИВАН ИВАНОВИЧ";"Строка 1\r\nСтрока 2"\r\n\r\nA-2;Петров Пётр Петрович;Готово\r\n',
