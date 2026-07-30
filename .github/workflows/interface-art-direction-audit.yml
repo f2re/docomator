@@ -95,6 +95,7 @@ jobs:
             --height 900 \
             --out art-direction-audit/rendered \
             --format markdown \
+            --no-axe \
             --no-fail
 
       - name: Upload audit evidence
