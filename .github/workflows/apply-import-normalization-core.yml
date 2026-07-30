@@ -24,21 +24,44 @@ concurrency:
 jobs:
   apply:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/import-normalization-db-admin
           fetch-depth: 0
       - name: Применить изменения
-        run: python3 scripts/ci/apply-import-normalization-core.py
+        run: |
+          python3 scripts/ci/apply-import-normalization-core.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('apps/api/src/data-import-routes.ts')
+          value = path.read_text(encoding='utf-8')
+          old = '''  const expectedToken = createImportPreviewToken({
+              sourceSha256: body.sourceSha256.toLowerCase(),
+              headers: body.headers,
+              rows: body.rows,
+              sourceRowNumbers: body.sourceRowNumbers
+            });'''
+          new = '''  const expectedToken = createImportPreviewToken({
+              sourceSha256: body.sourceSha256.toLowerCase(),
+              headers: body.headers,
+              rows: body.rows,
+              ...(body.sourceRowNumbers === undefined
+                ? {}
+                : { sourceRowNumbers: body.sourceRowNumbers })
+            });'''
+          if value.count(old) != 1:
+              raise RuntimeError(f'preview token block count: {value.count(old)}')
+          path.write_text(value.replace(old, new, 1), encoding='utf-8')
+          PY
       - name: Установить зависимости
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Проверить сборку и тесты ядра
         run: |
-          npm run build -w @docomator/storage
+          npm run build
           npm run test -w @docomator/storage
-          npm run build -w @docomator/api
+          npm run test -w @docomator/api
       - name: Зафиксировать изменения
         shell: bash
         run: |
