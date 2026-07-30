@@ -12,7 +12,6 @@ import {
   toJsonValue
 } from "@docomator/storage";
 
-import { registerDataImportRoutes } from "./data-import-routes.js";
 import {
   correlationId,
   mutationContextFromRequest
@@ -75,7 +74,6 @@ export function registerDocumentIntakeRoutes(
     }
   );
 
-  registerDataImportRoutes(app, spaceRegistry);
 
   app.post<{ Querystring: InspectDocumentQuery; Body: Buffer }>(
     "/api/v1/document-intake/inspect",
