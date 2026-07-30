@@ -1,0 +1,62 @@
+name: Финализировать исправление импорта XLSX
+
+on:
+  push:
+    branches:
+      - feature/xlsx-import-normalization-db-admin
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: finalize-xlsx-import-normalization
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/xlsx-import-normalization-db-admin
+          fetch-depth: 0
+
+      - name: Проверить завершение основной интеграции
+        id: state
+        shell: bash
+        run: |
+          if [[ -e .github/workflows/apply-xlsx-import-normalization-db-admin.yml ]] || \
+             [[ -e scripts/ci/apply-xlsx-import-normalization-db-admin.py ]] || \
+             [[ -e scripts/ci/apply-import-normalization-offline.py ]]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Удалить одноразовый финализатор
+        if: steps.state.outputs.ready == 'true'
+        shell: bash
+        run: rm -f .github/workflows/finalize-xlsx-import-normalization.yml
+
+      - name: Зафиксировать чистую ветку
+        if: steps.state.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Завершить исправление импорта XLSX'
+          git push origin HEAD:feature/xlsx-import-normalization-db-admin
+
+      - name: Перевести PR в готовое состояние и включить auto-merge
+        if: steps.state.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr ready 59 || true
+          gh pr merge 59 --squash --auto
