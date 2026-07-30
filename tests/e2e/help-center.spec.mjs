@@ -47,6 +47,26 @@ test("встроенное руководство открывается, ище
   await expect(page.locator("#viewTitle")).toHaveText("Сотрудники");
 });
 
+test("пункт Руководство повторно открывает обзор, а не последнюю статью", async ({
+  page
+}) => {
+  await installDocomatorApiMock(page);
+  const app = new DocomatorPage(page);
+  await app.open();
+
+  await openFullGuide(page, app);
+  await page.locator('[data-help-article="bulk-import"]').first().click();
+  await expect(page.locator("#helpCenterArticlePane")).toBeVisible();
+  await expect(page.locator("#helpCenterIndexPane")).toBeHidden();
+
+  await openFullGuide(page, app);
+  await expect(page.locator("#helpCenterIndexPane")).toBeVisible();
+  await expect(page.locator("#helpCenterArticlePane")).toBeHidden();
+  await expect(page.locator("#helpCenterHeading")).toContainText(
+    "Руководство по всем рабочим потокам"
+  );
+});
+
 test("контекстная помощь содержит переход к полному локальному руководству", async ({
   page
 }) => {
