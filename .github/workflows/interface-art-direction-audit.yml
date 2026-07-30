@@ -1,0 +1,108 @@
+name: Interface art-direction audit
+
+on:
+  push:
+    branches:
+      - agent/interface-art-direction
+
+permissions:
+  contents: read
+
+concurrency:
+  group: interface-art-direction-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Docomator
+        uses: actions/checkout@v4
+
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build and prepare database
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-art-direction-data
+        run: |
+          npm run build
+          npm run migrate
+
+      - name: Start local application
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-art-direction-data
+          DOCOMATOR_PORT: 18080
+          DOCOMATOR_PREVIEW_ENABLED: "false"
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run start:api > "$RUNNER_TEMP/docomator-art-direction-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/docomator-art-direction-api.pid"
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/docomator-art-direction-api.log"
+          exit 1
+
+      - name: Fetch pinned Better Art Direction
+        shell: bash
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/f2re/better-art-direction.git "$RUNNER_TEMP/better-art-direction"
+          git -C "$RUNNER_TEMP/better-art-direction" checkout cc455537eaac951cffa67a052c686431756559e7
+
+      - name: Run static audit
+        shell: bash
+        run: |
+          mkdir -p .art-direction-audit
+          node "$RUNNER_TEMP/better-art-direction/skills/better-art-direction/scripts/static-audit.mjs" \
+            apps/api/ui \
+            --format markdown \
+            --out .art-direction-audit/static-report.md \
+            --no-fail
+          node "$RUNNER_TEMP/better-art-direction/skills/better-art-direction/scripts/static-audit.mjs" \
+            apps/api/ui \
+            --format json \
+            --out .art-direction-audit/static-report.json \
+            --no-fail
+
+      - name: Run rendered audit
+        shell: bash
+        run: |
+          node "$RUNNER_TEMP/better-art-direction/skills/better-art-direction/scripts/visual-audit.mjs" \
+            --url http://127.0.0.1:18080 \
+            --paths '/#overview,/#employees,/#templates,/#generation,/#documents,/#settings' \
+            --widths 320,768,1440 \
+            --schemes light,dark \
+            --height 900 \
+            --out .art-direction-audit/rendered \
+            --format markdown \
+            --no-fail
+
+      - name: Upload audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: interface-art-direction-audit
+          path: |
+            .art-direction-audit
+            ${{ runner.temp }}/docomator-art-direction-api.log
+          if-no-files-found: error
+          retention-days: 7
