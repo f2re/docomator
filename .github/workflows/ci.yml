@@ -83,6 +83,12 @@ jobs:
 
           python3 "$PACKAGE_ROOT/apply-p0bc.py" "$PWD" --check-only
           python3 "$PACKAGE_ROOT/apply-p0bc.py" "$PWD"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("packages/document-intake/src/intake.test.ts")
+          path.write_text(path.read_text(encoding="utf-8").rstrip() + "\n", encoding="utf-8")
+          PY
           git diff --check
 
       - name: Install locked dependencies
