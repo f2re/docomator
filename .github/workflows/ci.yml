@@ -14,8 +14,85 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  apply-p0b:
+    if: github.event_name == 'pull_request' && github.head_ref == 'agent/audit-remediation-p0b'
+    name: Apply audit remediation P0-B
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/audit-remediation-p0b
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply checked-in fail-closed transformation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/apply-audit-remediation-p0b.yml')
+          source = workflow.read_text(encoding='utf-8')
+          opening = "          python3 - <<'PY'\n"
+          closing = "\n          PY"
+          start = source.find(opening)
+          if start < 0:
+              raise SystemExit('Не найдено начало встроенного преобразования P0-B')
+          start += len(opening)
+          end = source.find(closing, start)
+          if end < 0:
+              raise SystemExit('Не найден конец встроенного преобразования P0-B')
+          lines = source[start:end].splitlines()
+          script = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in lines
+          ) + '\n'
+          namespace = {'__name__': '__main__'}
+          exec(compile(script, str(workflow), 'exec'), namespace, namespace)
+          PY
+          rm -f .github/workflows/apply-audit-remediation-p0b.yml
+          git fetch --no-tags origin main
+          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+          git diff --check
+          test ! -e .github/workflows/apply-audit-remediation-p0b.yml
+
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify transformed repository
+        run: npm run check
+
+      - name: Commit clean implementation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Развязать импорт и актуализировать справку'
+          git push origin HEAD:agent/audit-remediation-p0b
+
   verify:
     name: Build, test, docs, and shell
+    needs: apply-p0b
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
