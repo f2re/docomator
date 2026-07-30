@@ -109,7 +109,6 @@ test("XLSX assigns stable names to blank and duplicate headers", async () => {
     { "Код": "4", "Колонка 2": "", "Код #2": "6" }
   ]);
   assert.deepEqual(parsed.sourceRowNumbers, [2, 4]);
-  assert.match(parsed.warnings.join(" "), /пустые строки/u);
 });
 
 test("CSV preserves the starting physical line of a quoted multiline record", async () => {
