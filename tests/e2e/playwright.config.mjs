@@ -31,7 +31,7 @@ export default defineConfig({
   testIgnore: realStackRun ? [] : "**/real-stack-document-flow.spec.mjs",
   fullyParallel: false,
   forbidOnly: acceptanceRun || Boolean(process.env.CI),
-  retries: acceptanceRun ? 0 : process.env.CI ? 1 : 0,
+  retries: realStackRun ? 0 : acceptanceRun ? 0 : process.env.CI ? 1 : 0,
   workers: 1,
   timeout: 30_000,
   expect: {
