@@ -44,7 +44,6 @@
 .help-project-browser > header h2 {
   margin-top: 0.25rem;
   font-size: clamp(1.45rem, 3vw, 2.1rem);
-  outline: none;
 }
 
 .help-project-browser > header p:last-child {
@@ -215,7 +214,6 @@
 .help-project-markdown h2:first-child,
 .help-project-markdown h3:first-child {
   margin-top: 0;
-  outline: none;
 }
 
 .help-project-markdown p,

@@ -255,3 +255,107 @@
     width: 100%;
   }
 }
+
+/* Коррекции, подтверждённые полным Chromium/axe-прогоном. */
+.primary-button,
+.secondary-button {
+  min-height: 44px;
+}
+
+.employee-row-status.is-active {
+  color: #1f5f45;
+  background: #e4eee8;
+}
+
+:root[data-theme="dark"] .employee-row-status.is-active {
+  color: #9fe2bc;
+  background: rgba(112, 207, 158, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .employee-row-status.is-active {
+    color: #9fe2bc;
+    background: rgba(112, 207, 158, 0.14);
+  }
+}
+
+.nav-item:focus,
+.mobile-nav button:focus {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.home-hero .hero-copy {
+  align-items: stretch;
+}
+
+.home-hero .hero-copy > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.home-hero .hero-copy h2,
+.home-hero .hero-copy p,
+.home-hero .hero-copy .primary-button {
+  overflow-wrap: anywhere;
+  text-wrap: wrap;
+}
+
+.home-hero .hero-copy .primary-button {
+  align-self: flex-start;
+  white-space: normal;
+}
+
+@media (max-width: 820px) {
+  .topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .topbar-actions .workspace-switcher-host {
+    width: auto;
+    max-width: none !important;
+    flex: 1 1 0;
+  }
+
+  .topbar .context-chip {
+    width: 100%;
+    max-width: none !important;
+  }
+
+  .settings-row.management-tile {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: 36px minmax(0, 1fr) 16px;
+    align-items: start;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .management-tile-icon {
+    width: 36px;
+    height: 36px;
+    align-self: start;
+    border-radius: 5px;
+  }
+
+  .management-tile-copy {
+    min-width: 0;
+  }
+
+  .management-tile-copy strong,
+  .management-tile-copy small,
+  .management-tile-copy em {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .management-chevron {
+    align-self: center;
+  }
+}
+
+@media (max-width: 620px) {
+  .management-tile-copy em {
+    display: none;
+  }
+}

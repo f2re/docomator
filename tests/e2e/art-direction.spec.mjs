@@ -83,8 +83,10 @@ test("на телефоне пустой отчёт проверки не рас
 });
 
 test("видимый фокус сохраняется на основной навигации", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await openMockedWorkspace(page);
   const employees = page.locator('.nav-item[data-view-target="employees"]');
+  await page.keyboard.press("Tab");
   await employees.focus();
   const outline = await employees.evaluate((element) => {
     const style = getComputedStyle(element);
