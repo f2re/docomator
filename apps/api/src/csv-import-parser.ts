@@ -2,15 +2,20 @@ export class CsvImportParseError extends Error {
   override readonly name = "CsvImportParseError";
 }
 
-const MAX_ROWS = 1_001;
+export interface ParsedCsvImportRow {
+  rowNumber: number;
+  cells: string[];
+}
 
-function countDelimiter(line: string, delimiter: string): number {
+const MAX_LOGICAL_ROWS = 1_001;
+
+function countDelimiter(record: string, delimiter: string): number {
   let count = 0;
   let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
+  for (let index = 0; index < record.length; index += 1) {
+    const character = record[index];
     if (character === '"') {
-      if (quoted && line[index + 1] === '"') index += 1;
+      if (quoted && record[index + 1] === '"') index += 1;
       else quoted = !quoted;
     } else if (!quoted && character === delimiter) {
       count += 1;
@@ -19,8 +24,27 @@ function countDelimiter(line: string, delimiter: string): number {
   return count;
 }
 
+function firstLogicalRecord(text: string): string {
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      if (quoted && text[index + 1] === '"') index += 1;
+      else quoted = !quoted;
+      continue;
+    }
+    if (!quoted && (character === "\n" || character === "\r")) {
+      const record = text.slice(0, index);
+      if (record.trim().length > 0) return record;
+      const next = character === "\r" && text[index + 1] === "\n" ? index + 2 : index + 1;
+      return firstLogicalRecord(text.slice(next));
+    }
+  }
+  return text;
+}
+
 export function parseCsvImport(buffer: Uint8Array): {
-  matrix: string[][];
+  rows: ParsedCsvImportRow[];
   delimiter: string;
 } {
   let text = Buffer.from(buffer).toString("utf8");
@@ -31,11 +55,11 @@ export function parseCsvImport(buffer: Uint8Array): {
     );
   }
 
-  const firstLine = text.split(/\r?\n/u).find((line) => line.trim().length > 0) ?? "";
+  const firstRecord = firstLogicalRecord(text);
   const delimiter = [";", ",", "\t"]
     .map((candidate) => ({
       candidate,
-      count: countDelimiter(firstLine, candidate)
+      count: countDelimiter(firstRecord, candidate)
     }))
     .sort((left, right) => right.count - left.count)[0];
   if (delimiter === undefined || delimiter.count < 1) {
@@ -44,10 +68,25 @@ export function parseCsvImport(buffer: Uint8Array): {
     );
   }
 
-  const matrix: string[][] = [];
+  const rows: ParsedCsvImportRow[] = [];
   let row: string[] = [];
   let field = "";
   let quoted = false;
+  let physicalLine = 1;
+  let rowStartLine = 1;
+
+  const finishRow = () => {
+    row.push(field);
+    field = "";
+    rows.push({ rowNumber: rowStartLine, cells: row });
+    row = [];
+    if (rows.length > MAX_LOGICAL_ROWS) {
+      throw new CsvImportParseError(
+        "CSV содержит более 1000 строк данных."
+      );
+    }
+  };
+
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
     if (quoted) {
@@ -58,6 +97,10 @@ export function parseCsvImport(buffer: Uint8Array): {
         } else {
           quoted = false;
         }
+      } else if (character === "\n" || character === "\r") {
+        if (character === "\r" && text[index + 1] === "\n") index += 1;
+        field += "\n";
+        physicalLine += 1;
       } else {
         field += character;
       }
@@ -71,15 +114,9 @@ export function parseCsvImport(buffer: Uint8Array): {
       field = "";
     } else if (character === "\n" || character === "\r") {
       if (character === "\r" && text[index + 1] === "\n") index += 1;
-      row.push(field);
-      field = "";
-      matrix.push(row);
-      row = [];
-      if (matrix.length > MAX_ROWS + 1) {
-        throw new CsvImportParseError(
-          "CSV содержит более 1000 строк данных."
-        );
-      }
+      finishRow();
+      physicalLine += 1;
+      rowStartLine = physicalLine;
     } else {
       field += character;
     }
@@ -89,9 +126,8 @@ export function parseCsvImport(buffer: Uint8Array): {
     throw new CsvImportParseError("В CSV не закрыта кавычка поля.");
   }
   if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    matrix.push(row);
+    finishRow();
   }
 
-  return { matrix, delimiter: delimiter.candidate };
+  return { rows, delimiter: delimiter.candidate };
 }
