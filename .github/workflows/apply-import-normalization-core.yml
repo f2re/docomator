@@ -1,0 +1,46 @@
+name: Применить нормализацию импорта
+
+on:
+  push:
+    branches:
+      - feature/import-normalization-db-admin
+    paths:
+      - scripts/ci/apply-import-normalization-core.py
+      - .github/workflows/apply-import-normalization-core.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-import-normalization-core
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/import-normalization-db-admin
+          fetch-depth: 0
+      - name: Применить изменения
+        run: python3 scripts/ci/apply-import-normalization-core.py
+      - name: Установить зависимости
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Проверить сборку и тесты ядра
+        run: |
+          npm run build -w @docomator/storage
+          npm run test -w @docomator/storage
+          npm run build -w @docomator/api
+      - name: Зафиксировать изменения
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f scripts/ci/apply-import-normalization-core.py .github/workflows/apply-import-normalization-core.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m 'Добавить нормализацию регистра и разделение ФИО'
+          git push origin HEAD:feature/import-normalization-db-admin
