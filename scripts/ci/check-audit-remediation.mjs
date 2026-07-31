@@ -59,6 +59,25 @@ export async function collectAuditRemediationFindings(
     findings.push("apps/api/src/app.ts: отсутствует явная регистрация импорта данных");
   }
 
+  const obsoleteSessionFiles = [
+    "config/docomator.env.example",
+    "scripts/offline/install.sh",
+    "scripts/offline/lib.sh"
+  ];
+  for (const relativePath of obsoleteSessionFiles) {
+    const source = await readRequired(root, relativePath, findings);
+    if (source.includes("DOCOMATOR_SESSION_SECRET")) {
+      findings.push(
+        `${relativePath}: возвращён неиспользуемый DOCOMATOR_SESSION_SECRET из прежней модели сессий`
+      );
+    }
+    if (source.includes("random_secret")) {
+      findings.push(
+        `${relativePath}: возвращён неиспользуемый генератор секрета прежней модели сессий`
+      );
+    }
+  }
+
   const intake = await readRequired(
     root,
     "packages/document-intake/src/intake.ts",
