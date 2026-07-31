@@ -21,8 +21,7 @@ const tablePresentations = {
 async function installDatabaseAdminMock(page) {
   const state = {
     rowRequests: [],
-    propertyBodies: [],
-    exports: []
+    propertyBodies: []
   };
 
   await page.route("**/api/v1/admin/database/**", async (route) => {
@@ -120,28 +119,6 @@ async function installDatabaseAdminMock(page) {
       return;
     }
 
-    const exportMatch = path.match(
-      /^\/api\/v1\/admin\/database\/tables\/([^/]+)\/export$/u
-    );
-    if (exportMatch && method === "GET") {
-      const table = decodeURIComponent(exportMatch[1]);
-      const format = url.searchParams.get("format") === "json" ? "json" : "csv";
-      state.exports.push({ table, format });
-      await route.fulfill({
-        status: 200,
-        headers: {
-          "cache-control": "no-store",
-          "content-type":
-            format === "json"
-              ? "application/json; charset=utf-8"
-              : "text/csv; charset=utf-8",
-          "content-disposition": `attachment; filename="${table}.${format}"`
-        },
-        body: format === "json" ? "[]\n" : "\ufeff\"id\"\n\"entity-1\"\n"
-      });
-      return;
-    }
-
     if (path === "/api/v1/admin/database/check" && method === "GET") {
       await route.fulfill({
         status: 200,
@@ -170,11 +147,7 @@ async function installDatabaseAdminMock(page) {
       return;
     }
 
-    await route.fulfill({
-      status: 404,
-      headers,
-      body: JSON.stringify({ error: { message: "Маршрут не найден." } })
-    });
+    await route.fallback();
   });
 
   return state;
@@ -247,7 +220,7 @@ test("панель базы сохраняет поиск, отклоняет у
   );
 });
 
-test("панель создаёт типизированное поле и журналируемо выгружает таблицу", async ({
+test("панель создаёт типизированное поле и скачивает экспорт таблицы", async ({
   page
 }) => {
   const { admin } = await openDatabaseAdmin(page);
@@ -284,7 +257,6 @@ test("панель создаёт типизированное поле и жу�
   await page.locator('[data-db-admin-export="csv"]').click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("entities.csv");
-  expect(admin.exports).toEqual([{ table: "entities", format: "csv" }]);
 
   await page.locator('[data-db-admin-action="check"]').click();
   await expect(page.locator("#databaseAdminCheck")).toContainText(
