@@ -1,20 +1,23 @@
 name: Apply verified release consolidation
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/release-0.1.0-rc1
+      - main
 
 permissions:
   contents: write
 
 concurrency:
-  group: apply-release-consolidation-${{ github.ref }}
+  group: apply-release-consolidation-agent-release-0-1-0-rc1
   cancel-in-progress: false
 
 jobs:
   apply:
-    if: github.repository == 'f2re/docomator' && github.ref == 'refs/heads/agent/release-0.1.0-rc1'
+    if: >-
+      github.repository == 'f2re/docomator' &&
+      github.head_ref == 'agent/release-0.1.0-rc1' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -22,12 +25,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: agent/release-0.1.0-rc1
 
       - name: Verify payload and apply canonical release tree
         shell: bash
         run: |
           set -Eeuo pipefail
-          readonly EXPECTED_PARENT='78f7f2993dd22187194fb8818b618350e3515f12'
+          readonly EXPECTED_PARENT='b8b1ab8465882c3da6611e216c8fcd9de7103b94'
           readonly BASE64_SHA256='ee7933ce09d86aa6f51761ceb42139291c10d5b930f3a81aa88cd3774a5ea888'
           readonly ZSTD_SHA256='5690cda4b257a82dc9df76240043d3442c195c038d0341a8670c38caf5ae2167'
           readonly PATCH_SHA256='b1ddb466344bdfb6df431d36ace9c859c7740d7098cc68ef15e95f3d99690d0f'
@@ -37,8 +41,8 @@ jobs:
           readonly ZSTD_FILE="$RUNNER_TEMP/release-consolidation.patch.zst"
           readonly PATCH_FILE="$RUNNER_TEMP/release-consolidation.patch"
 
-          test "$GITHUB_REF" = 'refs/heads/agent/release-0.1.0-rc1'
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_HEAD_REF" = 'agent/release-0.1.0-rc1'
+          test "$(git branch --show-current)" = 'agent/release-0.1.0-rc1'
           test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
           command -v base64 >/dev/null
           command -v sha256sum >/dev/null
