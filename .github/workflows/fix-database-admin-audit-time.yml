@@ -1,0 +1,52 @@
+name: Fix database admin audit time
+
+on:
+  push:
+    branches:
+      - agent/database-admin-hardening
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-database-admin-audit-time-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/database-admin-hardening
+          fetch-depth: 0
+
+      - name: Apply exact TypeScript fix and remove workflow
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("packages/storage/src/database-admin.ts")
+          source = path.read_text(encoding="utf-8")
+          old = '''      this.#audit.record({
+                  occurredAt: context.now,
+                  actorType: context.actorType,
+          '''
+          new = '''      this.#audit.record({
+                  ...(context.now === undefined ? {} : { occurredAt: context.now }),
+                  actorType: context.actorType,
+          '''
+          if source.count(old) != 1:
+              raise SystemExit("exact audit record block not found")
+          path.write_text(source.replace(old, new), encoding="utf-8")
+          PY
+          rm .github/workflows/fix-database-admin-audit-time.yml
+          git diff --check
+          git config user.name "docomator-maintenance"
+          git config user.email "docomator-maintenance@users.noreply.github.com"
+          git add packages/storage/src/database-admin.ts .github/workflows/fix-database-admin-audit-time.yml
+          git commit -m "Исправить необязательное время аудита экспорта"
+          git push origin HEAD:agent/database-admin-hardening
