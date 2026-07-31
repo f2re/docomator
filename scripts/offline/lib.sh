@@ -106,10 +106,6 @@ require_trusted_bundle() {
   done < <(find "$root" -print0)
 }
 
-random_secret() {
-  od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
-}
-
 read_env_value() {
   local file="$1"
   local key="$2"

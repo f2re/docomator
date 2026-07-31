@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 
 import type {
   DatabaseAdminRegistry,
@@ -50,13 +50,18 @@ const pageQuerySchema = {
   }
 } as const;
 
+function noStore(reply: FastifyReply): void {
+  reply.header("cache-control", "no-store");
+}
+
 export function registerDatabaseAdminRoutes(
   app: FastifyInstance,
   registry: DatabaseAdminRegistry
 ): void {
-  app.get("/api/v1/admin/database/tables", async () => ({
-    data: registry.listTables()
-  }));
+  app.get("/api/v1/admin/database/tables", async (_request, reply) => {
+    noStore(reply);
+    return { data: registry.listTables() };
+  });
 
   app.get<{ Params: TableParams; Querystring: TableRowsQuery }>(
     "/api/v1/admin/database/tables/:table/rows",
@@ -73,26 +78,29 @@ export function registerDatabaseAdminRoutes(
         querystring: pageQuerySchema
       }
     },
-    async (request) => ({
-      data: registry.listRows({
-        table: request.params.table,
-        ...(request.query.limit === undefined
-          ? {}
-          : { limit: request.query.limit }),
-        ...(request.query.offset === undefined
-          ? {}
-          : { offset: request.query.offset }),
-        ...(request.query.sortColumn === undefined
-          ? {}
-          : { sortColumn: request.query.sortColumn }),
-        ...(request.query.sortDirection === undefined
-          ? {}
-          : { sortDirection: request.query.sortDirection }),
-        ...(request.query.search === undefined
-          ? {}
-          : { search: request.query.search })
-      })
-    })
+    async (request, reply) => {
+      noStore(reply);
+      return {
+        data: registry.listRows({
+          table: request.params.table,
+          ...(request.query.limit === undefined
+            ? {}
+            : { limit: request.query.limit }),
+          ...(request.query.offset === undefined
+            ? {}
+            : { offset: request.query.offset }),
+          ...(request.query.sortColumn === undefined
+            ? {}
+            : { sortColumn: request.query.sortColumn }),
+          ...(request.query.sortDirection === undefined
+            ? {}
+            : { sortDirection: request.query.sortDirection }),
+          ...(request.query.search === undefined
+            ? {}
+            : { search: request.query.search })
+        })
+      };
+    }
   );
 
   app.get<{ Params: TableParams; Querystring: TableExportQuery }>(
@@ -118,22 +126,27 @@ export function registerDatabaseAdminRoutes(
       }
     },
     async (request, reply) => {
-      const result = registry.exportTable({
-        table: request.params.table,
-        format: request.query.format === "json" ? "json" : "csv",
-        ...(request.query.limit === undefined
-          ? { limit: 10_000 }
-          : { limit: request.query.limit }),
-        ...(request.query.sortColumn === undefined
-          ? {}
-          : { sortColumn: request.query.sortColumn }),
-        ...(request.query.sortDirection === undefined
-          ? {}
-          : { sortDirection: request.query.sortDirection }),
-        ...(request.query.search === undefined
-          ? {}
-          : { search: request.query.search })
-      });
+      const result = registry.exportTable(
+        {
+          table: request.params.table,
+          format: request.query.format === "json" ? "json" : "csv",
+          ...(request.query.limit === undefined
+            ? { limit: 10_000 }
+            : { limit: request.query.limit }),
+          ...(request.query.sortColumn === undefined
+            ? {}
+            : { sortColumn: request.query.sortColumn }),
+          ...(request.query.sortDirection === undefined
+            ? {}
+            : { sortDirection: request.query.sortDirection }),
+          ...(request.query.search === undefined
+            ? {}
+            : { search: request.query.search })
+        },
+        mutationContextFromRequest(request)
+      );
+      reply.header("cache-control", "no-store");
+      reply.header("x-content-type-options", "nosniff");
       reply.header("content-type", result.contentType);
       reply.header(
         "content-disposition",
@@ -144,9 +157,10 @@ export function registerDatabaseAdminRoutes(
     }
   );
 
-  app.get("/api/v1/admin/database/check", async () => ({
-    data: registry.quickCheck()
-  }));
+  app.get("/api/v1/admin/database/check", async (_request, reply) => {
+    noStore(reply);
+    return { data: registry.quickCheck() };
+  });
 
   app.post<{ Body: CreatePropertyBody }>(
     "/api/v1/admin/database/properties",
@@ -162,7 +176,10 @@ export function registerDatabaseAdminRoutes(
             description: { type: "string", maxLength: 2_000 },
             valueType: { type: "string", minLength: 1, maxLength: 80 },
             unit: { type: "string", maxLength: 80 },
-            cardinality: { type: "string", enum: ["one", "many"] },
+            cardinality: {
+              type: "string",
+              enum: ["single", "multiple"]
+            },
             sensitivity: {
               type: "string",
               enum: ["public", "internal", "personal", "restricted"]
@@ -187,6 +204,7 @@ export function registerDatabaseAdminRoutes(
         request.body,
         mutationContextFromRequest(request)
       );
+      noStore(reply);
       return reply.code(201).send({ data: record });
     }
   );

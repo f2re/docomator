@@ -1,5 +1,11 @@
-import { KnowledgeRegistry, type MutationContext, type PropertyDefinitionRecord } from "./knowledge.js";
+import { AuditRepository } from "./audit.js";
 import { SqliteStore, type SqliteExecutor } from "./database.js";
+import {
+  KnowledgeRegistry,
+  type MutationContext,
+  type PropertyDefinitionRecord,
+  type PropertySensitivity
+} from "./knowledge.js";
 
 export class DatabaseAdminValidationError extends Error {
   override readonly name = "DatabaseAdminValidationError";
@@ -12,7 +18,14 @@ export interface DatabaseAdminColumn {
   primaryKeyPosition: number;
 }
 
-export interface DatabaseAdminTable {
+export interface DatabaseAdminTablePresentation {
+  label: string;
+  category: string;
+  description: string;
+  sensitivity: PropertySensitivity;
+}
+
+export interface DatabaseAdminTable extends DatabaseAdminTablePresentation {
   name: string;
   rowCount: number;
   columns: DatabaseAdminColumn[];
@@ -20,6 +33,7 @@ export interface DatabaseAdminTable {
 
 export interface DatabaseAdminPage {
   table: string;
+  presentation: DatabaseAdminTablePresentation;
   columns: DatabaseAdminColumn[];
   rows: Array<Record<string, string | number | null>>;
   total: number;
@@ -43,6 +57,185 @@ interface SqliteColumnRow {
   type: string;
   notnull: number;
   pk: number;
+}
+
+const EXACT_TABLE_PRESENTATIONS: Readonly<
+  Record<string, DatabaseAdminTablePresentation>
+> = Object.freeze({
+  entities: {
+    label: "Объекты и сотрудники",
+    category: "Основные данные",
+    description: "Карточки людей и других объектов, доступных в разделах Docomator.",
+    sensitivity: "personal"
+  },
+  entity_types: {
+    label: "Типы объектов",
+    category: "Модель данных",
+    description: "Определения типов записей: человек, оборудование, статья и другие.",
+    sensitivity: "internal"
+  },
+  property_definitions: {
+    label: "Определения полей",
+    category: "Модель данных",
+    description: "Типизированные поля, применимые к карточкам объектов и шаблонам.",
+    sensitivity: "internal"
+  },
+  entity_property_values: {
+    label: "Значения полей объектов",
+    category: "Основные данные",
+    description: "Версионируемые значения дополнительных полей карточек.",
+    sensitivity: "personal"
+  },
+  spaces: {
+    label: "Разделы данных",
+    category: "Организация данных",
+    description: "Рабочие разделы, объединяющие объекты, группы, шаблоны и результаты.",
+    sensitivity: "internal"
+  },
+  space_entity_ownership: {
+    label: "Принадлежность объектов разделам",
+    category: "Организация данных",
+    description: "Связи карточек с рабочими разделами.",
+    sensitivity: "internal"
+  },
+  audience_groups: {
+    label: "Группы объектов",
+    category: "Организация данных",
+    description: "Сохранённые однородные составы для выпуска документов.",
+    sensitivity: "personal"
+  },
+  audience_snapshots: {
+    label: "Снимки состава",
+    category: "Организация данных",
+    description: "Неизменяемые составы участников, зафиксированные для конкретных операций.",
+    sensitivity: "personal"
+  },
+  document_quarantine_records: {
+    label: "Проверенные исходные документы",
+    category: "Документы",
+    description: "Записи безопасного приёма DOCX и XLSX до подключения шаблона.",
+    sensitivity: "internal"
+  },
+  document_generation_jobs: {
+    label: "Задания выпуска",
+    category: "Документы",
+    description: "Запуски формирования персональных и сводных документов.",
+    sensitivity: "personal"
+  },
+  document_generation_units: {
+    label: "Единицы выпуска",
+    category: "Документы",
+    description: "Результат формирования по каждому участнику или сводному документу.",
+    sensitivity: "personal"
+  },
+  document_deliveries: {
+    label: "Доставка в сетевые папки",
+    category: "Доставка",
+    description: "Попытки и результаты сохранения файлов в разрешённые сетевые каталоги.",
+    sensitivity: "internal"
+  },
+  document_email_deliveries: {
+    label: "Почтовая доставка",
+    category: "Доставка",
+    description: "Попытки отправки готовых документов по электронной почте.",
+    sensitivity: "restricted"
+  },
+  document_schedules: {
+    label: "Расписания выпуска",
+    category: "Автоматизация",
+    description: "Сохранённые правила периодического формирования документов.",
+    sensitivity: "internal"
+  },
+  document_schedule_runs: {
+    label: "Запуски расписаний",
+    category: "Автоматизация",
+    description: "История периодических запусков и их фактическое состояние.",
+    sensitivity: "internal"
+  },
+  space_email_recipients: {
+    label: "Получатели электронной почты",
+    category: "Доставка",
+    description: "Разрешённые корпоративные адресаты выбранных разделов.",
+    sensitivity: "restricted"
+  },
+  audit_log: {
+    label: "Журнал действий",
+    category: "Диагностика",
+    description: "Технический журнал операций, инициаторов и идентификаторов корреляции.",
+    sensitivity: "restricted"
+  },
+  worker_jobs: {
+    label: "Очередь фоновых заданий",
+    category: "Диагностика",
+    description: "Состояние, аренда и повторы заданий фонового обработчика.",
+    sensitivity: "restricted"
+  },
+  domain_events: {
+    label: "Исходящие доменные события",
+    category: "Диагностика",
+    description: "Служебная очередь событий и ключей идемпотентности.",
+    sensitivity: "restricted"
+  },
+  schema_migrations: {
+    label: "Применённые миграции",
+    category: "Диагностика",
+    description: "Неизменяемый перечень применённых изменений физической схемы SQLite.",
+    sensitivity: "internal"
+  }
+});
+
+function tablePresentation(name: string): DatabaseAdminTablePresentation {
+  const exact = EXACT_TABLE_PRESENTATIONS[name];
+  if (exact !== undefined) return { ...exact };
+
+  if (name.startsWith("template_")) {
+    return {
+      label: `Данные шаблонов · ${name}`,
+      category: "Шаблоны",
+      description: "Служебные версии, поля, проверки и активированные выпуски шаблонов.",
+      sensitivity: "internal"
+    };
+  }
+  if (name.startsWith("audience_")) {
+    return {
+      label: `Составы и группы · ${name}`,
+      category: "Организация данных",
+      description: "Служебные связи участников, групп и неизменяемых снимков состава.",
+      sensitivity: "personal"
+    };
+  }
+  if (name.startsWith("document_")) {
+    return {
+      label: `Документный контур · ${name}`,
+      category: "Документы",
+      description: "Служебные данные формирования, результатов или доставки документов.",
+      sensitivity: "personal"
+    };
+  }
+  if (name.startsWith("employee_")) {
+    return {
+      label: `Запросы карточек · ${name}`,
+      category: "Основные данные",
+      description: "Идемпотентные запросы создания или изменения карточек сотрудников.",
+      sensitivity: "personal"
+    };
+  }
+  if (name.startsWith("space_")) {
+    return {
+      label: `Связи разделов · ${name}`,
+      category: "Организация данных",
+      description: "Служебные связи объектов и настроек с рабочими разделами.",
+      sensitivity: "internal"
+    };
+  }
+
+  return {
+    label: `Служебная таблица · ${name}`,
+    category: "Служебные данные",
+    description:
+      "Техническая таблица без предметного редактора. Изменение выполняется только через штатные операции или новую миграцию.",
+    sensitivity: "restricted"
+  };
 }
 
 function quotedIdentifier(value: string): string {
@@ -85,13 +278,16 @@ function csvCell(value: string | number | null): string {
 export class DatabaseAdminRegistry {
   readonly #store: SqliteStore;
   readonly #knowledge: KnowledgeRegistry;
+  readonly #audit: AuditRepository;
 
   constructor(
     store: SqliteStore,
-    knowledge: KnowledgeRegistry = new KnowledgeRegistry(store)
+    knowledge: KnowledgeRegistry = new KnowledgeRegistry(store),
+    audit: AuditRepository = new AuditRepository(store)
   ) {
     this.#store = store;
     this.#knowledge = knowledge;
+    this.#audit = audit;
   }
 
   listTables(): DatabaseAdminTable[] {
@@ -112,7 +308,8 @@ export class DatabaseAdminRegistry {
             .prepare(`SELECT COUNT(*) AS count FROM ${quotedIdentifier(table.name)}`)
             .get() as unknown as SqliteCountRow
         ).count,
-        columns: this.#columns(database, table.name)
+        columns: this.#columns(database, table.name),
+        ...tablePresentation(table.name)
       }));
     });
   }
@@ -126,7 +323,8 @@ export class DatabaseAdminRegistry {
           .prepare(`SELECT COUNT(*) AS count FROM ${quotedIdentifier(name)}`)
           .get() as unknown as SqliteCountRow
       ).count,
-      columns: this.#columns(database, name)
+      columns: this.#columns(database, name),
+      ...tablePresentation(name)
     }));
   }
 
@@ -148,30 +346,33 @@ export class DatabaseAdminRegistry {
       if (columns.length === 0) {
         throw new DatabaseAdminValidationError("У таблицы нет доступных колонок.");
       }
-      const sortColumn = input.sortColumn?.trim() ||
+      const sortColumn =
+        input.sortColumn?.trim() ||
         columns.find((column) => column.primaryKeyPosition > 0)?.name ||
-        columns[0]?.name || "";
+        columns[0]?.name ||
+        "";
       if (!columns.some((column) => column.name === sortColumn)) {
         throw new DatabaseAdminValidationError("Колонка сортировки не найдена.");
       }
       const searchable = columns.slice(0, 20);
-      const where = search.length === 0
-        ? ""
-        : ` WHERE ${searchable
-            .map((column) => `CAST(${quotedIdentifier(column.name)} AS TEXT) LIKE ? ESCAPE '\\'`)
-            .join(" OR ")}`;
+      const where =
+        search.length === 0
+          ? ""
+          : ` WHERE ${searchable
+              .map(
+                (column) =>
+                  `CAST(${quotedIdentifier(column.name)} AS TEXT) LIKE ? ESCAPE '\\'`
+              )
+              .join(" OR ")}`;
       const escapedSearch = `%${search
         .replaceAll("\\", "\\\\")
         .replaceAll("%", "\\%")
         .replaceAll("_", "\\_")}%`;
-      const parameters = search.length === 0
-        ? []
-        : searchable.map(() => escapedSearch);
+      const parameters =
+        search.length === 0 ? [] : searchable.map(() => escapedSearch);
       const total = (
         database
-          .prepare(
-            `SELECT COUNT(*) AS count FROM ${quotedIdentifier(table)}${where}`
-          )
+          .prepare(`SELECT COUNT(*) AS count FROM ${quotedIdentifier(table)}${where}`)
           .get(...parameters) as unknown as SqliteCountRow
       ).count;
       const rawRows = database
@@ -181,9 +382,12 @@ export class DatabaseAdminRegistry {
           ORDER BY ${quotedIdentifier(sortColumn)} ${direction.toUpperCase()}
           LIMIT ? OFFSET ?
         `)
-        .all(...parameters, limit, offset) as unknown as Array<Record<string, unknown>>;
+        .all(...parameters, limit, offset) as unknown as Array<
+        Record<string, unknown>
+      >;
       return {
         table,
+        presentation: tablePresentation(table),
         columns,
         rows: rawRows.map((row) =>
           Object.fromEntries(
@@ -200,14 +404,17 @@ export class DatabaseAdminRegistry {
     });
   }
 
-  exportTable(input: {
-    table: string;
-    format: "csv" | "json";
-    sortColumn?: string;
-    sortDirection?: "asc" | "desc";
-    search?: string;
-    limit?: number;
-  }): { fileName: string; contentType: string; content: string; rowCount: number } {
+  exportTable(
+    input: {
+      table: string;
+      format: "csv" | "json";
+      sortColumn?: string;
+      sortDirection?: "asc" | "desc";
+      search?: string;
+      limit?: number;
+    },
+    context?: MutationContext
+  ): { fileName: string; contentType: string; content: string; rowCount: number } {
     const page = this.listRows({
       table: input.table,
       limit: normalizedLimit(input.limit, 10_000),
@@ -218,38 +425,69 @@ export class DatabaseAdminRegistry {
         : { sortDirection: input.sortDirection }),
       ...(input.search === undefined ? {} : { search: input.search })
     });
-    if (input.format === "json") {
-      return {
-        fileName: `${page.table}.json`,
-        contentType: "application/json; charset=utf-8",
-        content: `${JSON.stringify(page.rows, null, 2)}\n`,
-        rowCount: page.rows.length
-      };
+    const result =
+      input.format === "json"
+        ? {
+            fileName: `${page.table}.json`,
+            contentType: "application/json; charset=utf-8",
+            content: `${JSON.stringify(page.rows, null, 2)}\n`,
+            rowCount: page.rows.length
+          }
+        : {
+            fileName: `${page.table}.csv`,
+            contentType: "text/csv; charset=utf-8",
+            content: `\ufeff${[
+              page.columns.map((column) => column.name).map(csvCell).join(";"),
+              ...page.rows.map((row) =>
+                page.columns
+                  .map((column) => csvCell(row[column.name] ?? null))
+                  .join(";")
+              )
+            ].join("\n")}\n`,
+            rowCount: page.rows.length
+          };
+
+    if (context !== undefined) {
+      this.#audit.record({
+        ...(context.now === undefined ? {} : { occurredAt: context.now }),
+        actorType: context.actorType,
+        actorId: context.actorId ?? null,
+        action: "export",
+        objectType: "database_table",
+        objectId: page.table,
+        correlationId: context.correlationId,
+        details: {
+          format: input.format,
+          rowCount: result.rowCount,
+          filtered: page.search.length > 0,
+          sortColumn: page.sortColumn,
+          sortDirection: page.sortDirection
+        }
+      });
     }
-    const headers = page.columns.map((column) => column.name);
-    const content = [
-      headers.map(csvCell).join(";"),
-      ...page.rows.map((row) =>
-        headers.map((header) => csvCell(row[header] ?? null)).join(";")
-      )
-    ].join("\n");
-    return {
-      fileName: `${page.table}.csv`,
-      contentType: "text/csv; charset=utf-8",
-      content: `\ufeff${content}\n`,
-      rowCount: page.rows.length
-    };
+
+    return result;
   }
 
-  quickCheck(): { status: "ok" | "error"; messages: string[]; foreignKeyErrors: number } {
+  quickCheck(): {
+    status: "ok" | "error";
+    messages: string[];
+    foreignKeyErrors: number;
+  } {
     return this.#store.execute((database) => {
-      const messages = (database.prepare("PRAGMA quick_check").all() as unknown as Array<Record<string, unknown>>)
-        .flatMap((row) => Object.values(row).map(String));
-      const foreignKeyErrors = (database.prepare("PRAGMA foreign_key_check").all() as unknown[]).length;
+      const messages = (
+        database.prepare("PRAGMA quick_check").all() as unknown as Array<
+          Record<string, unknown>
+        >
+      ).flatMap((row) => Object.values(row).map(String));
+      const foreignKeyErrors = (
+        database.prepare("PRAGMA foreign_key_check").all() as unknown[]
+      ).length;
       return {
-        status: messages.every((message) => message === "ok") && foreignKeyErrors === 0
-          ? "ok"
-          : "error",
+        status:
+          messages.every((message) => message === "ok") && foreignKeyErrors === 0
+            ? "ok"
+            : "error",
         messages,
         foreignKeyErrors
       };
@@ -285,13 +523,12 @@ export class DatabaseAdminRegistry {
     return name;
   }
 
-  #columns(
-    database: SqliteExecutor,
-    table: string
-  ): DatabaseAdminColumn[] {
-    return (database
-      .prepare(`PRAGMA table_info(${quotedIdentifier(table)})`)
-      .all() as unknown as SqliteColumnRow[]).map((column) => ({
+  #columns(database: SqliteExecutor, table: string): DatabaseAdminColumn[] {
+    return (
+      database
+        .prepare(`PRAGMA table_info(${quotedIdentifier(table)})`)
+        .all() as unknown as SqliteColumnRow[]
+    ).map((column) => ({
       name: column.name,
       type: column.type || "",
       notNull: column.notnull === 1,

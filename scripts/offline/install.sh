@@ -194,10 +194,6 @@ fi
 replace_env_value "$CONFIG_FILE" DOCOMATOR_VERSION "$VERSION"
 replace_env_value "$CONFIG_FILE" DOCOMATOR_DATA_DIR "$DATA_DIR"
 
-if [[ "$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET)" == "CHANGE_ME_DURING_INSTALL" || -z "$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET)" ]]; then
-  replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET "$(random_secret)"
-fi
-
 mapfile -d '' bundled_models < <(find "$BUNDLE_ROOT/payload/models" -maxdepth 1 -type f -print0 | sort -z)
 if ((${#bundled_models[@]} > 0)); then
   for model in "${bundled_models[@]}"; do
