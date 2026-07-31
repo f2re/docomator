@@ -180,6 +180,10 @@ async function installDatabaseAdminMock(page) {
   return state;
 }
 
+async function setEnhancedSelect(page, selector, value) {
+  await page.locator(selector).selectOption(value, { force: true });
+}
+
 async function openDatabaseAdmin(page) {
   await installDocomatorApiMock(page, {
     entityTypes: [
@@ -192,7 +196,10 @@ async function openDatabaseAdmin(page) {
   await app.open();
   await app.openView("settings");
   await page.locator('[data-view-target="database"]').click();
-  await expect(page.locator("#databaseAdminTable")).toBeVisible();
+  await expect(page.locator("#databaseAdminTable")).toBeAttached();
+  await expect(
+    page.locator("#databaseAdminTable + [data-searchable-select-root] .searchable-select-trigger")
+  ).toBeVisible();
   await expect(page.locator("#databaseAdminContext")).toContainText(
     "Объекты и сотрудники"
   );
@@ -216,9 +223,8 @@ test("панель базы сохраняет поиск, отклоняет у
     "Петрова Анна Игоревна"
   );
 
-  const table = page.locator("#databaseAdminTable");
-  await table.selectOption("audit_log");
-  await table.selectOption("entities");
+  await setEnhancedSelect(page, "#databaseAdminTable", "audit_log");
+  await setEnhancedSelect(page, "#databaseAdminTable", "entities");
   await expect(page.locator("#databaseAdminContext")).toContainText(
     "Объекты и сотрудники"
   );
@@ -249,7 +255,11 @@ test("панель создаёт типизированное поле и жу�
   await page.locator('[data-db-admin-action="property"]').click();
   await page.locator("#databaseAdminPropertyLabel").fill("Инвентарный номер");
   await page.locator("#databaseAdminPropertyType").selectOption("enum");
-  await page.locator("#databaseAdminPropertyEntityType").selectOption("equipment");
+  await setEnhancedSelect(
+    page,
+    "#databaseAdminPropertyEntityType",
+    "equipment"
+  );
   await page
     .locator("#databaseAdminPropertyCardinality")
     .selectOption("multiple");
