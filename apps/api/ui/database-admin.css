@@ -16,19 +16,109 @@
 
 .database-admin-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) minmax(220px, 1fr) minmax(180px, .8fr) minmax(150px, .6fr) minmax(140px, .5fr);
+  grid-template-columns:
+    minmax(260px, 1.25fr)
+    minmax(180px, 0.75fr)
+    minmax(150px, 0.55fr)
+    minmax(140px, 0.45fr);
   gap: 12px;
   align-items: end;
 }
 
+.database-admin-table-field,
+.database-admin-search,
 .database-admin-export {
   grid-column: 1 / -1;
+}
+
+.database-admin-search {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.database-admin-search .search-field {
+  min-width: 0;
+}
+
+.database-admin-context {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-panel, 10px);
+  background: var(--surface);
+}
+
+.database-admin-context h3,
+.database-admin-context p {
+  margin: 0;
+}
+
+.database-admin-context p:last-child {
+  max-width: 820px;
+  margin-top: 4px;
+}
+
+.database-admin-context-meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.database-admin-context code {
+  max-width: 300px;
+  padding: 4px 7px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-radius: 5px;
+}
+
+.database-admin-sensitivity {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.database-admin-sensitivity.is-public {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+}
+
+.database-admin-sensitivity.is-internal {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.database-admin-sensitivity.is-personal {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 28%, var(--border));
+}
+
+.database-admin-sensitivity.is-restricted {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--border));
 }
 
 .database-admin-check {
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-control, 7px);
   background: var(--surface-2);
 }
 
@@ -44,10 +134,45 @@
   background: var(--danger-soft);
 }
 
+#databaseAdminRowsRegion {
+  position: relative;
+  min-width: 0;
+}
+
+.database-admin-progress {
+  position: sticky;
+  z-index: 5;
+  top: 84px;
+  display: flex;
+  width: fit-content;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  margin: 0 12px -44px auto;
+  padding: 0 11px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.database-admin-progress .state-mark {
+  width: 8px;
+  height: 8px;
+  animation: employee-pulse 1.2s ease-in-out infinite;
+}
+
 .database-admin-data {
   min-width: 0;
   padding: 0;
   overflow: hidden;
+}
+
+.database-admin-data.is-updating {
+  opacity: 0.72;
+  pointer-events: none;
 }
 
 .database-admin-data-heading,
@@ -76,6 +201,7 @@
 .database-admin-table-wrap {
   max-height: min(62vh, 720px);
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .database-admin-table {
@@ -83,7 +209,9 @@
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: .78rem;
+  font-family: var(--font-data, monospace);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .database-admin-table th,
@@ -100,8 +228,8 @@
 
 .database-admin-table th {
   position: sticky;
-  top: 0;
   z-index: 2;
+  top: 0;
   text-align: left;
   background: var(--surface-2);
 }
@@ -109,13 +237,14 @@
 .database-admin-table th button {
   display: block;
   width: 100%;
+  min-height: 32px;
   padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--text);
-  text-align: left;
   font: inherit;
   font-weight: 750;
+  text-align: left;
+  background: transparent;
+  border: 0;
   cursor: pointer;
 }
 
@@ -130,6 +259,27 @@
   background: color-mix(in srgb, var(--surface-2) 58%, transparent);
 }
 
+.database-admin-row-action-heading,
+.database-admin-row-action {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  min-width: 86px !important;
+  max-width: 86px !important;
+  background: var(--surface) !important;
+}
+
+.database-admin-row-action-heading {
+  z-index: 3 !important;
+  background: var(--surface-2) !important;
+}
+
+.database-admin-row-action .text-button {
+  min-height: 36px;
+  font-family: var(--font);
+  font-size: 0.78rem;
+}
+
 .database-admin-null {
   color: var(--hint);
   font-style: italic;
@@ -139,8 +289,28 @@
   border-top: 1px solid var(--border);
 }
 
+.database-admin-guidance {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control, 7px);
+  background: var(--surface);
+}
+
+.database-admin-guidance summary {
+  min-height: 44px;
+  padding: 11px 14px;
+  color: var(--muted);
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.database-admin-guidance p {
+  margin: 0;
+  padding: 0 14px 14px;
+}
+
 .database-admin-dialog {
-  width: min(760px, calc(100vw - 32px));
+  width: min(780px, calc(100vw - 32px));
 }
 
 .database-admin-property-grid {
@@ -149,12 +319,75 @@
   gap: 12px;
 }
 
-.database-admin-property-grid .field:last-child {
+.database-admin-property-grid .database-admin-wide {
   grid-column: 1 / -1;
 }
 
 .database-admin-property-grid textarea {
   min-height: 90px;
+}
+
+.database-admin-row-dialog {
+  width: min(920px, calc(100vw - 32px));
+}
+
+.database-admin-row-values {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.database-admin-row-values > div {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1.45fr);
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+
+.database-admin-row-values dt,
+.database-admin-row-values dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.database-admin-row-values dt strong,
+.database-admin-row-values dt small {
+  display: block;
+}
+
+.database-admin-row-values dt small {
+  margin-top: 3px;
+  color: var(--hint);
+}
+
+.database-admin-row-values pre {
+  max-height: 240px;
+  margin: 0;
+  overflow: auto;
+  color: var(--text);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.database-admin-correction {
+  padding: 13px 14px;
+  border-left: 3px solid var(--warning);
+  background: var(--warning-soft);
+  border-radius: 6px;
+}
+
+.database-admin-correction strong,
+.database-admin-correction p {
+  display: block;
+  margin: 0;
+}
+
+.database-admin-correction p {
+  margin-top: 4px;
 }
 
 @media (max-width: 980px) {
@@ -165,36 +398,60 @@
 
 @media (max-width: 620px) {
   .database-admin-toolbar,
-  .database-admin-property-grid {
+  .database-admin-property-grid,
+  .database-admin-row-values > div,
+  .database-admin-search {
     grid-template-columns: 1fr;
   }
 
-  .database-admin-property-grid .field:last-child {
+  .database-admin-table-field,
+  .database-admin-search,
+  .database-admin-export,
+  .database-admin-property-grid .database-admin-wide {
     grid-column: auto;
   }
 
   .database-admin-actions,
-  .database-admin-export {
+  .database-admin-export,
+  .database-admin-search {
     width: 100%;
   }
 
   .database-admin-actions button,
-  .database-admin-export button {
+  .database-admin-export button,
+  .database-admin-search button {
     flex: 1 1 140px;
+    width: 100%;
   }
 
+  .database-admin-context,
   .database-admin-data-heading,
   .database-admin-pagination {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .database-admin-dialog {
+  .database-admin-context-meta {
+    flex-wrap: wrap;
+  }
+
+  .database-admin-progress {
+    top: 132px;
+  }
+
+  .database-admin-dialog,
+  .database-admin-row-dialog {
     width: 100vw;
     max-width: none;
     height: 100dvh;
     max-height: none;
     margin: 0;
     border-radius: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .database-admin-progress .state-mark {
+    animation: none;
   }
 }
