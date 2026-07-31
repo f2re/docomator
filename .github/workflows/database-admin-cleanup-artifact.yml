@@ -4,12 +4,15 @@ on:
   push:
     branches:
       - agent/database-admin-hardening
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
 
 concurrency:
-  group: database-admin-cleanup-${{ github.ref }}
+  group: database-admin-cleanup-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
