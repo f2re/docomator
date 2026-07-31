@@ -28,6 +28,9 @@ async function cleanFixture() {
       "registerDataImportRoutes(app, spaceRegistry);"
     ].join("\n")
   );
+  await write(root, "config/docomator.env.example", "DOCOMATOR_HOST=127.0.0.1\n");
+  await write(root, "scripts/offline/install.sh", "#!/usr/bin/env bash\nset -Eeuo pipefail\n");
+  await write(root, "scripts/offline/lib.sh", "#!/usr/bin/env bash\nset -Eeuo pipefail\n");
   await write(
     root,
     "packages/document-intake/src/intake.ts",
@@ -109,6 +112,24 @@ test("находит устаревшие подсказки и скрытую �
   const findings = await collectAuditRemediationFindings(root);
   assert.ok(findings.some((finding) => finding.includes("устаревшая подсказка")));
   assert.ok(findings.some((finding) => finding.includes("скрыто регистрируется")));
+});
+
+test("не допускает возврат секрета сессии и его генератора", async (t) => {
+  const root = await cleanFixture();
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await write(
+    root,
+    "config/docomator.env.example",
+    "DOCOMATOR_SESSION_SECRET=CHANGE_ME_DURING_INSTALL\n"
+  );
+  await write(
+    root,
+    "scripts/offline/lib.sh",
+    "random_secret() { printf secret; }\n"
+  );
+  const findings = await collectAuditRemediationFindings(root);
+  assert.ok(findings.some((finding) => finding.includes("DOCOMATOR_SESSION_SECRET")));
+  assert.ok(findings.some((finding) => finding.includes("генератор секрета")));
 });
 
 test("находит отсутствие фактического лимита и настоящего браузерного контура", async (t) => {
