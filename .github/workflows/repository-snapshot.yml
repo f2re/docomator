@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          readonly EXPECTED_PARENT='f493c0220798460a212c6ee0e419998e678242a8'
+          readonly EXPECTED_PARENT='75a44c7f046d3b6502162e0b8c46ab31d99772a3'
           readonly BASE64_SHA256='ee7933ce09d86aa6f51761ceb42139291c10d5b930f3a81aa88cd3774a5ea888'
           readonly ZSTD_SHA256='5690cda4b257a82dc9df76240043d3442c195c038d0341a8670c38caf5ae2167'
           readonly PATCH_SHA256='5f63d69b933fec4540f6a426d972908babf9710cd948a58cc670a4cf0861daa4'
@@ -42,7 +42,7 @@ jobs:
           readonly PATCH_FILE="$RUNNER_TEMP/release-consolidation.patch"
 
           test "$GITHUB_HEAD_REF" = 'agent/release-0.1.0-rc1'
-          test "$(git branch --show-current)" = 'agent/release-0.1.0--rc1'
+          test "$(git branch --show-current)" = 'agent/release-0.1.0-rc1'
           test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
           command -v base64 >/dev/null
           command -v sha256sum >/dev/null
