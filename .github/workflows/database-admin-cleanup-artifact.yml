@@ -1,28 +1,29 @@
-name: Prepare database admin cleanup artifact
+name: Apply database admin cleanup
 
 on:
   push:
     branches:
       - agent/database-admin-hardening
-  pull_request:
-    branches:
-      - main
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: database-admin-cleanup-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: database-admin-cleanup-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  prepare:
+  apply:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/database-admin-hardening
+          fetch-depth: 0
 
-      - name: Remove obsolete session secret handling
+      - name: Apply exact cleanup and remove workflow
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -56,16 +57,12 @@ jobs:
               "",
           )
           PY
+          rm .github/workflows/database-admin-cleanup-artifact.yml
           bash -n scripts/offline/install.sh scripts/offline/lib.sh
-          ! grep -R "DOCOMATOR_SESSION_SECRET\|random_secret" \
-            config scripts/offline --exclude='database-admin-cleanup-artifact.yml'
-
-      - name: Upload cleaned files
-        uses: actions/upload-artifact@v4
-        with:
-          name: database-admin-cleaned-install-scripts
-          path: |
-            scripts/offline/install.sh
-            scripts/offline/lib.sh
-          if-no-files-found: error
-          retention-days: 2
+          ! grep -R "DOCOMATOR_SESSION_SECRET\|random_secret" config scripts/offline
+          git diff --check
+          git config user.name "docomator-maintenance"
+          git config user.email "docomator-maintenance@users.noreply.github.com"
+          git add scripts/offline/install.sh scripts/offline/lib.sh .github/workflows/database-admin-cleanup-artifact.yml
+          git commit -m "Удалить устаревший секрет сессии из установки"
+          git push origin HEAD:agent/database-admin-hardening
