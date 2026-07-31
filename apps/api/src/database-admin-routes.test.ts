@@ -91,16 +91,19 @@ test("database admin API lists, sorts, audits exports and checks tables without 
           name: string;
           label: string;
           category: string;
+          description: string;
           sensitivity: string;
         }>;
       }
     ).data.find((table) => table.name === "entities");
-    assert.deepEqual(entitiesTable, {
-      name: "entities",
-      label: "Объекты и сотрудники",
-      category: "Основные данные",
-      sensitivity: "personal"
-    });
+    assert.ok(entitiesTable);
+    assert.equal(entitiesTable.label, "Объекты и сотрудники");
+    assert.equal(entitiesTable.category, "Основные данные");
+    assert.equal(
+      entitiesTable.description,
+      "Карточки людей и других объектов, доступных в разделах Docomator."
+    );
+    assert.equal(entitiesTable.sensitivity, "personal");
 
     const rows = await app.inject({
       method: "GET",
@@ -112,7 +115,12 @@ test("database admin API lists, sorts, audits exports and checks tables without 
         total: number;
         rows: Array<Record<string, unknown>>;
         sortColumn: string;
-        presentation: { label: string; sensitivity: string };
+        presentation: {
+          label: string;
+          category: string;
+          description: string;
+          sensitivity: string;
+        };
       };
     };
     assert.equal(page.data.total, 1);
