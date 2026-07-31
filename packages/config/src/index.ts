@@ -218,7 +218,7 @@ function smtpWorker(env: NodeJS.ProcessEnv): SmtpWorkerConfig {
 function common(env: NodeJS.ProcessEnv): CommonConfig {
   const dataDir = path.resolve(env.DOCOMATOR_DATA_DIR ?? "/var/lib/docomator");
   return {
-    version: env.DOCOMATOR_VERSION ?? "0.1.0-alpha.0",
+    version: env.DOCOMATOR_VERSION ?? "0.1.0-rc.1",
     dataDir,
     logLevel: parseLogLevel(env.DOCOMATOR_LOG_LEVEL),
     llmEnabled: parseBoolean(env.DOCOMATOR_LLM_ENABLED, false),

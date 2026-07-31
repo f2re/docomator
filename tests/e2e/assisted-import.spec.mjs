@@ -13,12 +13,12 @@ test("оператор вставляет таблицу из Excel и пров�
   await expect(page.locator("#bulkDataImportPanel")).toContainText(
     "Импортировать людей и заполненные поля"
   );
-  await page.locator('[data-bulk-v2-source="paste"]').click();
-  await expect(page.locator("#bulkV2PasteSource")).toBeVisible();
-  await page.locator("#bulkV2Paste").fill(
+  await page.locator('[data-bulk-import-source="paste"]').click();
+  await expect(page.locator("#bulkImportPasteSource")).toBeVisible();
+  await page.locator("#bulkImportPaste").fill(
     "ФИО\tТабельный номер\tДолжность\nАнна Смирнова\tT-001\tИнженер\nИван Петров\tT-002\tАналитик"
   );
-  await page.locator("#bulkV2PastePreview").click();
+  await page.locator("#bulkImportPastePreview").click();
 
   await expect(page.locator("#bulkImportMessage")).toContainText("Таблица прочитана");
   await expect(page.locator("#bulkImportMappings")).toContainText("Класс данных");

@@ -11,7 +11,7 @@ import {
 
 const validIdentity = {
   name: "docomator",
-  version: "0.1.0-alpha.0",
+  version: "0.1.0-rc.1",
   gitCommit: "a".repeat(40),
   releaseMetadataSha256: "b".repeat(64),
   source: "installed"
@@ -37,7 +37,7 @@ async function withServer(handler, run) {
 function reportFixture(checks = []) {
   return {
     format: "docomator-pilot-readiness",
-    version: "0.1.0-alpha.0",
+    version: "0.1.0-rc.1",
     generatedAt: "2026-07-19T20:00:00.000Z",
     status: "passed",
     url: "http://127.0.0.1:8080",
@@ -58,7 +58,7 @@ function reportFixture(checks = []) {
 
 test("installed release identity is strict and version-bound", () => {
   assert.deepEqual(
-    validateInstalledReleaseIdentity(validIdentity, "0.1.0-alpha.0"),
+    validateInstalledReleaseIdentity(validIdentity, "0.1.0-rc.1"),
     validIdentity
   );
   assert.throws(
@@ -84,7 +84,7 @@ test("release identity is fetched from the installed API endpoint", async () => 
     },
     async (baseUrl) => {
       assert.deepEqual(
-        await fetchInstalledReleaseIdentity(baseUrl, "0.1.0-alpha.0"),
+        await fetchInstalledReleaseIdentity(baseUrl, "0.1.0-rc.1"),
         validIdentity
       );
     }

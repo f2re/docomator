@@ -57,7 +57,7 @@ async function preflightBundle() {
     "payload/app/apps/api/ui/generic-template-entities.js",
     "payload/app/apps/api/ui/generic-document-generation.js",
     "payload/app/apps/api/ui/database-admin.js",
-    "payload/app/apps/api/ui/bulk-data-import-v3.js",
+    "payload/app/apps/api/ui/bulk-data-import.js",
     "payload/app/scripts/ci/release-gate.mjs",
     "payload/app/scripts/ci/release-gate-crash-worker.mjs",
     "payload/app/scripts/ci/libreoffice-release-gate.mjs",

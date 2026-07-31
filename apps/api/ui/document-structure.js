@@ -919,6 +919,7 @@ function renderStructureSelection(element) {
   renderStructureRepeatAreaFields();
   renderStructureParagraphMode();
   updateStructureFieldReadiness();
+  rowEditorInstallEntry(element);
 }
 
 async function loadStructureDraft() {

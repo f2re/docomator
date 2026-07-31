@@ -13,7 +13,7 @@ import {
 } from "./release-evidence-gate.mjs";
 
 const commitSha = "a".repeat(40);
-const releaseVersion = "0.1.0-alpha.0";
+const releaseVersion = "0.1.0-rc.1";
 const now = new Date().toISOString();
 
 function recoveryAct(overrides = {}) {
