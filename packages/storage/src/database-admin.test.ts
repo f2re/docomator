@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { AuditRepository } from "./audit.js";
 import {
   DatabaseAdminRegistry,
   DatabaseAdminValidationError
@@ -24,7 +25,12 @@ test("database admin lists, searches, sorts and exports only validated tables", 
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
-    const registry = new DatabaseAdminRegistry(fixture.store);
+    const audit = new AuditRepository(fixture.store);
+    const registry = new DatabaseAdminRegistry(
+      fixture.store,
+      new KnowledgeRegistry(fixture.store),
+      audit
+    );
     const space = spaces.createSpace(
       { key: "database-admin", name: "Администрирование" },
       context("corr-space")
@@ -49,7 +55,12 @@ test("database admin lists, searches, sorts and exports only validated tables", 
     );
 
     const tables = registry.listTables();
-    assert.ok(tables.some((table) => table.name === "entities"));
+    const entitiesTable = tables.find((table) => table.name === "entities");
+    assert.ok(entitiesTable);
+    assert.equal(entitiesTable.label, "Объекты и сотрудники");
+    assert.equal(entitiesTable.category, "Основные данные");
+    assert.equal(entitiesTable.sensitivity, "personal");
+
     const description = registry.describeTable("entities");
     assert.ok(description.rowCount >= 2);
     assert.ok(description.columns.some((column) => column.name === "display_name"));
@@ -65,25 +76,45 @@ test("database admin lists, searches, sorts and exports only validated tables", 
     assert.equal(page.rows[0]?.["display_name"], "Яковлев Яков Яковлевич");
     assert.equal(page.sortColumn, "display_name");
     assert.equal(page.sortDirection, "desc");
+    assert.equal(page.presentation.label, "Объекты и сотрудники");
 
-    const csv = registry.exportTable({
-      table: "entities",
-      format: "csv",
-      sortColumn: "display_name",
-      limit: 10_000
-    });
+    const csv = registry.exportTable(
+      {
+        table: "entities",
+        format: "csv",
+        sortColumn: "display_name",
+        limit: 10_000
+      },
+      context("corr-export-csv")
+    );
     assert.equal(csv.contentType, "text/csv; charset=utf-8");
     assert.ok(csv.content.startsWith("\ufeff"));
     assert.match(csv.content, /'=ОПАСНАЯ ФОРМУЛА/u);
+
+    const exportAudit = audit.listByCorrelation("corr-export-csv");
+    assert.equal(exportAudit.length, 1);
+    assert.equal(exportAudit[0]?.action, "export");
+    assert.equal(exportAudit[0]?.objectType, "database_table");
+    assert.equal(exportAudit[0]?.objectId, "entities");
+    assert.deepEqual(exportAudit[0]?.details, {
+      filtered: false,
+      format: "csv",
+      rowCount: 2,
+      sortColumn: "display_name",
+      sortDirection: "asc"
+    });
 
     const json = registry.exportTable({
       table: "entities",
       format: "json",
       search: "Яковлев"
     });
-    assert.deepEqual(JSON.parse(json.content).map((row: Record<string, unknown>) => row.display_name), [
-      "Яковлев Яков Яковлевич"
-    ]);
+    assert.deepEqual(
+      JSON.parse(json.content).map(
+        (row: Record<string, unknown>) => row.display_name
+      ),
+      ["Яковлев Яков Яковлевич"]
+    );
 
     assert.throws(
       () => registry.listRows({ table: "sqlite_master" }),
@@ -120,8 +151,10 @@ test("database admin adds a logical property without altering the physical entit
       {
         label: "Инвентарный номер",
         valueType: "string",
+        cardinality: "multiple",
         sensitivity: "internal",
-        appliesTo: ["person"]
+        appliesTo: ["person"],
+        aliases: ["инв. номер", "номер имущества"]
       },
       context("corr-property")
     );
@@ -130,7 +163,10 @@ test("database admin adds a logical property without altering the physical entit
       database.prepare('PRAGMA table_info("entities")').all()
     );
     assert.deepEqual(after, before);
-    assert.equal(knowledge.getPropertyDefinition(property.key).label, "Инвентарный номер");
+    const saved = knowledge.getPropertyDefinition(property.key);
+    assert.equal(saved.label, "Инвентарный номер");
+    assert.equal(saved.cardinality, "multiple");
+    assert.deepEqual(saved.aliases, ["инв. номер", "номер имущества"]);
   } finally {
     fixture.cleanup();
   }
