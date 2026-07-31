@@ -47,9 +47,6 @@ export * from "./template-test-versions.js";
 export {
   UnifiedTemplatePreviewActivationRegistry as TemplatePreviewActivationRegistry
 } from "./template-release-compatibility.js";
-export {
-  TemplatePreviewActivationRegistry as LegacyTemplatePreviewActivationRegistry
-} from "./template-preview-activation.js";
 
 export {
   DomainEventIdempotencyConflictError,
