@@ -449,7 +449,7 @@ export class DatabaseAdminRegistry {
 
     if (context !== undefined) {
       this.#audit.record({
-        occurredAt: context.now,
+        ...(context.now === undefined ? {} : { occurredAt: context.now }),
         actorType: context.actorType,
         actorId: context.actorId ?? null,
         action: "export",
