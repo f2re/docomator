@@ -7,7 +7,12 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { loadApiConfig } from "@docomator/config";
-import { KnowledgeRegistry, SpaceRegistry, SqliteStore } from "@docomator/storage";
+import {
+  AuditRepository,
+  KnowledgeRegistry,
+  SpaceRegistry,
+  SqliteStore
+} from "@docomator/storage";
 
 import { buildApp } from "./app.js";
 
@@ -50,7 +55,7 @@ function context(correlationId: string) {
   };
 }
 
-test("database admin API lists, sorts, exports and checks tables without arbitrary SQL", async () => {
+test("database admin API lists, sorts, audits exports and checks tables without arbitrary SQL", async () => {
   const fixture = migratedFixture();
   const spaces = new SpaceRegistry(fixture.store);
   const space = spaces.createSpace(
@@ -79,11 +84,23 @@ test("database admin API lists, sorts, exports and checks tables without arbitra
       url: "/api/v1/admin/database/tables"
     });
     assert.equal(tables.statusCode, 200, tables.body);
-    assert.ok(
-      (tables.json() as { data: Array<{ name: string }> }).data.some(
-        (table) => table.name === "entities"
-      )
-    );
+    assert.equal(tables.headers["cache-control"], "no-store");
+    const entitiesTable = (
+      tables.json() as {
+        data: Array<{
+          name: string;
+          label: string;
+          category: string;
+          sensitivity: string;
+        }>;
+      }
+    ).data.find((table) => table.name === "entities");
+    assert.deepEqual(entitiesTable, {
+      name: "entities",
+      label: "Объекты и сотрудники",
+      category: "Основные данные",
+      sensitivity: "personal"
+    });
 
     const rows = await app.inject({
       method: "GET",
@@ -95,20 +112,43 @@ test("database admin API lists, sorts, exports and checks tables without arbitra
         total: number;
         rows: Array<Record<string, unknown>>;
         sortColumn: string;
+        presentation: { label: string; sensitivity: string };
       };
     };
     assert.equal(page.data.total, 1);
     assert.equal(page.data.rows[0]?.display_name, "Смирнов Сергей Сергеевич");
     assert.equal(page.data.sortColumn, "display_name");
+    assert.deepEqual(page.data.presentation, {
+      label: "Объекты и сотрудники",
+      category: "Основные данные",
+      description:
+        "Карточки людей и других объектов, доступных в разделах Docomator.",
+      sensitivity: "personal"
+    });
 
     const exportResponse = await app.inject({
       method: "GET",
-      url: "/api/v1/admin/database/tables/entities/export?format=csv&sortColumn=display_name"
+      url: "/api/v1/admin/database/tables/entities/export?format=csv&sortColumn=display_name",
+      headers
     });
     assert.equal(exportResponse.statusCode, 200, exportResponse.body);
+    assert.equal(exportResponse.headers["cache-control"], "no-store");
     assert.match(exportResponse.headers["content-type"] ?? "", /^text\/csv/u);
     assert.match(exportResponse.body, /Смирнов Сергей Сергеевич/u);
     assert.ok(exportResponse.body.startsWith("\ufeff"));
+    const exportAudit = new AuditRepository(fixture.store).listByCorrelation(
+      "corr-api-db-admin"
+    );
+    assert.equal(exportAudit.length, 1);
+    assert.equal(exportAudit[0]?.action, "export");
+    assert.equal(exportAudit[0]?.objectId, "entities");
+    assert.deepEqual(exportAudit[0]?.details, {
+      filtered: false,
+      format: "csv",
+      rowCount: 1,
+      sortColumn: "display_name",
+      sortDirection: "asc"
+    });
 
     const check = await app.inject({
       method: "GET",
@@ -136,7 +176,7 @@ test("database admin API lists, sorts, exports and checks tables without arbitra
   }
 });
 
-test("database admin API creates a logical property without altering physical entity columns", async () => {
+test("database admin API creates a typed logical property without altering physical entity columns", async () => {
   const fixture = migratedFixture();
   const app = buildApp(
     loadApiConfig({
@@ -155,14 +195,28 @@ test("database admin API creates a logical property without altering physical en
       headers,
       payload: {
         label: "Внутренний номер",
-        valueType: "string",
+        valueType: "enum",
+        cardinality: "multiple",
         sensitivity: "internal",
-        appliesTo: ["person"]
+        appliesTo: ["person"],
+        aliases: ["номер сотрудника", "внутренний код"],
+        validation: { enum: ["А", "Б"] }
       }
     });
     assert.equal(response.statusCode, 201, response.body);
-    const created = response.json() as { data: { key: string; label: string } };
+    const created = response.json() as {
+      data: {
+        key: string;
+        label: string;
+        cardinality: string;
+        aliases: string[];
+        validation: unknown;
+      };
+    };
     assert.equal(created.data.label, "Внутренний номер");
+    assert.equal(created.data.cardinality, "multiple");
+    assert.deepEqual(created.data.aliases, ["внутренний код", "номер сотрудника"]);
+    assert.deepEqual(created.data.validation, { enum: ["А", "Б"] });
     assert.equal(
       new KnowledgeRegistry(fixture.store).getPropertyDefinition(created.data.key).label,
       "Внутренний номер"
