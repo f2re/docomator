@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          readonly EXPECTED_PARENT='b8b1ab8465882c3da6611e216c8fcd9de7103b94'
+          readonly EXPECTED_PARENT='e1efa87ef00f64328a2f06863d8f2bb2352b8f7a'
           readonly BASE64_SHA256='ee7933ce09d86aa6f51761ceb42139291c10d5b930f3a81aa88cd3774a5ea888'
           readonly ZSTD_SHA256='5690cda4b257a82dc9df76240043d3442c195c038d0341a8670c38caf5ae2167'
           readonly PATCH_SHA256='b1ddb466344bdfb6df431d36ace9c859c7740d7098cc68ef15e95f3d99690d0f'
@@ -49,7 +49,7 @@ jobs:
           command -v zstd >/dev/null
 
           mapfile -t payload_parts < <(find "$PAYLOAD_DIR" -maxdepth 1 -type f -name 'part-*' -print | LC_ALL=C sort)
-          test "${#payload_parts[@]}" -eq 7
+          test "${#payload_parts[@]}" -eq 14
           cat "${payload_parts[@]}" > "$BASE64_FILE"
           printf '%s  %s\n' "$BASE64_SHA256" "$BASE64_FILE" | sha256sum --check --strict
           base64 --decode "$BASE64_FILE" > "$ZSTD_FILE"
