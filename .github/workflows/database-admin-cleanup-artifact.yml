@@ -1,0 +1,68 @@
+name: Prepare database admin cleanup artifact
+
+on:
+  push:
+    branches:
+      - agent/database-admin-hardening
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-admin-cleanup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Remove obsolete session secret handling
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(relative: str, old: str, new: str) -> None:
+              path = Path(relative)
+              source = path.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{relative}: expected one exact block, found {count}")
+              path.write_text(source.replace(old, new), encoding="utf-8")
+
+          replace_exact(
+              "scripts/offline/install.sh",
+              '''if [[ "$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET)" == "CHANGE_ME_DURING_INSTALL" || -z "$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET)" ]]; then
+            replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET "$(random_secret)"
+          fi
+
+          ''',
+              "",
+          )
+          replace_exact(
+              "scripts/offline/lib.sh",
+              '''random_secret() {
+            od -An -N32 -tx1 /dev/urandom | tr -d ' \\n'
+          }
+
+          ''',
+              "",
+          )
+          PY
+          bash -n scripts/offline/install.sh scripts/offline/lib.sh
+          ! grep -R "DOCOMATOR_SESSION_SECRET\|random_secret" \
+            config scripts/offline --exclude='database-admin-cleanup-artifact.yml'
+
+      - name: Upload cleaned files
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-admin-cleaned-install-scripts
+          path: |
+            scripts/offline/install.sh
+            scripts/offline/lib.sh
+          if-no-files-found: error
+          retention-days: 2
