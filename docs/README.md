@@ -21,6 +21,8 @@
 | [REQUIREMENTS.md](REQUIREMENTS.md) | нормативные функциональные и нефункциональные требования |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | компоненты, потоки, границы и модель данных |
 | [UX_UI_SPECIFICATION.md](UX_UI_SPECIFICATION.md) | требования к пользовательскому интерфейсу и состояниям |
+| [INTERFACE_HIERARCHY.md](INTERFACE_HIERARCHY.md) | нормативное арт-направление, типографика, цвет, композиция и адаптивность |
+| [INTERFACE_AUDIT_2026-07-30.md](INTERFACE_AUDIT_2026-07-30.md) | доказательный аудит Better Art Direction и обоснование принятых изменений |
 | [TEMPLATE_COMPILER.md](TEMPLATE_COMPILER.md) | правила компиляции, привязок и заполнения DOCX/XLSX |
 | [SPACES_AND_AUDIENCES.md](SPACES_AND_AUDIENCES.md) | разделы данных, группы, выбор участников и снимки состава |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | последовательность реализации и Definition of Done |
