@@ -1,0 +1,38 @@
+name: Prepare repository snapshot
+
+on:
+  push:
+    branches:
+      - agent/release-0.1.0-rc1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pack repository tree
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude='tests/e2e/.tmp' \
+            -czf "$RUNNER_TEMP/docomator-repository-snapshot.tar.gz" .
+
+      - name: Upload repository snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: docomator-repository-snapshot
+          path: ${{ runner.temp }}/docomator-repository-snapshot.tar.gz
+          if-no-files-found: error
+          retention-days: 2
