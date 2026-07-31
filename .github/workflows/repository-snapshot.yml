@@ -1,6 +1,7 @@
 name: Prepare repository snapshot
 
 on:
+  pull_request:
   push:
     branches:
       - agent/release-0.1.0-rc1
