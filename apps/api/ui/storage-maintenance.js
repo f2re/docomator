@@ -1,5 +1,6 @@
 let storageMaintenanceCreated = false;
 let storageMaintenanceBusy = false;
+let storageReconciliationBusy = false;
 let storageMaintenancePlan = null;
 
 function storageFormatBytes(value) {
@@ -29,7 +30,7 @@ function createStorageMaintenancePanel() {
       <div>
         <p class="eyebrow">Обслуживание диска</p>
         <h2>Хранилище файлов</h2>
-        <p>Удаляются только объекты без действующих ссылок. Сначала система формирует неизменяемый план, затем требует отдельное подтверждение.</p>
+        <p>Очистка удаляет только объекты без действующих ссылок. Проверка целостности отдельно сравнивает SQLite и файлы на диске, не изменяя данные.</p>
       </div>
       <span class="large-emoji" aria-hidden="true">🧹</span>
     </div>
@@ -47,17 +48,22 @@ function createStorageMaintenancePanel() {
       </label>
       <div class="storage-maintenance-actions">
         <button class="secondary-button" id="storageUsageRefresh" type="button">Обновить сведения</button>
+        <button class="secondary-button" id="storageReconciliationRun" type="button">Проверить целостность</button>
         <button class="primary-button" id="storageCleanupPreview" type="button">Рассчитать очистку</button>
       </div>
     </div>
     <div id="storageUsageContent" class="storage-usage-content" aria-live="polite">
       <div class="generation-history-empty">Получаем сведения о хранилище…</div>
     </div>
+    <div id="storageReconciliationReport" class="storage-cleanup-plan" aria-live="polite"></div>
     <div id="storageCleanupPlan" class="storage-cleanup-plan" aria-live="polite"></div>`;
   sharedDocumentsView.append(panel);
   panel
     .querySelector("#storageUsageRefresh")
     ?.addEventListener("click", loadStorageUsage);
+  panel
+    .querySelector("#storageReconciliationRun")
+    ?.addEventListener("click", runStorageReconciliation);
   panel
     .querySelector("#storageCleanupPreview")
     ?.addEventListener("click", previewStorageCleanup);
@@ -110,6 +116,86 @@ async function loadStorageUsage() {
     holder.innerHTML = `<div class="generation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Сведения получить не удалось</strong><p>${sharedDocumentEscape(error?.message || "Повторите действие.")}</p></div></div>`;
   } finally {
     storageMaintenanceBusy = false;
+  }
+}
+
+function storageReconciliationIssueTitle(kind) {
+  const labels = {
+    object_store_missing: "Каталог хранилища отсутствует",
+    database_invalid_sha256: "Недопустимый SHA-256 в SQLite",
+    database_object_missing: "Файл отсутствует на диске",
+    database_size_mismatch: "Размер не совпадает",
+    database_storage_path_mismatch: "Путь в SQLite неканонический",
+    physical_object_unregistered: "Файл отсутствует в SQLite",
+    physical_checksum_mismatch: "Контрольная сумма не совпадает",
+    invalid_layout: "Нестандартное расположение",
+    non_regular_entry: "Ссылка или специальный объект",
+    incoming_entry: "Незавершённый временный объект",
+    unreadable_entry: "Объект недоступен для чтения"
+  };
+  return labels[kind] || "Нарушение целостности";
+}
+
+function storageReconciliationPath(issue) {
+  if (issue.relativePath) return issue.relativePath;
+  if (issue.sha256) return issue.sha256;
+  if (issue.fileId) return issue.fileId;
+  return "—";
+}
+
+function renderStorageReconciliation(report) {
+  const holder = document.querySelector("#storageReconciliationReport");
+  if (!holder) return;
+  const issueRows = Array.isArray(report.issues)
+    ? report.issues
+        .map(
+          (issue) => `
+            <article class="storage-candidate-row">
+              <strong>${sharedDocumentEscape(storageReconciliationIssueTitle(issue.kind))}</strong>
+              <code>${sharedDocumentEscape(storageReconciliationPath(issue))}</code>
+              <span>${sharedDocumentEscape(issue.message || "")}</span>
+            </article>`
+        )
+        .join("")
+    : "";
+  holder.innerHTML = `
+    <section class="storage-cleanup-confirmation">
+      <div class="generation-state ${report.healthy ? "is-success" : "is-warning"}">
+        <span aria-hidden="true">${report.healthy ? "✅" : "⚠️"}</span>
+        <div>
+          <strong>${report.healthy ? "SQLite и объектное хранилище согласованы" : `Обнаружено нарушений: ${Number(report.issueCount || 0)}`}</strong>
+          <p>${report.healthy ? "Все зарегистрированные объекты найдены, их размеры, пути и SHA-256 совпадают." : "Проверка ничего не изменяла. Сохраните отчёт и устраните причину до запуска очистки или восстановления."}</p>
+        </div>
+      </div>
+      <div class="generation-progress-grid storage-usage-grid">
+        <div class="generation-progress-item"><span>Записей SQLite</span><strong>${Number(report.databaseObjectCount || 0)}</strong><small>${storageFormatBytes(report.databaseObjectBytes)}</small></div>
+        <div class="generation-progress-item"><span>Файлов на диске</span><strong>${Number(report.physicalObjectCount || 0)}</strong><small>${storageFormatBytes(report.physicalObjectBytes)}</small></div>
+        <div class="generation-progress-item"><span>Полностью совпали</span><strong>${Number(report.matchedObjectCount || 0)}</strong><small>SHA-256, размер и путь</small></div>
+        <div class="generation-progress-item"><span>Проверено</span><strong>${sharedDocumentEscape(new Date(report.generatedAt).toLocaleString("ru-RU"))}</strong><small>${report.objectStorePresent ? "Каталог доступен" : "Каталог отсутствует"}</small></div>
+      </div>
+      ${issueRows ? `<div class="storage-candidate-list">${issueRows}</div>` : ""}
+      ${Number(report.omittedDetailCount || 0) > 0 ? `<div class="generation-history-empty">Не показано подробностей: ${Number(report.omittedDetailCount)}. Общие счётчики включают все обнаруженные нарушения.</div>` : ""}
+    </section>`;
+}
+
+async function runStorageReconciliation() {
+  if (storageReconciliationBusy) return;
+  const holder = document.querySelector("#storageReconciliationReport");
+  const button = document.querySelector("#storageReconciliationRun");
+  if (!holder || !button) return;
+  storageReconciliationBusy = true;
+  button.disabled = true;
+  holder.innerHTML = `<div class="generation-history-empty">Вычисляем SHA-256 и сравниваем SQLite с файлами на диске…</div>`;
+  try {
+    const body = await sharedDocumentFetchJson(
+      "/api/v1/storage/reconciliation?maxDetails=200"
+    );
+    renderStorageReconciliation(body.data);
+  } catch (error) {
+    holder.innerHTML = `<div class="generation-state is-error"><span aria-hidden="true">⛔</span><div><strong>Проверка целостности не завершена</strong><p>${sharedDocumentEscape(error?.message || "Повторите действие.")}</p></div></div>`;
+  } finally {
+    storageReconciliationBusy = false;
+    button.disabled = false;
   }
 }
 
