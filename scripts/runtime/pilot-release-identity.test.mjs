@@ -65,8 +65,9 @@ test("installed release identity is strict and version-bound", () => {
     () => validateInstalledReleaseIdentity({ ...validIdentity, source: "development" }),
     /установленного релиза/u
   );
+  const mismatchedVersion = `${validIdentity.version}.mismatch`;
   assert.throws(
-    () => validateInstalledReleaseIdentity(validIdentity, "0.1.0-rc.1"),
+    () => validateInstalledReleaseIdentity(validIdentity, mismatchedVersion),
     /не совпадает/u
   );
   assert.throws(
