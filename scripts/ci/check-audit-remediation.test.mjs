@@ -68,7 +68,7 @@ async function cleanFixture() {
     [
       "permissions: write-all",
       "runBlockLines(",
-      "actions/checkout@v4",
+      "APPROVED_CHECKOUT_ACTION",
       "repository_dispatch"
     ].join("\n")
   );
