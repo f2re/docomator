@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import { SqliteStore } from "./database.js";
 import { ContentAddressedObjectStore } from "./object-store.js";
@@ -58,7 +58,7 @@ function insertFile(
   });
 }
 
-async function fixture(t: test.TestContext) {
+async function fixture(t: TestContext) {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-object-check-"));
   const store = new SqliteStore({ databasePath: ":memory:" });
   createFilesTable(store);
