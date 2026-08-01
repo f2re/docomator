@@ -1,4 +1,4 @@
-name: Delete merged agent branch
+name: Delete merged work branch
 
 on:
   pull_request:
@@ -12,7 +12,15 @@ jobs:
     if: >-
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'agent/')
+      github.event.pull_request.head.ref != github.event.repository.default_branch &&
+      (
+        startsWith(github.event.pull_request.head.ref, 'agent/') ||
+        startsWith(github.event.pull_request.head.ref, 'ci/') ||
+        startsWith(github.event.pull_request.head.ref, 'feature/') ||
+        startsWith(github.event.pull_request.head.ref, 'fix/') ||
+        startsWith(github.event.pull_request.head.ref, 'temp/') ||
+        startsWith(github.event.pull_request.head.ref, 'verify/')
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -21,15 +29,23 @@ jobs:
         with:
           persist-credentials: true
           fetch-depth: 1
-      - name: Delete merged agent branch
+      - name: Delete merged work branch
         env:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          [[ "$HEAD_BRANCH" == agent/* ]]
+          [[ -n "$HEAD_BRANCH" ]]
           [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]
+          case "$HEAD_BRANCH" in
+            agent/*|ci/*|feature/*|fix/*|temp/*|verify/*)
+              ;;
+            *)
+              echo "Branch $HEAD_BRANCH is not eligible for automatic deletion." >&2
+              exit 1
+              ;;
+          esac
           if git ls-remote --exit-code --heads origin "refs/heads/$HEAD_BRANCH" >/dev/null 2>&1; then
             git push origin --delete "$HEAD_BRANCH"
           else
