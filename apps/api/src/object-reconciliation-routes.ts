@@ -2,8 +2,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
   DocumentGenerationValidationError,
-  ObjectReconciliationRegistry,
-  ObjectReconciliationValidationError
+  ObjectCleanupRegistry,
+  ObjectReconciliationValidationError,
+  objectReconciliationRegistryFromCleanupRegistry
 } from "@docomator/storage";
 
 import { correlationId } from "./request-context.js";
@@ -18,8 +19,9 @@ function responseEnvelope<T>(request: FastifyRequest, data: T) {
 
 export function registerObjectReconciliationRoutes(
   app: FastifyInstance,
-  registry: ObjectReconciliationRegistry
+  cleanupRegistry: ObjectCleanupRegistry
 ): void {
+  const registry = objectReconciliationRegistryFromCleanupRegistry(cleanupRegistry);
   app.get<{ Querystring: ReconciliationQuery }>(
     "/api/v1/storage/reconciliation",
     {
