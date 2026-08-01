@@ -47,7 +47,7 @@ require_command sort
 [[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/generic-template-entities.js" ]] || die "В комплекте отсутствует выбор типа объектов шаблона"
 [[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/generic-document-generation.js" ]] || die "В комплекте отсутствует выпуск документов по объектам"
 [[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/database-admin.js" ]] || die "В комплекте отсутствует интерфейс администратора базы данных"
-[[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/bulk-data-import-v3.js" ]] || die "В комплекте отсутствует нормализация массового импорта"
+[[ -f "$BUNDLE_ROOT/payload/app/apps/api/ui/bulk-data-import.js" ]] || die "В комплекте отсутствует нормализация массового импорта"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/ci/release-gate.mjs" ]] || \
   die "В комплекте отсутствует обязательный core release-gate"
 [[ -f "$BUNDLE_ROOT/payload/app/scripts/ci/release-gate-crash-worker.mjs" ]] || \

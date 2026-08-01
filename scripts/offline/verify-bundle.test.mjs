@@ -385,7 +385,7 @@ async function fixture() {
     "payload/app/apps/api/ui/generic-template-entities.js",
     "payload/app/apps/api/ui/generic-document-generation.js",
     "payload/app/apps/api/ui/database-admin.js",
-    "payload/app/apps/api/ui/bulk-data-import-v3.js",
+    "payload/app/apps/api/ui/bulk-data-import.js",
     "payload/runtime/node/bin/node",
     "payload/deploy/systemd/docomator-backup.service.in",
     "payload/deploy/systemd/docomator-backup.timer.in",

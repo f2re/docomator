@@ -339,3 +339,221 @@
     grid-template-columns: 1fr;
   }
 }
+
+.bulk-import-source-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  grid-column: 1 / -1;
+}
+
+.bulk-import-source-tabs .is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+#bulkImportFileSource,
+#bulkImportPasteSource {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.8rem;
+  grid-column: 1 / -1;
+}
+
+#bulkImportPasteSource[hidden],
+#bulkImportFileSource[hidden] {
+  display: none;
+}
+
+#bulkImportPaste {
+  min-height: 13rem;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  tab-size: 4;
+}
+
+.bulk-import-paste-actions {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.bulk-import-mapping-row-enhanced {
+  grid-template-columns: minmax(13rem, 1.2fr) minmax(13rem, 1fr) minmax(12rem, 1fr) minmax(11rem, 0.8fr);
+  align-items: start;
+}
+
+.bulk-import-column-name > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.bulk-import-confidence {
+  display: inline-flex;
+  min-height: 1.45rem;
+  align-items: center;
+  padding: 0.15rem 0.48rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 750;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.bulk-import-confidence.is-ready,
+.bulk-import-notice.is-ready {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.bulk-import-confidence.is-medium {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.bulk-import-confidence.is-review,
+.bulk-import-notice.is-warning {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+}
+
+.bulk-import-enum {
+  display: grid;
+  gap: 0.6rem;
+  grid-column: 2 / -1;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--surface-2);
+}
+
+.bulk-import-enum[hidden] {
+  display: none;
+}
+
+.bulk-import-enum textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.bulk-import-notice {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 0.85rem;
+}
+
+.bulk-import-notice strong,
+.bulk-import-notice p {
+  margin: 0;
+}
+
+.bulk-import-notice p {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 1120px) {
+  .bulk-import-mapping-row-enhanced {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bulk-import-enum {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  #bulkImportFileSource,
+  #bulkImportPasteSource,
+  .bulk-import-mapping-row-enhanced {
+    grid-template-columns: 1fr;
+  }
+
+  .bulk-import-paste-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bulk-import-normalization {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.bulk-import-normalization h3,
+.bulk-import-normalization p {
+  margin: 0;
+}
+
+.bulk-import-normalization > div > p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.bulk-import-normalization .operator-check {
+  align-items: flex-start;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.bulk-import-normalization .operator-check strong,
+.bulk-import-normalization .operator-check small {
+  display: block;
+}
+
+.bulk-import-normalization .operator-check small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.bulk-import-case-option {
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--surface-subtle);
+}
+
+.bulk-import-case-option strong,
+.bulk-import-case-option small {
+  display: block;
+}
+
+.bulk-import-case-option small {
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.bulk-import-parser-warnings {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 25%, var(--border));
+  border-radius: 12px;
+  background: var(--warning-soft);
+}
+
+.bulk-import-parser-warnings p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 620px) {
+  .bulk-import-normalization {
+    padding: 13px;
+  }
+}

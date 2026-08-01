@@ -29,7 +29,6 @@ interface HelpDocumentRecord extends HelpDocumentSummary {
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const defaultUiDirectory = path.resolve(moduleDirectory, "../ui");
 const defaultDocsDirectory = path.resolve(moduleDirectory, "../../../docs");
-const scheduleV2FileName = "document-schedules-v2.js";
 const maximumHelpDocuments = 500;
 const maximumHelpDocumentBytes = 2 * 1024 * 1024;
 
@@ -51,7 +50,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "structure.css",
       "template-field.css",
       "template-repeat-assistant.css",
-      "template-ux-recovery.css",
+      "template-workflow.css",
       "template-trial.css",
       "template-multi-trial.css",
       "template-activation.css",
@@ -60,14 +59,10 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-email-delivery.css",
       "email-recipients.css",
       "document-schedules.css",
-      "document-schedules-v2.css",
       "operator-workflows.css",
-      "group-management-v2.css",
       "shared-document-results.css",
       "storage-maintenance.css",
       "bulk-data-import.css",
-      "bulk-data-import-v2.css",
-      "bulk-data-import-v3.css",
       "database-admin.css",
       "operation-center.css",
       "operations-readiness.css",
@@ -86,8 +81,6 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "app.js",
       "entity-workspace.js",
       "operator-workflows.js",
-      "operator-workflows-recovery.js",
-      "group-management-v2.js",
       "workspace-switcher.js",
       "help-center.js",
       "help-project-documents.js",
@@ -104,10 +97,9 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "generic-template-entities.js",
       "template-placement-guidance.js",
       "template-repeat-assistant.js",
-      "template-row-editor-v2.js",
+      "template-row-editor.js",
       "template-trial.js",
       "template-multi-trial.js",
-      "template-multi-trial-recovery.js",
       "template-activation.js",
       "document-generation.js",
       "generic-document-generation.js",
@@ -118,15 +110,11 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "document-email-delivery.js",
       "email-recipients.js",
       "document-schedules.js",
-      "document-schedule-network.js",
-      "document-schedules-v2.js",
       "shared-document-results.js",
       "shared-document-view-labels.js",
       "shared-corporate-mode.js",
       "storage-maintenance.js",
       "bulk-data-import.js",
-      "bulk-data-import-v2.js",
-      "bulk-data-import-v3.js",
       "operation-center.js",
       "operations-readiness.js",
       "template-row-flow.js"
@@ -141,28 +129,6 @@ const assets: Readonly<Record<string, UiAsset>> = {
   }
 };
 
-/**
- * The schedule v2 file intentionally replaces selected functions from the
- * legacy schedule module. Both files are concatenated into one ES module, so
- * raw duplicate function declarations would make the whole UI fail to parse.
- * Keep the extension in a nested lexical scope and explicitly publish only the
- * two replacement functions after it has initialized its closures.
- */
-function isolateUiExtension(fileName: string, body: Buffer): Buffer {
-  if (fileName !== scheduleV2FileName) return body;
-  return Buffer.concat([
-    Buffer.from("const __docomatorScheduleV2Bridge = {};\n{\n"),
-    body,
-    Buffer.from(
-      "\n__docomatorScheduleV2Bridge.render = renderScheduleWorkspace;\n" +
-        "__docomatorScheduleV2Bridge.load = loadScheduleWorkspace;\n" +
-        "}\n" +
-        "renderScheduleWorkspace = __docomatorScheduleV2Bridge.render;\n" +
-        "loadScheduleWorkspace = __docomatorScheduleV2Bridge.load;\n"
-    )
-  ]);
-}
-
 async function sendAsset(
   reply: FastifyReply,
   uiDirectory: string,
@@ -170,9 +136,7 @@ async function sendAsset(
 ): Promise<FastifyReply> {
   const fileNames = [asset.fileName, ...(asset.appendFileNames ?? [])];
   const bodies = await Promise.all(
-    fileNames.map(async (fileName) =>
-      isolateUiExtension(fileName, await fs.readFile(path.join(uiDirectory, fileName)))
-    )
+    fileNames.map((fileName) => fs.readFile(path.join(uiDirectory, fileName)))
   );
   const body =
     bodies.length === 1

@@ -24,7 +24,7 @@ body:
     id: version
     attributes:
       label: Версия/release и commit
-      placeholder: 0.1.0-alpha.0 / SHA
+      placeholder: 0.1.0-rc.1 / SHA
   - type: textarea
     id: environment
     attributes:

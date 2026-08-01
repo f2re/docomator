@@ -43,7 +43,7 @@ async function fixture(releaseSource) {
 
   const identity = {
     name: "docomator",
-    version: "0.1.0-alpha.0",
+    version: "0.1.0-rc.1",
     gitCommit: "a".repeat(40),
     releaseMetadataSha256: "b".repeat(64),
     source: releaseSource
@@ -67,7 +67,7 @@ async function fixture(releaseSource) {
 
   const report = {
     format: "docomator-pilot-readiness",
-    version: "0.1.0-alpha.0",
+    version: "0.1.0-rc.1",
     generatedAt: "2026-07-19T20:00:00.000Z",
     status: "passed",
     url,
