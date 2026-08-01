@@ -2,10 +2,19 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const APPROVED_WRITE_WORKFLOW = "delete-merged-agent-branch.yml";
+const APPROVED_WRITE_WORKFLOW = "delete-merged-work-branch.yml";
+const APPROVED_CHECKOUT_ACTION = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262";
 const WRITE_PERMISSION_LINE = /^\s*([a-z][a-z0-9-]*):\s*write\s*$/gimu;
 const INLINE_WRITE_PERMISSION = /\b([a-z][a-z0-9-]*)\s*:\s*write(?!-all)\b/gimu;
 const WRITE_ALL_PERMISSION = /^\s*permissions\s*:\s*write-all\s*$/imu;
+const ELIGIBLE_BRANCH_PREFIXES = [
+  "agent/",
+  "ci/",
+  "feature/",
+  "fix/",
+  "temp/",
+  "verify/"
+];
 
 const FORBIDDEN_TRIGGERS = [
   "issue_comment",
@@ -19,19 +28,35 @@ const APPROVED_REQUIRED_PATTERNS = [
   /^\s*contents:\s*write\s*$/mu,
   /github\.event\.pull_request\.merged\s*==\s*true/u,
   /github\.event\.pull_request\.head\.repo\.full_name\s*==\s*github\.repository/u,
-  /startsWith\(github\.event\.pull_request\.head\.ref,\s*['"]agent\//u,
+  /github\.event\.pull_request\.head\.ref\s*!=\s*github\.event\.repository\.default_branch/u,
   /^\s*HEAD_BRANCH:\s*\$\{\{\s*github\.event\.pull_request\.head\.ref\s*\}\}\s*$/mu,
   /^\s*DEFAULT_BRANCH:\s*\$\{\{\s*github\.event\.repository\.default_branch\s*\}\}\s*$/mu,
-  /\[\[\s*"\$HEAD_BRANCH"\s*==\s*agent\/\*\s*\]\]/u,
+  /\[\[\s*-n\s*"\$HEAD_BRANCH"\s*\]\]/u,
   /\[\[\s*"\$HEAD_BRANCH"\s*!=\s*"\$DEFAULT_BRANCH"\s*\]\]/u,
   /git\s+ls-remote\s+--exit-code\s+--heads\s+origin\s+"refs\/heads\/\$HEAD_BRANCH"/u,
   /git\s+push\s+origin\s+--delete\s+"\$HEAD_BRANCH"/u
 ];
 
+for (const prefix of ELIGIBLE_BRANCH_PREFIXES) {
+  APPROVED_REQUIRED_PATTERNS.push(
+    new RegExp(
+      `startsWith\\(github\\.event\\.pull_request\\.head\\.ref,\\s*['"]${prefix.replace("/", "\\/")}['"]\\)`,
+      "u"
+    )
+  );
+}
+
 const APPROVED_RUN_LINES = new Set([
   "set -Eeuo pipefail",
-  '[[ "$HEAD_BRANCH" == agent/* ]]',
+  '[[ -n "$HEAD_BRANCH" ]]',
   '[[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]',
+  'case "$HEAD_BRANCH" in',
+  "agent/*|ci/*|feature/*|fix/*|temp/*|verify/*)",
+  ";;",
+  "*)",
+  'echo "Branch $HEAD_BRANCH is not eligible for automatic deletion." >&2',
+  "exit 1",
+  "esac",
   'if git ls-remote --exit-code --heads origin "refs/heads/$HEAD_BRANCH" >/dev/null 2>&1; then',
   'git push origin --delete "$HEAD_BRANCH"',
   "else",
@@ -141,12 +166,9 @@ function inspectApprovedWriteWorkflow(source, permissions) {
   }
 
   const uses = workflowUses(source);
-  if (
-    uses.length !== 1 ||
-    uses[0] !== "actions/checkout@v4"
-  ) {
+  if (uses.length !== 1 || uses[0] !== APPROVED_CHECKOUT_ACTION) {
     findings.push(
-      `workflow удаления ветки может использовать только actions/checkout@v4; найдено: ${uses.join(", ") || "нет"}`
+      `workflow удаления ветки может использовать только ${APPROVED_CHECKOUT_ACTION}; найдено: ${uses.join(", ") || "нет"}`
     );
   }
 

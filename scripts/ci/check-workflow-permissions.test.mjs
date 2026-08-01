@@ -9,7 +9,9 @@ import {
   inspectWorkflow
 } from "./check-workflow-permissions.mjs";
 
-const safeWriteWorkflow = `name: Delete merged agent branch
+const checkoutAction = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262";
+
+const safeWriteWorkflow = `name: Delete merged work branch
 on:
   pull_request:
     types: [closed]
@@ -20,19 +22,35 @@ jobs:
     if: >-
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'agent/')
+      github.event.pull_request.head.ref != github.event.repository.default_branch &&
+      (
+        startsWith(github.event.pull_request.head.ref, 'agent/') ||
+        startsWith(github.event.pull_request.head.ref, 'ci/') ||
+        startsWith(github.event.pull_request.head.ref, 'feature/') ||
+        startsWith(github.event.pull_request.head.ref, 'fix/') ||
+        startsWith(github.event.pull_request.head.ref, 'temp/') ||
+        startsWith(github.event.pull_request.head.ref, 'verify/')
+      )
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Delete merged agent branch
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Delete merged work branch
         env:
           HEAD_BRANCH: \${{ github.event.pull_request.head.ref }}
           DEFAULT_BRANCH: \${{ github.event.repository.default_branch }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          [[ "$HEAD_BRANCH" == agent/* ]]
+          [[ -n "$HEAD_BRANCH" ]]
           [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]
+          case "$HEAD_BRANCH" in
+            agent/*|ci/*|feature/*|fix/*|temp/*|verify/*)
+              ;;
+            *)
+              echo "Branch $HEAD_BRANCH is not eligible for automatic deletion." >&2
+              exit 1
+              ;;
+          esac
           if git ls-remote --exit-code --heads origin "refs/heads/$HEAD_BRANCH" >/dev/null 2>&1; then
             git push origin --delete "$HEAD_BRANCH"
           else
@@ -50,9 +68,9 @@ test("разрешает обычный workflow только для чтени�
   );
 });
 
-test("разрешает только точный защищённый workflow удаления слитой agent-ветки", () => {
+test("разрешает точный защищённый workflow удаления слитой рабочей ветки", () => {
   assert.deepEqual(
-    inspectWorkflow("delete-merged-agent-branch.yml", safeWriteWorkflow),
+    inspectWorkflow("delete-merged-work-branch.yml", safeWriteWorkflow),
     []
   );
 });
@@ -105,13 +123,23 @@ test("запрещает блочный и скалярный запуск из 
 });
 
 test("не принимает защитные строки, оставленные только в комментариях", () => {
-  const unsafe = safeWriteWorkflow
-    .replace(
-      '          [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]',
-      '          # [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]'
-    );
+  const unsafe = safeWriteWorkflow.replace(
+    '          [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]',
+    '          # [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]'
+  );
   assert.match(
-    inspectWorkflow("delete-merged-agent-branch.yml", unsafe).join("\n"),
+    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
+    /утратил обязательное защитное условие/u
+  );
+});
+
+test("не принимает workflow без одного из разрешённых префиксов", () => {
+  const unsafe = safeWriteWorkflow.replace(
+    "        startsWith(github.event.pull_request.head.ref, 'verify/')",
+    "        false"
+  );
+  assert.match(
+    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
     /утратил обязательное защитное условие/u
   );
 });
@@ -122,19 +150,27 @@ test("запрещает дополнительную команду в разр
     "          set -Eeuo pipefail\n          git commit -am 'неразрешённое изменение'"
   );
   assert.match(
-    inspectWorkflow("delete-merged-agent-branch.yml", unsafe).join("\n"),
+    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
     /неразрешённую команду: git commit/u
+  );
+});
+
+test("запрещает плавающий тег checkout в write-workflow", () => {
+  const unsafe = safeWriteWorkflow.replace(checkoutAction, "actions/checkout@v4");
+  assert.match(
+    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
+    /может использовать только actions\/checkout@11d5960/u
   );
 });
 
 test("запрещает дополнительное стороннее action в разрешённом write-workflow", () => {
   const unsafe = safeWriteWorkflow.replace(
-    "      - uses: actions/checkout@v4",
-    "      - uses: actions/checkout@v4\n      - uses: example/untrusted-action@v1"
+    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n      - uses: example/untrusted-action@v1"
   );
   assert.match(
-    inspectWorkflow("delete-merged-agent-branch.yml", unsafe).join("\n"),
-    /может использовать только actions\/checkout@v4/u
+    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
+    /может использовать только actions\/checkout@11d5960/u
   );
 });
 
@@ -144,7 +180,7 @@ test("проверяет весь каталог workflow", async () => {
   await fs.mkdir(workflows, { recursive: true });
   await fs.writeFile(path.join(workflows, "ci.yml"), "permissions:\n  contents: read\n");
   await fs.writeFile(
-    path.join(workflows, "delete-merged-agent-branch.yml"),
+    path.join(workflows, "delete-merged-work-branch.yml"),
     safeWriteWorkflow
   );
 
