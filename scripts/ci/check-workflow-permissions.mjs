@@ -7,6 +7,8 @@ const APPROVED_CHECKOUT_ACTION = "actions/checkout@11d5960a326750d5838078e36cf38
 const WRITE_PERMISSION_LINE = /^\s*([a-z][a-z0-9-]*):\s*write\s*$/gimu;
 const INLINE_WRITE_PERMISSION = /\b([a-z][a-z0-9-]*)\s*:\s*write(?!-all)\b/gimu;
 const WRITE_ALL_PERMISSION = /^\s*permissions\s*:\s*write-all\s*$/imu;
+const PINNED_ACTION = /^[^@\s]+@[a-f0-9]{40}$/u;
+const PINNED_DOCKER_IMAGE = /^docker:\/\/[^@\s]+@sha256:[a-f0-9]{64}$/u;
 const ELIGIBLE_BRANCH_PREFIXES = [
   "agent/",
   "ci/",
@@ -124,6 +126,18 @@ function workflowUses(source) {
   );
 }
 
+function actionPinFindings(source) {
+  const findings = [];
+  for (const action of workflowUses(source)) {
+    if (action.startsWith("./")) continue;
+    if (PINNED_ACTION.test(action) || PINNED_DOCKER_IMAGE.test(action)) continue;
+    findings.push(
+      `внешний action не закреплён полным commit SHA или digest: ${action}`
+    );
+  }
+  return findings;
+}
+
 function workflowShells(source) {
   return [...source.matchAll(/^\s*shell:\s*([^\s]+)\s*$/gimu)].map(
     (match) => match[1]
@@ -210,6 +224,8 @@ export function inspectWorkflow(fileName, source) {
       findings.push(`запрещён триггер ${trigger}`);
     }
   }
+
+  findings.push(...actionPinFindings(effective));
 
   const writeAll = WRITE_ALL_PERMISSION.test(effective);
   if (writeAll) {
