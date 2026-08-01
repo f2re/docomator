@@ -68,6 +68,46 @@ test("разрешает обычный workflow только для чтени�
   );
 });
 
+test("разрешает закреплённые, локальные и digest-based actions", () => {
+  assert.deepEqual(
+    inspectWorkflow(
+      "ci.yml",
+      [
+        "name: CI",
+        "on: push",
+        "permissions:",
+        "  contents: read",
+        "jobs:",
+        "  verify:",
+        "    steps:",
+        `      - uses: ${checkoutAction}`,
+        "      - uses: ./.github/actions/local-check",
+        `      - uses: docker://alpine@sha256:${"a".repeat(64)}`
+      ].join("\n")
+    ),
+    []
+  );
+});
+
+test("запрещает плавающий внешний action в read-only workflow", () => {
+  assert.deepEqual(
+    inspectWorkflow(
+      "ci.yml",
+      [
+        "name: CI",
+        "on: push",
+        "permissions:",
+        "  contents: read",
+        "jobs:",
+        "  verify:",
+        "    steps:",
+        "      - uses: actions/checkout@v4"
+      ].join("\n")
+    ),
+    ["внешний action не закреплён полным commit SHA или digest: actions/checkout@v4"]
+  );
+});
+
 test("разрешает точный защищённый workflow удаления слитой рабочей ветки", () => {
   assert.deepEqual(
     inspectWorkflow("delete-merged-work-branch.yml", safeWriteWorkflow),
@@ -157,10 +197,9 @@ test("запрещает дополнительную команду в разр
 
 test("запрещает плавающий тег checkout в write-workflow", () => {
   const unsafe = safeWriteWorkflow.replace(checkoutAction, "actions/checkout@v4");
-  assert.match(
-    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
-    /может использовать только actions\/checkout@11d5960/u
-  );
+  const findings = inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n");
+  assert.match(findings, /внешний action не закреплён/u);
+  assert.match(findings, /может использовать только actions\/checkout@11d5960/u);
 });
 
 test("запрещает дополнительное стороннее action в разрешённом write-workflow", () => {
@@ -168,10 +207,9 @@ test("запрещает дополнительное стороннее action 
     "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
     "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n      - uses: example/untrusted-action@v1"
   );
-  assert.match(
-    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
-    /может использовать только actions\/checkout@11d5960/u
-  );
+  const findings = inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n");
+  assert.match(findings, /внешний action не закреплён/u);
+  assert.match(findings, /может использовать только actions\/checkout@11d5960/u);
 });
 
 test("проверяет весь каталог workflow", async () => {
