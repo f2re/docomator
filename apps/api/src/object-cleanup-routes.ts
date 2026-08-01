@@ -9,6 +9,7 @@ import {
   cleanupCutoffFromDays
 } from "@docomator/storage";
 
+import { registerObjectReconciliationRoutes } from "./object-reconciliation-routes.js";
 import { correlationId, mutationContextFromRequest } from "./request-context.js";
 
 interface UsageQuery {
@@ -46,6 +47,8 @@ export function registerObjectCleanupRoutes(
   app: FastifyInstance,
   registry: ObjectCleanupRegistry
 ): void {
+  registerObjectReconciliationRoutes(app, registry);
+
   app.get<{ Querystring: UsageQuery }>(
     "/api/v1/storage/usage",
     {
