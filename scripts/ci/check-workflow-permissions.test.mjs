@@ -9,6 +9,8 @@ import {
   inspectWorkflow
 } from "./check-workflow-permissions.mjs";
 
+const checkoutAction = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262";
+
 const safeWriteWorkflow = `name: Delete merged work branch
 on:
   pull_request:
@@ -31,7 +33,7 @@ jobs:
       )
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Delete merged work branch
         env:
           HEAD_BRANCH: \${{ github.event.pull_request.head.ref }}
@@ -153,14 +155,22 @@ test("запрещает дополнительную команду в разр
   );
 });
 
+test("запрещает плавающий тег checkout в write-workflow", () => {
+  const unsafe = safeWriteWorkflow.replace(checkoutAction, "actions/checkout@v4");
+  assert.match(
+    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
+    /может использовать только actions\/checkout@11d5960/u
+  );
+});
+
 test("запрещает дополнительное стороннее action в разрешённом write-workflow", () => {
   const unsafe = safeWriteWorkflow.replace(
-    "      - uses: actions/checkout@v4",
-    "      - uses: actions/checkout@v4\n      - uses: example/untrusted-action@v1"
+    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n      - uses: example/untrusted-action@v1"
   );
   assert.match(
     inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
-    /может использовать только actions\/checkout@v4/u
+    /может использовать только actions\/checkout@11d5960/u
   );
 });
 

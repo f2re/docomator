@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const APPROVED_WRITE_WORKFLOW = "delete-merged-work-branch.yml";
+const APPROVED_CHECKOUT_ACTION = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262";
 const WRITE_PERMISSION_LINE = /^\s*([a-z][a-z0-9-]*):\s*write\s*$/gimu;
 const INLINE_WRITE_PERMISSION = /\b([a-z][a-z0-9-]*)\s*:\s*write(?!-all)\b/gimu;
 const WRITE_ALL_PERMISSION = /^\s*permissions\s*:\s*write-all\s*$/imu;
@@ -165,9 +166,9 @@ function inspectApprovedWriteWorkflow(source, permissions) {
   }
 
   const uses = workflowUses(source);
-  if (uses.length !== 1 || uses[0] !== "actions/checkout@v4") {
+  if (uses.length !== 1 || uses[0] !== APPROVED_CHECKOUT_ACTION) {
     findings.push(
-      `workflow удаления ветки может использовать только actions/checkout@v4; найдено: ${uses.join(", ") || "нет"}`
+      `workflow удаления ветки может использовать только ${APPROVED_CHECKOUT_ACTION}; найдено: ${uses.join(", ") || "нет"}`
     );
   }
 
