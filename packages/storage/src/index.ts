@@ -32,6 +32,8 @@ export * from "./operator-assist-access.js";
 export * from "./operator-assist.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
+export * from "./publication-access.js";
+export * from "./publications.js";
 export * from "./repeat-contract.js";
 export * from "./runtime-status-access.js";
 export * from "./runtime-status.js";
