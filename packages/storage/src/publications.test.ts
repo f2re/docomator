@@ -161,14 +161,14 @@ test("publication registry links authors, classifies articles and counts unique 
       space.id,
       first.entityId,
       "vak",
-      { state: "confirmed", source: "Перечень ВАК" },
+      { state: "confirmed", source: "Локальный перечень ВАК" },
       context("corr-vak-1")
     );
     publications.setClassification(
       space.id,
       first.entityId,
       "rinc",
-      { state: "confirmed", source: "eLIBRARY" },
+      { state: "confirmed", source: "Локальная выгрузка eLIBRARY" },
       context("corr-rinc-1")
     );
     publications.setClassification(
@@ -191,7 +191,13 @@ test("publication registry links authors, classifies articles and counts unique 
           space.id,
           {
             ...configuration,
-            publicationEntityTypeKey: "alternate-publication"
+            publicationEntityTypeKey: "alternate-publication",
+            publicationYearPropertyKey: null,
+            publicationDatePropertyKey: null,
+            doiPropertyKey: null,
+            journalPropertyKey: null,
+            bibliographyPropertyKey: null,
+            statusPropertyKey: null
           },
           context("corr-change-linked-type")
         ),
