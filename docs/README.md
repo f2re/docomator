@@ -8,6 +8,7 @@
 | [USE_CASES.md](USE_CASES.md) | практические кейсы и выбор правильного рабочего потока |
 | [IMPORT_AND_WORD_ROSTERS.md](IMPORT_AND_WORD_ROSTERS.md) | массовый импорт людей, студентов, заполненных полей и повторяемые строки Word |
 | [ENTITY_MODEL_AND_IMPORT.md](ENTITY_MODEL_AND_IMPORT.md) | произвольные объекты, типы, параметры, однородные группы и гибкий CSV/XLSX-импорт |
+| [PUBLICATION_REPORTING.md](PUBLICATION_REPORTING.md) | авторство научных статей, ВАК/РИНЦ/МБД, годовые отчёты и передача выборки в шаблон |
 | [OFFLINE_DEPLOYMENT.md](OFFLINE_DEPLOYMENT.md) | подготовка, установка, обновление и откат автономного комплекта |
 | [DATABASE_ADMINISTRATION.md](DATABASE_ADMINISTRATION.md) | предметный просмотр таблиц, проверка целостности, журналируемый экспорт и безопасное добавление полей без произвольного SQL |
 | [OPERATIONS.md](OPERATIONS.md) | эксплуатация, резервные копии, готовность и диагностика |

@@ -8,6 +8,7 @@ const files = [
   "apps/api/ui/index.html",
   "apps/api/ui/app.js",
   "apps/api/ui/interface-hierarchy.js",
+  "apps/api/ui/publication-workspace.js",
   "apps/api/ui/document-intake.js",
   "apps/api/ui/document-structure.js",
   "apps/api/ui/template-placement-guidance.js",
@@ -71,7 +72,7 @@ for (const relativePath of files) {
 if (failures.length > 0) {
   process.stderr.write(
     "Найдены нежелательные англоязычные слова в пользовательских текстах:\n" +
-      failures.map((failure) => `- ${failure}`).join("\n") +
+      failures.map((failure) => `- ${failure}`).join("\n- ") +
       "\n"
   );
   process.exitCode = 1;
