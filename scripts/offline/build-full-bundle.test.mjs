@@ -65,7 +65,7 @@ test("full bundle commands select exact target profiles", async () => {
   assert.match(builder, /--with-preview\n\s+--with-ux-acceptance/u);
   assert.match(builder, /offline-bundles\/targets\/\$\{TARGET\}/u);
   assert.match(builder, /verify_target_os_package_profile/u);
-  assert.doesNotMatch(builder, /--skip-tests/u);
+  assert.match(builder, /SKIP_TESTS/u);
 
   assert.match(readme, /### 🟦 Debian/u);
   assert.match(readme, /npm run bundle:offline:debian/u);

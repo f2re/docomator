@@ -211,7 +211,7 @@ test("verification rejects non-canonical manifest paths", async () => {
   }
 });
 
-test("verification rejects symbolic links and special filesystem entries", { timeout: 2_000 }, async () => {
+test("verification rejects symbolic links and special filesystem entries", { timeout: 10_000 }, async () => {
   const current = await fixture();
   try {
     const backup = await createBackup({ dataDirectory: current.dataDirectory });

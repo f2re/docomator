@@ -18,6 +18,7 @@ NODE_SHA256=""
 UX_CHROMIUM_PACKAGE=""
 UX_CHROMIUM_BIN=""
 FORCE=0
+SKIP_TESTS=0
 
 usage() {
   cat <<'USAGE'
@@ -40,6 +41,7 @@ LibreOffice preview и offline UX acceptance. Команду запускают 
   --node-sha256 SHA256        ожидаемая сумма для --node-archive
   --ux-chromium-package ИМЯ   пакет Chromium; для Debian по умолчанию chromium
   --ux-chromium-bin ПУТЬ      executable Chromium; для Debian /usr/bin/chromium
+  --skip-tests                пропустить npm run check при сборке
   --force                     заменить существующий bundle той же версии
   -h, --help                  показать эту справку
 
@@ -109,6 +111,10 @@ while (($# > 0)); do
       need_value "$1" "$#"
       UX_CHROMIUM_BIN="$2"
       shift 2
+      ;;
+    --skip-tests)
+      SKIP_TESTS=1
+      shift
       ;;
     --force)
       FORCE=1
@@ -310,6 +316,9 @@ elif [[ -n "$NODE_ARCHIVE" ]]; then
 fi
 if ((FORCE == 1)); then
   prepare_arguments+=(--force)
+fi
+if ((SKIP_TESTS == 1)); then
+  prepare_arguments+=(--skip-tests)
 fi
 
 info "Собираем полный $TARGET bundle: preview=on, UX acceptance=on, LLM=on"
