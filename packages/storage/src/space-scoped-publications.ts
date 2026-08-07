@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 
 import { SqliteStore } from "./database.js";
+import type { JsonValue } from "./json.js";
 import {
   KnowledgeNotFoundError,
   KnowledgeRegistry,
   type AppendPropertyValueInput,
   type CreatePropertyDefinitionInput,
-  type JsonValue,
   type MutationContext,
   type PropertyDefinitionRecord,
   type PropertyValueRecord
@@ -15,15 +15,10 @@ import {
   PUBLICATION_DERIVED_PROPERTY_KEYS,
   PublicationConflictError,
   PublicationRegistry,
-  type PublicationAudienceSnapshotResult,
   type PublicationAuthorRecord,
   type PublicationClassificationRecord,
   type PublicationRegistryConfiguration,
   type PublicationRegistryConfigurationInput,
-  type PublicationReport,
-  type PublicationReportCriteriaInput,
-  type PublicationReportSnapshot,
-  type PublicationReportSnapshotSummary,
   type ReplacePublicationAuthorInput,
   type SetPublicationClassificationInput
 } from "./publications.js";
@@ -128,6 +123,13 @@ function deterministicScopedKey(baseKey: string, spaceId: string): string {
   return `${baseKey}.s${suffix}`;
 }
 
+function jsonObject(value: JsonValue | undefined): { [key: string]: JsonValue } {
+  if (value === undefined || value === null || Array.isArray(value) || typeof value !== "object") {
+    return {};
+  }
+  return value;
+}
+
 function resolveScopedPropertyKey(
   store: SqliteStore,
   spaceId: string,
@@ -137,7 +139,7 @@ function resolveScopedPropertyKey(
     (connection) =>
       connection
         .prepare(`
-          SELECT property_definition.key
+          SELECT 1 AS found
           FROM property_definitions property_definition
           JOIN space_property_definitions scoped
             ON scoped.property_definition_id = property_definition.id
@@ -165,9 +167,10 @@ function assertCompatibleDefinition(
       `Поле «${specification.label}» связано с другим типом объектов.`
     );
   }
+  const storedValidation = jsonObject(record.validation);
   if (
     specification.validation.systemManaged === true &&
-    record.validation.systemManaged !== true
+    storedValidation.systemManaged !== true
   ) {
     throw new PublicationConflictError(
       `Системное поле «${specification.label}» занято пользовательским определением.`
@@ -248,19 +251,22 @@ class PublicationDerivedKnowledgeRegistry extends KnowledgeRegistry {
         `Системное поле «${input.label}» не содержит тип объектов.`
       );
     }
+    const specification: PublicationPropertySpecification = {
+      key: input.key,
+      label: input.label,
+      valueType: input.valueType,
+      description: input.description ?? "",
+      appliesTo,
+      validation: jsonObject(input.validation),
+      ...(input.sensitivity === undefined
+        ? {}
+        : { sensitivity: input.sensitivity })
+    };
     return ensureScopedProperty(
       this.backingStore,
       this.spaces,
       this.spaceId,
-      {
-        key: input.key,
-        label: input.label,
-        valueType: input.valueType,
-        description: input.description ?? "",
-        appliesTo,
-        validation: input.validation ?? {},
-        sensitivity: input.sensitivity
-      },
+      specification,
       contextInput
     );
   }
@@ -289,7 +295,7 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     this.globalKnowledge = new KnowledgeRegistry(backingStore);
   }
 
-  private spaceId(spaceIdentity: string): string {
+  private resolvedSpaceId(spaceIdentity: string): string {
     return this.spaces.getSpace(spaceIdentity).id;
   }
 
@@ -304,7 +310,7 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     });
   }
 
-  private ensureEntityType(
+  private ensureGlobalEntityType(
     key: string,
     label: string,
     description: string,
@@ -327,7 +333,7 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     publicationEntityTypeKey: string,
     context: MutationContext
   ): void {
-    const spaceId = this.spaceId(spaceIdentity);
+    const spaceId = this.resolvedSpaceId(spaceIdentity);
     for (const specification of DERIVED_PROPERTY_SPECS) {
       ensureScopedProperty(
         this.backingStore,
@@ -342,11 +348,35 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     }
   }
 
+  private assertConfiguredPropertiesBelongToSpace(
+    spaceIdentity: string,
+    input: PublicationRegistryConfigurationInput
+  ): void {
+    const knowledge = new SpaceScopedKnowledgeRegistry(
+      this.backingStore,
+      spaceIdentity,
+      { spaces: this.spaces }
+    );
+    for (const key of [
+      input.publicationYearPropertyKey,
+      input.publicationDatePropertyKey,
+      input.teacherDepartmentPropertyKey,
+      input.doiPropertyKey,
+      input.journalPropertyKey,
+      input.bibliographyPropertyKey,
+      input.statusPropertyKey
+    ]) {
+      if (key !== undefined && key !== null) {
+        knowledge.getPropertyDefinition(key);
+      }
+    }
+  }
+
   private ensureDerivedForConfiguredSpace(
     spaceIdentity: string,
     context: MutationContext
   ): void {
-    const configuration = this.delegate(spaceIdentity).getConfiguration(spaceIdentity);
+    const configuration = super.getConfiguration(spaceIdentity);
     if (configuration === null) return;
     this.ensureDerivedProperties(
       spaceIdentity,
@@ -355,17 +385,12 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     );
   }
 
-  override getConfiguration(
-    spaceIdentity: string
-  ): PublicationRegistryConfiguration | null {
-    return this.delegate(spaceIdentity).getConfiguration(spaceIdentity);
-  }
-
   override configure(
     spaceIdentity: string,
     input: PublicationRegistryConfigurationInput,
     contextInput: MutationContext
   ): PublicationRegistryConfiguration {
+    this.assertConfiguredPropertiesBelongToSpace(spaceIdentity, input);
     this.ensureDerivedProperties(
       spaceIdentity,
       input.publicationEntityTypeKey,
@@ -382,23 +407,23 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     spaceIdentity: string,
     contextInput: MutationContext
   ): PublicationRegistryConfiguration {
-    const existing = this.getConfiguration(spaceIdentity);
+    const existing = super.getConfiguration(spaceIdentity);
     if (existing !== null) return existing;
 
-    this.ensureEntityType(
+    this.ensureGlobalEntityType(
       "scientific-publication",
       "Научная статья",
       "Публикация с авторами, изданием, идентификаторами и классификациями.",
       contextInput
     );
-    this.ensureEntityType(
+    this.ensureGlobalEntityType(
       "person",
       "Человек",
       "Сотрудник, преподаватель или другой человек.",
       contextInput
     );
 
-    const spaceId = this.spaceId(spaceIdentity);
+    const spaceId = this.resolvedSpaceId(spaceIdentity);
     const publicationProperties: readonly PublicationPropertySpecification[] = [
       {
         key: "publication.year",
@@ -518,16 +543,6 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     );
   }
 
-  override listAuthors(
-    spaceIdentity: string,
-    publicationEntityIdValue: string
-  ): PublicationAuthorRecord[] {
-    return this.delegate(spaceIdentity).listAuthors(
-      spaceIdentity,
-      publicationEntityIdValue
-    );
-  }
-
   override replaceAuthors(
     spaceIdentity: string,
     publicationEntityIdValue: string,
@@ -540,16 +555,6 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
       publicationEntityIdValue,
       values,
       contextInput
-    );
-  }
-
-  override listClassifications(
-    spaceIdentity: string,
-    publicationEntityIdValue: string
-  ): PublicationClassificationRecord[] {
-    return this.delegate(spaceIdentity).listClassifications(
-      spaceIdentity,
-      publicationEntityIdValue
     );
   }
 
@@ -581,69 +586,6 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
       spaceIdentity,
       publicationEntityIdValue,
       codeValue,
-      contextInput
-    );
-  }
-
-  override buildReport(
-    spaceIdentity: string,
-    input: PublicationReportCriteriaInput = {}
-  ): PublicationReport {
-    return this.delegate(spaceIdentity).buildReport(spaceIdentity, input);
-  }
-
-  override createReportSnapshot(
-    spaceIdentity: string,
-    input: PublicationReportCriteriaInput,
-    contextInput: MutationContext
-  ): PublicationReportSnapshot {
-    return this.delegate(spaceIdentity).createReportSnapshot(
-      spaceIdentity,
-      input,
-      contextInput
-    );
-  }
-
-  override listReportSnapshots(
-    spaceIdentity: string,
-    limitValue = 50
-  ): PublicationReportSnapshotSummary[] {
-    return this.delegate(spaceIdentity).listReportSnapshots(
-      spaceIdentity,
-      limitValue
-    );
-  }
-
-  override getReportSnapshot(
-    spaceIdentity: string,
-    snapshotIdValue: string
-  ): PublicationReportSnapshot {
-    return this.delegate(spaceIdentity).getReportSnapshot(
-      spaceIdentity,
-      snapshotIdValue
-    );
-  }
-
-  override createAudienceSnapshot(
-    spaceIdentity: string,
-    input: PublicationReportCriteriaInput,
-    contextInput: MutationContext
-  ): PublicationAudienceSnapshotResult {
-    return this.delegate(spaceIdentity).createAudienceSnapshot(
-      spaceIdentity,
-      input,
-      contextInput
-    );
-  }
-
-  override createAudienceSnapshotFromReportSnapshot(
-    spaceIdentity: string,
-    snapshotIdValue: string,
-    contextInput: MutationContext
-  ): PublicationAudienceSnapshotResult {
-    return this.delegate(spaceIdentity).createAudienceSnapshotFromReportSnapshot(
-      spaceIdentity,
-      snapshotIdValue,
       contextInput
     );
   }
