@@ -56,6 +56,8 @@ async function fixture(t: TestContext) {
     space.id,
     context("corr-bootstrap")
   );
+  const publicationYearPropertyKey = configuration.publicationYearPropertyKey;
+  assert.ok(publicationYearPropertyKey);
   const knowledge = new SpaceScopedKnowledgeRegistry(store, space.id, { spaces });
   const teacher = spaces.createEntity(
     space.id,
@@ -73,7 +75,7 @@ async function fixture(t: TestContext) {
   knowledge.appendPropertyValue(
     {
       entityId: publication.entityId,
-      propertyKey: configuration.publicationYearPropertyKey,
+      propertyKey: publicationYearPropertyKey,
       value: 2026,
       sourceType: "test"
     },
