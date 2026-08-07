@@ -165,6 +165,8 @@ export function registerKnowledgeRoutes(
   app: FastifyInstance,
   registry: KnowledgeRegistry
 ): void {
+  const defaultSpaceRegistry = propertyRegistry(registry, DEFAULT_SPACE_ID);
+
   app.post<{ Body: CreateEntityTypeBody }>(
     "/api/v1/knowledge/entity-types",
     {
@@ -359,6 +361,8 @@ export function registerKnowledgeRoutes(
       )
   );
 
+  // Legacy entity API is deterministic default-space compatibility only.
+  // Space-aware UI and integrations must use /api/v1/spaces/:spaceId/entities.
   app.post<{ Body: CreateEntityBody }>(
     "/api/v1/knowledge/entities",
     {
@@ -376,7 +380,7 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request, reply) => {
-      const created = registry.createEntity(
+      const created = defaultSpaceRegistry.createEntity(
         request.body,
         mutationContextFromRequest(request)
       );
@@ -401,7 +405,7 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request) =>
-      responseEnvelope(request, registry.listEntities(request.query))
+      responseEnvelope(request, defaultSpaceRegistry.listEntities(request.query))
   );
 
   app.get<{ Params: EntityParams }>(
@@ -418,7 +422,7 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request) =>
-      responseEnvelope(request, registry.getEntity(request.params.entityId))
+      responseEnvelope(request, defaultSpaceRegistry.getEntity(request.params.entityId))
   );
 
   app.put<{ Params: SpaceEntityPropertyParams; Body: AppendPropertyValueBody }>(
@@ -484,8 +488,6 @@ export function registerKnowledgeRoutes(
       )
   );
 
-  // Legacy compatibility is intentionally limited to the deterministic default
-  // space. New UI and integrations must use the space-qualified routes above.
   app.put<{ Params: EntityPropertyParams; Body: AppendPropertyValueBody }>(
     "/api/v1/knowledge/entities/:entityId/properties/:propertyKey",
     {
@@ -502,10 +504,7 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request, reply) => {
-      const created = propertyRegistry(
-        registry,
-        DEFAULT_SPACE_ID
-      ).appendPropertyValue(
+      const created = defaultSpaceRegistry.appendPropertyValue(
         {
           entityId: request.params.entityId,
           propertyKey: request.params.propertyKey,
@@ -535,10 +534,10 @@ export function registerKnowledgeRoutes(
     async (request) =>
       responseEnvelope(
         request,
-        propertyRegistry(
-          registry,
-          DEFAULT_SPACE_ID
-        ).listPropertyValueHistory(request.params.entityId, request.query)
+        defaultSpaceRegistry.listPropertyValueHistory(
+          request.params.entityId,
+          request.query
+        )
       )
   );
 }
