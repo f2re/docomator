@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   PROPERTY_UI_GROUPS,
   PROPERTY_VALUE_TYPES,
+  SpaceIsolatedEmployeeRegistry,
   type EmployeeRegistry,
   type EmployeeStatus
 } from "@docomator/storage";
@@ -117,6 +118,8 @@ export function registerEmployeeRoutes(
   app: FastifyInstance,
   registry: EmployeeRegistry
 ): void {
+  const scopedRegistry = SpaceIsolatedEmployeeRegistry.fromRegistry(registry);
+
   app.get<{ Params: SpaceParams; Querystring: ListEmployeesQuery }>(
     "/api/v1/spaces/:spaceId/employees",
     {
@@ -139,7 +142,7 @@ export function registerEmployeeRoutes(
     async (request) =>
       responseEnvelope(
         request,
-        registry.list(request.params.spaceId, request.query)
+        scopedRegistry.list(request.params.spaceId, request.query)
       )
   );
 
@@ -170,7 +173,7 @@ export function registerEmployeeRoutes(
       }
     },
     async (request, reply) => {
-      const result = registry.create(
+      const result = scopedRegistry.create(
         request.params.spaceId,
         request.body,
         mutationContextFromRequest(request)
@@ -194,7 +197,7 @@ export function registerEmployeeRoutes(
     async (request) =>
       responseEnvelope(
         request,
-        registry.get(request.params.spaceId, request.params.employeeId)
+        scopedRegistry.get(request.params.spaceId, request.params.employeeId)
       )
   );
 
@@ -227,7 +230,7 @@ export function registerEmployeeRoutes(
     async (request) =>
       responseEnvelope(
         request,
-        registry.update(
+        scopedRegistry.update(
           request.params.spaceId,
           request.params.employeeId,
           request.body,

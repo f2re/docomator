@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
+  DEFAULT_SPACE_ID,
   PROPERTY_UI_GROUPS,
   PROPERTY_VALUE_TYPES,
+  SpaceScopedKnowledgeRegistry,
   type EntityStatus,
   type JsonValue,
   type KnowledgeRegistry,
@@ -14,6 +16,10 @@ import { correlationId, mutationContextFromRequest } from "./request-context.js"
 
 interface PaginationQuery {
   limit?: number;
+}
+
+interface PropertyDefinitionQuery extends PaginationQuery {
+  spaceId?: string;
 }
 
 interface EntityListQuery extends PaginationQuery {
@@ -88,8 +94,22 @@ const paginationProperties = {
   limit: { type: "integer", minimum: 1, maximum: 500 }
 } as const;
 
+const propertyScopeProperties = {
+  spaceId: { type: "string", minLength: 1, maxLength: 160 }
+} as const;
+
 function responseEnvelope<T>(request: FastifyRequest, data: T) {
   return { data, correlationId: correlationId(request) };
+}
+
+function propertyRegistry(
+  registry: KnowledgeRegistry,
+  spaceId: string | undefined
+): SpaceScopedKnowledgeRegistry {
+  return SpaceScopedKnowledgeRegistry.fromRegistry(
+    registry,
+    spaceId ?? DEFAULT_SPACE_ID
+  );
 }
 
 export function registerKnowledgeRoutes(
@@ -153,10 +173,15 @@ export function registerKnowledgeRoutes(
       responseEnvelope(request, registry.getEntityType(request.params.key))
   );
 
-  app.post<{ Body: CreatePropertyDefinitionBody }>(
+  app.post<{ Querystring: PropertyDefinitionQuery; Body: CreatePropertyDefinitionBody }>(
     "/api/v1/knowledge/property-definitions",
     {
       schema: {
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: propertyScopeProperties
+        },
         body: {
           type: "object",
           additionalProperties: false,
@@ -190,7 +215,10 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request, reply) => {
-      const created = registry.createPropertyDefinition(
+      const created = propertyRegistry(
+        registry,
+        request.query.spaceId
+      ).createPropertyDefinition(
         request.body,
         mutationContextFromRequest(request)
       );
@@ -199,25 +227,30 @@ export function registerKnowledgeRoutes(
     }
   );
 
-  app.get<{ Querystring: PaginationQuery }>(
+  app.get<{ Querystring: PropertyDefinitionQuery }>(
     "/api/v1/knowledge/property-definitions",
     {
       schema: {
         querystring: {
           type: "object",
           additionalProperties: false,
-          properties: paginationProperties
+          properties: {
+            ...paginationProperties,
+            ...propertyScopeProperties
+          }
         }
       }
     },
     async (request) =>
       responseEnvelope(
         request,
-        registry.listPropertyDefinitions(request.query.limit)
+        propertyRegistry(registry, request.query.spaceId).listPropertyDefinitions(
+          request.query.limit
+        )
       )
   );
 
-  app.get<{ Params: KeyParams }>(
+  app.get<{ Params: KeyParams; Querystring: PropertyDefinitionQuery }>(
     "/api/v1/knowledge/property-definitions/:key",
     {
       schema: {
@@ -225,17 +258,28 @@ export function registerKnowledgeRoutes(
           type: "object",
           required: ["key"],
           properties: { key: stableKeySchema }
+        },
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: propertyScopeProperties
         }
       }
     },
     async (request) =>
       responseEnvelope(
         request,
-        registry.getPropertyDefinition(request.params.key)
+        propertyRegistry(registry, request.query.spaceId).getPropertyDefinition(
+          request.params.key
+        )
       )
   );
 
-  app.put<{ Params: KeyParams; Body: UpdatePropertyUiGroupBody }>(
+  app.put<{
+    Params: KeyParams;
+    Querystring: PropertyDefinitionQuery;
+    Body: UpdatePropertyUiGroupBody;
+  }>(
     "/api/v1/knowledge/property-definitions/:key/group",
     {
       schema: {
@@ -244,6 +288,11 @@ export function registerKnowledgeRoutes(
           additionalProperties: false,
           required: ["key"],
           properties: { key: stableKeySchema }
+        },
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: propertyScopeProperties
         },
         body: {
           type: "object",
@@ -258,7 +307,7 @@ export function registerKnowledgeRoutes(
     async (request) =>
       responseEnvelope(
         request,
-        registry.updatePropertyDefinitionUiGroup(
+        propertyRegistry(registry, request.query.spaceId).updatePropertyDefinitionUiGroup(
           request.params.key,
           request.body.uiGroup,
           mutationContextFromRequest(request)

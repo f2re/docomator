@@ -63,6 +63,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "shared-document-results.css",
       "storage-maintenance.css",
       "bulk-data-import.css",
+      "bulk-data-import-ux.css",
       "database-admin.css",
       "operation-center.css",
       "operations-readiness.css",
@@ -79,6 +80,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     appendFileNames: [
       "searchable-select.js",
       "app.js",
+      "space-isolation-ui.js",
       "entity-workspace.js",
       "operator-workflows.js",
       "workspace-switcher.js",
@@ -115,6 +117,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "shared-corporate-mode.js",
       "storage-maintenance.js",
       "bulk-data-import.js",
+      "space-isolation-ui.js",
       "operation-center.js",
       "operations-readiness.js",
       "template-row-flow.js"

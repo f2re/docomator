@@ -1,0 +1,132 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { KnowledgeNotFoundError, KnowledgeRegistry } from "./knowledge.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
+import { SpaceRegistry } from "./spaces.js";
+import { createMigratedTestStore } from "./test-helpers.js";
+
+const NOW = "2026-08-07T07:00:00.000Z";
+
+function context(correlationId: string) {
+  return {
+    correlationId,
+    actorType: "test",
+    actorId: "operator-1",
+    now: NOW
+  };
+}
+
+test("property definitions are isolated by space", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const first = spaces.createSpace(
+      { key: "space-fields-a", name: "Пространство A" },
+      context("corr-space-a")
+    );
+    const second = spaces.createSpace(
+      { key: "space-fields-b", name: "Пространство B" },
+      context("corr-space-b")
+    );
+    const firstKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      first.id,
+      { spaces }
+    );
+    const secondKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      second.id,
+      { spaces }
+    );
+
+    const firstField = firstKnowledge.createPropertyDefinition(
+      {
+        label: "Должность",
+        valueType: "string",
+        sensitivity: "personal",
+        appliesTo: ["person"]
+      },
+      context("corr-field-a")
+    );
+    const secondField = secondKnowledge.createPropertyDefinition(
+      {
+        label: "Должность",
+        valueType: "string",
+        sensitivity: "personal",
+        appliesTo: ["person"]
+      },
+      context("corr-field-b")
+    );
+
+    assert.notEqual(firstField.key, secondField.key);
+    assert.deepEqual(
+      firstKnowledge.listPropertyDefinitions(500).map((item) => item.key),
+      [firstField.key]
+    );
+    assert.deepEqual(
+      secondKnowledge.listPropertyDefinitions(500).map((item) => item.key),
+      [secondField.key]
+    );
+    assert.throws(
+      () => secondKnowledge.getPropertyDefinition(firstField.key),
+      KnowledgeNotFoundError
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("database rejects a property from another space even through global registry", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const first = spaces.createSpace(
+      { key: "space-guard-a", name: "Пространство A" },
+      context("corr-space-a")
+    );
+    const second = spaces.createSpace(
+      { key: "space-guard-b", name: "Пространство B" },
+      context("corr-space-b")
+    );
+    const firstKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      first.id,
+      { spaces }
+    );
+    const field = firstKnowledge.createPropertyDefinition(
+      {
+        label: "Внутренний номер",
+        valueType: "string",
+        sensitivity: "internal",
+        appliesTo: ["person"]
+      },
+      context("corr-field")
+    );
+    const entity = spaces.createEntity(
+      second.id,
+      {
+        entityTypeKey: "person",
+        displayName: "Иванов Иван Иванович"
+      },
+      context("corr-entity")
+    );
+    const globalKnowledge = new KnowledgeRegistry(fixture.store);
+
+    assert.throws(
+      () =>
+        globalKnowledge.appendPropertyValue(
+          {
+            entityId: entity.entityId,
+            propertyKey: field.key,
+            value: "42",
+            sourceType: "test"
+          },
+          context("corr-value")
+        ),
+      /property definition is outside entity space/u
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
