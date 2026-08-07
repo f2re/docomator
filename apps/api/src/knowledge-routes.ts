@@ -43,6 +43,14 @@ interface EntityPropertyParams extends EntityParams {
   propertyKey: string;
 }
 
+interface SpaceEntityParams extends EntityParams {
+  spaceId: string;
+}
+
+interface SpaceEntityPropertyParams extends SpaceEntityParams {
+  propertyKey: string;
+}
+
 interface CreateEntityTypeBody {
   key?: string;
   label: string;
@@ -90,12 +98,42 @@ const stableKeySchema = {
   pattern: "^[A-Za-z][A-Za-z0-9]*(?:[._-][A-Za-z0-9]+)*$"
 } as const;
 
+const identifierSchema = {
+  type: "string",
+  minLength: 1,
+  maxLength: 160
+} as const;
+
 const paginationProperties = {
   limit: { type: "integer", minimum: 1, maximum: 500 }
 } as const;
 
 const propertyScopeProperties = {
-  spaceId: { type: "string", minLength: 1, maxLength: 160 }
+  spaceId: identifierSchema
+} as const;
+
+const appendPropertyValueBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["value", "sourceType"],
+  properties: {
+    value: {},
+    sourceType: { type: "string", minLength: 1, maxLength: 80 },
+    sourceId: { type: "string", maxLength: 160 },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+    confirmedBy: { type: "string", maxLength: 160 },
+    validFrom: { type: "string", minLength: 1, maxLength: 64 },
+    validTo: { type: "string", minLength: 1, maxLength: 64 }
+  }
+} as const;
+
+const propertyHistoryQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    ...paginationProperties,
+    propertyKey: stableKeySchema
+  }
 } as const;
 
 function responseEnvelope<T>(request: FastifyRequest, data: T) {
@@ -368,7 +406,7 @@ export function registerKnowledgeRoutes(
           type: "object",
           required: ["entityId"],
           properties: {
-            entityId: { type: "string", minLength: 1, maxLength: 160 }
+            entityId: identifierSchema
           }
         }
       }
@@ -377,6 +415,71 @@ export function registerKnowledgeRoutes(
       responseEnvelope(request, registry.getEntity(request.params.entityId))
   );
 
+  app.put<{ Params: SpaceEntityPropertyParams; Body: AppendPropertyValueBody }>(
+    "/api/v1/spaces/:spaceId/entities/:entityId/properties/:propertyKey",
+    {
+      schema: {
+        params: {
+          type: "object",
+          additionalProperties: false,
+          required: ["spaceId", "entityId", "propertyKey"],
+          properties: {
+            spaceId: identifierSchema,
+            entityId: identifierSchema,
+            propertyKey: stableKeySchema
+          }
+        },
+        body: appendPropertyValueBodySchema
+      }
+    },
+    async (request, reply) => {
+      const created = propertyRegistry(
+        registry,
+        request.params.spaceId
+      ).appendPropertyValue(
+        {
+          entityId: request.params.entityId,
+          propertyKey: request.params.propertyKey,
+          ...request.body
+        },
+        mutationContextFromRequest(request)
+      );
+      reply.code(201);
+      return responseEnvelope(request, created);
+    }
+  );
+
+  app.get<{
+    Params: SpaceEntityParams;
+    Querystring: PropertyValueHistoryQuery;
+  }>(
+    "/api/v1/spaces/:spaceId/entities/:entityId/property-values",
+    {
+      schema: {
+        params: {
+          type: "object",
+          additionalProperties: false,
+          required: ["spaceId", "entityId"],
+          properties: {
+            spaceId: identifierSchema,
+            entityId: identifierSchema
+          }
+        },
+        querystring: propertyHistoryQuerySchema
+      }
+    },
+    async (request) =>
+      responseEnvelope(
+        request,
+        propertyRegistry(
+          registry,
+          request.params.spaceId
+        ).listPropertyValueHistory(request.params.entityId, request.query)
+      )
+  );
+
+  // Legacy compatibility is intentionally limited to the deterministic default
+  // space. New UI and integrations must use the space-qualified routes above.
   app.put<{ Params: EntityPropertyParams; Body: AppendPropertyValueBody }>(
     "/api/v1/knowledge/entities/:entityId/properties/:propertyKey",
     {
@@ -385,28 +488,18 @@ export function registerKnowledgeRoutes(
           type: "object",
           required: ["entityId", "propertyKey"],
           properties: {
-            entityId: { type: "string", minLength: 1, maxLength: 160 },
+            entityId: identifierSchema,
             propertyKey: stableKeySchema
           }
         },
-        body: {
-          type: "object",
-          additionalProperties: false,
-          required: ["value", "sourceType"],
-          properties: {
-            value: {},
-            sourceType: { type: "string", minLength: 1, maxLength: 80 },
-            sourceId: { type: "string", maxLength: 160 },
-            confidence: { type: "number", minimum: 0, maximum: 1 },
-            confirmedBy: { type: "string", maxLength: 160 },
-            validFrom: { type: "string", minLength: 1, maxLength: 64 },
-            validTo: { type: "string", minLength: 1, maxLength: 64 }
-          }
-        }
+        body: appendPropertyValueBodySchema
       }
     },
     async (request, reply) => {
-      const created = registry.appendPropertyValue(
+      const created = propertyRegistry(
+        registry,
+        DEFAULT_SPACE_ID
+      ).appendPropertyValue(
         {
           entityId: request.params.entityId,
           propertyKey: request.params.propertyKey,
@@ -427,23 +520,19 @@ export function registerKnowledgeRoutes(
           type: "object",
           required: ["entityId"],
           properties: {
-            entityId: { type: "string", minLength: 1, maxLength: 160 }
+            entityId: identifierSchema
           }
         },
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            ...paginationProperties,
-            propertyKey: stableKeySchema
-          }
-        }
+        querystring: propertyHistoryQuerySchema
       }
     },
     async (request) =>
       responseEnvelope(
         request,
-        registry.listPropertyValueHistory(request.params.entityId, request.query)
+        propertyRegistry(
+          registry,
+          DEFAULT_SPACE_ID
+        ).listPropertyValueHistory(request.params.entityId, request.query)
       )
   );
 }
