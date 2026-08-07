@@ -287,7 +287,11 @@ test("импорт произвольных объектов принимает 
   );
   await expect(fixButton).toHaveText("Проверить поле");
   await fixButton.click();
-  await expect(capacity.locator("[data-entity-import-mode]")).toBeFocused();
+  const visibleModeControl = capacity.locator(
+    "[data-searchable-select-root] .searchable-select-trigger"
+  );
+  await expect(visibleModeControl).toBeVisible();
+  await expect(visibleModeControl).toBeFocused();
 
   const geometry = await page.locator("#entityImportDialog").evaluate((dialog) => ({
     clientWidth: dialog.clientWidth,
