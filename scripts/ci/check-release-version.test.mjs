@@ -23,15 +23,42 @@ async function fixture(version = "0.1.0-rc.1") {
   for (const relativePath of packages) {
     const target = path.join(root, relativePath);
     await fs.mkdir(path.dirname(target), { recursive: true });
-    await fs.writeFile(target, JSON.stringify({ version, dependencies: { "@docomator/config": version } }));
+    const packageData = {
+      version,
+      dependencies: { "@docomator/config": version }
+    };
+    if (relativePath === "package.json") {
+      packageData.scripts = {
+        "version:sync": "node scripts/ci/sync-release-version.mjs"
+      };
+    }
+    await fs.writeFile(target, JSON.stringify(packageData));
   }
-  await fs.writeFile(path.join(root, "package-lock.json"), JSON.stringify({ version, packages: { "": { version, dependencies: { "@docomator/config": version } } } }));
+  await fs.writeFile(path.join(root, "package-lock.json"), JSON.stringify({
+    version,
+    packages: {
+      "": {
+        version,
+        dependencies: { "@docomator/config": version }
+      }
+    }
+  }));
   await fs.mkdir(path.join(root, "config"), { recursive: true });
-  await fs.writeFile(path.join(root, "config/docomator.env.example"), `DOCOMATOR_VERSION=${version}\n`);
+  await fs.writeFile(
+    path.join(root, "config/docomator.env.example"),
+    `DOCOMATOR_VERSION=${version}\n`
+  );
   await fs.mkdir(path.join(root, "packages/config/src"), { recursive: true });
-  await fs.writeFile(path.join(root, "packages/config/src/index.ts"), `const version = env.DOCOMATOR_VERSION ?? \"${version}\";\n`);
+  await fs.writeFile(
+    path.join(root, "packages/config/src/index.ts"),
+    `const version = env.DOCOMATOR_VERSION ?? \"${version}\";\n`
+  );
   await fs.mkdir(path.join(root, "docs"), { recursive: true });
   await fs.writeFile(path.join(root, "docs/RELEASE_NOTES.md"), `# ${version}\n`);
+  await fs.writeFile(
+    path.join(root, "docs/VERSIONING.md"),
+    "# Versioning\n\n`VERSION` is the source. Run `npm run version:sync`.\n"
+  );
   return root;
 }
 
@@ -48,5 +75,9 @@ test("находит дрейф внутренней зависимости", as
   const data = JSON.parse(await fs.readFile(target, "utf8"));
   data.dependencies["@docomator/config"] = "0.1.0-alpha.0";
   await fs.writeFile(target, JSON.stringify(data));
-  assert.ok((await collectReleaseVersionFindings(root)).some((finding) => finding.includes("@docomator/config")));
+  assert.ok(
+    (await collectReleaseVersionFindings(root)).some((finding) =>
+      finding.includes("@docomator/config")
+    )
+  );
 });
