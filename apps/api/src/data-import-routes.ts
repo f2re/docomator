@@ -168,6 +168,7 @@ function registryInput(body: ExecuteImportBody) {
 
 function validateLegacyIdentity(
   spaces: SpaceRegistry,
+  spaceIdentity: string,
   body: ExecuteImportBody
 ): void {
   validateIdentityMapping(body);
@@ -175,6 +176,7 @@ function validateLegacyIdentity(
   importOperation(() =>
     validateExistingImportIdentityProperty({
       spaces,
+      spaceIdentity,
       entityTypeKey: body.entityTypeKey ?? "person",
       identityPropertyKey: body.identityPropertyKey ?? "",
       mappings: body.mappings
@@ -387,7 +389,7 @@ export function registerDataImportRoutes(
     },
     async (request, reply) => {
       validatePreviewToken(request.body);
-      validateLegacyIdentity(spaces, request.body);
+      validateLegacyIdentity(spaces, request.params.spaceId, request.body);
       const plan = importOperation(() =>
         registry.plan(
           request.params.spaceId,
@@ -412,7 +414,7 @@ export function registerDataImportRoutes(
     },
     async (request, reply) => {
       validatePreviewToken(request.body);
-      validateLegacyIdentity(spaces, request.body);
+      validateLegacyIdentity(spaces, request.params.spaceId, request.body);
       const result = importOperation(() =>
         registry.execute(
           request.params.spaceId,
