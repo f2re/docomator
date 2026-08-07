@@ -6,6 +6,7 @@ import {
   type AssistedExecuteDataImportInput
 } from "./data-import-assist.js";
 import { KnowledgeRegistry } from "./knowledge.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { SpaceRegistry } from "./spaces.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
@@ -95,6 +96,11 @@ test("assisted import plans without writes and creates typed fields, aliases and
       { key: "students", name: "Студенты" },
       context("corr-space")
     );
+    const scopedKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      space.id,
+      { spaces }
+    );
     const input = studentImport([
       {
         "ФИО": "Иванов Иван Иванович",
@@ -119,14 +125,19 @@ test("assisted import plans without writes and creates typed fields, aliases and
     assert.equal(plan.failedCount, 0);
     assert.equal(plan.mappingResolutions.length, 5);
     assert.equal(spaces.listEntities(space.id).length, 0);
-    assert.equal(knowledge.listPropertyDefinitions().some((item) => item.label === "Тема научной работы"), false);
+    assert.equal(
+      scopedKnowledge
+        .listPropertyDefinitions()
+        .some((item) => item.label === "Тема научной работы"),
+      false
+    );
 
     const result = imports.execute(space.id, input, context("corr-execute"));
     assert.equal(result.createdCount, 2);
     assert.equal(result.failedCount, 0);
     assert.equal(result.groupName, "Студенты — научные работы");
 
-    const definitions = knowledge.listPropertyDefinitions();
+    const definitions = scopedKnowledge.listPropertyDefinitions();
     const group = definitions.find((item) => item.label === "Учебная группа");
     const passport = definitions.find((item) => item.label === "Номер паспорта");
     const topic = definitions.find((item) => item.label === "Тема научной работы");
@@ -157,7 +168,7 @@ test("assisted import plans without writes and creates typed fields, aliases and
       context("corr-repeat")
     );
     assert.equal(repeated.updatedCount, 1);
-    const updatedGroup = knowledge.getPropertyDefinition(group.key);
+    const updatedGroup = scopedKnowledge.getPropertyDefinition(group.key);
     assert.deepEqual(updatedGroup.validation, {
       enum: ["М-21", "М-22", "М-23"],
       allowCustom: true
@@ -177,7 +188,12 @@ test("closed imported list rejects a value outside configured options without cr
       { key: "students", name: "Студенты" },
       context("corr-space")
     );
-    const status = knowledge.createPropertyDefinition(
+    const scopedKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      space.id,
+      { spaces }
+    );
+    const status = scopedKnowledge.createPropertyDefinition(
       {
         key: "person.student_status",
         label: "Статус студента",
@@ -210,7 +226,9 @@ test("closed imported list rejects a value outside configured options without cr
     assert.equal(result.failedCount, 1);
     assert.equal(result.createdCount, 0);
     assert.equal(spaces.listEntities(space.id).length, 0);
-    assert.deepEqual(knowledge.getPropertyDefinition(status.key).validation, {
+    assert.equal(result.errors[0]?.code, "property_value_invalid");
+    assert.equal(result.errors[0]?.column, "Статус");
+    assert.deepEqual(scopedKnowledge.getPropertyDefinition(status.key).validation, {
       enum: ["Обучается"],
       allowCustom: false
     });
@@ -219,8 +237,7 @@ test("closed imported list rejects a value outside configured options without cr
   }
 });
 
-
-test("assisted import resolves equal labels inside the selected arbitrary entity type", () => {
+test("assisted import resolves equal labels inside selected space and arbitrary entity type", () => {
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
@@ -234,7 +251,16 @@ test("assisted import resolves equal labels inside the selected arbitrary entity
       { key: "article", label: "Научная статья" },
       context("corr-article-type")
     );
-    const roomNumber = knowledge.createPropertyDefinition(
+    const space = spaces.createSpace(
+      { key: "campus", name: "Учебный корпус" },
+      context("corr-campus")
+    );
+    const scopedKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      space.id,
+      { spaces }
+    );
+    const roomNumber = scopedKnowledge.createPropertyDefinition(
       {
         key: "room.number",
         label: "Номер",
@@ -244,7 +270,7 @@ test("assisted import resolves equal labels inside the selected arbitrary entity
       },
       context("corr-room-number")
     );
-    knowledge.createPropertyDefinition(
+    scopedKnowledge.createPropertyDefinition(
       {
         key: "article.number",
         label: "Номер",
@@ -253,10 +279,6 @@ test("assisted import resolves equal labels inside the selected arbitrary entity
         appliesTo: ["article"]
       },
       context("corr-article-number")
-    );
-    const space = spaces.createSpace(
-      { key: "campus", name: "Учебный корпус" },
-      context("corr-campus")
     );
     const input: AssistedExecuteDataImportInput = {
       entityTypeKey: "room",
@@ -301,7 +323,7 @@ test("assisted import resolves equal labels inside the selected arbitrary entity
       result.mappingResolutions.find((item) => item.column === "Номер")?.matchedBy,
       "label"
     );
-    const capacity = knowledge
+    const capacity = scopedKnowledge
       .listPropertyDefinitions()
       .find((definition) => definition.label === "Вместимость");
     assert.ok(capacity);
