@@ -40,10 +40,8 @@ import {
   EmailRecipientNotFoundError,
   EmailRecipientRegistry,
   EmailRecipientValidationError,
-  EmployeeRegistry,
   KnowledgeConflictError,
   KnowledgeNotFoundError,
-  KnowledgeRegistry,
   KnowledgeValidationError,
   MultiFieldTestVersionConflictError,
   MultiFieldTestVersionNotFoundError,
@@ -52,6 +50,7 @@ import {
   OperationCenterRegistry,
   PropertyValueValidationError,
   SpaceConflictError,
+  SpaceIsolatedEmployeeRegistry,
   SpaceNotFoundError,
   SpaceRegistry,
   SpaceValidationError,
@@ -72,6 +71,7 @@ import {
   TemplateTestVersionRegistry,
   TemplateTestVersionValidationError
 } from "@docomator/storage";
+import { KnowledgeRegistry } from "@docomator/storage/internal";
 import { TemplateCompilerError } from "@docomator/template-compiler";
 import Fastify, {
   type FastifyError,
@@ -120,7 +120,7 @@ export interface AppDependencies {
   documentPreflightRegistry?: DocumentPreflightRegistry;
   documentScheduleRegistry?: DocumentScheduleRegistry;
   emailRecipientRegistry?: EmailRecipientRegistry;
-  employeeRegistry?: EmployeeRegistry;
+  employeeRegistry?: SpaceIsolatedEmployeeRegistry;
   quarantineRegistry?: DocumentQuarantineRegistry;
   templateDraftRegistry?: TemplateDraftRegistry;
   templateDraftFieldEditor?: TemplateDraftFieldEditor;
@@ -248,11 +248,7 @@ export function buildApp(
   const emailRecipientRegistry =
     dependencies.emailRecipientRegistry ?? new EmailRecipientRegistry(store);
   const employeeRegistry =
-    dependencies.employeeRegistry ??
-    new EmployeeRegistry(store, {
-      knowledge: knowledgeRegistry,
-      spaces: spaceRegistry
-    });
+    dependencies.employeeRegistry ?? new SpaceIsolatedEmployeeRegistry(store);
   const quarantineRegistry =
     dependencies.quarantineRegistry ??
     new DocumentQuarantineRegistry(store, objectStore);
