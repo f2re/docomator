@@ -6,6 +6,7 @@ import {
   type PropertyDefinitionRecord,
   type PropertySensitivity
 } from "./knowledge.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 
 export class DatabaseAdminValidationError extends Error {
   override readonly name = "DatabaseAdminValidationError";
@@ -495,10 +496,14 @@ export class DatabaseAdminRegistry {
   }
 
   createPropertyDefinition(
+    spaceIdentity: string,
     input: Parameters<KnowledgeRegistry["createPropertyDefinition"]>[0],
     context: MutationContext
   ): PropertyDefinitionRecord {
-    return this.#knowledge.createPropertyDefinition(input, context);
+    return SpaceScopedKnowledgeRegistry.fromRegistry(
+      this.#knowledge,
+      spaceIdentity
+    ).createPropertyDefinition(input, context);
   }
 
   #validatedTableName(value: string): string {
