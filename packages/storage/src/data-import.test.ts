@@ -7,7 +7,8 @@ import {
   type ExecuteDataImportInput
 } from "./data-import.js";
 import type { SqliteStore } from "./database.js";
-import { KnowledgeRegistry } from "./knowledge.js";
+import { KnowledgeNotFoundError, KnowledgeRegistry } from "./knowledge.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { SpaceRegistry } from "./spaces.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
@@ -76,6 +77,11 @@ test("keyless employee import plans without writes and creates personal fields a
       { key: "staff", name: "Сотрудники" },
       context("corr-space")
     );
+    const scopedKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      space.id,
+      { spaces }
+    );
     const input = employeeImport([
       {
         "Табельный номер": "001",
@@ -101,7 +107,7 @@ test("keyless employee import plans without writes and creates personal fields a
     );
     assert.equal(spaces.listEntities(space.id).length, 0);
     assert.equal(
-      knowledge.listPropertyDefinitions().some((field) => field.label === "Должность"),
+      scopedKnowledge.listPropertyDefinitions().some((field) => field.label === "Должность"),
       false
     );
     assert.equal(spaces.listGroups(space.id).length, 0);
@@ -110,7 +116,7 @@ test("keyless employee import plans without writes and creates personal fields a
     assert.equal(result.createdCount, 2);
     assert.equal(result.failedCount, 0);
     assert.equal(result.groupName, "Летний импорт");
-    const position = knowledge
+    const position = scopedKnowledge
       .listPropertyDefinitions()
       .find((field) => field.label === "Должность");
     assert.ok(position);
@@ -128,8 +134,9 @@ test("keyless employee import plans without writes and creates personal fields a
     assert.equal(repeated.updatedCount, 0);
     assert.equal(repeated.unchangedCount, 2);
     assert.equal(
-      knowledge.listPropertyDefinitions().filter((field) => field.label === "Должность")
-        .length,
+      scopedKnowledge
+        .listPropertyDefinitions()
+        .filter((field) => field.label === "Должность").length,
       1
     );
   } finally {
@@ -137,7 +144,82 @@ test("keyless employee import plans without writes and creates personal fields a
   }
 });
 
-test("duplicate identity is reported in Russian and preview leaves no data", () => {
+test("same import field label is independent in two spaces", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const imports = new DataImportRegistry(fixture.store, { spaces });
+    const alpha = spaces.createSpace(
+      { key: "alpha", name: "Альфа" },
+      context("corr-alpha")
+    );
+    const beta = spaces.createSpace(
+      { key: "beta", name: "Бета" },
+      context("corr-beta")
+    );
+    const alphaKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      alpha.id,
+      { spaces }
+    );
+    const betaKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      beta.id,
+      { spaces }
+    );
+
+    imports.execute(
+      alpha.id,
+      employeeImport([
+        {
+          "Табельный номер": "001",
+          "ФИО": "Иванов Иван",
+          "Должность": "Инженер"
+        }
+      ]),
+      context("corr-import-alpha")
+    );
+    imports.execute(
+      beta.id,
+      {
+        ...employeeImport([
+          {
+            "Табельный номер": "001",
+            "ФИО": "Иванов Иван",
+            "Должность": "Бухгалтер"
+          }
+        ]),
+        sourceSha256: "b".repeat(64)
+      },
+      context("corr-import-beta")
+    );
+
+    const alphaField = alphaKnowledge
+      .listPropertyDefinitions()
+      .find((field) => field.label === "Должность");
+    const betaField = betaKnowledge
+      .listPropertyDefinitions()
+      .find((field) => field.label === "Должность");
+    assert.ok(alphaField);
+    assert.ok(betaField);
+    assert.notEqual(alphaField.id, betaField.id);
+    assert.notEqual(alphaField.key, betaField.key);
+    assert.throws(
+      () => alphaKnowledge.getPropertyDefinition(betaField.key),
+      KnowledgeNotFoundError
+    );
+    assert.throws(
+      () => betaKnowledge.getPropertyDefinition(alphaField.key),
+      KnowledgeNotFoundError
+    );
+    assert.equal(spaces.listEntities(alpha.id).length, 1);
+    assert.equal(spaces.listEntities(beta.id).length, 1);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("duplicate identity returns typed coordinates and preview leaves no data", () => {
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
@@ -165,8 +247,63 @@ test("duplicate identity is reported in Russian and preview leaves no data", () 
 
     assert.equal(plan.createdCount, 1);
     assert.equal(plan.failedCount, 1);
-    assert.match(plan.errors[0]?.message ?? "", /повторяется внутри файла/u);
+    assert.deepEqual(
+      {
+        code: plan.errors[0]?.code,
+        column: plan.errors[0]?.column,
+        rawValue: plan.errors[0]?.rawValue,
+        severity: plan.errors[0]?.severity,
+        repair: plan.errors[0]?.repair.kind
+      },
+      {
+        code: "duplicate_identity",
+        column: "Табельный номер",
+        rawValue: "001",
+        severity: "error",
+        repair: "choose_identity_column"
+      }
+    );
     assert.equal(spaces.listEntities(space.id).length, 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("invalid number is reported by machine code without parsing its message", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const imports = new DataImportRegistry(fixture.store, { spaces });
+    const space = spaces.createSpace(
+      { key: "staff", name: "Сотрудники" },
+      context("corr-space-number")
+    );
+    const input: ExecuteDataImportInput = {
+      ...employeeImport(
+        [
+          {
+            "Табельный номер": "001",
+            "ФИО": "Иванов Иван",
+            "Должность": "не число"
+          }
+        ],
+        [
+          {
+            column: "Должность",
+            createIfMissing: true,
+            label: "Стаж",
+            valueType: "number"
+          }
+        ]
+      )
+    };
+    const plan = imports.plan(space.id, input, context("corr-plan-number"));
+    assert.equal(plan.failedCount, 1);
+    assert.equal(plan.errors[0]?.code, "invalid_number");
+    assert.equal(plan.errors[0]?.column, "Должность");
+    assert.equal(plan.errors[0]?.rawValue, "не число");
+    assert.match(plan.errors[0]?.propertyKey ?? "", /^employee_field\./u);
+    assert.equal(plan.errors[0]?.repair.kind, "change_field_type");
   } finally {
     fixture.cleanup();
   }
@@ -182,7 +319,12 @@ test("blank cells do not clear values and a failed new row is rolled back", () =
       { key: "staff", name: "Сотрудники" },
       context("corr-space")
     );
-    const employmentStatus = knowledge.createPropertyDefinition(
+    const scopedKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      space.id,
+      { spaces }
+    );
+    const employmentStatus = scopedKnowledge.createPropertyDefinition(
       {
         key: "person.employment_status",
         label: "Состояние",
@@ -223,7 +365,7 @@ test("blank cells do not clear values and a failed new row is rolled back", () =
     assert.equal(first.createdCount, 1);
     const employeeId = spaces.listEntities(space.id)[0]?.entityId;
     assert.ok(employeeId);
-    const position = knowledge
+    const position = scopedKnowledge
       .listPropertyDefinitions()
       .find((field) => field.label === "Должность");
     assert.ok(position);
@@ -246,8 +388,9 @@ test("blank cells do not clear values and a failed new row is rolled back", () =
     );
     assert.equal(unchanged.unchangedCount, 1);
     assert.equal(
-      knowledge.listPropertyValueHistory(employeeId, { propertyKey: position.key })[0]
-        ?.value,
+      scopedKnowledge.listPropertyValueHistory(employeeId, {
+        propertyKey: position.key
+      })[0]?.value,
       "Инженер"
     );
 
@@ -270,10 +413,10 @@ test("blank cells do not clear values and a failed new row is rolled back", () =
     assert.equal(failed.failedCount, 1);
     assert.equal(failed.createdCount, 0);
     assert.equal(spaces.listEntities(space.id).length, 1);
-    assert.equal(
-      failed.errors[0]?.message,
-      "Строка не сохранена: одно из значений не соответствует правилам поля."
-    );
+    assert.equal(failed.errors[0]?.code, "property_value_invalid");
+    assert.equal(failed.errors[0]?.column, "Состояние");
+    assert.equal(failed.errors[0]?.rawValue, "Уволен");
+    assert.equal(failed.errors[0]?.propertyKey, employmentStatus.key);
   } finally {
     fixture.cleanup();
   }
@@ -329,6 +472,11 @@ test("finalization failure rolls back imported rows, history, audit and outbox",
       { key: "staff", name: "Сотрудники" },
       context("corr-space")
     );
+    const scopedKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      space.id,
+      { spaces }
+    );
     const before = mutationCounts(fixture.store);
     fixture.store.execute((database) =>
       database.exec(`
@@ -358,7 +506,9 @@ test("finalization failure rolls back imported rows, history, audit and outbox",
     assert.equal(spaces.listEntities(space.id).length, 0);
     assert.equal(imports.list(space.id).length, 0);
     assert.equal(
-      knowledge.listPropertyDefinitions().some((field) => field.label === "Должность"),
+      scopedKnowledge
+        .listPropertyDefinitions()
+        .some((field) => field.label === "Должность"),
       false
     );
     assert.deepEqual(mutationCounts(fixture.store), before);
