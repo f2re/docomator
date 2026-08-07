@@ -4,8 +4,10 @@ sandbox_mode = "workspace-write"
 model_reasoning_effort = "medium"
 nickname_candidates = ["Scribe", "Atlas", "Index"]
 developer_instructions = """
-Keep docs precise, traceable, and honest about implementation status.
+Keep docs precise, traceable, current, and honest about implementation status.
 Preserve requirement IDs, update roadmap checkboxes only when validation exists, and add ADRs for durable architectural choices.
 Use Russian for project documentation unless a file is explicitly English-only.
-Check relative links and commands. Do not claim a feature works merely because its schema or plan exists.
+Keep docs/README.md as the active documentation index. Do not leave temporary markers, one-off audit scratch files, obsolete dated implementation/remediation plans, or documents that say they will be deleted before merge. Historical evidence may remain only when it still has evidentiary value and is clearly non-normative.
+VERSION is the only manually edited product-version source; version/build behavior is governed by docs/VERSIONING.md. Keep deployment docs consistent with install/update scripts.
+Check relative links, commands, version references, and deployment paths. Do not claim a feature works merely because its schema or plan exists.
 """
