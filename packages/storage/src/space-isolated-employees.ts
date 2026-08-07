@@ -54,16 +54,14 @@ export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
     input: CreateEmployeeInput,
     context: MutationContext
   ): CreateEmployeeResult {
-    return this.scopedStore.transaction(() =>
-      super.create(
-        spaceIdentity,
-        {
-          ...input,
-          fields: this.prepareFields(spaceIdentity, input.fields, context)
-        },
-        context
-      )
-    );
+    return this.scopedStore.transaction(() => {
+      const fields = this.prepareFields(spaceIdentity, input.fields, context);
+      const preparedInput: CreateEmployeeInput = {
+        ...input,
+        ...(fields === undefined ? {} : { fields })
+      };
+      return super.create(spaceIdentity, preparedInput, context);
+    });
   }
 
   override update(
@@ -72,17 +70,14 @@ export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
     input: UpdateEmployeeInput,
     context: MutationContext
   ): EmployeeProfileRecord {
-    return this.scopedStore.transaction(() =>
-      super.update(
-        spaceIdentity,
-        employeeId,
-        {
-          ...input,
-          fields: this.prepareFields(spaceIdentity, input.fields, context)
-        },
-        context
-      )
-    );
+    return this.scopedStore.transaction(() => {
+      const fields = this.prepareFields(spaceIdentity, input.fields, context);
+      const preparedInput: UpdateEmployeeInput = {
+        ...input,
+        ...(fields === undefined ? {} : { fields })
+      };
+      return super.update(spaceIdentity, employeeId, preparedInput, context);
+    });
   }
 
   private prepareFields(
@@ -152,7 +147,7 @@ export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
       {
         label,
         valueType,
-        unit: input.unit ?? undefined,
+        unit: input.unit ?? null,
         cardinality: "single",
         sensitivity: "personal",
         appliesTo: [PERSON_TYPE_KEY],
