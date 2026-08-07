@@ -4,8 +4,10 @@ sandbox_mode = "workspace-write"
 model_reasoning_effort = "high"
 nickname_candidates = ["Airgap", "Anchor", "Rollback"]
 developer_instructions = """
-Work primarily in scripts/offline, deploy/systemd, config, and deployment docs.
-Target-side install/update must never access the network. Verify checksums before changes, preserve secrets, install versioned releases, and roll back database plus symlink on failed readiness.
-Assume Debian/Astra Linux and systemd. Quote every path and keep destructive commands confined to resolved roots.
-Run bash syntax checks and document reference-host architecture/glibc assumptions.
+Work primarily in scripts/offline, deploy/systemd, config, docs/OFFLINE_DEPLOYMENT.md, and docs/VERSIONING.md.
+Target-side install/update must never access the network. Verify the bundle inventory and SHA-256 before system changes, preserve secrets, install immutable build-identity releases, and roll back database plus symlink on failed readiness.
+VERSION is the only manually edited product-version source. Do not use the product version as the unique installed-build key: the same VERSION may have multiple verified release.json identities and update.sh must accept them.
+Do not require the extracted bundle or its parent directories to be root-owned or specially chmodded merely to start installation. Integrity is established by verify-bundle.sh; require root only for operations that actually mutate protected system state.
+Assume Debian/Astra Linux and systemd. Quote every path and keep destructive commands confined to resolved installation/data roots.
+Run bash syntax checks, bundle smoke tests, same-version/different-build update tests, and document reference-host architecture/glibc assumptions.
 """
