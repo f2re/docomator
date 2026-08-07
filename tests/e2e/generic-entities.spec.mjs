@@ -287,7 +287,7 @@ test("импорт произвольных объектов принимает 
   );
   await expect(fixButton).toHaveText("Проверить поле");
   await fixButton.click();
-  await expect(capacity.locator("[data-entity-import-mode]")).toBeFocused();
+  await expect(capacity.locator(".searchable-select-control")).toBeFocused();
 
   const geometry = await page.locator("#entityImportDialog").evaluate((dialog) => ({
     clientWidth: dialog.clientWidth,
