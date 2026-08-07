@@ -128,12 +128,12 @@ test("scoped reads never acquire an unowned legacy field", () => {
   }
 });
 
-test("database rejects an unowned property value instead of claiming it implicitly", () => {
+test("legacy internal writes may claim an unowned field only for the entity space", () => {
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
     const space = spaces.createSpace(
-      { key: "scope-required", name: "Явная принадлежность" },
+      { key: "legacy-write", name: "Переходная запись" },
       context("corr-space")
     );
     const entity = spaces.createEntity(
@@ -155,27 +155,23 @@ test("database rejects an unowned property value instead of claiming it implicit
       context("corr-field")
     );
 
-    assert.throws(
-      () =>
-        globalKnowledge.appendPropertyValue(
-          {
-            entityId: entity.entityId,
-            propertyKey: unowned.key,
-            value: "значение",
-            sourceType: "test"
-          },
-          context("corr-value")
-        ),
-      /property definition must belong to a space before value insert/u
+    globalKnowledge.appendPropertyValue(
+      {
+        entityId: entity.entityId,
+        propertyKey: unowned.key,
+        value: "значение",
+        sourceType: "test"
+      },
+      context("corr-value")
     );
-    const scopeCount = fixture.store.execute((database) =>
+    const scopes = fixture.store.execute((database) =>
       database
         .prepare(
-          "SELECT COUNT(*) AS count FROM space_property_definitions WHERE property_definition_id = ?"
+          "SELECT space_id FROM space_property_definitions WHERE property_definition_id = ?"
         )
-        .get(unowned.id) as { count: number }
+        .all(unowned.id) as unknown as Array<{ space_id: string }>
     );
-    assert.equal(scopeCount.count, 0);
+    assert.deepEqual(scopes.map((row) => row.space_id), [space.id]);
   } finally {
     fixture.cleanup();
   }
