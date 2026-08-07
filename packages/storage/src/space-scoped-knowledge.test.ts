@@ -128,6 +128,69 @@ test("scoped reads never acquire an unowned legacy field", () => {
   }
 });
 
+test("legacy shared definitions are readable but cannot be mutated from one space", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const first = spaces.createSpace(
+      { key: "legacy-shared-a", name: "Legacy A" },
+      context("corr-space-a")
+    );
+    const second = spaces.createSpace(
+      { key: "legacy-shared-b", name: "Legacy B" },
+      context("corr-space-b")
+    );
+    const firstKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      first.id,
+      { spaces }
+    );
+    const field = firstKnowledge.createPropertyDefinition(
+      {
+        key: "legacy.shared.field",
+        label: "Историческое общее поле",
+        valueType: "string",
+        appliesTo: ["person"]
+      },
+      context("corr-field")
+    );
+
+    fixture.store.execute((database) => {
+      database.exec("DROP TRIGGER IF EXISTS trg_space_property_definition_single_owner_insert");
+      database
+        .prepare(`
+          INSERT INTO space_property_definitions(
+            space_id, property_definition_id, created_at
+          ) VALUES (?, ?, ?)
+        `)
+        .run(second.id, field.id, NOW);
+    });
+
+    const secondKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      second.id,
+      { spaces }
+    );
+    assert.equal(firstKnowledge.getPropertyDefinition(field.key).id, field.id);
+    assert.equal(secondKnowledge.getPropertyDefinition(field.key).id, field.id);
+    assert.throws(
+      () =>
+        firstKnowledge.updatePropertyDefinitionUiGroup(
+          field.key,
+          "teacher",
+          context("corr-shared-update")
+        ),
+      /Историческое поле используется несколькими пространствами/u
+    );
+    assert.equal(
+      secondKnowledge.getPropertyDefinition(field.key).validation.uiGroup,
+      "unassigned"
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("legacy internal writes may claim an unowned field only for the entity space", () => {
   const fixture = createMigratedTestStore();
   try {
