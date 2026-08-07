@@ -16,6 +16,8 @@ import {
   type PropertySensitivity
 } from "./knowledge.js";
 import { OperatorAssistRegistry } from "./operator-assist.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
+import { SpaceScopedOperatorAssistRegistry } from "./space-scoped-operator-assist.js";
 import { SpaceRegistry } from "./spaces.js";
 import type { DataImportValueTransform } from "./data-import-normalization.js";
 
@@ -231,7 +233,7 @@ export class AssistedDataImportRegistry {
   ): AssistedDataImportPlanRecord {
     try {
       this.store.transaction(() => {
-        const prepared = this.prepare(input, context);
+        const prepared = this.prepare(spaceIdentity, input, context);
         const result = this.imports.execute(spaceIdentity, prepared.input, context);
         throw new AssistedDataImportPlanRollback({
           ...result,
@@ -253,18 +255,23 @@ export class AssistedDataImportRegistry {
     context: MutationContext
   ): AssistedDataImportRunRecord {
     return this.store.transaction(() => {
-      const prepared = this.prepare(input, context);
+      const prepared = this.prepare(spaceIdentity, input, context);
       const result = this.imports.execute(spaceIdentity, prepared.input, context);
       return { ...result, mappingResolutions: prepared.mappingResolutions };
     });
   }
 
   private prepare(
+    spaceIdentity: string,
     input: AssistedExecuteDataImportInput,
     context: MutationContext
   ): PreparedAssistedImport {
     const entityTypeKey = (input.entityTypeKey ?? "person").trim().toLowerCase();
-    const definitions = this.knowledge.listPropertyDefinitions(500);
+    const knowledge = SpaceScopedKnowledgeRegistry.fromRegistry(
+      this.knowledge,
+      spaceIdentity
+    );
+    const definitions = knowledge.listPropertyDefinitions(500);
     const byKey = new Map(definitions.map((definition) => [definition.key, definition]));
     const byLabel = new Map<string, PropertyDefinitionRecord[]>();
     for (const definition of definitions) {
@@ -334,12 +341,13 @@ export class AssistedDataImportRegistry {
               )
             : [];
         const allowCustom = valueType === "enum" ? source.allowCustom !== false : null;
-        definition = this.knowledge.createPropertyDefinition(
+        definition = knowledge.createPropertyDefinition(
           {
             label: requestedLabel,
             valueType,
             sensitivity:
-              source.sensitivity ?? (entityTypeKey === "person" ? "personal" : "internal"),
+              source.sensitivity ??
+              (entityTypeKey === "person" ? "personal" : "internal"),
             appliesTo: [entityTypeKey],
             aliases,
             validation:
@@ -365,6 +373,7 @@ export class AssistedDataImportRegistry {
           );
         }
         definition = this.enrichExistingDefinition(
+          spaceIdentity,
           definition,
           source,
           column,
@@ -434,7 +443,7 @@ export class AssistedDataImportRegistry {
         let definition = matches[0];
         let created = false;
         if (definition === undefined) {
-          definition = this.knowledge.createPropertyDefinition(
+          definition = knowledge.createPropertyDefinition(
             {
               label: part.label,
               valueType: "string",
@@ -514,6 +523,7 @@ export class AssistedDataImportRegistry {
   }
 
   private enrichExistingDefinition(
+    spaceIdentity: string,
     current: PropertyDefinitionRecord,
     mapping: AssistedDataImportPropertyMapping,
     column: string,
@@ -530,7 +540,10 @@ export class AssistedDataImportRegistry {
       aliases?: string[];
       validation?: JsonValue;
     } = {};
-    if (mapping.sensitivity !== undefined && mapping.sensitivity !== current.sensitivity) {
+    if (
+      mapping.sensitivity !== undefined &&
+      mapping.sensitivity !== current.sensitivity
+    ) {
       update.sensitivity = mapping.sensitivity;
     }
     if (!sameStringList(requestedAliases, current.aliases)) {
@@ -540,8 +553,7 @@ export class AssistedDataImportRegistry {
     if (current.valueType === "enum") {
       const currentValidation = validationObject(current.validation);
       const currentOptions = configuredEnumValues(current);
-      const allowCustom =
-        mapping.allowCustom ?? configuredAllowCustom(current);
+      const allowCustom = mapping.allowCustom ?? configuredAllowCustom(current);
       const requested = normalizeList(mapping.enumValues, "варианты списка");
       const discovered = allowCustom ? importedColumnValues(rows, column) : [];
       const merged = mergeTextLists(currentOptions, requested, discovered);
@@ -564,8 +576,16 @@ export class AssistedDataImportRegistry {
       );
     }
 
-    return Object.keys(update).length === 0
-      ? current
-      : this.operator.updatePropertyDefinition(current.key, update, context);
+    if (Object.keys(update).length === 0) return current;
+    const scopedOperator =
+      this.operator instanceof SpaceScopedOperatorAssistRegistry
+        ? this.operator
+        : new SpaceScopedOperatorAssistRegistry(this.store);
+    return scopedOperator.updatePropertyDefinitionInSpace(
+      spaceIdentity,
+      current.key,
+      update,
+      context
+    );
   }
 }
