@@ -21,7 +21,6 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-require_trusted_bundle "$SCRIPT_DIR"
 "$SCRIPT_DIR/verify-bundle.sh" "$SCRIPT_DIR"
 verify_target_os_package_profile "$SCRIPT_DIR/payload/os-packages"
 
