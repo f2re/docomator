@@ -39,7 +39,7 @@
 
     const trigger = document.createElement("button");
     trigger.type = "button";
-    trigger.className = "searchable-select-trigger";
+    trigger.className = "searchable-select-trigger searchable-select-control";
     trigger.setAttribute("role", "combobox");
     trigger.setAttribute("aria-expanded", "false");
     trigger.setAttribute("aria-controls", `${id}-panel`);
