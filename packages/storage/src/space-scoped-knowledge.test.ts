@@ -182,9 +182,9 @@ test("legacy shared definitions are readable but cannot be mutated from one spac
         ),
       /Историческое поле используется несколькими пространствами/u
     );
-    assert.equal(
-      secondKnowledge.getPropertyDefinition(field.key).validation.uiGroup,
-      "unassigned"
+    assert.deepEqual(
+      secondKnowledge.getPropertyDefinition(field.key).validation,
+      { uiGroup: "unassigned" }
     );
   } finally {
     fixture.cleanup();
