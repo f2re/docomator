@@ -291,7 +291,7 @@ test("employee API keeps explicit property compatibility and denies cross-space 
   try {
     const definition = await app.inject({
       method: "POST",
-      url: "/api/v1/knowledge/property-definitions",
+      url: "/api/v1/knowledge/property-definitions?spaceId=default",
       headers,
       payload: {
         key: "person.email",
@@ -317,7 +317,7 @@ test("employee API keeps explicit property compatibility and denies cross-space 
 
     const referenceDefinition = await app.inject({
       method: "POST",
-      url: "/api/v1/knowledge/property-definitions",
+      url: "/api/v1/knowledge/property-definitions?spaceId=default",
       headers,
       payload: {
         key: "person.manager",

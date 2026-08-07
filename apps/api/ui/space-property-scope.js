@@ -269,6 +269,18 @@ function clearEntityImportErrorUx(root) {
   root.querySelector("[data-entity-import-error-guide]")?.remove();
 }
 
+function visibleEntityImportCorrectionControl(row) {
+  if (!row) return null;
+  const createField = [...row.querySelectorAll("[data-entity-import-create]")].find(
+    (field) => !field.hidden && field.querySelector("[data-entity-import-type]")
+  );
+  return (
+    createField?.querySelector("[data-entity-import-type]") ||
+    row.querySelector("[data-entity-import-mode]") ||
+    row.querySelector("input, select, textarea")
+  );
+}
+
 function enhanceEntityImportErrors() {
   const root = document.querySelector("#entityImportWorkspace");
   if (!root) return;
@@ -339,11 +351,7 @@ function enhanceEntityImportErrors() {
           (candidate) => candidate.dataset.column === column
         );
         row?.scrollIntoView({ behavior: "smooth", block: "center" });
-        const control =
-          row?.querySelector("[data-entity-import-type]:not([hidden])") ||
-          row?.querySelector("[data-entity-import-mode]") ||
-          row?.querySelector("input, select, textarea");
-        control?.focus();
+        visibleEntityImportCorrectionControl(row)?.focus();
       });
       card.append(button);
     }

@@ -42,14 +42,14 @@ class SpaceIsolatedAssistedDataImportRegistry extends AssistedDataImportRegistry
       spaceIdentity,
       { spaces: this.spaces }
     );
-    this.claimExplicitLegacyProperties(knowledge, input);
+    this.adoptExplicitLegacyProperties(knowledge, input);
     return new AssistedDataImportRegistry(this.backingStore, {
       spaces: this.spaces,
       knowledge
     });
   }
 
-  private claimExplicitLegacyProperties(
+  private adoptExplicitLegacyProperties(
     knowledge: SpaceScopedKnowledgeRegistry,
     input: AssistedExecuteDataImportInput
   ): void {
@@ -65,13 +65,19 @@ class SpaceIsolatedAssistedDataImportRegistry extends AssistedDataImportRegistry
     for (const key of keys) {
       try {
         knowledge.getPropertyDefinition(key);
-      } catch (error) {
-        const mapping = input.mappings.find(
-          (candidate) => candidate.propertyKey === key
-        );
-        if (mapping?.createIfMissing === true) continue;
-        throw error;
+        continue;
+      } catch {
+        // Compatibility adoption is explicit here. Normal scoped reads remain
+        // side-effect free and never acquire an unowned definition.
       }
+      const adopted = knowledge.adoptUnownedPropertyDefinition(key);
+      if (adopted !== null) continue;
+      const mapping = input.mappings.find(
+        (candidate) => candidate.propertyKey === key
+      );
+      if (mapping?.createIfMissing === true) continue;
+      // Re-run the normal lookup to produce the standard not-found error.
+      knowledge.getPropertyDefinition(key);
     }
   }
 }

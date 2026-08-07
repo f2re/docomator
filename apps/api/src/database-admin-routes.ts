@@ -25,6 +25,10 @@ interface TableExportQuery extends TableRowsQuery {
   format?: "csv" | "json";
 }
 
+interface CreatePropertyQuery {
+  spaceId: string;
+}
+
 interface CreatePropertyBody {
   key?: string;
   label: string;
@@ -162,10 +166,18 @@ export function registerDatabaseAdminRoutes(
     return { data: registry.quickCheck() };
   });
 
-  app.post<{ Body: CreatePropertyBody }>(
+  app.post<{ Querystring: CreatePropertyQuery; Body: CreatePropertyBody }>(
     "/api/v1/admin/database/properties",
     {
       schema: {
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          required: ["spaceId"],
+          properties: {
+            spaceId: { type: "string", minLength: 1, maxLength: 160 }
+          }
+        },
         body: {
           type: "object",
           required: ["label", "valueType"],
@@ -201,6 +213,7 @@ export function registerDatabaseAdminRoutes(
     },
     async (request, reply) => {
       const record = registry.createPropertyDefinition(
+        request.query.spaceId,
         request.body,
         mutationContextFromRequest(request)
       );

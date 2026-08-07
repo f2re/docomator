@@ -1,6 +1,7 @@
 import { SqliteStore } from "./database.js";
 import { ObjectCleanupRegistry } from "./object-cleanup.js";
-import { PublicationRegistry } from "./publications.js";
+import { SpaceScopedPublicationRegistry } from "./space-scoped-publications.js";
+import type { PublicationRegistry } from "./publications.js";
 
 export function publicationRegistryFromObjectCleanupRegistry(
   registry: ObjectCleanupRegistry
@@ -11,5 +12,5 @@ export function publicationRegistryFromObjectCleanupRegistry(
       "Object cleanup registry does not expose its backing SQLite store"
     );
   }
-  return new PublicationRegistry(store);
+  return new SpaceScopedPublicationRegistry(store);
 }

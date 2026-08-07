@@ -138,16 +138,26 @@ test("database admin lists, searches, sorts and exports only validated tables", 
   }
 });
 
-test("database admin adds a logical property without altering the physical entity table", () => {
+test("database admin adds a logical property to the selected space without altering the physical entity table", () => {
   const fixture = createMigratedTestStore();
   try {
     const knowledge = new KnowledgeRegistry(fixture.store);
+    const spaces = new SpaceRegistry(fixture.store);
     const registry = new DatabaseAdminRegistry(fixture.store, knowledge);
+    const space = spaces.createSpace(
+      { key: "admin-fields", name: "Поля администратора" },
+      context("corr-admin-space")
+    );
+    const otherSpace = spaces.createSpace(
+      { key: "admin-fields-other", name: "Другое пространство" },
+      context("corr-admin-space-other")
+    );
     const before = fixture.store.execute((database) =>
       database.prepare('PRAGMA table_info("entities")').all()
     );
 
     const property = registry.createPropertyDefinition(
+      space.id,
       {
         label: "Инвентарный номер",
         valueType: "string",
@@ -167,6 +177,19 @@ test("database admin adds a logical property without altering the physical entit
     assert.equal(saved.label, "Инвентарный номер");
     assert.equal(saved.cardinality, "multiple");
     assert.deepEqual(saved.aliases, ["инв. номер", "номер имущества"]);
+    const scopes = fixture.store.execute((database) =>
+      database
+        .prepare(`
+          SELECT scoped.space_id
+          FROM space_property_definitions scoped
+          JOIN property_definitions definition
+            ON definition.id = scoped.property_definition_id
+          WHERE definition.key = ?
+        `)
+        .all(property.key) as unknown as Array<{ space_id: string }>
+    );
+    assert.deepEqual(scopes.map((row) => row.space_id), [space.id]);
+    assert.ok(!scopes.some((row) => row.space_id === otherSpace.id));
   } finally {
     fixture.cleanup();
   }

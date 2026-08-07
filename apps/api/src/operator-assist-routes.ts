@@ -1,6 +1,5 @@
 import type { ApiConfig } from "@docomator/config";
 import {
-  DEFAULT_SPACE_ID,
   DocumentScheduleRegistry,
   DocumentScheduleValidationError,
   normalizeScheduleNetworkTemplate,
@@ -27,7 +26,7 @@ interface PropertyParams {
 }
 
 interface PropertyScopeQuery {
-  spaceId?: string;
+  spaceId: string;
 }
 
 interface GroupParams extends SpaceParams {
@@ -104,6 +103,13 @@ const stableKeySchema = {
   minLength: 1,
   maxLength: 160,
   pattern: "^[A-Za-z][A-Za-z0-9]*(?:[._-][A-Za-z0-9]+)*$"
+} as const;
+
+const requiredPropertyScopeQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["spaceId"],
+  properties: { spaceId: idSchema }
 } as const;
 
 const scheduleUpdateProperties = {
@@ -192,11 +198,7 @@ export function registerOperatorAssistRoutes(
           required: ["key"],
           properties: { key: stableKeySchema }
         },
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: { spaceId: idSchema }
-        },
+        querystring: requiredPropertyScopeQuerySchema,
         body: {
           type: "object",
           additionalProperties: false,
@@ -232,7 +234,7 @@ export function registerOperatorAssistRoutes(
     },
     async (request, reply) => {
       const updated = registry.updatePropertyDefinitionInSpace(
-        request.query.spaceId ?? DEFAULT_SPACE_ID,
+        request.query.spaceId,
         request.params.key,
         request.body,
         mutationContextFromRequest(request)
@@ -256,11 +258,7 @@ export function registerOperatorAssistRoutes(
           required: ["key"],
           properties: { key: stableKeySchema }
         },
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: { spaceId: idSchema }
-        },
+        querystring: requiredPropertyScopeQuerySchema,
         body: {
           type: "object",
           additionalProperties: false,
@@ -278,7 +276,7 @@ export function registerOperatorAssistRoutes(
     },
     async (request, reply) => {
       const updated = registry.extendEnumOptionsInSpace(
-        request.query.spaceId ?? DEFAULT_SPACE_ID,
+        request.query.spaceId,
         request.params.key,
         request.body.values,
         mutationContextFromRequest(request)

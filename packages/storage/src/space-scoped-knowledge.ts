@@ -1,5 +1,6 @@
 import { SqliteStore } from "./database.js";
 import {
+  KnowledgeConflictError,
   KnowledgeNotFoundError,
   KnowledgeRegistry,
   KnowledgeValidationError,
@@ -66,7 +67,7 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
 
   override getPropertyDefinition(keyValue: string): PropertyDefinitionRecord {
     const definition = super.getPropertyDefinition(keyValue);
-    this.assertOrClaimDefinition(definition);
+    this.assertDefinitionOwned(definition);
     return definition;
   }
 
@@ -74,8 +75,8 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
     input: CreatePropertyDefinitionInput,
     contextInput: MutationContext
   ): PropertyDefinitionRecord {
-    const created = super.createPropertyDefinition(input, contextInput);
-    this.scopedStore.execute((connection) => {
+    return this.scopedStore.transaction((connection) => {
+      const created = super.createPropertyDefinition(input, contextInput);
       connection
         .prepare(`
           INSERT INTO space_property_definitions(
@@ -85,8 +86,77 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
           ) VALUES (?, ?, ?)
         `)
         .run(this.spaceId, created.id, created.createdAt);
+      return created;
     });
-    return created;
+  }
+
+  /**
+   * Explicit compatibility operation for a legacy definition that was created
+   * before field ownership existed. Normal reads never adopt definitions.
+   * Returns null only when the global definition itself does not exist.
+   */
+  adoptUnownedPropertyDefinition(
+    keyValue: string
+  ): PropertyDefinitionRecord | null {
+    let definition: PropertyDefinitionRecord;
+    try {
+      definition = super.getPropertyDefinition(keyValue);
+    } catch (error) {
+      if (error instanceof KnowledgeNotFoundError) return null;
+      throw error;
+    }
+    const state = this.scopedStore.transaction((connection) => {
+      const scopes = connection
+        .prepare(`
+          SELECT space_id
+          FROM space_property_definitions
+          WHERE property_definition_id = ?
+          ORDER BY space_id ASC
+        `)
+        .all(definition.id) as unknown as Array<{ space_id: string }>;
+      if (scopes.some((scope) => scope.space_id === this.spaceId)) {
+        return "owned" as const;
+      }
+      if (scopes.length === 0) {
+        connection
+          .prepare(`
+            INSERT INTO space_property_definitions(
+              space_id,
+              property_definition_id,
+              created_at
+            ) VALUES (?, ?, ?)
+          `)
+          .run(this.spaceId, definition.id, definition.createdAt);
+        return "adopted" as const;
+      }
+      return "foreign" as const;
+    });
+    if (state === "foreign") {
+      throw new KnowledgeNotFoundError(
+        "Поле не найдено в выбранном пространстве."
+      );
+    }
+    return definition;
+  }
+
+  assertPropertyDefinitionMutable(keyValue: string): PropertyDefinitionRecord {
+    const definition = this.getPropertyDefinition(keyValue);
+    const scopes = this.scopedStore.execute((connection) =>
+      connection
+        .prepare(`
+          SELECT space_id
+          FROM space_property_definitions
+          WHERE property_definition_id = ?
+          ORDER BY space_id ASC
+        `)
+        .all(definition.id) as unknown as Array<{ space_id: string }>
+    );
+    if (scopes.length !== 1 || scopes[0]?.space_id !== this.spaceId) {
+      throw new KnowledgeConflictError(
+        "Историческое поле используется несколькими пространствами и защищено от общего изменения. Создайте отдельное поле в текущем пространстве и перенесите данные контролируемой операцией."
+      );
+    }
+    return definition;
   }
 
   override updatePropertyDefinitionUiGroup(
@@ -94,7 +164,7 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
     uiGroupValue: string,
     contextInput: MutationContext
   ): PropertyDefinitionRecord {
-    this.getPropertyDefinition(keyValue);
+    this.assertPropertyDefinitionMutable(keyValue);
     return super.updatePropertyDefinitionUiGroup(
       keyValue,
       uiGroupValue,
@@ -122,34 +192,18 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
     return super.listPropertyValueHistory(entityIdValue, options);
   }
 
-  private assertOrClaimDefinition(definition: PropertyDefinitionRecord): void {
-    const state = this.scopedStore.transaction((connection) => {
-      const scopes = connection
-        .prepare(`
-          SELECT space_id
-          FROM space_property_definitions
-          WHERE property_definition_id = ?
-          ORDER BY space_id ASC
-        `)
-        .all(definition.id) as unknown as Array<{ space_id: string }>;
-      if (scopes.some((scope) => scope.space_id === this.spaceId)) {
-        return "owned" as const;
-      }
-      if (scopes.length === 0) {
+  private assertDefinitionOwned(definition: PropertyDefinitionRecord): void {
+    const owned = this.scopedStore.execute(
+      (connection) =>
         connection
           .prepare(`
-            INSERT INTO space_property_definitions(
-              space_id,
-              property_definition_id,
-              created_at
-            ) VALUES (?, ?, ?)
+            SELECT 1 AS found
+            FROM space_property_definitions
+            WHERE space_id = ? AND property_definition_id = ?
           `)
-          .run(this.spaceId, definition.id, definition.createdAt);
-        return "claimed" as const;
-      }
-      return "foreign" as const;
-    });
-    if (state === "foreign") {
+          .get(this.spaceId, definition.id) !== undefined
+    );
+    if (!owned) {
       throw new KnowledgeNotFoundError(
         "Поле не найдено в выбранном пространстве."
       );

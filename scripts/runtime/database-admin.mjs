@@ -26,10 +26,10 @@ function usage() {
   database-admin.mjs rows <таблица> [--sort <колонка>] [--desc] [--search <текст>] [--limit <n>] [--offset <n>]
   database-admin.mjs export <таблица> --format csv|json --output <файл> [--sort <колонка>] [--desc] [--search <текст>] [--limit <n>]
   database-admin.mjs check
-  database-admin.mjs create-property --label <название> --type <тип> --applies-to <тип-объекта> [--unit <единица>] [--sensitivity internal|public|personal|restricted]
+  database-admin.mjs create-property --space <пространство> --label <название> --type <тип> --applies-to <тип-объекта> [--unit <единица>] [--sensitivity internal|public|personal|restricted]
 
 Команды не исполняют произвольный SQL и не изменяют физическую схему SQLite.
-Новые поля создаются как типизированные определения Docomator.
+Новые поля создаются как типизированные определения выбранного пространства Docomator.
 `);
 }
 
@@ -142,13 +142,15 @@ try {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     if (result.status !== "ok") process.exitCode = 1;
   } else if (command === "create-property") {
+    const spaceIdentity = option(args, "--space");
     const label = option(args, "--label");
     const valueType = option(args, "--type");
     const appliesTo = option(args, "--applies-to");
-    if (!label || !valueType || !appliesTo) {
-      throw new Error("Нужны --label, --type и --applies-to.");
+    if (!spaceIdentity || !label || !valueType || !appliesTo) {
+      throw new Error("Нужны --space, --label, --type и --applies-to.");
     }
     const result = registry.createPropertyDefinition(
+      spaceIdentity,
       {
         label,
         valueType,
@@ -164,7 +166,7 @@ try {
       }
     );
     process.stdout.write(
-      `Поле создано: ${result.label} (${result.key}), тип ${result.valueType}.\n`
+      `Поле создано в пространстве ${spaceIdentity}: ${result.label} (${result.key}), тип ${result.valueType}.\n`
     );
   } else {
     throw new Error(`Неизвестная команда: ${command}`);

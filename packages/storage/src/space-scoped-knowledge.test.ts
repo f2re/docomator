@@ -77,6 +77,169 @@ test("property definitions are isolated by space", () => {
   }
 });
 
+test("scoped reads never acquire an unowned legacy field", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const space = spaces.createSpace(
+      { key: "space-read-only", name: "Чтение без побочных эффектов" },
+      context("corr-space")
+    );
+    const globalKnowledge = new KnowledgeRegistry(fixture.store);
+    const legacy = globalKnowledge.createPropertyDefinition(
+      {
+        key: "legacy.unowned.field",
+        label: "Старое поле без владельца",
+        valueType: "string",
+        appliesTo: ["person"]
+      },
+      context("corr-global-field")
+    );
+    const scoped = new SpaceScopedKnowledgeRegistry(fixture.store, space.id, {
+      spaces
+    });
+
+    assert.throws(
+      () => scoped.getPropertyDefinition(legacy.key),
+      KnowledgeNotFoundError
+    );
+    const beforeAdoption = fixture.store.execute((database) =>
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM space_property_definitions WHERE property_definition_id = ?"
+        )
+        .get(legacy.id) as { count: number }
+    );
+    assert.equal(beforeAdoption.count, 0);
+
+    const adopted = scoped.adoptUnownedPropertyDefinition(legacy.key);
+    assert.equal(adopted?.id, legacy.id);
+    assert.equal(scoped.getPropertyDefinition(legacy.key).id, legacy.id);
+    const afterAdoption = fixture.store.execute((database) =>
+      database
+        .prepare(
+          "SELECT space_id FROM space_property_definitions WHERE property_definition_id = ?"
+        )
+        .get(legacy.id) as { space_id: string } | undefined
+    );
+    assert.equal(afterAdoption?.space_id, space.id);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("legacy shared definitions are readable but cannot be mutated from one space", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const first = spaces.createSpace(
+      { key: "legacy-shared-a", name: "Legacy A" },
+      context("corr-space-a")
+    );
+    const second = spaces.createSpace(
+      { key: "legacy-shared-b", name: "Legacy B" },
+      context("corr-space-b")
+    );
+    const firstKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      first.id,
+      { spaces }
+    );
+    const field = firstKnowledge.createPropertyDefinition(
+      {
+        key: "legacy.shared.field",
+        label: "Историческое общее поле",
+        valueType: "string",
+        appliesTo: ["person"]
+      },
+      context("corr-field")
+    );
+
+    fixture.store.execute((database) => {
+      database.exec("DROP TRIGGER IF EXISTS trg_space_property_definition_single_owner_insert");
+      database
+        .prepare(`
+          INSERT INTO space_property_definitions(
+            space_id, property_definition_id, created_at
+          ) VALUES (?, ?, ?)
+        `)
+        .run(second.id, field.id, NOW);
+    });
+
+    const secondKnowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      second.id,
+      { spaces }
+    );
+    assert.equal(firstKnowledge.getPropertyDefinition(field.key).id, field.id);
+    assert.equal(secondKnowledge.getPropertyDefinition(field.key).id, field.id);
+    assert.throws(
+      () =>
+        firstKnowledge.updatePropertyDefinitionUiGroup(
+          field.key,
+          "teacher",
+          context("corr-shared-update")
+        ),
+      /Историческое поле используется несколькими пространствами/u
+    );
+    assert.deepEqual(
+      secondKnowledge.getPropertyDefinition(field.key).validation,
+      {}
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("legacy internal writes may claim an unowned field only for the entity space", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const space = spaces.createSpace(
+      { key: "legacy-write", name: "Переходная запись" },
+      context("corr-space")
+    );
+    const entity = spaces.createEntity(
+      space.id,
+      {
+        entityTypeKey: "person",
+        displayName: "Петров Пётр Петрович"
+      },
+      context("corr-entity")
+    );
+    const globalKnowledge = new KnowledgeRegistry(fixture.store);
+    const unowned = globalKnowledge.createPropertyDefinition(
+      {
+        key: "legacy.unowned.value",
+        label: "Поле без пространства",
+        valueType: "string",
+        appliesTo: ["person"]
+      },
+      context("corr-field")
+    );
+
+    globalKnowledge.appendPropertyValue(
+      {
+        entityId: entity.entityId,
+        propertyKey: unowned.key,
+        value: "значение",
+        sourceType: "test"
+      },
+      context("corr-value")
+    );
+    const scopes = fixture.store.execute((database) =>
+      database
+        .prepare(
+          "SELECT space_id FROM space_property_definitions WHERE property_definition_id = ?"
+        )
+        .all(unowned.id) as unknown as Array<{ space_id: string }>
+    );
+    assert.deepEqual(scopes.map((row) => row.space_id), [space.id]);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("database rejects a property from another space even through global registry", () => {
   const fixture = createMigratedTestStore();
   try {
