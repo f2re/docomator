@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./internal": {
+      "types": "./dist/index-internal.d.ts",
+      "default": "./dist/index-internal.js"
     }
   },
   "types": "./dist/index.d.ts",

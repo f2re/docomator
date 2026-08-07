@@ -3,14 +3,13 @@ import {
   DataImportValidationError,
   type DataImportPropertyMapping
 } from "./data-import.js";
-import {
-  KnowledgeNotFoundError,
-  KnowledgeRegistry
-} from "./knowledge.js";
+import { KnowledgeNotFoundError, KnowledgeRegistry } from "./knowledge.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import type { SpaceRegistry } from "./spaces.js";
 
 export function validateExistingImportIdentityProperty(input: {
   spaces: SpaceRegistry;
+  spaceIdentity: string;
   entityTypeKey: string;
   identityPropertyKey: string;
   mappings: readonly DataImportPropertyMapping[];
@@ -19,8 +18,13 @@ export function validateExistingImportIdentityProperty(input: {
   if (!(store instanceof SqliteStore)) {
     throw new TypeError("Space registry does not expose its backing SQLite store");
   }
-  const knowledge = new KnowledgeRegistry(store);
-  const entityType = knowledge.getEntityType(input.entityTypeKey);
+  const globalKnowledge = new KnowledgeRegistry(store);
+  const knowledge = new SpaceScopedKnowledgeRegistry(
+    store,
+    input.spaceIdentity,
+    { spaces: input.spaces }
+  );
+  const entityType = globalKnowledge.getEntityType(input.entityTypeKey);
   try {
     const property = knowledge.getPropertyDefinition(input.identityPropertyKey);
     if (property.valueType !== "string") {
@@ -42,11 +46,11 @@ export function validateExistingImportIdentityProperty(input: {
       (candidate) =>
         candidate.propertyKey !== undefined &&
         candidate.propertyKey.trim().toLowerCase() ===
-        input.identityPropertyKey.trim().toLowerCase()
+          input.identityPropertyKey.trim().toLowerCase()
     );
     if (!mapping?.createIfMissing) {
       throw new DataImportValidationError(
-        "Свойство устойчивого ключа не существует и его создание не разрешено."
+        "Свойство устойчивого ключа не существует в выбранном пространстве и его создание не разрешено."
       );
     }
   }

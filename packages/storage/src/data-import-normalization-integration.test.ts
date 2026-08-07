@@ -6,7 +6,7 @@ import {
   caseInsensitiveImportKey,
   parseImportPersonName
 } from "./data-import-normalization.js";
-import { KnowledgeRegistry } from "./knowledge.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { SpaceRegistry } from "./spaces.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
@@ -63,15 +63,19 @@ test("case-insensitive employee import reuses identity and stores separate name 
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
-    const knowledge = new KnowledgeRegistry(fixture.store);
-    const imports = new AssistedDataImportRegistry(fixture.store, {
-      spaces,
-      knowledge
-    });
     const space = spaces.createSpace(
       { key: "people-normalized", name: "Нормализованные сотрудники" },
       context("corr-space")
     );
+    const knowledge = new SpaceScopedKnowledgeRegistry(
+      fixture.store,
+      space.id,
+      { spaces }
+    );
+    const imports = new AssistedDataImportRegistry(fixture.store, {
+      spaces,
+      knowledge
+    });
     const department = knowledge.createPropertyDefinition(
       {
         key: "person.department_normalized",
@@ -240,7 +244,9 @@ test("invalid split full name reports the physical source row", () => {
     assert.equal(result.createdCount, 0);
     assert.equal(result.failedCount, 1);
     assert.equal(result.errors[0]?.rowNumber, 42);
-    assert.match(result.errors[0]?.message ?? "", /два или три слова/u);
+    assert.equal(result.errors[0]?.code, "invalid_person_name");
+    assert.equal(result.errors[0]?.column, "ФИО");
+    assert.equal(result.errors[0]?.rawValue, "Однослово");
   } finally {
     fixture.cleanup();
   }

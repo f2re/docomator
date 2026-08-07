@@ -7,7 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { loadApiConfig } from "@docomator/config";
-import { KnowledgeRegistry, SqliteStore } from "@docomator/storage";
+import { SpaceScopedKnowledgeRegistry, SqliteStore } from "@docomator/storage";
 
 import { buildApp } from "./app.js";
 import { createImportPreviewToken } from "./data-import-parser.js";
@@ -158,7 +158,7 @@ test("keyless API plans and imports employees without returning generated keys",
   }
 });
 
-test("API reports duplicate update values in Russian during planning", async () => {
+test("API returns typed duplicate coordinates during planning", async () => {
   const fixture = migratedFixture();
   const app = buildApp(
     loadApiConfig({
@@ -188,10 +188,36 @@ test("API reports duplicate update values in Russian during planning", async () 
     });
     assert.equal(response.statusCode, 200, response.body);
     const result = response.json() as {
-      data: { failedCount: number; errors: Array<{ message: string }> };
+      data: {
+        failedCount: number;
+        errors: Array<{
+          code: string;
+          column?: string;
+          rawValue?: string;
+          severity: string;
+          suggestedAction: string;
+          repair: { kind: string };
+        }>;
+      };
     };
     assert.equal(result.data.failedCount, 1);
-    assert.match(result.data.errors[0]?.message ?? "", /повторяется внутри файла/u);
+    assert.deepEqual(
+      {
+        code: result.data.errors[0]?.code,
+        column: result.data.errors[0]?.column,
+        rawValue: result.data.errors[0]?.rawValue,
+        severity: result.data.errors[0]?.severity,
+        repair: result.data.errors[0]?.repair.kind
+      },
+      {
+        code: "duplicate_identity",
+        column: "Табельный номер",
+        rawValue: "001",
+        severity: "error",
+        repair: "choose_identity_column"
+      }
+    );
+    assert.ok((result.data.errors[0]?.suggestedAction ?? "").length > 0);
   } finally {
     await app.close();
     fixture.cleanup();
@@ -209,7 +235,7 @@ test("explicit technical import contract remains available for automation", asyn
   );
   try {
     const spaceId = await createSpace(app);
-    new KnowledgeRegistry(fixture.store).createPropertyDefinition(
+    new SpaceScopedKnowledgeRegistry(fixture.store, spaceId).createPropertyDefinition(
       {
         key: "person.external_id",
         label: "Внешний номер",
@@ -218,7 +244,7 @@ test("explicit technical import contract remains available for automation", asyn
         sensitivity: "personal"
       },
       {
-        correlationId: "corr-legacy-field",
+        correlationId: "corr-technical-field",
         actorType: "test",
         actorId: "operator-1",
         now: "2026-07-15T10:00:00.000Z"

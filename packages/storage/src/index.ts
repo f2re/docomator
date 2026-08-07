@@ -2,6 +2,7 @@ export * from "./audit.js";
 export * from "./data-import-access.js";
 export * from "./data-import-assist-access.js";
 export * from "./data-import-assist.js";
+export * from "./data-import-errors.js";
 export * from "./data-import-validation.js";
 export * from "./data-import.js";
 export * from "./database.js";
@@ -18,10 +19,53 @@ export * from "./document-schedules.js";
 export * from "./document-values.js";
 export * from "./email-address.js";
 export * from "./email-recipients.js";
-export * from "./employees.js";
+
+export { STANDARD_PERSON_TYPE_KEY } from "./employees.js";
+export type {
+  CreateEmployeeFieldInput,
+  CreateEmployeeInput,
+  CreateEmployeeResult,
+  EmployeeFieldRecord,
+  EmployeeProfileRecord,
+  EmployeeRegistry,
+  EmployeeStatus,
+  EmployeeSummaryRecord,
+  ListEmployeesOptions,
+  NewEmployeeFieldDefinitionInput,
+  UpdateEmployeeFieldInput,
+  UpdateEmployeeInput
+} from "./employees.js";
 export * from "./space-isolated-employees.js";
+
 export * from "./json.js";
-export * from "./knowledge.js";
+export {
+  generateOpaqueStableKey,
+  KnowledgeConflictError,
+  KnowledgeNotFoundError,
+  KnowledgeValidationError,
+  normalizePropertyUiGroup,
+  propertyUiGroupFromValidation,
+  PROPERTY_UI_GROUPS
+} from "./knowledge.js";
+export type {
+  AppendPropertyValueInput,
+  CreateEntityInput,
+  CreateEntityTypeInput,
+  CreatePropertyDefinitionInput,
+  EntityRecord,
+  EntityStatus,
+  EntityTypeRecord,
+  KnowledgeRegistry,
+  ListEntitiesOptions,
+  ListPropertyValueHistoryOptions,
+  MutationContext,
+  PropertyCardinality,
+  PropertyDefinitionRecord,
+  PropertySensitivity,
+  PropertyUiGroup,
+  PropertyValueRecord
+} from "./knowledge.js";
+
 export * from "./multi-field-test-versions.js";
 export * from "./network-folder-files.js";
 export * from "./object-cleanup-access.js";
@@ -35,7 +79,39 @@ export * from "./space-scoped-operator-assist.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
 export * from "./publication-access.js";
-export * from "./publications.js";
+export {
+  PUBLICATION_AUTHOR_ROLES,
+  PUBLICATION_CLASSIFICATION_CODES,
+  PUBLICATION_CLASSIFICATION_LABELS,
+  PUBLICATION_CLASSIFICATION_STATES,
+  PUBLICATION_DERIVED_PROPERTY_KEYS,
+  PublicationConflictError,
+  PublicationNotFoundError,
+  PublicationValidationError
+} from "./publications.js";
+export type {
+  PublicationAudienceSnapshotResult,
+  PublicationAuthorRecord,
+  PublicationAuthorRole,
+  PublicationClassificationCode,
+  PublicationClassificationMatch,
+  PublicationClassificationRecord,
+  PublicationClassificationState,
+  PublicationRegistry,
+  PublicationRegistryConfiguration,
+  PublicationRegistryConfigurationInput,
+  PublicationReport,
+  PublicationReportAuthor,
+  PublicationReportClassification,
+  PublicationReportCriteria,
+  PublicationReportCriteriaInput,
+  PublicationReportRow,
+  PublicationReportSnapshot,
+  PublicationReportSnapshotSummary,
+  PublicationReportTotals,
+  ReplacePublicationAuthorInput,
+  SetPublicationClassificationInput
+} from "./publications.js";
 export * from "./space-scoped-publications.js";
 export * from "./repeat-contract.js";
 export * from "./runtime-status-access.js";
