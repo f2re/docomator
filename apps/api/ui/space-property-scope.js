@@ -269,16 +269,28 @@ function clearEntityImportErrorUx(root) {
   root.querySelector("[data-entity-import-error-guide]")?.remove();
 }
 
+function searchableSelectTrigger(control) {
+  if (!(control instanceof HTMLSelectElement)) return null;
+  const sibling = control.nextElementSibling;
+  const root = sibling?.matches?.("[data-searchable-select-root]")
+    ? sibling
+    : control.parentElement?.querySelector?.("[data-searchable-select-root]");
+  return root?.querySelector?.(".searchable-select-trigger") || null;
+}
+
 function visibleEntityImportCorrectionControl(row) {
   if (!row) return null;
   const createField = [...row.querySelectorAll("[data-entity-import-create]")].find(
     (field) => !field.hidden && field.querySelector("[data-entity-import-type]")
   );
-  return (
-    createField?.querySelector("[data-entity-import-type]") ||
-    row.querySelector("[data-entity-import-mode]") ||
-    row.querySelector("input, select, textarea")
-  );
+  const createControl = createField?.querySelector("[data-entity-import-type]");
+  if (createControl) return searchableSelectTrigger(createControl) || createControl;
+
+  const modeControl = row.querySelector("[data-entity-import-mode]");
+  if (modeControl) return searchableSelectTrigger(modeControl) || modeControl;
+
+  const fallback = row.querySelector("input, select, textarea");
+  return searchableSelectTrigger(fallback) || fallback;
 }
 
 function enhanceEntityImportErrors() {
