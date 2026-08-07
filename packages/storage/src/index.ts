@@ -2,6 +2,7 @@ export * from "./audit.js";
 export * from "./data-import-access.js";
 export * from "./data-import-assist-access.js";
 export * from "./data-import-assist.js";
+export * from "./data-import-errors.js";
 export * from "./data-import-validation.js";
 export * from "./data-import.js";
 export * from "./database.js";
