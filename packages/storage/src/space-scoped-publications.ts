@@ -286,26 +286,26 @@ class PublicationDerivedKnowledgeRegistry extends KnowledgeRegistry {
 }
 
 export class SpaceScopedPublicationRegistry extends PublicationRegistry {
-  private readonly spaces: SpaceRegistry;
+  private readonly spaceRegistry: SpaceRegistry;
   private readonly globalKnowledge: KnowledgeRegistry;
 
   constructor(private readonly backingStore: SqliteStore) {
     super(backingStore);
-    this.spaces = new SpaceRegistry(backingStore);
+    this.spaceRegistry = new SpaceRegistry(backingStore);
     this.globalKnowledge = new KnowledgeRegistry(backingStore);
   }
 
   private resolvedSpaceId(spaceIdentity: string): string {
-    return this.spaces.getSpace(spaceIdentity).id;
+    return this.spaceRegistry.getSpace(spaceIdentity).id;
   }
 
   private delegate(spaceIdentity: string): PublicationRegistry {
     return new PublicationRegistry(this.backingStore, {
-      spaces: this.spaces,
+      spaces: this.spaceRegistry,
       knowledge: new PublicationDerivedKnowledgeRegistry(
         this.backingStore,
         spaceIdentity,
-        this.spaces
+        this.spaceRegistry
       )
     });
   }
@@ -337,7 +337,7 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     for (const specification of DERIVED_PROPERTY_SPECS) {
       ensureScopedProperty(
         this.backingStore,
-        this.spaces,
+        this.spaceRegistry,
         spaceId,
         {
           ...specification,
@@ -355,7 +355,7 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     const knowledge = new SpaceScopedKnowledgeRegistry(
       this.backingStore,
       spaceIdentity,
-      { spaces: this.spaces }
+      { spaces: this.spaceRegistry }
     );
     for (const key of [
       input.publicationYearPropertyKey,
@@ -498,7 +498,7 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     for (const specification of publicationProperties) {
       const field = ensureScopedProperty(
         this.backingStore,
-        this.spaces,
+        this.spaceRegistry,
         spaceId,
         specification,
         contextInput
@@ -507,7 +507,7 @@ export class SpaceScopedPublicationRegistry extends PublicationRegistry {
     }
     const department = ensureScopedProperty(
       this.backingStore,
-      this.spaces,
+      this.spaceRegistry,
       spaceId,
       {
         key: "person.department",
