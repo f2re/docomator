@@ -8,9 +8,9 @@ import test, { type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  KnowledgeRegistry,
-  PublicationRegistry,
   SpaceRegistry,
+  SpaceScopedKnowledgeRegistry,
+  SpaceScopedPublicationRegistry,
   SqliteStore
 } from "@docomator/storage";
 import Fastify from "fastify";
@@ -47,13 +47,16 @@ async function fixture(t: TestContext) {
 
   const store = new SqliteStore({ databasePath });
   const spaces = new SpaceRegistry(store);
-  const knowledge = new KnowledgeRegistry(store);
-  const publications = new PublicationRegistry(store);
+  const publications = new SpaceScopedPublicationRegistry(store);
   const space = spaces.createSpace(
     { key: "science", name: "Научная деятельность" },
     context("corr-space")
   );
-  publications.ensureDefaultConfiguration(space.id, context("corr-bootstrap"));
+  const configuration = publications.ensureDefaultConfiguration(
+    space.id,
+    context("corr-bootstrap")
+  );
+  const knowledge = new SpaceScopedKnowledgeRegistry(store, space.id, { spaces });
   const teacher = spaces.createEntity(
     space.id,
     { entityTypeKey: "person", displayName: "Иванов Иван Иванович" },
@@ -70,7 +73,7 @@ async function fixture(t: TestContext) {
   knowledge.appendPropertyValue(
     {
       entityId: publication.entityId,
-      propertyKey: "publication.year",
+      propertyKey: configuration.publicationYearPropertyKey,
       value: 2026,
       sourceType: "test"
     },
