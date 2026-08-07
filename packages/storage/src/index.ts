@@ -31,6 +31,7 @@ export * from "./object-reconciliation.js";
 export * from "./operation-center.js";
 export * from "./operator-assist-access.js";
 export * from "./operator-assist.js";
+export * from "./space-scoped-operator-assist.js";
 export * from "./object-store.js";
 export * from "./property-codec.js";
 export * from "./publication-access.js";

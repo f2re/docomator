@@ -1,10 +1,11 @@
 import type { ApiConfig } from "@docomator/config";
 import {
+  DEFAULT_SPACE_ID,
   DocumentScheduleRegistry,
   DocumentScheduleValidationError,
   normalizeScheduleNetworkTemplate,
-  OperatorAssistRegistry,
   scheduleNetworkRegistryFromScheduleRegistry,
+  SpaceScopedOperatorAssistRegistry,
   sqliteStoreFromDocumentScheduleRegistry,
   type DocumentGenerationMode,
   type DocumentScheduleDelivery,
@@ -23,6 +24,10 @@ interface SpaceParams {
 
 interface PropertyParams {
   key: string;
+}
+
+interface PropertyScopeQuery {
+  spaceId?: string;
 }
 
 interface GroupParams extends SpaceParams {
@@ -136,7 +141,7 @@ export function registerOperatorAssistRoutes(
   config: ApiConfig,
   scheduleRegistry: DocumentScheduleRegistry
 ): void {
-  const registry = new OperatorAssistRegistry(
+  const registry = new SpaceScopedOperatorAssistRegistry(
     sqliteStoreFromDocumentScheduleRegistry(scheduleRegistry)
   );
   const networkRegistry =
@@ -173,7 +178,11 @@ export function registerOperatorAssistRoutes(
     }
   );
 
-  app.put<{ Params: PropertyParams; Body: UpdatePropertyBody }>(
+  app.put<{
+    Params: PropertyParams;
+    Querystring: PropertyScopeQuery;
+    Body: UpdatePropertyBody;
+  }>(
     "/api/v1/knowledge/property-definitions/:key",
     {
       schema: {
@@ -182,6 +191,11 @@ export function registerOperatorAssistRoutes(
           additionalProperties: false,
           required: ["key"],
           properties: { key: stableKeySchema }
+        },
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: { spaceId: idSchema }
         },
         body: {
           type: "object",
@@ -217,7 +231,8 @@ export function registerOperatorAssistRoutes(
       }
     },
     async (request, reply) => {
-      const updated = registry.updatePropertyDefinition(
+      const updated = registry.updatePropertyDefinitionInSpace(
+        request.query.spaceId ?? DEFAULT_SPACE_ID,
         request.params.key,
         request.body,
         mutationContextFromRequest(request)
@@ -227,7 +242,11 @@ export function registerOperatorAssistRoutes(
     }
   );
 
-  app.post<{ Params: PropertyParams; Body: ExtendOptionsBody }>(
+  app.post<{
+    Params: PropertyParams;
+    Querystring: PropertyScopeQuery;
+    Body: ExtendOptionsBody;
+  }>(
     "/api/v1/knowledge/property-definitions/:key/options",
     {
       schema: {
@@ -236,6 +255,11 @@ export function registerOperatorAssistRoutes(
           additionalProperties: false,
           required: ["key"],
           properties: { key: stableKeySchema }
+        },
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: { spaceId: idSchema }
         },
         body: {
           type: "object",
@@ -253,7 +277,8 @@ export function registerOperatorAssistRoutes(
       }
     },
     async (request, reply) => {
-      const updated = registry.extendEnumOptions(
+      const updated = registry.extendEnumOptionsInSpace(
+        request.query.spaceId ?? DEFAULT_SPACE_ID,
         request.params.key,
         request.body.values,
         mutationContextFromRequest(request)
