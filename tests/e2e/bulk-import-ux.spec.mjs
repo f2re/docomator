@@ -17,7 +17,7 @@ test("принимает CSV/XLSX перетаскиванием и не рас�
   await installDocomatorApiMock(page);
   await openImport(page);
 
-  const dropZone = page.locator(".bulk-import-drop-zone");
+  const dropZone = page.locator("#bulkDataImportPanel .bulk-import-drop-zone");
   await expect(dropZone).toBeVisible();
   await expect(dropZone).toContainText("Перетащите Excel или CSV сюда");
 

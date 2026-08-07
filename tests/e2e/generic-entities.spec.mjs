@@ -59,6 +59,60 @@ const roomProperties = [
   }
 ];
 
+async function installScopedPropertyValueMock(page) {
+  const valuesByEntity = new Map();
+  await page.route(
+    /\/api\/v1\/spaces\/[^/]+\/entities\/[^/]+\/properties\/[^/?]+(?:\?.*)?$/u,
+    async (route) => {
+      if (route.request().method() !== "PUT") {
+        await route.fallback();
+        return;
+      }
+      const url = new URL(route.request().url());
+      const segments = url.pathname.split("/").filter(Boolean);
+      const entityId = decodeURIComponent(segments[5] || "");
+      const propertyKey = decodeURIComponent(segments[7] || "");
+      const body = route.request().postDataJSON() || {};
+      const previous = valuesByEntity.get(entityId) || [];
+      const version =
+        previous.filter((item) => item.propertyKey === propertyKey).length + 1;
+      const record = {
+        id: `e2e-value-${entityId}-${propertyKey}-${version}`,
+        entityId,
+        propertyKey,
+        value: body.value,
+        valueType: propertyKey === "room.capacity" ? "integer" : "string",
+        version,
+        sourceType: body.sourceType || "user_input",
+        createdAt: "2026-08-07T12:00:00.000Z"
+      };
+      valuesByEntity.set(entityId, [...previous, record]);
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ data: record, correlationId: "e2e-property-write" })
+      });
+    }
+  );
+  await page.route(
+    /\/api\/v1\/spaces\/[^/]+\/entities\/[^/]+\/property-values(?:\?.*)?$/u,
+    async (route) => {
+      const url = new URL(route.request().url());
+      const segments = url.pathname.split("/").filter(Boolean);
+      const entityId = decodeURIComponent(segments[5] || "");
+      const propertyKey = url.searchParams.get("propertyKey");
+      const values = (valuesByEntity.get(entityId) || []).filter(
+        (item) => propertyKey === null || item.propertyKey === propertyKey
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: values, correlationId: "e2e-property-history" })
+      });
+    }
+  );
+}
+
 test("оператор создаёт и импортирует произвольные объекты одного типа", async ({
   page
 }) => {
@@ -67,6 +121,7 @@ test("оператор создаёт и импортирует произвол
     properties: roomProperties,
     importPreview
   });
+  await installScopedPropertyValueMock(page);
   const app = new DocomatorPage(page);
   await app.open();
   await app.openView("entities");
@@ -216,9 +271,9 @@ test("импорт произвольных объектов принимает 
   ).toBe("auditoriums-invalid.csv");
 
   await page.locator("#entityImportPreviewButton").click();
-  const capacity = page
-    .locator("[data-entity-import-mapping]")
-    .filter({ hasText: "Вместимость" });
+  const capacity = page.locator(
+    '[data-entity-import-mapping][data-column="Вместимость"]'
+  );
   await expect(capacity).toBeVisible();
   await page.locator("#entityImportPlanButton").click();
 
