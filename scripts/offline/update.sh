@@ -18,6 +18,11 @@ for ((index = 0; index < ${#arguments[@]}; index += 1)); do
   fi
 done
 BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
+if [[ "${DOCOMATOR_STRICT_BUNDLE_PATH:-0}" == "1" ]]; then
+  require_command stat
+  require_trusted_bundle "$SCRIPT_DIR"
+  [[ "$BUNDLE_ROOT" == "$SCRIPT_DIR" ]] || require_trusted_bundle "$BUNDLE_ROOT"
+fi
 "$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
 
 LOCK_FILE="/run/lock/docomator-update.lock"
