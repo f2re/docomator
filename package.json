@@ -53,7 +53,8 @@
     "test:e2e:visual": "DOCOMATOR_VISUAL_COMPARE=1 playwright test --config tests/e2e/playwright.config.mjs visual-artifacts.spec.mjs",
     "test:e2e:visual:update": "DOCOMATOR_VISUAL_COMPARE=1 playwright test --config tests/e2e/playwright.config.mjs visual-artifacts.spec.mjs --update-snapshots",
     "check:canonical-ui": "node scripts/ci/check-canonical-ui.mjs",
-    "check:release-version": "node scripts/ci/check-release-version.mjs"
+    "check:release-version": "node scripts/ci/check-release-version.mjs",
+    "version:sync": "node scripts/ci/sync-release-version.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
