@@ -85,6 +85,38 @@ curl --fail --silent http://127.0.0.1:8080/readyz
 
 Подробности: [`docs/OFFLINE_DEPLOYMENT.md`](docs/OFFLINE_DEPLOYMENT.md).
 
+## Полные целевые bundles
+
+Debian и Astra Linux собираются как разные target-профили: набор системных пакетов, сведения об ОС и Chromium/LibreOffice-профиль должны соответствовать конкретной целевой платформе.
+
+### 🟦 Debian
+
+На совместимой подключённой Debian-машине:
+
+```bash
+npm run bundle:offline:debian
+```
+
+### 🟥 Astra Linux
+
+На совместимой подключённой машине Astra Linux:
+
+```bash
+npm run bundle:offline:astra
+```
+
+Готовность к стабильному выпуску подтверждается не наличием архива, а целевыми актами и строгим evidence gate:
+
+```bash
+npm run release:evidence:init -- /srv/docomator-release-evidence
+npm run release:evidence -- \
+  /srv/docomator-release-evidence \
+  --expected-commit '<полный Git SHA>' \
+  --expected-version "$(cat VERSION)"
+```
+
+Требования к фактической Debian/🟥 Astra Linux приёмке, восстановлению и реальному Office-корпусу описаны в [`docs/FINALIZATION.md`](docs/FINALIZATION.md).
+
 ## Обновление
 
 Используйте `update.sh` из нового проверенного bundle:
