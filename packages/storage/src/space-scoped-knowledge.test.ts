@@ -128,6 +128,59 @@ test("scoped reads never acquire an unowned legacy field", () => {
   }
 });
 
+test("database rejects an unowned property value instead of claiming it implicitly", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const space = spaces.createSpace(
+      { key: "scope-required", name: "Явная принадлежность" },
+      context("corr-space")
+    );
+    const entity = spaces.createEntity(
+      space.id,
+      {
+        entityTypeKey: "person",
+        displayName: "Петров Пётр Петрович"
+      },
+      context("corr-entity")
+    );
+    const globalKnowledge = new KnowledgeRegistry(fixture.store);
+    const unowned = globalKnowledge.createPropertyDefinition(
+      {
+        key: "legacy.unowned.value",
+        label: "Поле без пространства",
+        valueType: "string",
+        appliesTo: ["person"]
+      },
+      context("corr-field")
+    );
+
+    assert.throws(
+      () =>
+        globalKnowledge.appendPropertyValue(
+          {
+            entityId: entity.entityId,
+            propertyKey: unowned.key,
+            value: "значение",
+            sourceType: "test"
+          },
+          context("corr-value")
+        ),
+      /property definition must belong to a space before value insert/u
+    );
+    const scopeCount = fixture.store.execute((database) =>
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM space_property_definitions WHERE property_definition_id = ?"
+        )
+        .get(unowned.id) as { count: number }
+    );
+    assert.equal(scopeCount.count, 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("database rejects a property from another space even through global registry", () => {
   const fixture = createMigratedTestStore();
   try {
