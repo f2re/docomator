@@ -16,9 +16,8 @@ import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
  * OperatorAssistRegistry исторически работает с общей схемой свойств. Этот
  * адаптер оставляет его эксплуатационную логику неизменной, но не позволяет
  * экрану текущего пространства получать или менять пользовательское поле,
- * принадлежащее другому пространству. Исторические определения, уже общие для
- * нескольких пространств, доступны для чтения значений, но защищены от общего
- * изменения до контролируемого разделения данных.
+ * принадлежащее другому пространству. Исторический key после миграции 0029
+ * разрешается в независимый clone текущего пространства.
  */
 export class SpaceScopedOperatorAssistRegistry extends OperatorAssistRegistry {
   constructor(private readonly scopedStore: SqliteStore) {
@@ -51,8 +50,8 @@ export class SpaceScopedOperatorAssistRegistry extends OperatorAssistRegistry {
       this.scopedStore,
       spaceIdentity
     );
-    knowledge.assertPropertyDefinitionMutable(key);
-    const updated = super.updatePropertyDefinition(key, input, context);
+    const current = knowledge.assertPropertyDefinitionMutable(key);
+    const updated = super.updatePropertyDefinition(current.key, input, context);
     return knowledge.getPropertyDefinition(updated.key);
   }
 
@@ -66,8 +65,8 @@ export class SpaceScopedOperatorAssistRegistry extends OperatorAssistRegistry {
       this.scopedStore,
       spaceIdentity
     );
-    knowledge.assertPropertyDefinitionMutable(key);
-    const updated = super.extendEnumOptions(key, values, context);
+    const current = knowledge.assertPropertyDefinitionMutable(key);
+    const updated = super.extendEnumOptions(current.key, values, context);
     return knowledge.getPropertyDefinition(updated.key);
   }
 }
