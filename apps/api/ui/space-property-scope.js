@@ -274,10 +274,22 @@ function visibleEntityImportCorrectionControl(row) {
   const createField = [...row.querySelectorAll("[data-entity-import-create]")].find(
     (field) => !field.hidden && field.querySelector("[data-entity-import-type]")
   );
+  const createType = createField?.querySelector("[data-entity-import-type]");
+  if (createType) return createType;
+
+  const mode = row.querySelector("[data-entity-import-mode]");
+  const searchable =
+    mode?.nextElementSibling?.classList?.contains("searchable-select")
+      ? mode.nextElementSibling
+      : mode?.parentElement?.querySelector(".searchable-select");
+  const searchableControl = searchable?.querySelector(".searchable-select-control");
+  if (searchableControl) return searchableControl;
+
   return (
-    createField?.querySelector("[data-entity-import-type]") ||
-    row.querySelector("[data-entity-import-mode]") ||
-    row.querySelector("input, select, textarea")
+    mode ||
+    row.querySelector(
+      'input:not([hidden]), button:not([hidden]), select:not([hidden]), textarea:not([hidden])'
+    )
   );
 }
 
