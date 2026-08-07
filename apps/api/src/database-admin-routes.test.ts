@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 import { loadApiConfig } from "@docomator/config";
 import {
   AuditRepository,
-  KnowledgeRegistry,
   SpaceRegistry,
+  SpaceScopedKnowledgeRegistry,
   SqliteStore
 } from "@docomator/storage";
 
@@ -242,7 +242,9 @@ test("database admin API creates a typed logical property only in the selected s
     assert.deepEqual(created.data.aliases, ["внутренний код", "номер сотрудника"]);
     assert.deepEqual(created.data.validation, { enum: ["А", "Б"] });
     assert.equal(
-      new KnowledgeRegistry(fixture.store).getPropertyDefinition(created.data.key).label,
+      new SpaceScopedKnowledgeRegistry(fixture.store, space.id).getPropertyDefinition(
+        created.data.key
+      ).label,
       "Внутренний номер"
     );
     const scope = fixture.store.execute((database) =>
