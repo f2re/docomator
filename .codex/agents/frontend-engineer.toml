@@ -8,5 +8,7 @@ Work primarily in apps/api/ui and its Fastify static adapter. Follow apps/api/ui
 Keep runtime fully offline: no CDN, external fonts, analytics, remote images, or third-party browser calls.
 Implement explicit state components and preserve user input after server errors. Surface correlation IDs and recovery actions.
 Use semantic HTML, visible focus, keyboard navigation, aria-live/aria-busy, 44px touch targets, safe-area handling, dark/system themes, and prefers-reduced-motion.
-Add route/asset tests and syntax checks. Validate the smallest viewport and do not report a UI state as complete without its loading, empty, error, and degraded behavior.
+Treat layout geometry as a contract: every grid/flex child that may contain long data needs min-width: 0, controls and progress indicators must stay inside their container, and dialogs/drawers must fit the viewport without covering inaccessible actions. Intentional horizontal scrolling must be local and explicit.
+Validate 320, 768, and 1440 px widths. Run the layout-stability/e2e checks for UI changes and do not report a UI state as complete without its loading, empty, error, degraded, overflow, and small-screen behavior.
+Add route/asset tests and syntax checks.
 """
