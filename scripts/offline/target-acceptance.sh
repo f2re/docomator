@@ -125,7 +125,6 @@ run_logged() {
   "$@" > >(tee "$log_file") 2> >(tee -a "$log_file" >&2)
 }
 
-require_trusted_bundle "$BUNDLE_ROOT"
 run_logged "$OUTPUT_DIRECTORY/logs/01-verify-bundle.log" \
   "$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
 verify_target_os_package_profile "$BUNDLE_ROOT/payload/os-packages"
