@@ -213,52 +213,15 @@ function enhanceEntityImportDropZone() {
   });
 }
 
-function normalizeImportText(value) {
-  return String(value ?? "").normalize("NFKC").trim();
-}
-
-function entityImportErrorColumn(error, preview) {
-  if (typeof error?.column === "string" && error.column.trim()) {
-    return error.column.trim();
-  }
-  const message = String(error?.message || "");
-  const explicit = /колонк(?:а|е|у|ой)\s+«([^»]+)»/iu.exec(message)?.[1];
-  if (explicit && preview?.headers?.includes(explicit)) return explicit;
-  const rawValue = normalizeImportText(error?.rawValue);
-  if (!rawValue || !Array.isArray(preview?.rows)) return "";
-  const numbers = Array.isArray(preview.sourceRowNumbers)
-    ? preview.sourceRowNumbers
-    : preview.rows.map((_row, index) => index + 2);
-  const index = numbers.findIndex((number) => Number(number) === Number(error?.rowNumber));
-  const row = index >= 0 ? preview.rows[index] : null;
-  if (!row) return "";
-  const matches = (preview.headers || []).filter(
-    (header) => normalizeImportText(row[header]) === rawValue
-  );
-  return matches.length === 1 ? matches[0] : "";
+function entityImportErrorColumn(error) {
+  return typeof error?.column === "string" ? error.column.trim() : "";
 }
 
 function entityImportFallbackHint(error) {
   if (typeof error?.suggestedAction === "string" && error.suggestedAction.trim()) {
     return error.suggestedAction.trim();
   }
-  const text = String(error?.message || "").toLocaleLowerCase("ru-RU");
-  if (/не является числом|не является целым/u.test(text)) {
-    return "Если это код или номер, выберите текстовый тип. Если это число — исправьте значение в таблице.";
-  }
-  if (/не распознано как дата|недопустимую дату/u.test(text)) {
-    return "Используйте ДД.ММ.ГГГГ или ГГГГ-ММ-ДД либо выберите текстовый тип поля.";
-  }
-  if (/да\/нет/u.test(text)) {
-    return "Используйте да/нет, 1/0, true/false, +/− либо выберите текстовый тип.";
-  }
-  if (/повторяется внутри файла/u.test(text)) {
-    return "Выберите действительно уникальную колонку идентификатора или исправьте повтор в исходной таблице.";
-  }
-  if (/не заполнена колонка/u.test(text)) {
-    return "Заполните обязательную ячейку или выберите другую колонку для названия/идентификатора.";
-  }
-  return "Проверьте отмеченное сопоставление и исходное значение, затем снова запустите проверку.";
+  return "Проверьте исходную строку и сопоставление полей, затем снова запустите проверку.";
 }
 
 function clearEntityImportErrorUx(root) {
@@ -304,7 +267,6 @@ function enhanceEntityImportErrors() {
   }
   const plan = storedPlan.data;
   const errors = Array.isArray(plan?.errors) ? plan.errors : [];
-  const preview = state.previewBySpace.get(spaceId);
   const planRoot = root.querySelector("#entityImportPlan");
   if (!planRoot) return;
   root.dataset.docomatorPlanSequence = String(storedPlan.sequence);
@@ -313,7 +275,7 @@ function enhanceEntityImportErrors() {
 
   const byColumn = new Map();
   for (const error of errors) {
-    const column = entityImportErrorColumn(error, preview);
+    const column = entityImportErrorColumn(error);
     if (!column) continue;
     const items = byColumn.get(column) || [];
     items.push(error);
@@ -339,7 +301,7 @@ function enhanceEntityImportErrors() {
   const list = document.createElement("div");
   list.className = "bulk-import-error-list";
   errors.slice(0, 100).forEach((error) => {
-    const column = entityImportErrorColumn(error, preview);
+    const column = entityImportErrorColumn(error);
     const card = document.createElement("article");
     card.className = "bulk-import-error-card";
     const copy = document.createElement("div");
