@@ -16,26 +16,64 @@ const packages = [
   "packages/storage/package.json",
   "packages/template-compiler/package.json"
 ];
+const statusDocuments = [
+  "docs/RELEASE_NOTES.md",
+  "SECURITY.md",
+  "docs/SUPPORT_MATRIX.md",
+  "docs/FINALIZATION.md"
+];
 
-async function fixture(version = "0.1.0-rc.1") {
+async function fixture(version = "0.1.0") {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-release-version-"));
+  await fs.writeFile(
+    path.join(root, "RELEASE_IDENTITY.json"),
+    JSON.stringify({ version, status: "candidate", channel: "pilot" })
+  );
   await fs.writeFile(path.join(root, "VERSION"), `${version}\n`);
   for (const relativePath of packages) {
     const target = path.join(root, relativePath);
     await fs.mkdir(path.dirname(target), { recursive: true });
-    await fs.writeFile(target, JSON.stringify({ version, dependencies: { "@docomator/config": version } }));
+    await fs.writeFile(
+      target,
+      JSON.stringify({
+        version,
+        dependencies: { "@docomator/config": version }
+      })
+    );
   }
-  await fs.writeFile(path.join(root, "package-lock.json"), JSON.stringify({ version, packages: { "": { version, dependencies: { "@docomator/config": version } } } }));
+  await fs.writeFile(
+    path.join(root, "package-lock.json"),
+    JSON.stringify({
+      version,
+      packages: {
+        "": {
+          version,
+          dependencies: { "@docomator/config": version }
+        }
+      }
+    })
+  );
   await fs.mkdir(path.join(root, "config"), { recursive: true });
-  await fs.writeFile(path.join(root, "config/docomator.env.example"), `DOCOMATOR_VERSION=${version}\n`);
+  await fs.writeFile(
+    path.join(root, "config/docomator.env.example"),
+    `DOCOMATOR_VERSION=${version}\n`
+  );
   await fs.mkdir(path.join(root, "packages/config/src"), { recursive: true });
-  await fs.writeFile(path.join(root, "packages/config/src/index.ts"), `const version = env.DOCOMATOR_VERSION ?? \"${version}\";\n`);
+  await fs.writeFile(
+    path.join(root, "packages/config/src/index.ts"),
+    `const version = env.DOCOMATOR_VERSION ?? \"${version}\";\n`
+  );
   await fs.mkdir(path.join(root, "docs"), { recursive: true });
-  await fs.writeFile(path.join(root, "docs/RELEASE_NOTES.md"), `# ${version}\n`);
+  const statusText = `# ${version}\n\nСтатус выпуска: \`candidate\`\n\nКанал выпуска: \`pilot\`\n`;
+  for (const relativePath of statusDocuments) {
+    const target = path.join(root, relativePath);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, statusText);
+  }
   return root;
 }
 
-test("принимает согласованную версию", async (t) => {
+test("принимает согласованную версию и статус", async (t) => {
   const root = await fixture();
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   assert.deepEqual(await collectReleaseVersionFindings(root), []);
@@ -48,5 +86,23 @@ test("находит дрейф внутренней зависимости", as
   const data = JSON.parse(await fs.readFile(target, "utf8"));
   data.dependencies["@docomator/config"] = "0.1.0-alpha.0";
   await fs.writeFile(target, JSON.stringify(data));
-  assert.ok((await collectReleaseVersionFindings(root)).some((finding) => finding.includes("@docomator/config")));
+  assert.ok(
+    (await collectReleaseVersionFindings(root)).some((finding) =>
+      finding.includes("@docomator/config")
+    )
+  );
+});
+
+test("находит противоречивое заявление stable у candidate", async (t) => {
+  const root = await fixture();
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.appendFile(
+    path.join(root, "docs/RELEASE_NOTES.md"),
+    "\nСтатус: **стабильный выпуск**\n"
+  );
+  assert.ok(
+    (await collectReleaseVersionFindings(root)).some((finding) =>
+      finding.includes("не может одновременно называться стабильным")
+    )
+  );
 });
