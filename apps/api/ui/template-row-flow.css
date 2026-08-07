@@ -359,3 +359,101 @@
     display: none;
   }
 }
+
+/*
+ * Контракт геометрической устойчивости. Эти правила загружаются последними и
+ * не задают внешний вид: они не дают дочерним элементам растягивать сетки,
+ * прогрессам/ползункам выходить за контейнер, а диалогам — за viewport.
+ */
+.view,
+.view > *,
+.panel,
+form,
+fieldset,
+label,
+.topbar,
+.topbar-actions,
+.dialog-body,
+.dialog-footer,
+.create-dialog,
+.drawer-panel,
+.generation-card,
+.generation-content,
+.generation-form,
+.intake-layout,
+.intake-panel,
+.intake-result-panel,
+.management-view,
+.settings-row,
+.operation-row {
+  min-width: 0;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea,
+output,
+progress {
+  max-width: 100%;
+}
+
+input[type="range"],
+progress,
+[role="progressbar"],
+.progress-bar,
+.progress-track,
+.intake-progress {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+input[type="range"] {
+  margin-inline: 0;
+}
+
+progress,
+.progress-bar,
+.progress-track {
+  overflow: hidden;
+}
+
+.create-dialog {
+  width: min(44rem, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.drawer-panel {
+  max-width: min(100%, 46rem);
+  max-height: 100dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+table,
+img,
+svg,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+pre,
+code,
+.long-value,
+.monospace-value {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 390px) {
+  .create-dialog {
+    width: calc(100vw - 12px);
+    max-width: calc(100vw - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+}
