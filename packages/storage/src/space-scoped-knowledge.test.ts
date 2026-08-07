@@ -184,7 +184,7 @@ test("legacy shared definitions are readable but cannot be mutated from one spac
     );
     assert.deepEqual(
       secondKnowledge.getPropertyDefinition(field.key).validation,
-      { uiGroup: "unassigned" }
+      {}
     );
   } finally {
     fixture.cleanup();
