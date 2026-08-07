@@ -174,7 +174,7 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
           WHERE property_definition_id = ?
           ORDER BY space_id ASC
         `)
-        .all(definition.id) as unknown as Array<{ space_id: string }>;
+        .all(definition.id) as unknown as Array<{ space_id: string }>
     );
     if (scopes.length !== 1 || scopes[0]?.space_id !== this.spaceId) {
       throw new KnowledgeConflictError(
