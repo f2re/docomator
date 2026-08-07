@@ -61,16 +61,14 @@ require_command sed
 require_command cp
 require_command mv
 require_command ln
-require_command cmp
-require_command stat
 
 BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
-require_trusted_bundle "$SCRIPT_DIR"
-[[ "$BUNDLE_ROOT" == "$SCRIPT_DIR" ]] || require_trusted_bundle "$BUNDLE_ROOT"
 "$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
 VERSION="$(<"$BUNDLE_ROOT/VERSION")"
 [[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || \
   die "VERSION автономного комплекта содержит запрещённые символы"
+RELEASE_METADATA_SHA256="$(sha256_of "$BUNDLE_ROOT/release.json")"
+RELEASE_ID="${VERSION}-${RELEASE_METADATA_SHA256:0:12}"
 mapfile -d '' BUNDLE_OS_DEBS < <(
   find "$BUNDLE_ROOT/payload/os-packages" -maxdepth 1 -type f -name '*.deb' -print0
 )
@@ -82,7 +80,7 @@ mkdir -p "$DATA_DIR" "$CONFIG_DIR"
 DATA_DIR="$(absolute_path "$DATA_DIR")"
 CONFIG_DIR="$(absolute_path "$CONFIG_DIR")"
 RELEASES_DIR="$INSTALL_ROOT/releases"
-RELEASE_DIR="$RELEASES_DIR/$VERSION"
+RELEASE_DIR="$RELEASES_DIR/$RELEASE_ID"
 CURRENT_LINK="$INSTALL_ROOT/current"
 CONFIG_FILE="$CONFIG_DIR/docomator.env"
 DATABASE_PATH="$DATA_DIR/docomator.db"
@@ -225,7 +223,7 @@ if [[ -n "$OLD_TARGET" ]]; then
   if ((INSTALL_SYSTEMD == 1)); then
     stop_docomator_services
   fi
-  BACKUP_DIR="$DATA_DIR/backups/pre-update-$(date -u +'%Y%m%dT%H%M%SZ')-$VERSION-$$"
+  BACKUP_DIR="$DATA_DIR/backups/pre-update-$(date -u +'%Y%m%dT%H%M%SZ')-$RELEASE_ID-$$"
   mkdir -p "$BACKUP_DIR"
   cp -a "$CONFIG_FILE" "$BACKUP_DIR/docomator.env"
   if [[ -f "$DATABASE_PATH" ]]; then
@@ -276,7 +274,7 @@ rollback() {
 }
 
 if [[ ! -d "$RELEASE_DIR" ]]; then
-  TEMP_RELEASE="$RELEASES_DIR/.${VERSION}.tmp.$$"
+  TEMP_RELEASE="$RELEASES_DIR/.${RELEASE_ID}.tmp.$$"
   rm -rf "$TEMP_RELEASE"
   mkdir -p "$TEMP_RELEASE"
   cp -a "$BUNDLE_ROOT/payload/app" "$TEMP_RELEASE/"
@@ -296,10 +294,10 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
   mv "$TEMP_RELEASE" "$RELEASE_DIR"
 else
   [[ -f "$RELEASE_DIR/release.json" ]] || \
-    die "Существующий каталог версии неполон: $RELEASE_DIR"
-  cmp -s "$BUNDLE_ROOT/release.json" "$RELEASE_DIR/release.json" || \
-    die "Версия $VERSION уже установлена с другими сведениями. Подготовьте новый номер версии."
-  info "Такой же каталог версии уже существует: $RELEASE_DIR"
+    die "Существующий каталог сборки неполон: $RELEASE_DIR"
+  [[ "$(sha256_of "$RELEASE_DIR/release.json")" == "$RELEASE_METADATA_SHA256" ]] || \
+    die "Метаданные существующего каталога сборки повреждены: $RELEASE_DIR"
+  info "Эта же сборка уже установлена: $RELEASE_DIR"
 fi
 
 if ! DOCOMATOR_DATA_DIR="$DATA_DIR" \
@@ -385,7 +383,8 @@ if ((NO_START == 0)); then
 fi
 
 info "Docomator $VERSION успешно установлен"
-info "Текущая версия: $(readlink -f "$CURRENT_LINK")"
+info "Сборка: ${RELEASE_METADATA_SHA256:0:12}"
+info "Текущий релиз: $(readlink -f "$CURRENT_LINK")"
 info "Файл настроек: $CONFIG_FILE"
 info "Постоянные данные: $DATA_DIR"
 
