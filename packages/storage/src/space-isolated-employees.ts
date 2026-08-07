@@ -140,7 +140,7 @@ export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
     if (existing !== undefined) {
       if (existing.valueType !== valueType) {
         throw new KnowledgeConflictError(
-          `Поле «${label}» в текущем пространстве уже имеет другой тип данных.`
+          `Поле «${label}» в текущем пространстве уже существует с другим типом данных.`
         );
       }
       return existing;

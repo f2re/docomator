@@ -7,7 +7,9 @@ const projectRoot = path.resolve(import.meta.dirname, "../..");
 const uiDirectory = path.join(projectRoot, "apps/api/ui");
 const bundles = {
   "app.js": [
+    "space-property-scope.js",
     "app.js",
+    "space-isolation-app.js",
     "operator-workflows.js",
     "workspace-switcher.js",
     "help-center.js",
@@ -38,6 +40,7 @@ const bundles = {
     "shared-corporate-mode.js",
     "storage-maintenance.js",
     "bulk-data-import.js",
+    "space-isolation-ui.js",
     "operation-center.js",
     "operations-readiness.js",
     "template-row-flow.js"

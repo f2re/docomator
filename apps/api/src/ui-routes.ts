@@ -79,8 +79,9 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "field-groups-ui.js",
     appendFileNames: [
       "searchable-select.js",
+      "space-property-scope.js",
       "app.js",
-      "space-isolation-ui.js",
+      "space-isolation-app.js",
       "entity-workspace.js",
       "operator-workflows.js",
       "workspace-switcher.js",
