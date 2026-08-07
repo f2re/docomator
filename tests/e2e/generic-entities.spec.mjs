@@ -227,9 +227,12 @@ test("импорт произвольных объектов принимает 
   await expect(page.locator("#entityImportPlan")).toContainText(
     "Если это код или номер"
   );
-  await expect(
-    page.locator("#entityImportPlan .bulk-import-error-card button")
-  ).toHaveText("Проверить поле");
+  const fixButton = page.locator(
+    "#entityImportPlan .bulk-import-error-card button"
+  );
+  await expect(fixButton).toHaveText("Проверить поле");
+  await fixButton.click();
+  await expect(capacity.locator("[data-entity-import-mode]")).toBeFocused();
 
   const geometry = await page.locator("#entityImportDialog").evaluate((dialog) => ({
     clientWidth: dialog.clientWidth,
