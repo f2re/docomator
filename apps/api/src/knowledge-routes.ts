@@ -22,6 +22,10 @@ interface PropertyDefinitionQuery extends PaginationQuery {
   spaceId?: string;
 }
 
+interface RequiredPropertyDefinitionQuery extends PaginationQuery {
+  spaceId: string;
+}
+
 interface EntityListQuery extends PaginationQuery {
   entityTypeKey?: string;
   status?: EntityStatus;
@@ -110,6 +114,13 @@ const paginationProperties = {
 
 const propertyScopeProperties = {
   spaceId: identifierSchema
+} as const;
+
+const requiredPropertyScopeQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["spaceId"],
+  properties: propertyScopeProperties
 } as const;
 
 const appendPropertyValueBodySchema = {
@@ -211,15 +222,14 @@ export function registerKnowledgeRoutes(
       responseEnvelope(request, registry.getEntityType(request.params.key))
   );
 
-  app.post<{ Querystring: PropertyDefinitionQuery; Body: CreatePropertyDefinitionBody }>(
+  app.post<{
+    Querystring: RequiredPropertyDefinitionQuery;
+    Body: CreatePropertyDefinitionBody;
+  }>(
     "/api/v1/knowledge/property-definitions",
     {
       schema: {
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: propertyScopeProperties
-        },
+        querystring: requiredPropertyScopeQuerySchema,
         body: {
           type: "object",
           additionalProperties: false,
@@ -315,7 +325,7 @@ export function registerKnowledgeRoutes(
 
   app.put<{
     Params: KeyParams;
-    Querystring: PropertyDefinitionQuery;
+    Querystring: RequiredPropertyDefinitionQuery;
     Body: UpdatePropertyUiGroupBody;
   }>(
     "/api/v1/knowledge/property-definitions/:key/group",
@@ -327,11 +337,7 @@ export function registerKnowledgeRoutes(
           required: ["key"],
           properties: { key: stableKeySchema }
         },
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: propertyScopeProperties
-        },
+        querystring: requiredPropertyScopeQuerySchema,
         body: {
           type: "object",
           additionalProperties: false,
