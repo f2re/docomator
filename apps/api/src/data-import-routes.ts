@@ -60,6 +60,20 @@ interface HistoryQuery {
   limit?: number;
 }
 
+interface ImportRowErrorLike {
+  rowNumber: number;
+  externalKey: string | null;
+  message: string;
+}
+
+interface StructuredImportRowError extends ImportRowErrorLike {
+  code: string;
+  column?: string;
+  propertyKey?: string;
+  rawValue?: string;
+  suggestedAction: string;
+}
+
 const spaceParamsSchema = {
   type: "object",
   additionalProperties: false,
@@ -180,6 +194,121 @@ function validateLegacyIdentity(
       mappings: body.mappings
     })
   );
+}
+
+function sourceRow(body: ExecuteImportBody, rowNumber: number): Record<string, string> | null {
+  const physicalRows = body.sourceRowNumbers ?? body.rows.map((_row, index) => index + 2);
+  const index = physicalRows.findIndex((number) => number === rowNumber);
+  return index >= 0 ? body.rows[index] ?? null : null;
+}
+
+function quotedValues(message: string): string[] {
+  return [...message.matchAll(/«([^»]+)»/gu)]
+    .map((match) => match[1]?.normalize("NFKC").trim() ?? "")
+    .filter(Boolean);
+}
+
+function inferImportErrorColumn(
+  error: ImportRowErrorLike,
+  body: ExecuteImportBody
+): string | undefined {
+  const explicit = /колонк(?:а|е|у|ой)\s+«([^»]+)»/iu.exec(error.message)?.[1];
+  if (explicit !== undefined && body.headers.includes(explicit)) return explicit;
+  if (/устойчив|повторяется внутри файла|одинаковым ключом/iu.test(error.message)) {
+    return body.identityColumn;
+  }
+  if (/фио|отображаемым названием|два или три слова/iu.test(error.message)) {
+    return body.displayNameColumn;
+  }
+  const row = sourceRow(body, error.rowNumber);
+  if (row === null) return undefined;
+  for (const value of quotedValues(error.message)) {
+    const matches = body.headers.filter(
+      (header) => String(row[header] ?? "").normalize("NFKC").trim() === value
+    );
+    if (matches.length === 1) return matches[0];
+  }
+  return undefined;
+}
+
+function importErrorCode(message: string): string {
+  const text = message.toLocaleLowerCase("ru-RU");
+  if (/не заполнена колонка/u.test(text)) return "required_value_missing";
+  if (/повторяется внутри файла|несколько объектов с одинаков/u.test(text)) {
+    return "duplicate_identity";
+  }
+  if (/не является целым числом/u.test(text)) return "invalid_integer";
+  if (/не является числом/u.test(text)) return "invalid_number";
+  if (/не распознано как дата и время/u.test(text)) return "invalid_datetime";
+  if (/не распознано как дата|недопустимую дату/u.test(text)) return "invalid_date";
+  if (/да\/нет/u.test(text)) return "invalid_boolean";
+  if (/несколько полей|выберите существующее поле/u.test(text)) {
+    return "ambiguous_mapping";
+  }
+  if (/фио|два или три слова/u.test(text)) return "invalid_person_name";
+  if (/не применяется к типу/u.test(text)) return "property_type_mismatch";
+  return "row_validation_failed";
+}
+
+function suggestedImportAction(code: string): string {
+  switch (code) {
+    case "required_value_missing":
+      return "Заполните обязательную ячейку либо выберите другую колонку для названия или устойчивого идентификатора.";
+    case "duplicate_identity":
+      return "Исправьте повтор в исходной таблице или выберите колонку, где значения действительно уникальны.";
+    case "invalid_integer":
+    case "invalid_number":
+      return "Если это код или номер, выберите текстовый тип. Если это число — исправьте значение в исходной таблице.";
+    case "invalid_date":
+    case "invalid_datetime":
+      return "Приведите значение к формату даты/времени либо выберите текстовый тип, если колонка не является датой.";
+    case "invalid_boolean":
+      return "Используйте да/нет, 1/0, true/false или +/− либо выберите текстовый тип поля.";
+    case "ambiguous_mapping":
+      return "Выберите конкретное существующее поле или создайте новое поле для этой колонки.";
+    case "invalid_person_name":
+      return "Проверьте порядок ФИО или отключите разделение ФИО для неоднозначной строки.";
+    case "property_type_mismatch":
+      return "Выберите поле, применимое к текущему типу объектов, либо создайте отдельное поле в этом пространстве.";
+    default:
+      return "Проверьте сопоставление, тип поля и исходное значение, затем снова запустите предварительную проверку.";
+  }
+}
+
+function structuredImportError(
+  error: ImportRowErrorLike,
+  body: ExecuteImportBody
+): StructuredImportRowError {
+  const column = inferImportErrorColumn(error, body);
+  const mapping =
+    column === undefined
+      ? undefined
+      : body.mappings.find((candidate) => candidate.column === column);
+  const row = sourceRow(body, error.rowNumber);
+  const rawValue = column === undefined || row === null ? undefined : row[column];
+  const code = importErrorCode(error.message);
+  return {
+    rowNumber: error.rowNumber,
+    externalKey: error.externalKey,
+    message: error.message,
+    code,
+    ...(column === undefined ? {} : { column }),
+    ...(mapping?.propertyKey === undefined
+      ? {}
+      : { propertyKey: mapping.propertyKey }),
+    ...(rawValue === undefined ? {} : { rawValue }),
+    suggestedAction: suggestedImportAction(code)
+  };
+}
+
+function withStructuredImportErrors<T extends { errors: ImportRowErrorLike[] }>(
+  result: T,
+  body: ExecuteImportBody
+): Omit<T, "errors"> & { errors: StructuredImportRowError[] } {
+  return {
+    ...result,
+    errors: result.errors.map((error) => structuredImportError(error, body))
+  };
 }
 
 function importResultForClient<T extends {
@@ -395,7 +524,8 @@ export function registerDataImportRoutes(
           mutationContextFromRequest(request)
         )
       );
-      const { mappingResolutions: _mappingResolutions, ...publicPlan } = plan;
+      const structuredPlan = withStructuredImportErrors(plan, request.body);
+      const { mappingResolutions: _mappingResolutions, ...publicPlan } = structuredPlan;
       reply.header("cache-control", "no-store");
       return responseEnvelope(request, publicPlan);
     }
@@ -420,11 +550,12 @@ export function registerDataImportRoutes(
           mutationContextFromRequest(request)
         )
       );
+      const structuredResult = withStructuredImportErrors(result, request.body);
       reply.code(201).header("cache-control", "no-store");
       return responseEnvelope(
         request,
         importResultForClient(
-          result,
+          structuredResult,
           request.body.identityPropertyKey !== undefined
         )
       );
