@@ -77,6 +77,57 @@ test("property definitions are isolated by space", () => {
   }
 });
 
+test("scoped reads never acquire an unowned legacy field", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const space = spaces.createSpace(
+      { key: "space-read-only", name: "Чтение без побочных эффектов" },
+      context("corr-space")
+    );
+    const globalKnowledge = new KnowledgeRegistry(fixture.store);
+    const legacy = globalKnowledge.createPropertyDefinition(
+      {
+        key: "legacy.unowned.field",
+        label: "Старое поле без владельца",
+        valueType: "string",
+        appliesTo: ["person"]
+      },
+      context("corr-global-field")
+    );
+    const scoped = new SpaceScopedKnowledgeRegistry(fixture.store, space.id, {
+      spaces
+    });
+
+    assert.throws(
+      () => scoped.getPropertyDefinition(legacy.key),
+      KnowledgeNotFoundError
+    );
+    const beforeAdoption = fixture.store.execute((database) =>
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM space_property_definitions WHERE property_definition_id = ?"
+        )
+        .get(legacy.id) as { count: number }
+    );
+    assert.equal(beforeAdoption.count, 0);
+
+    const adopted = scoped.adoptUnownedPropertyDefinition(legacy.key);
+    assert.equal(adopted?.id, legacy.id);
+    assert.equal(scoped.getPropertyDefinition(legacy.key).id, legacy.id);
+    const afterAdoption = fixture.store.execute((database) =>
+      database
+        .prepare(
+          "SELECT space_id FROM space_property_definitions WHERE property_definition_id = ?"
+        )
+        .get(legacy.id) as { space_id: string } | undefined
+    );
+    assert.equal(afterAdoption?.space_id, space.id);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("database rejects a property from another space even through global registry", () => {
   const fixture = createMigratedTestStore();
   try {
