@@ -3,9 +3,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   PROPERTY_UI_GROUPS,
   PROPERTY_VALUE_TYPES,
-  SpaceIsolatedEmployeeRegistry,
-  type EmployeeRegistry,
-  type EmployeeStatus
+  type EmployeeStatus,
+  type SpaceIsolatedEmployeeRegistry
 } from "@docomator/storage";
 
 import { correlationId, mutationContextFromRequest } from "./request-context.js";
@@ -116,10 +115,8 @@ function responseEnvelope<T>(request: FastifyRequest, data: T) {
 
 export function registerEmployeeRoutes(
   app: FastifyInstance,
-  registry: EmployeeRegistry
+  scopedRegistry: SpaceIsolatedEmployeeRegistry
 ): void {
-  const scopedRegistry = SpaceIsolatedEmployeeRegistry.fromRegistry(registry);
-
   app.get<{ Params: SpaceParams; Querystring: ListEmployeesQuery }>(
     "/api/v1/spaces/:spaceId/employees",
     {
