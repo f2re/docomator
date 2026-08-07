@@ -165,7 +165,7 @@ export function registerKnowledgeRoutes(
   app: FastifyInstance,
   registry: KnowledgeRegistry
 ): void {
-  const defaultSpaceRegistry = propertyRegistry(registry, DEFAULT_SPACE_ID);
+  const defaultSpaceRegistry = () => propertyRegistry(registry, DEFAULT_SPACE_ID);
 
   app.post<{ Body: CreateEntityTypeBody }>(
     "/api/v1/knowledge/entity-types",
@@ -380,7 +380,7 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request, reply) => {
-      const created = defaultSpaceRegistry.createEntity(
+      const created = defaultSpaceRegistry().createEntity(
         request.body,
         mutationContextFromRequest(request)
       );
@@ -405,7 +405,7 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request) =>
-      responseEnvelope(request, defaultSpaceRegistry.listEntities(request.query))
+      responseEnvelope(request, defaultSpaceRegistry().listEntities(request.query))
   );
 
   app.get<{ Params: EntityParams }>(
@@ -422,7 +422,7 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request) =>
-      responseEnvelope(request, defaultSpaceRegistry.getEntity(request.params.entityId))
+      responseEnvelope(request, defaultSpaceRegistry().getEntity(request.params.entityId))
   );
 
   app.put<{ Params: SpaceEntityPropertyParams; Body: AppendPropertyValueBody }>(
@@ -504,7 +504,7 @@ export function registerKnowledgeRoutes(
       }
     },
     async (request, reply) => {
-      const created = defaultSpaceRegistry.appendPropertyValue(
+      const created = defaultSpaceRegistry().appendPropertyValue(
         {
           entityId: request.params.entityId,
           propertyKey: request.params.propertyKey,
@@ -534,7 +534,7 @@ export function registerKnowledgeRoutes(
     async (request) =>
       responseEnvelope(
         request,
-        defaultSpaceRegistry.listPropertyValueHistory(
+        defaultSpaceRegistry().listPropertyValueHistory(
           request.params.entityId,
           request.query
         )
