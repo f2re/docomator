@@ -37,7 +37,7 @@ Do not silently weaken a MUST requirement. Update requirements and add an ADR wh
 - `packages/*`: reusable domain/application contracts and adapters.
 - `migrations`: immutable SQLite migrations.
 - `scripts/offline`: connected-host bundle creation and network-free target install/update.
-- `docs`: normative requirements, architecture, plans, operations and ADRs.
+- `docs`: normative requirements, architecture, active plans, operations and ADRs.
 
 ## Working method
 
@@ -51,6 +51,8 @@ Do not silently weaken a MUST requirement. Update requirements and add an ADR wh
 
 Use subagents for independent read-heavy work, security review, test-gap analysis and documentation verification. Avoid concurrent write-heavy agents in overlapping directories. The parent agent owns integration and final validation.
 
+Do not leave temporary planning markers, scratch audit files, dated remediation plans that have been completed, or files whose text says they should be deleted before merge. Keep historical evidence only when it still has evidentiary value and mark it non-normative.
+
 ## Commands
 
 ```bash
@@ -61,6 +63,14 @@ bash scripts/ci/validate-shell.sh
 ```
 
 For a quick focused check, run the workspace build/test, but run `npm run check` before a PR is considered complete.
+
+## Versioning rules
+
+- The root `VERSION` file is the only manually edited product-version source.
+- Never hand-edit mirrored workspace/package/config versions. After changing `VERSION`, run `npm run version:sync` and `npm run check:release-version`.
+- Product version and build identity are different. A concrete build is identified by the SHA-256 of `release.json`; see `docs/VERSIONING.md`.
+- `update.sh` must accept a new verified build even when its product `VERSION` is equal to the currently installed version.
+- Immutable installed directories are keyed by build identity (`<version>-<release metadata hash prefix>`), not by product version alone.
 
 ## TypeScript rules
 
@@ -96,20 +106,23 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - State copy explains the current step, why it is happening, what comes next, and whether data is preserved.
 - Preserve form values after server errors and expose correlation IDs.
 - Keep runtime UI offline: no CDN, remote fonts, analytics, or external assets.
-
 - User-facing interface, API messages, installation help, notifications, roles, and states are Russian by default.
 - Do not expose raw English library/database errors or unexplained machine values to ordinary users.
 - Run `npm run check:language` for every user-facing change.
 - Verify 320 px, keyboard/focus, touch targets, dark mode, and reduced motion.
+- Treat geometry as a regression contract: no page-level horizontal overflow, controls/progress bars/sliders stay within their container, long text cannot expand a grid/flex track, and dialogs/drawers keep all actions reachable inside the viewport.
+- Intentional horizontal scrolling is permitted only inside an explicitly scrollable local container.
 
 ## Offline-release rules
 
 - `prepare-bundle.sh` may use the network only on the connected build host.
 - `install.sh`, `update.sh` and bundle verification must never use the network.
-- Verify SHA-256 before system changes.
-- Install into versioned immutable directories and switch an atomic symlink.
+- Verify bundle inventory, object types, allowed links and SHA-256 before system changes.
+- Do not require the extracted bundle or every parent directory to be owned by `root:root` merely to launch installation/update. Root is required only for actions that actually modify protected system state.
+- Install into immutable build-identity directories and switch an atomic symlink.
 - Back up database/config before migration and roll back on failed readiness.
 - Quote shell variables; use `set -Eeuo pipefail`; run `bash -n` for every changed shell script.
+- Test exact-build reapplication and a different build with the same `VERSION`.
 
 ## Definition of done
 
