@@ -80,14 +80,26 @@ test("knowledge API creates typed data with outbox and audit", async () => {
     const typeResponse = await app.inject({
       method: "GET",
       url: "/api/v1/knowledge/entity-types/person",
-      headers,
+      headers
     });
     assert.equal(typeResponse.statusCode, 200, typeResponse.body);
     assert.equal(typeResponse.headers["x-correlation-id"], headers["x-correlation-id"]);
 
-    const propertyResponse = await app.inject({
+    const missingSpace = await app.inject({
       method: "POST",
       url: "/api/v1/knowledge/property-definitions",
+      headers,
+      payload: {
+        label: "Не должно создаться",
+        valueType: "string",
+        appliesTo: ["person"]
+      }
+    });
+    assert.equal(missingSpace.statusCode, 400, missingSpace.body);
+
+    const propertyResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/knowledge/property-definitions?spaceId=default",
       headers,
       payload: {
         label: "Рост",
@@ -117,7 +129,7 @@ test("knowledge API creates typed data with outbox and audit", async () => {
 
     const valueResponse = await app.inject({
       method: "PUT",
-      url: `/api/v1/knowledge/entities/${entityId}/properties/${propertyKey}`,
+      url: `/api/v1/spaces/default/entities/${entityId}/properties/${propertyKey}`,
       headers,
       payload: {
         value: 181.5,
@@ -133,7 +145,7 @@ test("knowledge API creates typed data with outbox and audit", async () => {
 
     const historyResponse = await app.inject({
       method: "GET",
-      url: `/api/v1/knowledge/entities/${entityId}/property-values?propertyKey=${propertyKey}`
+      url: `/api/v1/spaces/default/entities/${entityId}/property-values?propertyKey=${propertyKey}`
     });
     assert.equal(historyResponse.statusCode, 200, historyResponse.body);
     const history = historyResponse.json() as {
@@ -196,9 +208,9 @@ test("knowledge API returns stable validation and conflict errors", async () => 
       "knowledge_conflict"
     );
 
-    await app.inject({
+    const heightDefinition = await app.inject({
       method: "POST",
-      url: "/api/v1/knowledge/property-definitions",
+      url: "/api/v1/knowledge/property-definitions?spaceId=default",
       headers,
       payload: {
         key: "person.height",
@@ -207,6 +219,7 @@ test("knowledge API returns stable validation and conflict errors", async () => 
         appliesTo: ["person"]
       }
     });
+    assert.equal(heightDefinition.statusCode, 201, heightDefinition.body);
     const entity = await app.inject({
       method: "POST",
       url: "/api/v1/knowledge/entities",
@@ -216,7 +229,7 @@ test("knowledge API returns stable validation and conflict errors", async () => 
     const entityId = (entity.json() as { data: { id: string } }).data.id;
     const invalidValue = await app.inject({
       method: "PUT",
-      url: `/api/v1/knowledge/entities/${entityId}/properties/person.height`,
+      url: `/api/v1/spaces/default/entities/${entityId}/properties/person.height`,
       headers,
       payload: { value: "не число", sourceType: "user_input" }
     });
