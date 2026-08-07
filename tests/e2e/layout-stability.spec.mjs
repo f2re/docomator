@@ -94,7 +94,11 @@ test("рабочие экраны не создают горизонтально
 test("диалог сотрудника полностью остаётся внутри viewport", async ({ page }) => {
   const app = await openMockedWorkspace(page);
   await app.openView("employees");
-  await page.locator('[data-employee-action="add"]:visible').first().click();
+  const addEmployee = page
+    .getByRole("button", { name: "Добавить сотрудника", exact: true })
+    .first();
+  await expect(addEmployee).toBeVisible();
+  await addEmployee.click();
 
   const dialog = page.locator("dialog[open]").first();
   await expect(dialog).toBeVisible();
