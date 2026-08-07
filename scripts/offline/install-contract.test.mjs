@@ -26,24 +26,37 @@ test("installed build identity is not keyed by VERSION alone", async () => {
   assert.doesNotMatch(install, /Подготовьте новый номер версии/u);
 });
 
-test("install and update trust verified content rather than bundle ownership", async () => {
+test("normal install/update accepts user-owned bundle paths and strict mode is opt-in", async () => {
   for (const relativePath of [
     "scripts/offline/install.sh",
-    "scripts/offline/update.sh",
+    "scripts/offline/update.sh"
+  ]) {
+    const text = await source(relativePath);
+    const strictCondition = text.indexOf(
+      '[[ "${DOCOMATOR_STRICT_BUNDLE_PATH:-0}" == "1" ]]'
+    );
+    const ownershipGuard = text.indexOf(
+      'require_trusted_bundle "$SCRIPT_DIR"'
+    );
+    const verification = text.indexOf("verify-bundle.sh");
+    assert.ok(strictCondition >= 0, `${relativePath}: strict mode must be explicit`);
+    assert.ok(
+      ownershipGuard > strictCondition,
+      `${relativePath}: ownership guard must only exist inside strict mode`
+    );
+    assert.ok(
+      verification > ownershipGuard,
+      `${relativePath}: bundle verification must still run after optional path hardening`
+    );
+  }
+
+  for (const relativePath of [
     "scripts/offline/ux-acceptance-gate.sh",
     "scripts/offline/target-acceptance.sh"
   ]) {
     const text = await source(relativePath);
-    assert.doesNotMatch(
-      text,
-      /require_trusted_bundle/u,
-      `${relativePath} must not require root-owned extracted bundle paths`
-    );
-    assert.match(
-      text,
-      /verify-bundle\.sh/u,
-      `${relativePath} must verify the bundle content`
-    );
+    assert.doesNotMatch(text, /require_trusted_bundle/u);
+    assert.match(text, /verify-bundle\.sh/u);
   }
 });
 
