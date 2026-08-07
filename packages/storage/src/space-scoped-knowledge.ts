@@ -1,5 +1,6 @@
 import { SqliteStore } from "./database.js";
 import {
+  KnowledgeConflictError,
   KnowledgeNotFoundError,
   KnowledgeRegistry,
   KnowledgeValidationError,
@@ -138,12 +139,32 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
     return definition;
   }
 
+  assertPropertyDefinitionMutable(keyValue: string): PropertyDefinitionRecord {
+    const definition = this.getPropertyDefinition(keyValue);
+    const scopes = this.scopedStore.execute((connection) =>
+      connection
+        .prepare(`
+          SELECT space_id
+          FROM space_property_definitions
+          WHERE property_definition_id = ?
+          ORDER BY space_id ASC
+        `)
+        .all(definition.id) as unknown as Array<{ space_id: string }>
+    );
+    if (scopes.length !== 1 || scopes[0]?.space_id !== this.spaceId) {
+      throw new KnowledgeConflictError(
+        "Историческое поле используется несколькими пространствами и защищено от общего изменения. Создайте отдельное поле в текущем пространстве и перенесите данные контролируемой операцией."
+      );
+    }
+    return definition;
+  }
+
   override updatePropertyDefinitionUiGroup(
     keyValue: string,
     uiGroupValue: string,
     contextInput: MutationContext
   ): PropertyDefinitionRecord {
-    this.getPropertyDefinition(keyValue);
+    this.assertPropertyDefinitionMutable(keyValue);
     return super.updatePropertyDefinitionUiGroup(
       keyValue,
       uiGroupValue,
