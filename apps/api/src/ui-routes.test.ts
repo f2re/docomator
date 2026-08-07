@@ -55,7 +55,9 @@ test("UI assets are served without external runtime dependencies", async () => {
     assert.match(script.body, /interfaceWorkflowSteps/);
     assert.match(script.body, /docomatorFieldGroups/u);
     assert.match(script.body, /docomatorSearchableSelect/u);
-    assert.doesNotMatch(script.body, /https?:\/\//);
+    // Локальный URL допустим только как резерв для разбора относительного адреса;
+    // любая внешняя сетевая зависимость пользовательского интерфейса запрещена.
+    assert.doesNotMatch(script.body, /https?:\/\/(?!localhost(?:[:/]|$))/u);
 
     assert.equal(icon.statusCode, 200);
     assert.match(icon.headers["content-type"] ?? "", /^image\/svg\+xml/);

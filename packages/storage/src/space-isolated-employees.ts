@@ -7,6 +7,7 @@ import {
 } from "./employees.js";
 import { SqliteStore } from "./database.js";
 import {
+  generateOpaqueStableKey,
   KnowledgeConflictError,
   KnowledgeValidationError,
   normalizePropertyUiGroup,
@@ -18,6 +19,7 @@ import { PROPERTY_VALUE_TYPES, type PropertyValueType } from "./property-codec.j
 import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 
 const PERSON_TYPE_KEY = "person";
+const MAX_FIELD_KEY_ATTEMPTS = 32;
 
 function normalizedLabel(value: string): string {
   return String(value)
@@ -143,17 +145,29 @@ export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
       }
       return existing;
     }
-    return knowledge.createPropertyDefinition(
-      {
-        label,
-        valueType,
-        unit: input.unit ?? null,
-        cardinality: "single",
-        sensitivity: "personal",
-        appliesTo: [PERSON_TYPE_KEY],
-        validation: { uiGroup }
-      },
-      context
+    for (let attempt = 0; attempt < MAX_FIELD_KEY_ATTEMPTS; attempt += 1) {
+      try {
+        return knowledge.createPropertyDefinition(
+          {
+            key: generateOpaqueStableKey("employee_field"),
+            label,
+            valueType,
+            unit: input.unit ?? null,
+            cardinality: "single",
+            sensitivity: "personal",
+            appliesTo: [PERSON_TYPE_KEY],
+            validation: { uiGroup }
+          },
+          context
+        );
+      } catch (error) {
+        if (!(error instanceof KnowledgeConflictError)) {
+          throw error;
+        }
+      }
+    }
+    throw new KnowledgeConflictError(
+      "Не удалось создать уникальный технический идентификатор поля сотрудника."
     );
   }
 }

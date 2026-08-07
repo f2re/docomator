@@ -66,7 +66,7 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
 
   override getPropertyDefinition(keyValue: string): PropertyDefinitionRecord {
     const definition = super.getPropertyDefinition(keyValue);
-    this.assertDefinitionOwned(definition.id);
+    this.assertOrClaimDefinition(definition);
     return definition;
   }
 
@@ -122,18 +122,34 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
     return super.listPropertyValueHistory(entityIdValue, options);
   }
 
-  private assertDefinitionOwned(propertyDefinitionId: string): void {
-    const owned = this.scopedStore.execute(
-      (connection) =>
+  private assertOrClaimDefinition(definition: PropertyDefinitionRecord): void {
+    const state = this.scopedStore.transaction((connection) => {
+      const scopes = connection
+        .prepare(`
+          SELECT space_id
+          FROM space_property_definitions
+          WHERE property_definition_id = ?
+          ORDER BY space_id ASC
+        `)
+        .all(definition.id) as unknown as Array<{ space_id: string }>;
+      if (scopes.some((scope) => scope.space_id === this.spaceId)) {
+        return "owned" as const;
+      }
+      if (scopes.length === 0) {
         connection
           .prepare(`
-            SELECT 1 AS found
-            FROM space_property_definitions
-            WHERE space_id = ? AND property_definition_id = ?
+            INSERT INTO space_property_definitions(
+              space_id,
+              property_definition_id,
+              created_at
+            ) VALUES (?, ?, ?)
           `)
-          .get(this.spaceId, propertyDefinitionId) !== undefined
-    );
-    if (!owned) {
+          .run(this.spaceId, definition.id, definition.createdAt);
+        return "claimed" as const;
+      }
+      return "foreign" as const;
+    });
+    if (state === "foreign") {
       throw new KnowledgeNotFoundError(
         "Поле не найдено в выбранном пространстве."
       );
