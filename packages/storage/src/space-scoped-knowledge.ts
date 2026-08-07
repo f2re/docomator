@@ -5,7 +5,10 @@ import {
   KnowledgeRegistry,
   KnowledgeValidationError,
   type AppendPropertyValueInput,
+  type CreateEntityInput,
   type CreatePropertyDefinitionInput,
+  type EntityRecord,
+  type ListEntitiesOptions,
   type ListPropertyValueHistoryOptions,
   type MutationContext,
   type PropertyDefinitionRecord,
@@ -45,6 +48,28 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
       );
     }
     return new SpaceScopedKnowledgeRegistry(store, spaceIdentity);
+  }
+
+  override createEntity(
+    input: CreateEntityInput,
+    contextInput: MutationContext
+  ): EntityRecord {
+    const spaces = new SpaceRegistry(this.scopedStore);
+    const created = spaces.createEntity(this.spaceId, input, contextInput);
+    return super.getEntity(created.entityId);
+  }
+
+  override listEntities(options: ListEntitiesOptions = {}): EntityRecord[] {
+    const limit = normalizeLimit(options.limit);
+    const spaces = new SpaceRegistry(this.scopedStore);
+    return spaces
+      .listEntities(this.spaceId, { ...options, limit })
+      .map((entity) => super.getEntity(entity.entityId));
+  }
+
+  override getEntity(idValue: string): EntityRecord {
+    this.assertEntityOwned(idValue);
+    return super.getEntity(idValue);
   }
 
   override listPropertyDefinitions(limitValue?: number): PropertyDefinitionRecord[] {
@@ -149,7 +174,7 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
           WHERE property_definition_id = ?
           ORDER BY space_id ASC
         `)
-        .all(definition.id) as unknown as Array<{ space_id: string }>
+        .all(definition.id) as unknown as Array<{ space_id: string }>;
     );
     if (scopes.length !== 1 || scopes[0]?.space_id !== this.spaceId) {
       throw new KnowledgeConflictError(
