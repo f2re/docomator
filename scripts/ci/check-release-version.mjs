@@ -24,8 +24,10 @@ export async function collectReleaseVersionFindings(rootDirectory = defaultRoot)
     findings.push(`VERSION: недопустимая версия «${version}»`);
   }
 
+  let rootPackage = null;
   for (const relativePath of packageFiles) {
     const data = JSON.parse(await fs.readFile(path.join(root, relativePath), "utf8"));
+    if (relativePath === "package.json") rootPackage = data;
     if (data.version !== version) {
       findings.push(`${relativePath}: version=${data.version ?? "не указана"}, ожидалась ${version}`);
     }
@@ -36,6 +38,13 @@ export async function collectReleaseVersionFindings(rootDirectory = defaultRoot)
         }
       }
     }
+  }
+
+  if (
+    rootPackage?.scripts?.["version:sync"] !==
+    "node scripts/ci/sync-release-version.mjs"
+  ) {
+    findings.push("package.json: отсутствует каноническая команда version:sync");
   }
 
   const lock = JSON.parse(await fs.readFile(path.join(root, "package-lock.json"), "utf8"));
@@ -61,6 +70,15 @@ export async function collectReleaseVersionFindings(rootDirectory = defaultRoot)
   }
   const notes = await fs.readFile(path.join(root, "docs/RELEASE_NOTES.md"), "utf8");
   if (!notes.includes(version)) findings.push("docs/RELEASE_NOTES.md: текущая версия не указана");
+
+  try {
+    const contract = await fs.readFile(path.join(root, "docs/VERSIONING.md"), "utf8");
+    if (!contract.includes("VERSION") || !contract.includes("version:sync")) {
+      findings.push("docs/VERSIONING.md: не описан единый источник версии и синхронизация");
+    }
+  } catch {
+    findings.push("docs/VERSIONING.md: отсутствует контракт версионирования");
+  }
 
   return findings;
 }
