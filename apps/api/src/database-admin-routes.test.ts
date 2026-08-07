@@ -184,8 +184,13 @@ test("database admin API lists, sorts, audits exports and checks tables without 
   }
 });
 
-test("database admin API creates a typed logical property without altering physical entity columns", async () => {
+test("database admin API creates a typed logical property only in the selected space", async () => {
   const fixture = migratedFixture();
+  const spaces = new SpaceRegistry(fixture.store);
+  const space = spaces.createSpace(
+    { key: "database-admin-fields", name: "Поля администратора" },
+    context("corr-admin-field-space")
+  );
   const app = buildApp(
     loadApiConfig({
       DOCOMATOR_DATA_DIR: fixture.directory,
@@ -197,9 +202,20 @@ test("database admin API creates a typed logical property without altering physi
     const before = fixture.store.execute((database) =>
       database.prepare('PRAGMA table_info("entities")').all()
     );
-    const response = await app.inject({
+    const missingSpace = await app.inject({
       method: "POST",
       url: "/api/v1/admin/database/properties",
+      headers,
+      payload: {
+        label: "Без пространства",
+        valueType: "string"
+      }
+    });
+    assert.equal(missingSpace.statusCode, 400, missingSpace.body);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/database/properties?spaceId=${encodeURIComponent(space.id)}`,
       headers,
       payload: {
         label: "Внутренний номер",
@@ -229,6 +245,18 @@ test("database admin API creates a typed logical property without altering physi
       new KnowledgeRegistry(fixture.store).getPropertyDefinition(created.data.key).label,
       "Внутренний номер"
     );
+    const scope = fixture.store.execute((database) =>
+      database
+        .prepare(`
+          SELECT scoped.space_id
+          FROM space_property_definitions scoped
+          JOIN property_definitions definition
+            ON definition.id = scoped.property_definition_id
+          WHERE definition.key = ?
+        `)
+        .get(created.data.key) as { space_id: string } | undefined
+    );
+    assert.equal(scope?.space_id, space.id);
     const after = fixture.store.execute((database) =>
       database.prepare('PRAGMA table_info("entities")').all()
     );
