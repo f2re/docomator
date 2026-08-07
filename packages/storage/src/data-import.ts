@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import { AuditRepository } from "./audit.js";
+import {
+  DataImportCellError,
+  dataImportRowIssue,
+  storedDataImportRowError,
+  type DataImportErrorCode,
+  type DataImportRowError
+} from "./data-import-errors.js";
 import { SqliteStore } from "./database.js";
 import {
   KnowledgeConflictError,
@@ -18,7 +25,10 @@ import {
   type DataImportPersonNameOptions,
   type DataImportValueTransform
 } from "./data-import-normalization.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { SpaceRegistry, type AudienceGroupRecord } from "./spaces.js";
+
+export type { DataImportErrorCode, DataImportRowError } from "./data-import-errors.js";
 
 export type DataImportFormat = "csv" | "xlsx";
 
@@ -67,12 +77,6 @@ export interface DataImportPlanRecord {
   errors: DataImportRowError[];
 }
 
-export interface DataImportRowError {
-  rowNumber: number;
-  externalKey: string | null;
-  message: string;
-}
-
 export interface DataImportRunRecord {
   id: string;
   spaceId: string;
@@ -108,6 +112,8 @@ interface PreparedRow {
   lookupKey: string;
   displayName: string;
   values: Array<{
+    column: string;
+    rawValue: string;
     property: PropertyDefinitionRecord;
     value: unknown;
     caseInsensitive: boolean;
@@ -319,47 +325,76 @@ function propertyEnumValues(property: PropertyDefinitionRecord): string[] {
     : [];
 }
 
+function valueErrorCode(property: PropertyDefinitionRecord): DataImportErrorCode {
+  switch (property.valueType) {
+    case "number":
+      return "invalid_number";
+    case "integer":
+      return "invalid_integer";
+    case "boolean":
+      return "invalid_boolean";
+    case "date":
+      return "invalid_date";
+    case "date-time":
+      return "invalid_datetime";
+    default:
+      return "property_value_invalid";
+  }
+}
+
 function convertValue(
   property: PropertyDefinitionRecord,
   raw: string,
-  caseInsensitive: boolean
+  caseInsensitive: boolean,
+  column: string
 ): unknown {
-  switch (property.valueType) {
-    case "string":
-    case "text":
-      return raw;
-    case "enum":
-      return canonicalEnumImportValue(
-        raw,
-        propertyEnumValues(property),
-        caseInsensitive
-      );
-    case "number":
-      return parseNumber(raw);
-    case "integer": {
-      const value = parseNumber(raw);
-      if (!Number.isInteger(value)) {
-        throw new DataImportValidationError(`«${raw}» не является целым числом.`);
-      }
-      return value;
-    }
-    case "boolean":
-      return parseBoolean(raw);
-    case "date":
-      return parseDate(raw);
-    case "date-time": {
-      const value = new Date(raw);
-      if (Number.isNaN(value.getTime())) {
-        throw new DataImportValidationError(
-          `«${raw}» не распознано как дата и время.`
+  try {
+    switch (property.valueType) {
+      case "string":
+      case "text":
+        return raw;
+      case "enum":
+        return canonicalEnumImportValue(
+          raw,
+          propertyEnumValues(property),
+          caseInsensitive
         );
+      case "number":
+        return parseNumber(raw);
+      case "integer": {
+        const value = parseNumber(raw);
+        if (!Number.isInteger(value)) {
+          throw new DataImportValidationError(`«${raw}» не является целым числом.`);
+        }
+        return value;
       }
-      return value.toISOString();
+      case "boolean":
+        return parseBoolean(raw);
+      case "date":
+        return parseDate(raw);
+      case "date-time": {
+        const value = new Date(raw);
+        if (Number.isNaN(value.getTime())) {
+          throw new DataImportValidationError(
+            `«${raw}» не распознано как дата и время.`
+          );
+        }
+        return value.toISOString();
+      }
+      default:
+        throw new DataImportValidationError(
+          `Свойство «${property.label}» имеет тип, который пока нельзя массово импортировать.`
+        );
     }
-    default:
-      throw new DataImportValidationError(
-        `Свойство «${property.label}» имеет тип, который пока нельзя массово импортировать.`
-      );
+  } catch (error) {
+    if (error instanceof DataImportCellError) throw error;
+    throw new DataImportCellError(
+      valueErrorCode(property),
+      error instanceof Error ? error.message : "Значение не соответствует типу поля.",
+      column,
+      property.key,
+      raw
+    );
   }
 }
 
@@ -415,9 +450,12 @@ function normalizeSourceRowNumbers(
 }
 
 function mapRun(row: ImportRunRow): DataImportRunRecord {
-  const details = JSON.parse(row.details_json) as {
-    errors?: DataImportRowError[];
-  };
+  const details = JSON.parse(row.details_json) as { errors?: unknown[] };
+  const errors = Array.isArray(details.errors)
+    ? details.errors
+        .map((error) => storedDataImportRowError(error))
+        .filter((error): error is DataImportRowError => error !== null)
+    : [];
   return {
     id: row.id,
     spaceId: row.space_id,
@@ -439,7 +477,7 @@ function mapRun(row: ImportRunRow): DataImportRunRecord {
       row.state === "completed" || row.state === "partial" || row.state === "failed"
         ? row.state
         : "failed",
-    errors: Array.isArray(details.errors) ? details.errors : [],
+    errors,
     createdAt: row.created_at
   };
 }
@@ -530,6 +568,11 @@ export class DataImportRegistry {
     contextInput: MutationContext
   ): DataImportRunRecord {
     const space = this.spaces.getSpace(spaceIdentity);
+    const scopedKnowledge = new SpaceScopedKnowledgeRegistry(
+      this.store,
+      space.id,
+      { spaces: this.spaces }
+    );
     const fileName = requiredText(input.fileName, "fileName", 255);
     const fileFormat = normalizedFormat(input.fileFormat);
     const sourceSha256 = sha256(input.sourceSha256);
@@ -573,7 +616,7 @@ export class DataImportRegistry {
     const runId = randomUUID();
 
     const definitions = new Map(
-      this.knowledge
+      scopedKnowledge
         .listPropertyDefinitions(500)
         .map((property) => [property.key, property])
     );
@@ -585,10 +628,10 @@ export class DataImportRegistry {
       );
       if (!identityMapping?.createIfMissing) {
         throw new DataImportValidationError(
-          "Свойство устойчивого ключа не существует. Разрешите его создание в сопоставлении колонок."
+          "Свойство устойчивого ключа не существует в выбранном пространстве. Разрешите его создание в сопоставлении колонок."
         );
       }
-      const created = this.knowledge.createPropertyDefinition(
+      const created = scopedKnowledge.createPropertyDefinition(
         {
           key: identityPropertyKey,
           label: identityMapping.label ?? "Устойчивый ключ импорта",
@@ -642,7 +685,11 @@ export class DataImportRegistry {
             `Поле «${property.label}» уже существует с другим типом данных.`
           );
         }
-        propertyKey = property?.key ?? generateOpaqueStableKey(entityTypeKey === "person" ? "employee_field" : "entity_field");
+        propertyKey =
+          property?.key ??
+          generateOpaqueStableKey(
+            entityTypeKey === "person" ? "employee_field" : "entity_field"
+          );
       } else {
         propertyKey = stableKey(mappingInput.propertyKey, "mapping.propertyKey");
       }
@@ -656,11 +703,11 @@ export class DataImportRegistry {
       if (property === undefined) {
         if (!mappingInput.createIfMissing) {
           throw new DataImportValidationError(
-            `Свойство «${propertyKey}» не существует.`
+            `Свойство «${propertyKey}» не существует в выбранном пространстве.`
           );
         }
         try {
-          property = this.knowledge.createPropertyDefinition(
+          property = scopedKnowledge.createPropertyDefinition(
             {
               key: propertyKey,
               label: requestedLabel,
@@ -672,7 +719,7 @@ export class DataImportRegistry {
           );
         } catch (error) {
           if (!(error instanceof KnowledgeConflictError)) throw error;
-          property = this.knowledge.getPropertyDefinition(propertyKey);
+          property = scopedKnowledge.getPropertyDefinition(propertyKey);
         }
         definitions.set(property.key, property);
       }
@@ -726,34 +773,65 @@ export class DataImportRegistry {
         return;
       }
       if (externalKey.length === 0 || sourceDisplayName.length === 0) {
-        errors.push({
-          rowNumber,
-          externalKey: externalKey || null,
-          message:
-            externalKey.length === 0
-              ? `Не заполнена колонка «${identityColumn}», выбранная для поиска объекта.`
-              : `Не заполнена колонка «${displayNameColumn}» с отображаемым названием объекта.`
-        });
+        const column = externalKey.length === 0 ? identityColumn : displayNameColumn;
+        const rawValue = row[column] ?? "";
+        errors.push(
+          dataImportRowIssue({
+            rowNumber,
+            externalKey: externalKey || null,
+            code: "required_value_missing",
+            column,
+            rawValue,
+            message:
+              externalKey.length === 0
+                ? `Не заполнена колонка «${identityColumn}», выбранная для поиска объекта.`
+                : `Не заполнена колонка «${displayNameColumn}» с отображаемым названием объекта.`
+          })
+        );
         return;
       }
       const lookupKey = identityCaseInsensitive
         ? caseInsensitiveImportKey(externalKey)
         : externalKey;
       if (seenExternalKeys.has(lookupKey)) {
-        errors.push({
-          rowNumber,
-          externalKey,
-          message: `Значение «${externalKey}» в колонке «${identityColumn}» повторяется внутри файла с учётом выбранной нормализации.`
-        });
+        errors.push(
+          dataImportRowIssue({
+            rowNumber,
+            externalKey,
+            code: "duplicate_identity",
+            column: identityColumn,
+            rawValue: externalKey,
+            message: `Значение «${externalKey}» в колонке «${identityColumn}» повторяется внутри файла с учётом выбранной нормализации.`
+          })
+        );
         return;
       }
       seenExternalKeys.add(lookupKey);
+
+      let displayName: string;
       try {
-        const displayName = entityTypeKey === "person"
-          ? normalizeImportPersonDisplayName(sourceDisplayName, input.personName)
-          : sourceDisplayName;
-        const values = preparedMappings.flatMap((mapping) => {
-          let raw = (row[mapping.column] ?? "").trim();
+        displayName =
+          entityTypeKey === "person"
+            ? normalizeImportPersonDisplayName(sourceDisplayName, input.personName)
+            : sourceDisplayName;
+      } catch (error) {
+        errors.push(
+          dataImportRowIssue({
+            rowNumber,
+            externalKey,
+            code: "invalid_person_name",
+            column: displayNameColumn,
+            rawValue: sourceDisplayName,
+            message: error instanceof Error ? error.message : "ФИО заполнено некорректно."
+          })
+        );
+        return;
+      }
+
+      const values: PreparedRow["values"] = [];
+      for (const mapping of preparedMappings) {
+        let raw = (row[mapping.column] ?? "").trim();
+        try {
           if (mapping.transform !== undefined) {
             raw = transformedPersonNameValue(
               raw,
@@ -761,31 +839,61 @@ export class DataImportRegistry {
               input.personName
             );
           }
-          if (raw.length === 0) return [];
-          return [{
+          if (raw.length === 0) continue;
+          values.push({
+            column: mapping.column,
+            rawValue: raw,
             property: mapping.property,
             value: convertValue(
               mapping.property,
               raw,
-              mapping.caseInsensitive
+              mapping.caseInsensitive,
+              mapping.column
             ),
             caseInsensitive: mapping.caseInsensitive
-          }];
-        });
-        preparedRows.push({
-          rowNumber,
-          externalKey,
-          lookupKey,
-          displayName,
-          values
-        });
-      } catch (error) {
-        errors.push({
-          rowNumber,
-          externalKey,
-          message: error instanceof Error ? error.message : String(error)
-        });
+          });
+        } catch (error) {
+          if (error instanceof DataImportCellError) {
+            errors.push(
+              dataImportRowIssue({
+                rowNumber,
+                externalKey,
+                code: error.code,
+                column: error.column,
+                propertyKey: error.propertyKey,
+                rawValue: error.rawValue,
+                message: error.message
+              })
+            );
+          } else {
+            errors.push(
+              dataImportRowIssue({
+                rowNumber,
+                externalKey,
+                code: mapping.transform === undefined
+                  ? "row_validation_failed"
+                  : "invalid_person_name",
+                column: mapping.column,
+                propertyKey: mapping.property.key,
+                rawValue: raw,
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : "Строка не соответствует правилам импорта."
+              })
+            );
+          }
+          return;
+        }
       }
+
+      preparedRows.push({
+        rowNumber,
+        externalKey,
+        lookupKey,
+        displayName,
+        values
+      });
     });
 
     const groupInput = input.group;
@@ -815,7 +923,11 @@ export class DataImportRegistry {
       }
       return {
         existing: nameMatches[0] ?? null,
-        key: nameMatches[0]?.key ?? generateOpaqueStableKey(entityTypeKey === "person" ? "employee_group" : "entity_group"),
+        key:
+          nameMatches[0]?.key ??
+          generateOpaqueStableKey(
+            entityTypeKey === "person" ? "employee_group" : "entity_group"
+          ),
         name: groupName,
         description
       };
@@ -841,7 +953,10 @@ export class DataImportRegistry {
               | ImportKeyRow
               | undefined;
             if (exact !== undefined) {
-              return { entityId: exact.entity_id, externalKey: exact.external_key ?? row.lookupKey };
+              return {
+                entityId: exact.entity_id,
+                externalKey: exact.external_key ?? row.lookupKey
+              };
             }
             if (identityCaseInsensitive) {
               const compatible = (connection
@@ -854,7 +969,9 @@ export class DataImportRegistry {
                 .filter((candidate) =>
                   caseInsensitiveImportKey(candidate.external_key ?? "") === row.lookupKey
                 );
-              const entityIds = [...new Set(compatible.map((candidate) => candidate.entity_id))];
+              const entityIds = [
+                ...new Set(compatible.map((candidate) => candidate.entity_id))
+              ];
               if (entityIds.length > 1) {
                 throw new DataImportConflictError(
                   "Найдено несколько объектов с одинаковым ключом после нормализации регистра."
@@ -991,17 +1108,27 @@ export class DataImportRegistry {
             ) {
               continue;
             }
-            this.knowledge.appendPropertyValue(
-              {
-                entityId,
-                propertyKey: item.property.key,
-                value: item.value,
-                sourceType: "bulk_import",
-                sourceId: runId,
-                confidence: 1
-              },
-              context
-            );
+            try {
+              scopedKnowledge.appendPropertyValue(
+                {
+                  entityId,
+                  propertyKey: item.property.key,
+                  value: item.value,
+                  sourceType: "bulk_import",
+                  sourceId: runId,
+                  confidence: 1
+                },
+                context
+              );
+            } catch {
+              throw new DataImportCellError(
+                "property_value_invalid",
+                `Значение «${item.rawValue}» не соответствует правилам поля «${item.property.label}».`,
+                item.column,
+                item.property.key,
+                item.rawValue
+              );
+            }
             appendedPropertyValues += 1;
             changed = true;
           }
@@ -1015,11 +1142,28 @@ export class DataImportRegistry {
         else unchangedCount += 1;
         importedEntityIds.push(outcome.entityId);
       } catch (error) {
-        errors.push({
-          rowNumber: row.rowNumber,
-          externalKey: row.externalKey,
-          message: rowMutationErrorMessage(error)
-        });
+        if (error instanceof DataImportCellError) {
+          errors.push(
+            dataImportRowIssue({
+              rowNumber: row.rowNumber,
+              externalKey: row.externalKey,
+              code: error.code,
+              column: error.column,
+              propertyKey: error.propertyKey,
+              rawValue: error.rawValue,
+              message: error.message
+            })
+          );
+        } else {
+          errors.push(
+            dataImportRowIssue({
+              rowNumber: row.rowNumber,
+              externalKey: row.externalKey,
+              code: "row_validation_failed",
+              message: rowMutationErrorMessage(error)
+            })
+          );
+        }
       }
     }
 
