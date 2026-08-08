@@ -6,6 +6,7 @@ import {
   KnowledgeRegistry,
   KnowledgeValidationError
 } from "./knowledge.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
 const T0 = "2026-07-11T10:00:00.000Z";
@@ -22,7 +23,7 @@ function context(correlationId: string) {
 test("knowledge mutations append outbox and audit records atomically", () => {
   const fixture = createMigratedTestStore();
   try {
-    const registry = new KnowledgeRegistry(fixture.store);
+    const registry = new SpaceScopedKnowledgeRegistry(fixture.store, "default");
     const personType = registry.getEntityType("person");
     registry.createEntityType(
       { key: "organization", label: "Организация" },
@@ -121,7 +122,7 @@ test("knowledge mutations append outbox and audit records atomically", () => {
 test("property scope and enum validation are enforced before mutation", () => {
   const fixture = createMigratedTestStore();
   try {
-    const registry = new KnowledgeRegistry(fixture.store);
+    const registry = new SpaceScopedKnowledgeRegistry(fixture.store, "default");
     registry.createEntityType(
       { key: "organization", label: "Организация" },
       context("corr-type-organization")

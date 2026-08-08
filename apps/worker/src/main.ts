@@ -5,12 +5,12 @@ import {
   ContentAddressedObjectStore,
   DocumentDeliveryRegistry,
   DocumentEmailDeliveryRegistry,
-  DocumentGenerationRegistry,
   DocumentPreflightRegistry,
   DocumentScheduleRegistry,
   EmailRecipientRegistry,
   RuntimeStatusRegistry,
   ScheduleNetworkDeliveryRegistry,
+  SpaceCompatibleDocumentGenerationRegistry,
   SpaceRegistry,
   SqliteStore,
   TemplatePreviewActivationRegistry,
@@ -45,7 +45,7 @@ const previewRegistry = new TemplatePreviewActivationRegistry(
   objectStore,
   { queue }
 );
-const generationRegistry = new DocumentGenerationRegistry(
+const generationRegistry = new SpaceCompatibleDocumentGenerationRegistry(
   store,
   objectStore,
   { queue }

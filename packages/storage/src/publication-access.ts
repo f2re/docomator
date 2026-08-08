@@ -1,6 +1,6 @@
 import { SqliteStore } from "./database.js";
 import { ObjectCleanupRegistry } from "./object-cleanup.js";
-import { SpaceScopedPublicationRegistry } from "./space-scoped-publications.js";
+import { SpaceCompatiblePublicationRegistry } from "./space-compatible-publications.js";
 import type { PublicationRegistry } from "./publications.js";
 
 export function publicationRegistryFromObjectCleanupRegistry(
@@ -12,5 +12,5 @@ export function publicationRegistryFromObjectCleanupRegistry(
       "Object cleanup registry does not expose its backing SQLite store"
     );
   }
-  return new SpaceScopedPublicationRegistry(store);
+  return new SpaceCompatiblePublicationRegistry(store);
 }

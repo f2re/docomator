@@ -1,5 +1,6 @@
-import { DataImportRegistry } from "./data-import.js";
+import type { DataImportRegistry } from "./data-import.js";
 import { SqliteStore } from "./database.js";
+import { SpaceCompatibleDataImportRegistry } from "./space-compatible-data-import.js";
 import type { SpaceRegistry } from "./spaces.js";
 
 export function dataImportRegistryFromSpaceRegistry(
@@ -11,5 +12,5 @@ export function dataImportRegistryFromSpaceRegistry(
       "Space registry does not expose its backing SQLite store"
     );
   }
-  return new DataImportRegistry(store, { spaces: registry });
+  return new SpaceCompatibleDataImportRegistry(store, { spaces: registry });
 }

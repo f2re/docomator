@@ -1,4 +1,5 @@
 import { type SqliteExecutor, SqliteStore } from "./database.js";
+import { loadDocumentMemberProperties } from "./document-member-properties.js";
 import type {
   DocumentGenerationField,
   DocumentGenerationFormat,
@@ -7,7 +8,7 @@ import type {
   DocumentGenerationValueType
 } from "./document-generation.js";
 import { resolveDocumentMemberValues } from "./document-values.js";
-import { parseJson, type JsonValue } from "./json.js";
+import { parseJson } from "./json.js";
 import { repeatContractFormat } from "./repeat-contract.js";
 
 export interface DocumentPreflightMissingField {
@@ -75,12 +76,6 @@ interface MemberRow {
   position: number;
   display_name_snapshot: string;
   entity_type_key_snapshot: string;
-}
-
-interface PropertyRow {
-  entity_id: string;
-  property_key: string;
-  value_json: string;
 }
 
 export class DocumentPreflightValidationError extends Error {
@@ -178,6 +173,7 @@ function loadFields(
 
 function loadMembers(
   connection: SqliteExecutor,
+  spaceId: string,
   snapshotId: string
 ): DocumentGenerationMember[] {
   const rows = connection
@@ -188,35 +184,11 @@ function loadMembers(
       ORDER BY position ASC
     `)
     .all(snapshotId) as unknown as MemberRow[];
-  const propertiesByEntity = new Map<string, Record<string, JsonValue>>();
-  const ids = rows.map((row) => row.entity_id);
-  for (let offset = 0; offset < ids.length; offset += 200) {
-    const chunk = ids.slice(offset, offset + 200);
-    if (chunk.length === 0) continue;
-    const placeholders = chunk.map(() => "?").join(", ");
-    const propertyRows = connection
-      .prepare(`
-        SELECT v.entity_id, p.key AS property_key, v.value_json
-        FROM entity_property_values v
-        JOIN property_definitions p ON p.id = v.property_definition_id
-        JOIN (
-          SELECT entity_id, property_definition_id, MAX(version) AS max_version
-          FROM entity_property_values
-          WHERE entity_id IN (${placeholders})
-          GROUP BY entity_id, property_definition_id
-        ) latest
-          ON latest.entity_id = v.entity_id
-         AND latest.property_definition_id = v.property_definition_id
-         AND latest.max_version = v.version
-        ORDER BY v.entity_id, p.key
-      `)
-      .all(...chunk) as unknown as PropertyRow[];
-    for (const property of propertyRows) {
-      const values = propertiesByEntity.get(property.entity_id) ?? {};
-      values[property.property_key] = parseJson(property.value_json);
-      propertiesByEntity.set(property.entity_id, values);
-    }
-  }
+  const propertiesByEntity = loadDocumentMemberProperties(
+    connection,
+    spaceId,
+    rows.map((row) => row.entity_id)
+  );
   return rows.map((row) => ({
     entityId: row.entity_id,
     position: Number(row.position),
@@ -298,7 +270,11 @@ export class DocumentPreflightRegistry {
         );
       }
       const fields = loadFields(connection, source.candidate_id, fieldCount);
-      const members = loadMembers(connection, source.snapshot_id);
+      const members = loadMembers(
+        connection,
+        source.space_id,
+        source.snapshot_id
+      );
       if (members.length !== memberCount) {
         throw new DocumentPreflightConflictError(
           "Audience snapshot member list is incomplete"
