@@ -1,0 +1,27 @@
+.employee-toolbar {
+  flex-wrap: wrap;
+}
+
+.employee-toolbar .search-field {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.employee-toolbar .secondary-button {
+  max-width: 100%;
+  flex: 0 1 auto;
+  white-space: normal;
+}
+
+.data-export-status {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 620px) {
+  .employee-toolbar .search-field,
+  .employee-toolbar .secondary-button {
+    width: 100%;
+    flex-basis: 100%;
+  }
+}
