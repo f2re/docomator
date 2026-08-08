@@ -45,12 +45,8 @@ summary,
 .help-center-start-path,
 .help-center-grid {
   min-width: 0;
+  width: 100%;
   max-width: 100%;
-}
-
-#helpCenterIndexPane,
-#helpCenterArticlePane {
-  overflow-x: hidden;
 }
 
 .help-center-categories {
