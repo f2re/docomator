@@ -26,6 +26,9 @@ summary,
 .field textarea,
 .generation-field input,
 .generation-field select,
-.generation-field textarea {
+.generation-field textarea,
+.context-chip,
+.system-status-control,
+.workspace-switcher-footer button {
   min-height: 44px;
 }
