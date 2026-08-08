@@ -5,6 +5,7 @@ export * from "./data-import-assist.js";
 export * from "./data-import-errors.js";
 export * from "./data-import-validation.js";
 export * from "./data-import.js";
+export * from "./space-compatible-data-import.js";
 export * from "./database.js";
 export * from "./database-admin.js";
 export * from "./data-import-normalization.js";
