@@ -43,6 +43,36 @@ async function overflowDiagnostics(page) {
   });
 }
 
+async function interactionViolations(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll(
+      'button, input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea, summary, [role="button"]'
+    )]
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      })
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          element: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}${[...element.classList]
+            .slice(0, 3)
+            .map((className) => `.${className}`)
+            .join("")}`,
+          width: Math.round(rect.width * 10) / 10,
+          height: Math.round(rect.height * 10) / 10
+        };
+      })
+      .filter((item) => item.width < 43.5 || item.height < 43.5)
+  );
+}
+
 test("основная навигация работает без горизонтального переполнения", async ({
   page
 }) => {
@@ -65,6 +95,55 @@ test("основная навигация работает без горизон
       overflow,
       `горизонтальное переполнение в разделе ${view}: ${JSON.stringify(diagnostics)}`
     ).toBeLessThanOrEqual(0);
+  }
+});
+
+test("дополнительные разделы остаются в «Ещё» и не расширяют мобильную панель", async ({
+  page
+}) => {
+  const app = new DocomatorPage(page);
+  await app.open();
+
+  const mobileNavigation = page.locator(".mobile-nav");
+  await expect(mobileNavigation.locator("button")).toHaveCount(5);
+  await expect(
+    mobileNavigation.locator('[data-view-target="publications"]')
+  ).toHaveCount(0);
+
+  await app.openView("settings");
+  const publicationShortcut = page.locator(
+    '.settings-grid [data-navigation-overflow="publications"]'
+  );
+  await expect(publicationShortcut).toBeVisible();
+  await expect(publicationShortcut).toContainText("Публикации");
+  await publicationShortcut.click();
+  await expect(page.locator('[data-view="publications"]')).toHaveClass(/is-visible/);
+
+  if ((page.viewportSize()?.width || 0) <= 820) {
+    const more = mobileNavigation.locator('[data-view-target="settings"]');
+    await expect(more).toHaveClass(/is-active/);
+    await expect(more).toHaveAttribute("aria-current", "page");
+  }
+});
+
+test("видимые элементы управления сохраняют зону не меньше 44 на 44", async ({
+  page
+}) => {
+  const app = new DocomatorPage(page);
+  await app.open();
+  await expect(page.locator('link[data-interaction-contract]')).toHaveAttribute(
+    "href",
+    "/ui/interaction-contract.css"
+  );
+  await expect(page.locator("#refreshButton")).toHaveCSS("height", "44px");
+
+  for (const view of ["overview", "employees", "settings", "publications"]) {
+    await app.openView(view);
+    const violations = await interactionViolations(page);
+    expect(
+      violations,
+      `слишком маленькие интерактивные зоны в разделе ${view}: ${JSON.stringify(violations)}`
+    ).toEqual([]);
   }
 });
 

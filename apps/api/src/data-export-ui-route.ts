@@ -44,8 +44,22 @@ export function registerDataExportUiRoute(
   );
   registerUiAsset(
     app,
+    "/ui/navigation-contract.js",
+    "navigation-contract.js",
+    "text/javascript; charset=utf-8",
+    uiDirectory
+  );
+  registerUiAsset(
+    app,
     "/ui/data-export.css",
     "data-export.css",
+    "text/css; charset=utf-8",
+    uiDirectory
+  );
+  registerUiAsset(
+    app,
+    "/ui/interaction-contract.css",
+    "interaction-contract.css",
     "text/css; charset=utf-8",
     uiDirectory
   );

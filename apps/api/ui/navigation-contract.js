@@ -1,0 +1,112 @@
+{
+  const primaryMobileViews = new Set([
+    "overview",
+    "employees",
+    "generation",
+    "documents",
+    "settings"
+  ]);
+
+  const overflowMetadata = Object.freeze({
+    publications: Object.freeze({
+      label: "Публикации",
+      description: "Научные статьи, авторы, классификации и отчёты"
+    })
+  });
+
+  function viewLabel(target) {
+    return (
+      overflowMetadata[target]?.label ||
+      document
+        .querySelector(`.nav-list [data-view-target="${CSS.escape(target)}"] span:last-child`)
+        ?.textContent?.trim() ||
+      "Дополнительный раздел"
+    );
+  }
+
+  function viewDescription(target) {
+    return (
+      overflowMetadata[target]?.description ||
+      "Дополнительные возможности текущего рабочего пространства"
+    );
+  }
+
+  function ensureSettingsShortcut(target) {
+    const grid = document.querySelector(".settings-grid");
+    if (!grid || !target) return;
+    if (grid.querySelector(`[data-navigation-overflow="${CSS.escape(target)}"]`)) return;
+    if (grid.querySelector(`[data-view-target="${CSS.escape(target)}"]`)) return;
+
+    const button = document.createElement("button");
+    button.className = "settings-row";
+    button.type = "button";
+    button.dataset.viewTarget = target;
+    button.dataset.navigationOverflow = target;
+
+    const copy = document.createElement("span");
+    const title = document.createElement("strong");
+    const description = document.createElement("small");
+    const arrow = document.createElement("span");
+
+    title.textContent = viewLabel(target);
+    description.textContent = viewDescription(target);
+    copy.append(title, description);
+    arrow.textContent = "›";
+    arrow.setAttribute("aria-hidden", "true");
+    button.append(copy, arrow);
+
+    const advanced = grid.querySelector('[data-view-target="knowledge"]');
+    if (advanced) advanced.before(button);
+    else grid.append(button);
+  }
+
+  function normalizeMobileNavigation() {
+    const navigation = document.querySelector(".mobile-nav");
+    if (!navigation) return;
+
+    for (const button of [...navigation.querySelectorAll("[data-view-target]")]) {
+      const target = String(button.dataset.viewTarget || "").trim();
+      if (!target || primaryMobileViews.has(target)) continue;
+      ensureSettingsShortcut(target);
+      button.remove();
+    }
+  }
+
+  function syncOverflowCurrent(view) {
+    const navigation = document.querySelector(".mobile-nav");
+    if (!navigation) return;
+    const target = String(view || location.hash.slice(1) || "overview");
+    if (primaryMobileViews.has(target)) return;
+
+    for (const button of navigation.querySelectorAll("[data-view-target]")) {
+      button.classList.remove("is-active");
+      button.removeAttribute("aria-current");
+    }
+    const more = navigation.querySelector('[data-view-target="settings"]');
+    more?.classList.add("is-active");
+    more?.setAttribute("aria-current", "page");
+  }
+
+  function refresh(view) {
+    normalizeMobileNavigation();
+    syncOverflowCurrent(view);
+  }
+
+  const observer = new MutationObserver(() => refresh());
+  const start = () => {
+    refresh();
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
+
+  window.addEventListener("docomator:view-changed", (event) => {
+    refresh(event.detail?.view);
+  });
+}

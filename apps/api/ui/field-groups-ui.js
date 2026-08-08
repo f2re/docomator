@@ -111,6 +111,17 @@
     normalize
   });
 
+  if (!document.querySelector('link[data-interaction-contract]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "/ui/interaction-contract.css";
+    link.dataset.interactionContract = "";
+    document.head.append(link);
+  }
+
+  void import("/ui/navigation-contract.js").catch((error) => {
+    console.error("Не удалось загрузить контракт навигации.", error);
+  });
   void import("/ui/auth-session.js").catch((error) => {
     console.error("Не удалось загрузить управление сессией.", error);
   });
