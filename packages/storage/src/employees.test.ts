@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { EmployeeRegistry } from "./employees.js";
 import {
   KnowledgeConflictError,
-  KnowledgeRegistry,
   KnowledgeValidationError
 } from "./knowledge.js";
 import { PropertyValueValidationError } from "./property-codec.js";
+import { SpaceIsolatedEmployeeRegistry } from "./space-isolated-employees.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { SpaceNotFoundError, SpaceRegistry } from "./spaces.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
@@ -25,8 +25,8 @@ function context(correlationId: string) {
 test("standard person type and generated employee field keys require no machine input", () => {
   const fixture = createMigratedTestStore();
   try {
-    const knowledge = new KnowledgeRegistry(fixture.store);
-    const employees = new EmployeeRegistry(fixture.store);
+    const knowledge = new SpaceScopedKnowledgeRegistry(fixture.store, "default");
+    const employees = new SpaceIsolatedEmployeeRegistry(fixture.store);
     assert.equal(knowledge.getEntityType("person").label, "Сотрудник");
 
     const created = employees.create(
@@ -71,7 +71,7 @@ test("standard person type and generated employee field keys require no machine 
 test("generated field keys retry collisions and employee creates are idempotent", () => {
   const fixture = createMigratedTestStore();
   try {
-    const knowledge = new KnowledgeRegistry(fixture.store);
+    const knowledge = new SpaceScopedKnowledgeRegistry(fixture.store, "default");
     knowledge.createPropertyDefinition(
       {
         key: "employee_field.collision",
@@ -82,8 +82,7 @@ test("generated field keys retry collisions and employee creates are idempotent"
       context("existing-definition")
     );
     const keys = ["employee_field.collision", "employee_field.unique"];
-    const employees = new EmployeeRegistry(fixture.store, {
-      knowledge,
+    const employees = new SpaceIsolatedEmployeeRegistry(fixture.store, {
       fieldKeyFactory: () => keys.shift() ?? "employee_field.unexpected"
     });
     const input = {
@@ -121,8 +120,8 @@ test("generated field keys retry collisions and employee creates are idempotent"
 test("new employee fields reuse one normalized label and reject type conflicts", () => {
   const fixture = createMigratedTestStore();
   try {
-    const knowledge = new KnowledgeRegistry(fixture.store);
-    const employees = new EmployeeRegistry(fixture.store, { knowledge });
+    const knowledge = new SpaceScopedKnowledgeRegistry(fixture.store, "default");
+    const employees = new SpaceIsolatedEmployeeRegistry(fixture.store);
     const first = employees.create(
       "default",
       {
@@ -181,7 +180,7 @@ test("new employee fields reuse one normalized label and reject type conflicts",
 test("employee create and update roll back entity, definitions and values atomically", () => {
   const fixture = createMigratedTestStore();
   try {
-    const employees = new EmployeeRegistry(fixture.store);
+    const employees = new SpaceIsolatedEmployeeRegistry(fixture.store);
     assert.throws(
       () =>
         employees.create(
@@ -254,7 +253,7 @@ test("employee read and update deny cross-space access", () => {
       { key: "other", name: "Другое пространство" },
       context("space-other")
     );
-    const employees = new EmployeeRegistry(fixture.store, { spaces });
+    const employees = new SpaceIsolatedEmployeeRegistry(fixture.store, { spaces });
     const employee = employees.create(
       "default",
       { displayName: "Орлова Ольга" },
@@ -299,7 +298,7 @@ test("employee read and update deny cross-space access", () => {
 test("employee updates replay idempotently without new versions, events or audit", () => {
   const fixture = createMigratedTestStore();
   try {
-    const employees = new EmployeeRegistry(fixture.store);
+    const employees = new SpaceIsolatedEmployeeRegistry(fixture.store);
     const created = employees.create(
       "default",
       {
@@ -405,8 +404,10 @@ test("employee resource fields stay in one space and reject unscoped files", () 
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
-    const knowledge = new KnowledgeRegistry(fixture.store);
-    const employees = new EmployeeRegistry(fixture.store, { spaces, knowledge });
+    const knowledge = new SpaceScopedKnowledgeRegistry(fixture.store, "default", {
+      spaces
+    });
+    const employees = new SpaceIsolatedEmployeeRegistry(fixture.store, { spaces });
     const other = spaces.createSpace(
       { key: "employee-links-other", name: "Другое пространство" },
       context("employee-links-space")
