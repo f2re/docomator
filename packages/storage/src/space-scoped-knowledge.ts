@@ -91,9 +91,20 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
   }
 
   override getPropertyDefinition(keyValue: string): PropertyDefinitionRecord {
-    const definition = super.getPropertyDefinition(keyValue);
-    this.assertDefinitionOwned(definition);
-    return definition;
+    let direct: PropertyDefinitionRecord | null = null;
+    try {
+      direct = super.getPropertyDefinition(keyValue);
+    } catch (error) {
+      if (!(error instanceof KnowledgeNotFoundError)) throw error;
+    }
+    if (direct !== null && this.definitionOwned(direct.id)) return direct;
+
+    const aliased = this.aliasDefinition(keyValue);
+    if (aliased !== null) return aliased;
+
+    throw new KnowledgeNotFoundError(
+      "Поле не найдено в выбранном пространстве."
+    );
   }
 
   override createPropertyDefinition(
@@ -118,7 +129,8 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
   /**
    * Explicit compatibility operation for a legacy definition that was created
    * before field ownership existed. Normal reads never adopt definitions.
-   * Returns null only when the global definition itself does not exist.
+   * Definitions normalized by migration 0030 resolve to their independent
+   * per-space clone and the historical shared record can never be re-adopted.
    */
   adoptUnownedPropertyDefinition(
     keyValue: string
@@ -130,6 +142,27 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
       if (error instanceof KnowledgeNotFoundError) return null;
       throw error;
     }
+
+    const aliased = this.aliasDefinition(definition.key);
+    if (aliased !== null) return aliased;
+
+    const hasNormalizedAliases = this.scopedStore.execute(
+      (connection) =>
+        connection
+          .prepare(`
+            SELECT 1 AS found
+            FROM space_property_definition_aliases
+            WHERE alias_key = ?
+            LIMIT 1
+          `)
+          .get(definition.key) !== undefined
+    );
+    if (hasNormalizedAliases) {
+      throw new KnowledgeNotFoundError(
+        "Поле не найдено в выбранном пространстве."
+      );
+    }
+
     const state = this.scopedStore.transaction((connection) => {
       const scopes = connection
         .prepare(`
@@ -174,11 +207,11 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
           WHERE property_definition_id = ?
           ORDER BY space_id ASC
         `)
-        .all(definition.id) as unknown as Array<{ space_id: string }>
+        .all(definition.id) as unknown as Array<{ space_id: string }>;
     );
     if (scopes.length !== 1 || scopes[0]?.space_id !== this.spaceId) {
       throw new KnowledgeConflictError(
-        "Историческое поле используется несколькими пространствами и защищено от общего изменения. Создайте отдельное поле в текущем пространстве и перенесите данные контролируемой операцией."
+        "Поле не имеет единственного владельца пространства и защищено от изменения. Выполните контролируемую нормализацию данных."
       );
     }
     return definition;
@@ -189,9 +222,9 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
     uiGroupValue: string,
     contextInput: MutationContext
   ): PropertyDefinitionRecord {
-    this.assertPropertyDefinitionMutable(keyValue);
+    const definition = this.assertPropertyDefinitionMutable(keyValue);
     return super.updatePropertyDefinitionUiGroup(
-      keyValue,
+      definition.key,
       uiGroupValue,
       contextInput
     );
@@ -202,8 +235,11 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
     contextInput: MutationContext
   ): PropertyValueRecord {
     this.assertEntityOwned(input.entityId);
-    this.getPropertyDefinition(input.propertyKey);
-    return super.appendPropertyValue(input, contextInput);
+    const definition = this.getPropertyDefinition(input.propertyKey);
+    return super.appendPropertyValue(
+      { ...input, propertyKey: definition.key },
+      contextInput
+    );
   }
 
   override listPropertyValueHistory(
@@ -211,14 +247,18 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
     options: ListPropertyValueHistoryOptions = {}
   ): PropertyValueRecord[] {
     this.assertEntityOwned(entityIdValue);
-    if (options.propertyKey !== undefined) {
-      this.getPropertyDefinition(options.propertyKey);
+    if (options.propertyKey === undefined) {
+      return super.listPropertyValueHistory(entityIdValue, options);
     }
-    return super.listPropertyValueHistory(entityIdValue, options);
+    const definition = this.getPropertyDefinition(options.propertyKey);
+    return super.listPropertyValueHistory(entityIdValue, {
+      ...options,
+      propertyKey: definition.key
+    });
   }
 
-  private assertDefinitionOwned(definition: PropertyDefinitionRecord): void {
-    const owned = this.scopedStore.execute(
+  private definitionOwned(propertyDefinitionId: string): boolean {
+    return this.scopedStore.execute(
       (connection) =>
         connection
           .prepare(`
@@ -226,13 +266,30 @@ export class SpaceScopedKnowledgeRegistry extends KnowledgeRegistry {
             FROM space_property_definitions
             WHERE space_id = ? AND property_definition_id = ?
           `)
-          .get(this.spaceId, definition.id) !== undefined
+          .get(this.spaceId, propertyDefinitionId) !== undefined
     );
-    if (!owned) {
-      throw new KnowledgeNotFoundError(
-        "Поле не найдено в выбранном пространстве."
+  }
+
+  private aliasDefinition(aliasKey: string): PropertyDefinitionRecord | null {
+    const row = this.scopedStore.execute((connection) =>
+      connection
+        .prepare(`
+          SELECT definition.key
+          FROM space_property_definition_aliases alias
+          JOIN property_definitions definition
+            ON definition.id = alias.property_definition_id
+          WHERE alias.space_id = ? AND alias.alias_key = ?
+        `)
+        .get(this.spaceId, aliasKey) as { key: string } | undefined
+    );
+    if (row === undefined) return null;
+    const definition = super.getPropertyDefinition(row.key);
+    if (!this.definitionOwned(definition.id)) {
+      throw new KnowledgeConflictError(
+        "Псевдоним поля повреждён и не указывает на определение текущего пространства."
       );
     }
+    return definition;
   }
 
   private assertEntityOwned(entityId: string): void {
