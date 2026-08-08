@@ -41,14 +41,14 @@ function propertyValueType(value: string): PropertyValueType {
 }
 
 export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
-  private readonly fieldKeyFactory: () => string;
+  private readonly scopedFieldKeyFactory: () => string;
 
   constructor(
     private readonly scopedStore: SqliteStore,
     options: EmployeeRegistryOptions = {}
   ) {
     super(scopedStore, options);
-    this.fieldKeyFactory =
+    this.scopedFieldKeyFactory =
       options.fieldKeyFactory ?? (() => generateOpaqueStableKey("employee_field"));
   }
 
@@ -163,7 +163,7 @@ export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
       try {
         return knowledge.createPropertyDefinition(
           {
-            key: this.fieldKeyFactory(),
+            key: this.scopedFieldKeyFactory(),
             label,
             valueType,
             unit: input.unit ?? null,
