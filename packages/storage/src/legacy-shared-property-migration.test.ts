@@ -54,7 +54,7 @@ test("0030 splits a pre-0027 shared definition and removes implicit claim-on-wri
     applyMigrations(
       databasePath,
       "0001_bootstrap.sql",
-      "0026_publication_reporting.sql"
+      "0026_space_colors.sql"
     );
     let store = new SqliteStore({ databasePath });
     const spaces = new SpaceRegistry(store);
