@@ -28,9 +28,42 @@ async function cleanFixture() {
       "registerDataImportRoutes(app, spaceRegistry);"
     ].join("\n")
   );
-  await write(root, "config/docomator.env.example", "DOCOMATOR_HOST=127.0.0.1\n");
+  await write(
+    root,
+    "apps/api/src/password-gate.ts",
+    [
+      "DOCOMATOR_ACCESS_PASSWORD_HASH",
+      "DOCOMATOR_SESSION_SECRET",
+      "scryptSync(",
+      "timingSafeEqual(",
+      "HttpOnly",
+      "SameSite=Strict",
+      "login_temporarily_blocked"
+    ].join("\n")
+  );
+  await write(
+    root,
+    "config/docomator.env.example",
+    [
+      "DOCOMATOR_HOST=127.0.0.1",
+      "DOCOMATOR_ACCESS_PASSWORD_HASH=",
+      "DOCOMATOR_SESSION_SECRET=",
+      "DOCOMATOR_SESSION_TTL_SECONDS=28800"
+    ].join("\n") + "\n"
+  );
   await write(root, "scripts/offline/install.sh", "#!/usr/bin/env bash\nset -Eeuo pipefail\n");
   await write(root, "scripts/offline/lib.sh", "#!/usr/bin/env bash\nset -Eeuo pipefail\n");
+  await write(
+    root,
+    "scripts/offline/set-password.sh",
+    [
+      "scryptSync",
+      "randomBytes(48)",
+      "DOCOMATOR_ACCESS_PASSWORD_HASH",
+      "DOCOMATOR_SESSION_SECRET",
+      "systemctl restart docomator-api.service"
+    ].join("\n")
+  );
   await write(
     root,
     "packages/document-intake/src/intake.ts",
@@ -114,22 +147,24 @@ test("находит устаревшие подсказки и скрытую �
   assert.ok(findings.some((finding) => finding.includes("скрыто регистрируется")));
 });
 
-test("не допускает возврат секрета сессии и его генератора", async (t) => {
+test("не допускает неполный password gate и конфигурацию без локальной настройки", async (t) => {
   const root = await cleanFixture();
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   await write(
     root,
-    "config/docomator.env.example",
-    "DOCOMATOR_SESSION_SECRET=CHANGE_ME_DURING_INSTALL\n"
+    "apps/api/src/password-gate.ts",
+    "DOCOMATOR_ACCESS_PASSWORD_HASH\nDOCOMATOR_SESSION_SECRET\n"
   );
   await write(
     root,
-    "scripts/offline/lib.sh",
-    "random_secret() { printf secret; }\n"
+    "config/docomator.env.example",
+    "DOCOMATOR_ACCESS_PASSWORD_HASH=\n"
   );
+  await write(root, "scripts/offline/set-password.sh", "scryptSync\n");
   const findings = await collectAuditRemediationFindings(root);
-  assert.ok(findings.some((finding) => finding.includes("DOCOMATOR_SESSION_SECRET")));
-  assert.ok(findings.some((finding) => finding.includes("генератор секрета")));
+  assert.ok(findings.some((finding) => finding.includes("неполный общий password gate")));
+  assert.ok(findings.some((finding) => finding.includes("отсутствует настройка общего password gate")));
+  assert.ok(findings.some((finding) => finding.includes("неполная локальная настройка password gate")));
 });
 
 test("находит отсутствие фактического лимита и настоящего браузерного контура", async (t) => {
