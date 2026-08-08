@@ -8,7 +8,7 @@
   }
 
   async function logout(button) {
-    const original = button.textContent;
+    const original = button.innerHTML;
     button.disabled = true;
     button.textContent = "Выходим…";
     try {
@@ -22,23 +22,40 @@
       });
     } finally {
       location.replace("/login");
-      button.textContent = original;
+      button.innerHTML = original;
     }
   }
 
-  function installLogout() {
-    if (document.querySelector("[data-auth-logout]")) return;
-    const footer = document.querySelector(".sidebar-footer");
-    const connection = document.querySelector("#connectionBadge");
-    if (!footer) return;
+  function createLogoutButton(location) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "quiet-button";
     button.dataset.authLogout = "";
-    button.innerHTML = '<span aria-hidden="true">↪</span><span>Выйти</span>';
+    button.dataset.authLocation = location;
+    if (location === "settings") {
+      button.className = "settings-row";
+      button.innerHTML =
+        '<span><strong>Выйти</strong><small>Завершить текущую сессию на этом устройстве</small></span><span aria-hidden="true">›</span>';
+    } else {
+      button.className = "quiet-button";
+      button.innerHTML = '<span aria-hidden="true">↪</span><span>Выйти</span>';
+    }
     button.addEventListener("click", () => void logout(button));
-    if (connection) footer.insertBefore(button, connection);
-    else footer.append(button);
+    return button;
+  }
+
+  function installLogout() {
+    const footer = document.querySelector(".sidebar-footer");
+    const connection = document.querySelector("#connectionBadge");
+    if (footer && !footer.querySelector('[data-auth-location="sidebar"]')) {
+      const button = createLogoutButton("sidebar");
+      if (connection) footer.insertBefore(button, connection);
+      else footer.append(button);
+    }
+
+    const settings = document.querySelector(".settings-grid");
+    if (settings && !settings.querySelector('[data-auth-location="settings"]')) {
+      settings.append(createLogoutButton("settings"));
+    }
   }
 
   async function enhance() {
