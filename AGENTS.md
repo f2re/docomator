@@ -20,14 +20,15 @@ Do not silently weaken a MUST requirement. Update requirements and add an ADR wh
 - Runtime must work without Internet access.
 - LLM output is untrusted data. Never execute model-generated JavaScript, SQL, shell, paths, HTML, OOXML, or commands.
 - File mutation, scheduling, validation, and delivery must be deterministic backend operations.
-- No `eval`, `Function`, arbitrary dynamic imports, or user-defined executable expressions.
+- No `eval`, `Function`, arbitrary dynamic imports from untrusted input, or user-defined executable expressions.
 - Applied SQL migrations and activated template versions are immutable.
 - Every external side effect needs a correlation ID and idempotency key.
 - Generated legal/content text requires review unless an explicit approved policy says otherwise.
 - SMTP and network destinations are allowlisted.
 - Network share writes must verify mount + sentinel and use temp-file/atomic-rename semantics.
 - Keep the modular monolith. Do not introduce a broker, cache server, microservice, or vector database without measured need and an ADR.
-- The application has no authentication, accounts, roles or section-level access control: every client admitted by the trusted corporate perimeter works with shared data. Do not add IAM without a superseding ADR.
+- ADR-0009 adds one shared application password. Docomator still has no user accounts, roles, personal cabinets or section-level ACL: every successfully authenticated client works with the same shared data. Do not turn the password gate into IAM without a superseding ADR.
+- Spaces are hard data partitions, not authorization scopes. Authentication must never weaken or replace `spaceId` validation and database isolation.
 
 ## Repository structure
 
@@ -70,7 +71,7 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Do not perform side effects at module import time except executable entrypoints.
 - Handle SIGTERM/SIGINT and bounded shutdown in long-running processes.
 - Use UTC ISO timestamps internally; store timezone separately where schedules require it.
-- Never log credentials, raw authorization headers, session cookies or restricted values.
+- Never log passwords, password hashes, session secrets, raw authorization headers, session cookies or restricted values.
 
 ## SQLite and queue rules
 
@@ -96,6 +97,7 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - State copy explains the current step, why it is happening, what comes next, and whether data is preserved.
 - Preserve form values after server errors and expose correlation IDs.
 - Keep runtime UI offline: no CDN, remote fonts, analytics, or external assets.
+- Expired authentication must lead to the login screen without losing the user's understanding of what happened; after successful login the user returns to a safe local path.
 
 - User-facing interface, API messages, installation help, notifications, roles, and states are Russian by default.
 - Do not expose raw English library/database errors or unexplained machine values to ordinary users.
@@ -109,6 +111,7 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Verify SHA-256 before system changes.
 - Install into versioned immutable directories and switch an atomic symlink.
 - Back up database/config before migration and roll back on failed readiness.
+- A new installation must remain locked until a shared password is explicitly configured on the target host; updates must preserve the password hash and session secret unless the operator changes them.
 - Quote shell variables; use `set -Eeuo pipefail`; run `bash -n` for every changed shell script.
 
 ## Definition of done
