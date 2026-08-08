@@ -1,8 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 
 import { expect, test } from "./fixtures/test.mjs";
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
 import { DocomatorPage } from "./pages/docomator-page.mjs";
+import {
+  CANONICAL_UI_VIEWS,
+  installUiRegressionScenario
+} from "./ui-regression-inventory.mjs";
 
 const WCAG_TAGS = [
   "wcag2a",
@@ -12,14 +15,6 @@ const WCAG_TAGS = [
   "wcag22aa"
 ];
 const EVIDENCE_CONTRACT_VERSION = 2;
-
-const primaryViews = [
-  ["overview", "Главная"],
-  ["employees", "Сотрудники"],
-  ["templates", "Шаблоны"],
-  ["generation", "Создать документы"],
-  ["documents", "Результаты"]
-];
 
 const projectThemes = new Map([
   ["chromium-320", "light"],
@@ -77,14 +72,11 @@ async function expectNoDetectableViolations(page, label, testInfo) {
   ).toBe(0);
 }
 
-for (const [view, label] of primaryViews) {
+for (const { view, label } of CANONICAL_UI_VIEWS) {
   test(`экран «${label}» не содержит машинно-выявляемых нарушений WCAG`, async ({
     page
   }, testInfo) => {
-    await installDocomatorApiMock(page, {
-      employeeCount: 3,
-      activeTemplate: true
-    });
+    await installUiRegressionScenario(page);
     const app = new DocomatorPage(page);
     await app.open();
     await app.openView(view);
@@ -96,7 +88,7 @@ for (const [view, label] of primaryViews) {
 test("диалог сотрудника не содержит машинно-выявляемых нарушений WCAG", async ({
   page
 }, testInfo) => {
-  await installDocomatorApiMock(page);
+  await installUiRegressionScenario(page);
   const app = new DocomatorPage(page);
   await app.open();
   await app.openView("employees");
@@ -107,7 +99,7 @@ test("диалог сотрудника не содержит машинно-в�
 
   await expectNoDetectableViolations(
     page,
-    "Добавление сотрудника и нескольких полей",
+    "Добавление сотрудника и поля",
     testInfo
   );
 });
