@@ -11,18 +11,18 @@
     return String(document.querySelector("#entityWorkspaceType")?.value || "").trim();
   }
 
-  function exportFileName(response) {
+  function exportFileName(response, format) {
     const disposition = response.headers.get("content-disposition") || "";
     const match = /filename="([^"]+)"/iu.exec(disposition);
-    return match?.[1] || `docomator-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    return match?.[1] || `docomator-export-${new Date().toISOString().slice(0, 10)}.${format}`;
   }
 
-  async function exportType(button, entityTypeKey) {
+  async function exportType(button, entityTypeKey, format) {
     const spaceId = currentSpaceId();
     if (!spaceId || !entityTypeKey) return;
     const original = button.textContent;
     button.disabled = true;
-    button.textContent = "Готовим CSV…";
+    button.textContent = `Готовим ${format.toUpperCase()}…`;
     const status = button.parentElement?.querySelector("[data-data-export-status]");
     if (status) {
       status.textContent = "";
@@ -30,10 +30,13 @@
     }
     try {
       const response = await fetch(
-        `/api/v1/spaces/${encodeURIComponent(spaceId)}/data-export.csv?entityTypeKey=${encodeURIComponent(entityTypeKey)}`,
+        `/api/v1/spaces/${encodeURIComponent(spaceId)}/data-export.${format}?entityTypeKey=${encodeURIComponent(entityTypeKey)}`,
         {
           headers: {
-            accept: "text/csv",
+            accept:
+              format === "xlsx"
+                ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                : "text/csv",
             "x-correlation-id": globalThis.crypto?.randomUUID?.() || `export-${Date.now()}`,
             "x-actor-id": "local-ui"
           }
@@ -52,7 +55,7 @@
       try {
         const link = document.createElement("a");
         link.href = url;
-        link.download = exportFileName(response);
+        link.download = exportFileName(response, format);
         link.hidden = true;
         document.body.append(link);
         link.click();
@@ -63,8 +66,8 @@
       const count = Number(response.headers.get("x-docomator-export-count") || "0");
       if (status) {
         status.textContent = count === 0
-          ? "Файл создан: в выбранном разделе пока нет объектов этого типа."
-          : `Экспортировано: ${count}`;
+          ? `Файл ${format.toUpperCase()} создан: в выбранном разделе пока нет объектов этого типа.`
+          : `Экспортировано в ${format.toUpperCase()}: ${count}`;
         status.hidden = false;
       }
     } catch (error) {
@@ -85,7 +88,7 @@
     if (status) return status;
     status = document.createElement("span");
     status.dataset.dataExportStatus = "";
-    status.className = "data-export-status";
+    status.className = "save-explanation data-export-status";
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
     status.hidden = true;
@@ -93,26 +96,33 @@
     return status;
   }
 
-  function installButton(anchor, keyProvider, marker) {
+  function installButtons(anchor, keyProvider, marker) {
     const parent = anchor?.parentElement;
     if (!anchor || !parent || parent.querySelector(`[${marker}]`)) return;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "secondary-button";
-    button.setAttribute(marker, "");
-    button.textContent = "Экспорт CSV";
-    button.addEventListener("click", () => void exportType(button, keyProvider()));
-    anchor.insertAdjacentElement("afterend", button);
+    let insertion = anchor;
+    for (const format of ["csv", "xlsx"]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary-button";
+      if (format === "csv") button.setAttribute(marker, "");
+      button.dataset.exportFormat = format;
+      button.textContent = `Экспорт ${format.toUpperCase()}`;
+      button.addEventListener("click", () =>
+        void exportType(button, keyProvider(), format)
+      );
+      insertion.insertAdjacentElement("afterend", button);
+      insertion = button;
+    }
     statusNode(parent);
   }
 
   function enhance() {
-    installButton(
+    installButtons(
       document.querySelector("[data-bulk-import-open]"),
       () => "person",
       "data-employee-export"
     );
-    installButton(
+    installButtons(
       document.querySelector('[data-entity-action="import"]'),
       selectedEntityType,
       "data-entity-export"
