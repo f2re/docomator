@@ -6,6 +6,10 @@ import {
 import { loadDocumentMemberProperties } from "./document-member-properties.js";
 import { ContentAddressedObjectStore } from "./object-store.js";
 
+type DocumentGenerationRegistryOptions = NonNullable<
+  ConstructorParameters<typeof DocumentGenerationRegistry>[2]
+>;
+
 /**
  * Runtime generation registry with compatibility for immutable template fields
  * that still contain a pre-0030 property key. The alias is resolved only in the
@@ -15,9 +19,10 @@ import { ContentAddressedObjectStore } from "./object-store.js";
 export class SpaceCompatibleDocumentGenerationRegistry extends DocumentGenerationRegistry {
   constructor(
     private readonly compatibleStore: SqliteStore,
-    objectStore: ContentAddressedObjectStore
+    objectStore: ContentAddressedObjectStore,
+    options: DocumentGenerationRegistryOptions = {}
   ) {
-    super(compatibleStore, objectStore);
+    super(compatibleStore, objectStore, options);
   }
 
   override getWorkForWorker(jobId: string): DocumentGenerationWork {
