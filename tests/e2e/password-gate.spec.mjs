@@ -122,12 +122,18 @@ test("общий пароль закрывает приложение, откр�
     await page.locator("#password").fill(password);
     await page.getByRole("button", { name: "Войти" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
-    await expect(page.getByText("Docomator", { exact: true }).first()).toBeVisible();
-    const logout = page.locator("[data-auth-logout]");
-    await expect(logout).toBeVisible();
+    await expect(page.locator("#main-content")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Обзор", level: 1 })).toBeVisible();
 
     const authenticated = await page.request.get(`${origin}/api/v1/spaces`);
     expect(authenticated.status()).toBe(200);
+
+    const settingsNavigation = page.locator('[data-view-target="settings"]:visible').first();
+    await expect(settingsNavigation).toBeVisible();
+    await settingsNavigation.click();
+    await expect(page.locator("#settings-heading")).toBeVisible();
+    const logout = page.locator('[data-auth-logout][data-auth-location="settings"]');
+    await expect(logout).toBeVisible();
 
     await logout.click();
     await expect(page).toHaveURL(`${origin}/login`);
