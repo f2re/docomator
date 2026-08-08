@@ -6,7 +6,7 @@ import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { SpaceRegistry } from "./spaces.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
-const NOW = "2026-08-07T07:00:00.000Z";
+const NOW = "2026-08-08T07:00:00.000Z";
 
 function context(correlationId: string) {
   return {
@@ -128,7 +128,7 @@ test("scoped reads never acquire an unowned legacy field", () => {
   }
 });
 
-test("legacy shared definitions are readable but cannot be mutated from one space", () => {
+test("an illegally shared definition remains protected from mutation", () => {
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
@@ -180,7 +180,7 @@ test("legacy shared definitions are readable but cannot be mutated from one spac
           "teacher",
           context("corr-shared-update")
         ),
-      /Историческое поле используется несколькими пространствами/u
+      /не имеет единственного владельца пространства/u
     );
     assert.deepEqual(
       secondKnowledge.getPropertyDefinition(field.key).validation,
@@ -191,7 +191,7 @@ test("legacy shared definitions are readable but cannot be mutated from one spac
   }
 });
 
-test("legacy internal writes may claim an unowned field only for the entity space", () => {
+test("legacy internal writes cannot claim an unowned field after 0030", () => {
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
@@ -218,14 +218,18 @@ test("legacy internal writes may claim an unowned field only for the entity spac
       context("corr-field")
     );
 
-    globalKnowledge.appendPropertyValue(
-      {
-        entityId: entity.entityId,
-        propertyKey: unowned.key,
-        value: "значение",
-        sourceType: "test"
-      },
-      context("corr-value")
+    assert.throws(
+      () =>
+        globalKnowledge.appendPropertyValue(
+          {
+            entityId: entity.entityId,
+            propertyKey: unowned.key,
+            value: "значение",
+            sourceType: "test"
+          },
+          context("corr-value")
+        ),
+      /property definition must belong to a space before value insert/u
     );
     const scopes = fixture.store.execute((database) =>
       database
@@ -234,7 +238,7 @@ test("legacy internal writes may claim an unowned field only for the entity spac
         )
         .all(unowned.id) as unknown as Array<{ space_id: string }>
     );
-    assert.deepEqual(scopes.map((row) => row.space_id), [space.id]);
+    assert.deepEqual(scopes, []);
   } finally {
     fixture.cleanup();
   }
