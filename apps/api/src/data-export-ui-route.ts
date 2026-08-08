@@ -7,16 +7,26 @@ import type { FastifyInstance } from "fastify";
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const defaultUiDirectory = path.resolve(moduleDirectory, "../ui");
 
-export function registerDataExportUiRoute(
+function registerUiModule(
   app: FastifyInstance,
-  uiDirectory: string = defaultUiDirectory
+  route: string,
+  fileName: string,
+  uiDirectory: string
 ): void {
-  app.get("/ui/data-export.js", async (_request, reply) => {
-    const body = await fs.readFile(path.join(uiDirectory, "data-export.js"));
+  app.get(route, async (_request, reply) => {
+    const body = await fs.readFile(path.join(uiDirectory, fileName));
     return reply
       .header("cache-control", "no-store")
       .header("x-content-type-options", "nosniff")
       .type("text/javascript; charset=utf-8")
       .send(body);
   });
+}
+
+export function registerDataExportUiRoute(
+  app: FastifyInstance,
+  uiDirectory: string = defaultUiDirectory
+): void {
+  registerUiModule(app, "/ui/data-export.js", "data-export.js", uiDirectory);
+  registerUiModule(app, "/ui/auth-session.js", "auth-session.js", uiDirectory);
 }
