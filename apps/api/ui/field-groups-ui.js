@@ -1,4 +1,32 @@
 {
+  if (!globalThis.__docomatorAuthFetchInstalled) {
+    globalThis.__docomatorAuthFetchInstalled = true;
+    const originalFetch = globalThis.fetch.bind(globalThis);
+    globalThis.fetch = async (input, init) => {
+      const response = await originalFetch(input, init);
+      const rawUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : typeof Request !== "undefined" && input instanceof Request
+              ? input.url
+              : "";
+      if (response.status === 401 && rawUrl) {
+        const url = new URL(rawUrl, location.origin);
+        if (
+          url.origin === location.origin &&
+          !url.pathname.startsWith("/api/v1/auth/") &&
+          location.pathname !== "/login"
+        ) {
+          const next = `${location.pathname}${location.search}${location.hash}`;
+          location.assign(`/login?next=${encodeURIComponent(next)}`);
+        }
+      }
+      return response;
+    };
+  }
+
   const definitions = Object.freeze([
     Object.freeze({ key: "common", label: "Общие сведения", description: "ФИО, контакты и сведения, подходящие всем карточкам." }),
     Object.freeze({ key: "teacher", label: "Преподаватель", description: "Кафедра, должность, нагрузка и другие сведения преподавателя." }),
@@ -83,6 +111,9 @@
     normalize
   });
 
+  void import("/ui/auth-session.js").catch((error) => {
+    console.error("Не удалось загрузить управление сессией.", error);
+  });
   void import("/ui/data-export.js").catch((error) => {
     console.error("Не удалось загрузить модуль экспорта данных.", error);
   });
