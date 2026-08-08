@@ -46,11 +46,9 @@ async function exportFixture() {
     const insertSpace = database.prepare("INSERT INTO spaces VALUES (?, ?, ?)");
     insertSpace.run("space-a", "alpha", "Альфа");
     insertSpace.run("space-b", "beta", "Бета");
-    database.prepare("INSERT INTO entity_types VALUES (?, ?, ?)").run(
-      "type-room",
-      "room",
-      "Аудитория"
-    );
+    const insertType = database.prepare("INSERT INTO entity_types VALUES (?, ?, ?)");
+    insertType.run("type-room", "room", "Аудитория");
+    insertType.run("type-equipment", "equipment", "Оборудование");
     const insertEntity = database.prepare("INSERT INTO entities VALUES (?, ?, ?, ?)");
     insertEntity.run("entity-a", "type-room", "=2+2", "active");
     insertEntity.run("entity-b", "type-room", "Чужая аудитория", "active");
@@ -78,6 +76,15 @@ async function exportFixture() {
   return { directory, store };
 }
 
+async function closeFixture(
+  app: ReturnType<typeof Fastify>,
+  fixture: Awaited<ReturnType<typeof exportFixture>>
+) {
+  await app.close();
+  fixture.store.close();
+  await fs.rm(fixture.directory, { recursive: true, force: true });
+}
+
 test("CSV-экспорт остаётся внутри пространства и берёт последние значения", async () => {
   const fixture = await exportFixture();
   const app = Fastify({ logger: false });
@@ -97,21 +104,51 @@ test("CSV-экспорт остаётся внутри пространства 
   assert.doesNotMatch(response.body, /Чужая аудитория/u);
   assert.doesNotMatch(response.body, /99/u);
 
-  await app.close();
-  fixture.store.close();
-  await fs.rm(fixture.directory, { recursive: true, force: true });
+  await closeFixture(app, fixture);
 });
 
-test("CSV-экспорт пустого типа возвращает заголовки без фиктивных строк", async () => {
+test("XLSX-экспорт использует тот же пространственный набор и не создаёт формулы", async () => {
   const fixture = await exportFixture();
   const app = Fastify({ logger: false });
   registerDataExportRoutes(app, fixture.store);
+
   const response = await app.inject({
     method: "GET",
-    url: "/api/v1/spaces/space-a/data-export.csv?entityTypeKey=room"
+    url: "/api/v1/spaces/space-a/data-export.xlsx?entityTypeKey=room"
   });
   assert.equal(response.statusCode, 200);
+  assert.equal(
+    response.headers["content-type"],
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
   assert.equal(response.headers["x-docomator-export-count"], "1");
+  assert.match(String(response.headers["content-disposition"]), /\.xlsx"$/u);
+  assert.equal(response.rawPayload.readUInt32LE(0), 0x04034b50);
+  const archiveText = response.rawPayload.toString("utf8");
+  assert.match(archiveText, /'=2\+2/u);
+  assert.match(archiveText, /'@опасная формула/u);
+  assert.match(archiveText, />12</u);
+  assert.doesNotMatch(archiveText, /Чужая аудитория/u);
+  assert.doesNotMatch(archiveText, />99</u);
+  assert.doesNotMatch(archiveText, /<f>/u);
+
+  await closeFixture(app, fixture);
+});
+
+test("экспорт известного пустого типа возвращает только заголовок и нулевой count", async () => {
+  const fixture = await exportFixture();
+  const app = Fastify({ logger: false });
+  registerDataExportRoutes(app, fixture.store);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/v1/spaces/space-a/data-export.csv?entityTypeKey=equipment"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers["x-docomator-export-count"], "0");
+  const rows = response.body.replace(/^\uFEFF/u, "").trimEnd().split("\r\n");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0], '"Название";"Статус"');
 
   const missing = await app.inject({
     method: "GET",
@@ -120,7 +157,5 @@ test("CSV-экспорт пустого типа возвращает загол
   assert.equal(missing.statusCode, 404);
   assert.equal(missing.json().error.code, "entity_type_not_found");
 
-  await app.close();
-  fixture.store.close();
-  await fs.rm(fixture.directory, { recursive: true, force: true });
+  await closeFixture(app, fixture);
 });
