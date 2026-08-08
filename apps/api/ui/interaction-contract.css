@@ -1,4 +1,4 @@
-/* Нормативный контракт интерактивных зон: UX-правило минимум 44 × 44 CSS px. */
+/* Нормативный UI-контракт доступности: зоны 44 × 44 CSS px и безопасный reflow. */
 
 button,
 input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
@@ -35,9 +35,65 @@ summary,
   min-height: 44px !important;
 }
 
+.help-center-view,
+#helpCenterIndexPane,
+#helpCenterArticlePane,
+.help-center-hero,
+.help-center-tools,
+.help-center-search,
+.help-center-categories,
+.help-center-start-path,
+.help-center-grid {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#helpCenterIndexPane,
+#helpCenterArticlePane {
+  overflow-x: hidden;
+}
+
+.help-center-categories {
+  width: 100%;
+}
+
+.help-center-start-path button,
+.help-center-grid button {
+  min-width: 0 !important;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 820px) {
   #employeeAddButtonHeader {
     display: inline-flex !important;
     width: 100%;
+  }
+
+  .help-center-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .help-center-hero-mark {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .metric-grid.shared-result-metrics {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .storage-maintenance-panel .panel-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .storage-maintenance-panel .panel-heading > div {
+    min-width: 0;
+  }
+
+  .storage-maintenance-panel .large-emoji {
+    display: none;
   }
 }
