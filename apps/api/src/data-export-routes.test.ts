@@ -107,7 +107,7 @@ test("CSV-экспорт остаётся внутри пространства 
   await closeFixture(app, fixture);
 });
 
-test("XLSX-экспорт использует тот же пространственный набор и не создаёт формулы", async () => {
+test("XLSX-экспорт сохраняет буквальные значения как текст и не создаёт формулы", async () => {
   const fixture = await exportFixture();
   const app = Fastify({ logger: false });
   registerDataExportRoutes(app, fixture.store);
@@ -125,8 +125,10 @@ test("XLSX-экспорт использует тот же пространст�
   assert.match(String(response.headers["content-disposition"]), /\.xlsx"$/u);
   assert.equal(response.rawPayload.readUInt32LE(0), 0x04034b50);
   const archiveText = response.rawPayload.toString("utf8");
-  assert.match(archiveText, /'=2\+2/u);
-  assert.match(archiveText, /'@опасная формула/u);
+  assert.match(archiveText, />=2\+2</u);
+  assert.match(archiveText, />@опасная формула</u);
+  assert.doesNotMatch(archiveText, />'=2\+2</u);
+  assert.doesNotMatch(archiveText, />'@опасная формула</u);
   assert.match(archiveText, />12</u);
   assert.doesNotMatch(archiveText, /Чужая аудитория/u);
   assert.doesNotMatch(archiveText, />99</u);
