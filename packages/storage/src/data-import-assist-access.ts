@@ -6,6 +6,7 @@ import {
 } from "./data-import-assist.js";
 import { SqliteStore } from "./database.js";
 import type { MutationContext } from "./knowledge.js";
+import { SpaceCompatibleDataImportRegistry } from "./space-compatible-data-import.js";
 import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import type { SpaceRegistry } from "./spaces.js";
 
@@ -39,9 +40,14 @@ class SpaceIsolatedAssistedDataImportRegistry extends AssistedDataImportRegistry
       spaceIdentity,
       { spaces: this.spaces }
     );
-    return new AssistedDataImportRegistry(this.backingStore, {
+    const imports = new SpaceCompatibleDataImportRegistry(this.backingStore, {
       spaces: this.spaces,
       knowledge
+    });
+    return new AssistedDataImportRegistry(this.backingStore, {
+      spaces: this.spaces,
+      knowledge,
+      imports
     });
   }
 }
