@@ -121,7 +121,7 @@ test("общий пароль закрывает приложение, откр�
 
     await page.locator("#password").fill(password);
     await page.getByRole("button", { name: "Войти" }).click();
-    await expect(page).toHaveURL(`${origin}/`);
+    await expect(page).toHaveURL(`${origin}/#overview`);
     await expect(page.getByText("Docomator", { exact: true }).first()).toBeVisible();
     const logout = page.locator("[data-auth-logout]");
     await expect(logout).toBeVisible();
