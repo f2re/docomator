@@ -47,7 +47,8 @@ const previewRegistry = new TemplatePreviewActivationRegistry(
 );
 const generationRegistry = new SpaceCompatibleDocumentGenerationRegistry(
   store,
-  objectStore
+  objectStore,
+  { queue }
 );
 const emailDeliveryRegistry = new DocumentEmailDeliveryRegistry(store, { queue });
 const networkDeliveryRegistry = new DocumentDeliveryRegistry(store);
