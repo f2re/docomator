@@ -30,6 +30,75 @@ function fulfillJson(route, data) {
   });
 }
 
+function databaseColumns() {
+  return [
+    { name: "id", type: "TEXT", notNull: true, primaryKeyPosition: 1 },
+    { name: "display_name", type: "TEXT", notNull: true, primaryKeyPosition: 0 },
+    { name: "status", type: "TEXT", notNull: true, primaryKeyPosition: 0 }
+  ];
+}
+
+async function installDatabaseRegressionScenario(page) {
+  await page.route("**/api/v1/admin/database/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    if (url.pathname === "/api/v1/admin/database/tables") {
+      await fulfillJson(route, [
+        {
+          name: "entities",
+          rowCount: 2,
+          columns: databaseColumns(),
+          label: "Объекты и сотрудники",
+          category: "Основные данные",
+          description: "Карточки людей и других объектов текущего контура.",
+          sensitivity: "personal"
+        }
+      ]);
+      return;
+    }
+
+    if (url.pathname === "/api/v1/admin/database/tables/entities/rows") {
+      await fulfillJson(route, {
+        table: "entities",
+        presentation: {
+          label: "Объекты и сотрудники",
+          category: "Основные данные",
+          description: "Карточки людей и других объектов текущего контура.",
+          sensitivity: "personal"
+        },
+        columns: databaseColumns(),
+        rows: [
+          { id: "entity-1", display_name: "Смирнов Сергей Сергеевич", status: "active" },
+          { id: "entity-2", display_name: "Петрова Анна Игоревна", status: "active" }
+        ],
+        total: 2,
+        limit: 50,
+        offset: 0,
+        sortColumn: "id",
+        sortDirection: "asc",
+        search: ""
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/v1/admin/database/check") {
+      await fulfillJson(route, {
+        status: "ok",
+        messages: ["ok"],
+        foreignKeyErrors: 0
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+}
+
 export async function installUiRegressionScenario(page) {
   const state = await installDocomatorApiMock(page, {
     employeeCount: 3,
@@ -44,6 +113,7 @@ export async function installUiRegressionScenario(page) {
     /\/api\/v1\/spaces\/[^/]+\/publications\/reports\/snapshots(?:\?.*)?$/u,
     (route) => fulfillJson(route, [])
   );
+  await installDatabaseRegressionScenario(page);
 
   return state;
 }
