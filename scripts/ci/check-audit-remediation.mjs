@@ -59,21 +59,59 @@ export async function collectAuditRemediationFindings(
     findings.push("apps/api/src/app.ts: отсутствует явная регистрация импорта данных");
   }
 
-  const obsoleteSessionFiles = [
-    "config/docomator.env.example",
-    "scripts/offline/install.sh",
-    "scripts/offline/lib.sh"
-  ];
-  for (const relativePath of obsoleteSessionFiles) {
-    const source = await readRequired(root, relativePath, findings);
-    if (source.includes("DOCOMATOR_SESSION_SECRET")) {
+  const passwordGate = await readRequired(
+    root,
+    "apps/api/src/password-gate.ts",
+    findings
+  );
+  for (const required of [
+    "DOCOMATOR_ACCESS_PASSWORD_HASH",
+    "DOCOMATOR_SESSION_SECRET",
+    "scryptSync(",
+    "timingSafeEqual(",
+    "HttpOnly",
+    "SameSite=Strict",
+    "login_temporarily_blocked"
+  ]) {
+    if (!passwordGate.includes(required)) {
       findings.push(
-        `${relativePath}: возвращён неиспользуемый DOCOMATOR_SESSION_SECRET из прежней модели сессий`
+        `apps/api/src/password-gate.ts: неполный общий password gate из ADR-0009: «${required}»`
       );
     }
-    if (source.includes("random_secret")) {
+  }
+
+  const envExample = await readRequired(
+    root,
+    "config/docomator.env.example",
+    findings
+  );
+  for (const required of [
+    "DOCOMATOR_ACCESS_PASSWORD_HASH=",
+    "DOCOMATOR_SESSION_SECRET=",
+    "DOCOMATOR_SESSION_TTL_SECONDS="
+  ]) {
+    if (!envExample.includes(required)) {
       findings.push(
-        `${relativePath}: возвращён неиспользуемый генератор секрета прежней модели сессий`
+        `config/docomator.env.example: отсутствует настройка общего password gate: «${required}»`
+      );
+    }
+  }
+
+  const passwordSetup = await readRequired(
+    root,
+    "scripts/offline/set-password.sh",
+    findings
+  );
+  for (const required of [
+    "scryptSync",
+    "randomBytes(48)",
+    "DOCOMATOR_ACCESS_PASSWORD_HASH",
+    "DOCOMATOR_SESSION_SECRET",
+    "systemctl restart docomator-api.service"
+  ]) {
+    if (!passwordSetup.includes(required)) {
+      findings.push(
+        `scripts/offline/set-password.sh: неполная локальная настройка password gate: «${required}»`
       );
     }
   }
