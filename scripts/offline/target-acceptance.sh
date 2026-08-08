@@ -10,13 +10,14 @@ BUNDLE_ROOT="$SCRIPT_DIR"
 CONFIG_FILE="/etc/docomator/docomator.env"
 BASE_URL="http://127.0.0.1:8080/"
 OUTPUT_DIRECTORY=""
+PASSWORD_FILE=""
 PILOT_LAUNCHER="/opt/docomator/current/app/scripts/runtime/pilot-check.sh"
 REQUIRE_NETWORK=0
 REQUIRE_SMTP=0
 
 usage() {
   cat <<'USAGE'
-Использование: target-acceptance.sh --output КАТАЛОГ [параметры]
+Использование: target-acceptance.sh --output КАТАЛОГ --password-file ФАЙЛ [параметры]
 
 Выполняет единый fail-closed прогон проверенного offline bundle на целевой
 Debian/Astra Linux: проверка комплекта, root smoke, core/LibreOffice gate,
@@ -24,8 +25,12 @@ Debian/Astra Linux: проверка комплекта, root smoke, core/LibreO
 Команда запускается обычным пользователем; привилегированные шаги вызываются
 через sudo. Каталог результатов должен быть новым.
 
+Общий пароль передаётся только через обычный файл режима 0600. Сам пароль и
+путь к этому файлу не записываются в акты и не копируются в каталог результатов.
+
 Параметры:
   --output КАТАЛОГ        новый каталог целевых свидетельств
+  --password-file ФАЙЛ    обычный файл 0600 с общим паролем Docomator
   --bundle-root КАТАЛОГ   распакованный автономный комплект
   --config ФАЙЛ           настройки установленного Docomator
   --base-url URL          локальный адрес Docomator
@@ -47,6 +52,11 @@ while (($# > 0)); do
     --output)
       need_value "$1" "$#"
       OUTPUT_DIRECTORY="$2"
+      shift 2
+      ;;
+    --password-file)
+      need_value "$1" "$#"
+      PASSWORD_FILE="$2"
       shift 2
       ;;
     --bundle-root)
@@ -90,6 +100,7 @@ done
 [[ "${EUID:-$(id -u)}" -ne 0 ]] || \
   die "Целевую приёмку необходимо запускать обычным пользователем, не root."
 [[ -n "$OUTPUT_DIRECTORY" ]] || die "Укажите новый каталог через --output."
+[[ -n "$PASSWORD_FILE" ]] || die "Укажите файл общего пароля через --password-file."
 require_command sudo
 require_command find
 require_command realpath
@@ -101,9 +112,21 @@ require_command xargs
 BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
 CONFIG_FILE="$(realpath "$CONFIG_FILE")"
 PILOT_LAUNCHER="$(realpath "$PILOT_LAUNCHER")"
+PASSWORD_FILE="$(realpath "$PASSWORD_FILE")"
 [[ -f "$CONFIG_FILE" && ! -L "$CONFIG_FILE" ]] || die "Не найден обычный файл настроек: $CONFIG_FILE"
 [[ -f "$PILOT_LAUNCHER" && ! -L "$PILOT_LAUNCHER" ]] || \
   die "Не найден установленный pilot-check.sh: $PILOT_LAUNCHER"
+[[ -f "$PASSWORD_FILE" && ! -L "$PASSWORD_FILE" ]] || \
+  die "Файл пароля должен быть обычным файлом без символических ссылок."
+PASSWORD_OWNER="$(stat -c '%u' "$PASSWORD_FILE")"
+PASSWORD_MODE="$(stat -c '%a' "$PASSWORD_FILE")"
+[[ "$PASSWORD_OWNER" == "$(id -u)" ]] || \
+  die "Файл пароля должен принадлежать пользователю, запускающему приёмку."
+(( (8#$PASSWORD_MODE & 8#077) == 0 )) || \
+  die "Файл пароля должен быть доступен только владельцу (режим 0600 или строже)."
+PASSWORD_SIZE="$(stat -c '%s' "$PASSWORD_FILE")"
+((PASSWORD_SIZE >= 1 && PASSWORD_SIZE <= 4096)) || \
+  die "Файл пароля имеет недопустимый размер."
 
 OUTPUT_DIRECTORY="$(realpath -m "$OUTPUT_DIRECTORY")"
 OUTPUT_PARENT="$(dirname "$OUTPUT_DIRECTORY")"
@@ -142,6 +165,7 @@ pilot_arguments=(
   --config "$CONFIG_FILE"
   --url "$BASE_URL"
   --output "$OUTPUT_DIRECTORY/pilot"
+  --password-file "$PASSWORD_FILE"
   --run-backup
   --json-only
 )
@@ -159,6 +183,7 @@ sudo chmod -R u=rwX,go= "$OUTPUT_DIRECTORY/pilot"
 run_logged "$OUTPUT_DIRECTORY/logs/05-ux-acceptance.log" \
   "$BUNDLE_ROOT/ux-acceptance-gate.sh" \
     --base-url "$BASE_URL" \
+    --password-file "$PASSWORD_FILE" \
     --output "$OUTPUT_DIRECTORY/ux"
 
 mapfile -d '' PILOT_JSON_FILES < <(
