@@ -14,7 +14,12 @@ import {
 const MAXIMUM_COLLECTOR_OUTPUT_BYTES = 1024 * 1024;
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const collectorPath = path.join(scriptDirectory, "pilot-readiness.mjs");
-const OPTIONS_WITH_VALUE = new Set(["--config", "--url", "--output"]);
+const OPTIONS_WITH_VALUE = new Set([
+  "--config",
+  "--url",
+  "--output",
+  "--password-file"
+]);
 
 function parseEnv(text) {
   const values = {};
@@ -60,6 +65,26 @@ function optionValue(argumentsList, name, fallback = null) {
     value = argumentsList[index];
   }
   return value;
+}
+
+async function readPasswordFile(candidate) {
+  if (candidate === null) return null;
+  const filePath = path.resolve(candidate);
+  const information = await fs.lstat(filePath);
+  if (!information.isFile() || information.isSymbolicLink()) {
+    throw new Error("Файл пароля должен быть обычным файлом без символических ссылок.");
+  }
+  if ((information.mode & 0o077) !== 0) {
+    throw new Error("Файл пароля должен быть доступен только владельцу (режим 0600 или строже). ");
+  }
+  if (information.size < 1 || information.size > 4096) {
+    throw new Error("Файл пароля имеет недопустимый размер.");
+  }
+  const password = (await fs.readFile(filePath, "utf8")).replace(/\r?\n$/u, "");
+  if (password.length < 1 || password.length > 512) {
+    throw new Error("Пароль в файле имеет недопустимую длину.");
+  }
+  return password;
 }
 
 function collectorArguments(argumentsList, stagingDirectory, jsonOnly) {
@@ -222,6 +247,9 @@ if (helpRequested) {
   }
 } else try {
   const outputDirectory = await finalOutputDirectory(originalArguments);
+  const password = await readPasswordFile(
+    optionValue(originalArguments, "--password-file")
+  );
   await fs.mkdir(outputDirectory, { recursive: true, mode: 0o750 });
   stagingDirectory = await fs.mkdtemp(path.join(outputDirectory, ".pilot-staging-"));
   await fs.chmod(stagingDirectory, 0o700);
@@ -259,7 +287,11 @@ if (helpRequested) {
   let identity = null;
   let identityError = null;
   try {
-    identity = await fetchInstalledReleaseIdentity(report.url, report.version ?? null);
+    identity = await fetchInstalledReleaseIdentity(
+      report.url,
+      report.version ?? null,
+      password
+    );
   } catch (error) {
     identityError = error instanceof Error ? error.message : String(error);
   }
