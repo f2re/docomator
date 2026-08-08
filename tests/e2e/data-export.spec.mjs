@@ -53,13 +53,17 @@ test("экспорт выбранного типа предлагает CSV и X
   await app.openView("entities");
   await expect(page.locator("#entityWorkspaceType")).toHaveValue("room");
 
-  const csvButton = page.locator('[data-entity-export][data-export-format="csv"]');
-  const xlsxButton = page.locator('[data-export-format="xlsx"]').filter({ hasText: "Экспорт XLSX" });
+  const genericActions = page.locator('[data-entity-action="import"]').locator("..");
+  const csvButton = genericActions.locator(
+    '[data-entity-export][data-export-format="csv"]'
+  );
+  const xlsxButton = genericActions.locator('[data-export-format="xlsx"]');
   await expect(csvButton).toBeVisible();
   await expect(csvButton).toHaveText("Экспорт CSV");
   await expect(xlsxButton).toBeVisible();
+  await expect(xlsxButton).toHaveText("Экспорт XLSX");
 
-  const parentGeometry = await csvButton.locator("..").evaluate((element) => ({
+  const parentGeometry = await genericActions.evaluate((element) => ({
     clientWidth: element.clientWidth,
     scrollWidth: element.scrollWidth
   }));
@@ -68,14 +72,14 @@ test("экспорт выбранного типа предлагает CSV и X
   const csvDownload = page.waitForEvent("download");
   await csvButton.click();
   expect((await csvDownload).suggestedFilename()).toBe("docomator-test-room-2026-08-08.csv");
-  await expect(page.locator("[data-data-export-status]")).toContainText(
+  await expect(genericActions.locator("[data-data-export-status]")).toContainText(
     "Экспортировано в CSV: 2"
   );
 
   const xlsxDownload = page.waitForEvent("download");
   await xlsxButton.click();
   expect((await xlsxDownload).suggestedFilename()).toBe("docomator-test-room-2026-08-08.xlsx");
-  await expect(page.locator("[data-data-export-status]")).toContainText(
+  await expect(genericActions.locator("[data-data-export-status]")).toContainText(
     "Экспортировано в XLSX: 2"
   );
 });
