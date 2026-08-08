@@ -82,4 +82,8 @@
     grouped,
     normalize
   });
+
+  void import("/ui/data-export.js").catch((error) => {
+    console.error("Не удалось загрузить модуль экспорта данных.", error);
+  });
 }
