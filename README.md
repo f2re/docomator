@@ -192,9 +192,11 @@ CI дополнительно запускает Chromium user flows, real-stack
 
 ## 📦 Автономная поставка
 
-Debian и Astra собираются как разные target-профили на соответствующих эталонных VM. Набор `.deb` одной ОС нельзя использовать для другой.
+Debian и Astra Linux собираются как разные target-профили на соответствующих эталонных VM. Набор `.deb` одной ОС нельзя использовать для другой.
 
-Примеры:
+### 🟦 Debian
+
+Debian bundle собирается только на согласованной Debian reference VM:
 
 ```bash
 npm run bundle:offline:debian -- \
@@ -202,6 +204,10 @@ npm run bundle:offline:debian -- \
   --llama-server /srv/build/llama.cpp/llama-server \
   --model /srv/models/model.gguf
 ```
+
+### 🟥 Astra Linux
+
+Astra Linux bundle собирается отдельно на согласованной Astra Linux reference VM и требует явного Chromium-профиля этой же ОС:
 
 ```bash
 npm run bundle:offline:astra -- \
