@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { EmployeeRegistry } from "./employees.js";
-import { KnowledgeConflictError, KnowledgeRegistry } from "./knowledge.js";
+import { KnowledgeConflictError } from "./knowledge.js";
+import { SpaceIsolatedEmployeeRegistry } from "./space-isolated-employees.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
 const NOW = "2026-07-27T04:00:00.000Z";
@@ -24,8 +25,8 @@ function validationObject(value: unknown): Record<string, unknown> {
 test("same-label teacher and student fields remain separate definitions", () => {
   const fixture = createMigratedTestStore();
   try {
-    const knowledge = new KnowledgeRegistry(fixture.store);
-    const employees = new EmployeeRegistry(fixture.store, { knowledge });
+    const knowledge = new SpaceScopedKnowledgeRegistry(fixture.store, "default");
+    const employees = new SpaceIsolatedEmployeeRegistry(fixture.store);
     const student = employees.create(
       "default",
       {
