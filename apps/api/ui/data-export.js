@@ -1,4 +1,13 @@
 {
+  function ensureStyles() {
+    if (document.querySelector('link[data-data-export-styles]')) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "/ui/data-export.css";
+    link.dataset.dataExportStyles = "";
+    document.head.append(link);
+  }
+
   function currentSpaceId() {
     return String(
       globalThis.docomatorCurrentSpaceId ||
@@ -117,6 +126,7 @@
   }
 
   function enhance() {
+    ensureStyles();
     installButtons(
       document.querySelector("[data-bulk-import-open]"),
       () => "person",
