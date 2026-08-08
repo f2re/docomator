@@ -123,7 +123,7 @@ test("общий пароль закрывает приложение, откр�
     await page.getByRole("button", { name: "Войти" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
     await expect(page.locator("#main-content")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Обзор", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Главная", level: 1 })).toBeVisible();
 
     const authenticated = await page.request.get(`${origin}/api/v1/spaces`);
     expect(authenticated.status()).toBe(200);
