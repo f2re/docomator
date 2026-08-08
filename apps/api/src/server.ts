@@ -5,6 +5,7 @@ import { SqliteStore } from "@docomator/storage";
 
 import { buildApp } from "./app.js";
 import { registerDataExportRoutes } from "./data-export-routes.js";
+import { registerDataExportUiRoute } from "./data-export-ui-route.js";
 import {
   installPasswordGate,
   loadPasswordGateConfig
@@ -17,6 +18,7 @@ const store = new SqliteStore({
 const app = buildApp(config, { store });
 installPasswordGate(app, loadPasswordGateConfig());
 registerDataExportRoutes(app, store);
+registerDataExportUiRoute(app);
 
 let closing = false;
 
