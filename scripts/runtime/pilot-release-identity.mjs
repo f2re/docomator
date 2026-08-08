@@ -29,6 +29,51 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function sessionCookieFromResponse(response) {
+  const source = response.headers.get("set-cookie") ?? "";
+  const cookie = source.split(";", 1)[0]?.trim() ?? "";
+  if (!cookie.startsWith("docomator_session=") || cookie.length > 4096) {
+    throw new Error("API входа не выдал корректную сессионную cookie.");
+  }
+  return cookie;
+}
+
+export async function createSharedPasswordSession(baseUrl, password) {
+  if (typeof password !== "string" || password.length === 0 || password.length > 512) {
+    throw new Error("Пароль для проверки установленного Docomator не задан или имеет недопустимую длину.");
+  }
+  let endpoint;
+  try {
+    endpoint = new URL("/api/v1/auth/login", baseUrl);
+  } catch {
+    throw new Error("Адрес API для входа некорректен.");
+  }
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        origin: endpoint.origin
+      },
+      body: JSON.stringify({ password }),
+      signal: AbortSignal.timeout(15_000)
+    });
+  } catch (error) {
+    throw new Error(`API входа Docomator недоступен: ${errorMessage(error)}`);
+  }
+  if (!response.ok) {
+    const retryAfter = response.headers.get("retry-after");
+    throw new Error(
+      response.status === 429 && retryAfter
+        ? `Вход временно заблокирован; повторите через ${retryAfter} сек.`
+        : `API входа Docomator вернул HTTP ${response.status}.`
+    );
+  }
+  return sessionCookieFromResponse(response);
+}
+
 export function validateInstalledReleaseIdentity(value, expectedVersion = null) {
   const identity = record(value);
   if (identity === null || !exactKeys(identity, RELEASE_KEYS)) {
@@ -64,17 +109,28 @@ export function validateInstalledReleaseIdentity(value, expectedVersion = null) 
   };
 }
 
-export async function fetchInstalledReleaseIdentity(baseUrl, expectedVersion = null) {
+export async function fetchInstalledReleaseIdentity(
+  baseUrl,
+  expectedVersion = null,
+  password = null
+) {
   let endpoint;
   try {
     endpoint = new URL("/api/v1/system/release", baseUrl);
   } catch {
     throw new Error("Адрес API для проверки релиза некорректен.");
   }
+  let cookie = null;
+  if (password !== null) {
+    cookie = await createSharedPasswordSession(baseUrl, password);
+  }
   let response;
   try {
     response = await fetch(endpoint, {
-      headers: { accept: "application/json" },
+      headers: {
+        accept: "application/json",
+        ...(cookie === null ? {} : { cookie })
+      },
       signal: AbortSignal.timeout(15_000)
     });
   } catch (error) {
@@ -176,7 +232,7 @@ export function bindPilotReleaseIdentity(reportInput, identity, failure = null) 
         summary: "Не удалось подтвердить установленный релиз",
         detail: failure || "Причина не указана",
         remediation:
-          "Проверьте /api/v1/system/release, release.json текущего каталога и настройки службы API."
+          "Проверьте общий пароль, /api/v1/system/release, release.json текущего каталога и настройки службы API."
       })
     );
   }
