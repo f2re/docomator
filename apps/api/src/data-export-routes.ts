@@ -355,10 +355,9 @@ export function registerDataExportRoutes(
       if (result.kind !== "ok") return lookupError(request, reply, result);
       const data = table(result);
       try {
-        const body = buildDataExportXlsx(
-          data.headers,
-          data.rows.map((row) => row.map(neutralizeSpreadsheetFormula))
-        );
+        // XLSX uses inline strings rather than formulas, so the literal user
+        // value remains visible without the CSV-only leading apostrophe.
+        const body = buildDataExportXlsx(data.headers, data.rows);
         return commonHeaders(reply, result, "xlsx")
           .type(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
