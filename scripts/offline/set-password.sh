@@ -15,8 +15,8 @@ usage() {
 Использование: sudo set-password.sh [параметры]
 
 Устанавливает или меняет общий пароль входа Docomator. В конфигурацию записывается
-только scrypt-хэш; сам пароль не сохраняется. При первой настройке также создаётся
-случайный секрет браузерных сессий.
+только scrypt-хэш; сам пароль не сохраняется. Каждая смена пароля также меняет
+секрет браузерных сессий и немедленно завершает ранее выданные сессии.
 
 Параметры:
   --config ФАЙЛ       файл /etc/docomator/docomator.env
@@ -82,13 +82,10 @@ HASH="$({ printf '%s' "$PASSWORD"; } | "$NODE_BIN" --input-type=module -e '
 ')"
 unset PASSWORD
 
-SESSION_SECRET="$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET)"
-if [[ -z "$SESSION_SECRET" ]]; then
-  SESSION_SECRET="$($NODE_BIN --input-type=module -e '
-    import { randomBytes } from "node:crypto";
-    process.stdout.write(randomBytes(48).toString("base64url"));
-  ')"
-fi
+SESSION_SECRET="$($NODE_BIN --input-type=module -e '
+  import { randomBytes } from "node:crypto";
+  process.stdout.write(randomBytes(48).toString("base64url"));
+')"
 
 replace_env_value "$CONFIG_FILE" DOCOMATOR_ACCESS_PASSWORD_HASH "$HASH"
 replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET "$SESSION_SECRET"
@@ -104,4 +101,4 @@ if ((NO_RESTART == 0)) && command -v systemctl >/dev/null 2>&1; then
     die "Пароль сохранён, но docomator-api.service не запустился. Проверьте journalctl -u docomator-api.service"
 fi
 
-printf '✅ Общий пароль Docomator обновлён. Все ранее выданные сессии с прежним session secret остаются действительны до истечения срока; для немедленного сброса всех сессий смените DOCOMATOR_SESSION_SECRET.\n'
+printf '✅ Общий пароль Docomator обновлён. Ранее выданные браузерные сессии завершены.\n'
