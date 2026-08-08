@@ -21,6 +21,10 @@ import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 const PERSON_TYPE_KEY = "person";
 const MAX_FIELD_KEY_ATTEMPTS = 32;
 
+type EmployeeRegistryOptions = NonNullable<
+  ConstructorParameters<typeof EmployeeRegistry>[1]
+>;
+
 function normalizedLabel(value: string): string {
   return String(value)
     .normalize("NFKC")
@@ -37,8 +41,15 @@ function propertyValueType(value: string): PropertyValueType {
 }
 
 export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
-  constructor(private readonly scopedStore: SqliteStore) {
-    super(scopedStore);
+  private readonly fieldKeyFactory: () => string;
+
+  constructor(
+    private readonly scopedStore: SqliteStore,
+    options: EmployeeRegistryOptions = {}
+  ) {
+    super(scopedStore, options);
+    this.fieldKeyFactory =
+      options.fieldKeyFactory ?? (() => generateOpaqueStableKey("employee_field"));
   }
 
   static fromRegistry(registry: EmployeeRegistry): SpaceIsolatedEmployeeRegistry {
@@ -152,7 +163,7 @@ export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
       try {
         return knowledge.createPropertyDefinition(
           {
-            key: generateOpaqueStableKey("employee_field"),
+            key: this.fieldKeyFactory(),
             label,
             valueType,
             unit: input.unit ?? null,
