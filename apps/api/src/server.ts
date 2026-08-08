@@ -1,9 +1,22 @@
+import path from "node:path";
+
 import { loadApiConfig } from "@docomator/config";
+import { SqliteStore } from "@docomator/storage";
 
 import { buildApp } from "./app.js";
+import { registerDataExportRoutes } from "./data-export-routes.js";
+import {
+  installPasswordGate,
+  loadPasswordGateConfig
+} from "./password-gate.js";
 
 const config = loadApiConfig();
-const app = buildApp(config);
+const store = new SqliteStore({
+  databasePath: path.join(config.dataDir, "docomator.db")
+});
+const app = buildApp(config, { store });
+installPasswordGate(app, loadPasswordGateConfig());
+registerDataExportRoutes(app, store);
 
 let closing = false;
 
@@ -22,6 +35,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
 
   try {
     await app.close();
+    store.close();
     process.exit(0);
   } catch (error) {
     app.log.error({ error }, "graceful shutdown failed");
@@ -49,5 +63,6 @@ try {
   }
 } catch (error) {
   app.log.fatal({ error }, "api failed to start");
+  store.close();
   process.exit(1);
 }
