@@ -12,7 +12,6 @@ import {
   stat,
   writeFile
 } from "node:fs/promises";
-import { get as httpGet } from "node:http";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -26,7 +25,7 @@ class UxGateError extends Error {}
 
 function usage() {
   process.stdout.write(
-    "Использование: ./ux-acceptance-gate.sh --output КАТАЛОГ [--base-url URL]\n"
+    "Использование: ./ux-acceptance-gate.sh --output КАТАЛОГ [--base-url URL] [--password-file ФАЙЛ]\n"
   );
 }
 
@@ -37,7 +36,8 @@ function fail(message) {
 function parseArguments(values) {
   const options = {
     baseURL: "http://127.0.0.1:18080",
-    outputDirectory: null
+    outputDirectory: null,
+    passwordFile: null
   };
   for (let index = 0; index < values.length; index += 1) {
     const argument = values[index];
@@ -51,6 +51,9 @@ function parseArguments(values) {
       index += 1;
     } else if (argument === "--output" && value !== undefined) {
       options.outputDirectory = value;
+      index += 1;
+    } else if (argument === "--password-file" && value !== undefined) {
+      options.passwordFile = value;
       index += 1;
     } else {
       fail(`Неизвестный или неполный параметр: ${argument ?? ""}`);
@@ -131,6 +134,39 @@ async function trustedNewOutput(value) {
   }
   await mkdir(requested, { mode: 0o700 });
   return requested;
+}
+
+async function securePasswordFile(candidate) {
+  if (candidate === null) return null;
+  const requested = path.resolve(candidate);
+  let canonical;
+  try {
+    canonical = await realpath(requested);
+  } catch {
+    fail("Файл общего пароля не найден.");
+  }
+  if (canonical !== requested) {
+    fail("Путь файла пароля не должен содержать символические ссылки.");
+  }
+  const information = await lstat(canonical);
+  const uid = typeof process.getuid === "function" ? process.getuid() : null;
+  if (
+    !information.isFile() ||
+    information.isSymbolicLink() ||
+    (uid !== null && information.uid !== uid) ||
+    (information.mode & 0o077) !== 0 ||
+    information.size < 1 ||
+    information.size > 4096
+  ) {
+    fail(
+      "Файл пароля должен быть обычным файлом текущего пользователя, режим 0600 или строже, размером до 4 КБ."
+    );
+  }
+  const password = (await readFile(canonical, "utf8")).replace(/\r?\n$/u, "");
+  if (password.length < 1 || password.length > 512) {
+    fail("Пароль в файле имеет недопустимую длину.");
+  }
+  return { path: canonical, password };
 }
 
 function runPlaywright(nodePath, cliPath, configPath, workingDirectory, environment) {
@@ -215,42 +251,69 @@ async function installedChromiumPackage(
   }
 }
 
-function requestReleaseIdentity(baseURL) {
+function sessionCookie(response) {
+  const source = response.headers.get("set-cookie") ?? "";
+  const cookie = source.split(";", 1)[0]?.trim() ?? "";
+  if (!cookie.startsWith("docomator_session=") || cookie.length > 4096) {
+    fail("Локальный Docomator не выдал корректную сессионную cookie.");
+  }
+  return cookie;
+}
+
+async function requestReleaseIdentity(baseURL, password) {
+  let cookie = null;
+  if (password !== null) {
+    const loginEndpoint = new URL("/api/v1/auth/login", baseURL);
+    let login;
+    try {
+      login = await fetch(loginEndpoint, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          origin: loginEndpoint.origin
+        },
+        body: JSON.stringify({ password }),
+        signal: AbortSignal.timeout(10_000)
+      });
+    } catch {
+      fail("Не удалось обратиться к локальному API входа Docomator.");
+    }
+    if (!login.ok) {
+      fail(`Локальный API входа Docomator вернул HTTP ${login.status}.`);
+    }
+    cookie = sessionCookie(login);
+  }
+
   const endpoint = new URL("/api/v1/system/release", baseURL);
-  return new Promise((resolve, reject) => {
-    const request = httpGet(
-      endpoint,
-      { headers: { accept: "application/json" } },
-      (response) => {
-        const chunks = [];
-        let size = 0;
-        response.on("data", (chunk) => {
-          size += chunk.length;
-          if (size > 64 * 1024) {
-            response.destroy(new Error("release identity response is too large"));
-          } else {
-            chunks.push(chunk);
-          }
-        });
-        response.on("error", reject);
-        response.on("end", () => {
-          if (response.statusCode !== 200) {
-            reject(new Error("release identity endpoint is unavailable"));
-            return;
-          }
-          try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-          } catch {
-            reject(new Error("release identity response is not JSON"));
-          }
-        });
-      }
-    );
-    request.setTimeout(10_000, () => {
-      request.destroy(new Error("release identity request timed out"));
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      headers: {
+        accept: "application/json",
+        ...(cookie === null ? {} : { cookie })
+      },
+      signal: AbortSignal.timeout(10_000)
     });
-    request.on("error", reject);
-  });
+  } catch {
+    fail("Локальный Docomator не предоставил идентичность установленного релиза.");
+  }
+  const source = await response.text();
+  if (Buffer.byteLength(source, "utf8") > 64 * 1024) {
+    fail("Ответ идентичности установленного релиза превышает допустимый размер.");
+  }
+  if (!response.ok) {
+    fail(
+      response.status === 401
+        ? "Для UX-приёмки требуется общий пароль Docomator; укажите --password-file."
+        : `API идентичности релиза вернул HTTP ${response.status}.`
+    );
+  }
+  try {
+    return JSON.parse(source);
+  } catch {
+    fail("API идентичности релиза вернул некорректный JSON.");
+  }
 }
 
 process.umask(0o077);
@@ -261,6 +324,7 @@ try {
   }
   const options = parseArguments(process.argv.slice(2));
   const baseURL = localBaseURL(options.baseURL);
+  const passwordFile = await securePasswordFile(options.passwordFile);
 
   let release;
   let releaseSource;
@@ -345,12 +409,10 @@ try {
     fail("Chromium вернул неподдерживаемую строку версии.");
   }
 
-  let servedRelease;
-  try {
-    servedRelease = await requestReleaseIdentity(baseURL);
-  } catch {
-    fail("Локальный Docomator не предоставил идентичность установленного релиза.");
-  }
+  const servedRelease = await requestReleaseIdentity(
+    baseURL,
+    passwordFile?.password ?? null
+  );
   if (
     servedRelease?.name !== "docomator" ||
     servedRelease.version !== releaseVersion ||
@@ -379,6 +441,7 @@ try {
     chromiumPath,
     browserVersion,
     baseURL,
+    passwordProvided: passwordFile !== null,
     generatedAt
   };
   await writeFile(
@@ -414,7 +477,10 @@ try {
     DOCOMATOR_E2E_BUNDLE_MANIFEST_SHA256: bundleManifestSha256,
     DOCOMATOR_E2E_RELEASE_METADATA_SHA256: releaseMetadataSha256,
     DOCOMATOR_E2E_CHROMIUM_BIN: chromiumPath,
-    DOCOMATOR_E2E_COMMIT_SHA: commitSha
+    DOCOMATOR_E2E_COMMIT_SHA: commitSha,
+    ...(passwordFile === null
+      ? {}
+      : { DOCOMATOR_E2E_ACCESS_PASSWORD_FILE: passwordFile.path })
   });
   if (code !== 0) {
     fail(`Playwright/axe завершился с кодом ${code}; диагностика сохранена.`);
