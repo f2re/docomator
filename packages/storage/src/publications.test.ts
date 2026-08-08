@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { KnowledgeRegistry } from "./knowledge.js";
 import {
   PUBLICATION_DERIVED_PROPERTY_KEYS,
   PublicationConflictError,
   PublicationNotFoundError,
-  PublicationRegistry,
   PublicationValidationError
 } from "./publications.js";
+import { SpaceCompatiblePublicationRegistry } from "./space-compatible-publications.js";
+import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { SpaceRegistry } from "./spaces.js";
 import { createMigratedTestStore } from "./test-helpers.js";
 
@@ -24,7 +24,7 @@ function context(correlationId: string) {
 }
 
 function addValue(
-  knowledge: KnowledgeRegistry,
+  knowledge: SpaceScopedKnowledgeRegistry,
   entityId: string,
   propertyKey: string,
   value: unknown,
@@ -44,13 +44,15 @@ function addValue(
 test("publication registry links authors, classifies articles and counts unique publications", () => {
   const fixture = createMigratedTestStore();
   try {
-    const knowledge = new KnowledgeRegistry(fixture.store);
     const spaces = new SpaceRegistry(fixture.store);
-    const publications = new PublicationRegistry(fixture.store);
+    const publications = new SpaceCompatiblePublicationRegistry(fixture.store);
     const space = spaces.createSpace(
       { key: "science", name: "Научная деятельность" },
       context("corr-space")
     );
+    const knowledge = new SpaceScopedKnowledgeRegistry(fixture.store, space.id, {
+      spaces
+    });
 
     const configuration = publications.ensureDefaultConfiguration(
       space.id,
@@ -284,7 +286,7 @@ test("publication authors cannot cross space boundaries", () => {
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
-    const publications = new PublicationRegistry(fixture.store);
+    const publications = new SpaceCompatiblePublicationRegistry(fixture.store);
     const science = spaces.createSpace(
       { key: "science", name: "Научная деятельность" },
       context("corr-science")
