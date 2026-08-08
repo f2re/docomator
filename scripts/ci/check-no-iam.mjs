@@ -26,6 +26,12 @@ const forbiddenUiCopy = [
   [/доступ\p{L}*\s+пользовател\p{L}*\s+пространств/iu, "доступ пользователей пространства"],
   [/организац\p{L}*\s+данных,\s*доступ\s+и\s+диагностик/iu, "настройки доступа"]
 ];
+const requiredPasswordGateTokens = [
+  "DOCOMATOR_ACCESS_PASSWORD_HASH",
+  "DOCOMATOR_SESSION_SECRET",
+  "HttpOnly",
+  "SameSite=Strict"
+];
 
 function runtimeFiles(relativeDirectory) {
   const absoluteDirectory = path.join(repositoryRoot, relativeDirectory);
@@ -38,8 +44,9 @@ function runtimeFiles(relativeDirectory) {
   });
 }
 
+const files = runtimeRoots.flatMap(runtimeFiles);
 const failures = [];
-for (const relativePath of runtimeRoots.flatMap(runtimeFiles)) {
+for (const relativePath of files) {
   const text = fs.readFileSync(path.join(repositoryRoot, relativePath), "utf8");
   for (const [token, description] of forbidden) {
     const index = text.indexOf(token);
@@ -56,13 +63,27 @@ for (const relativePath of runtimeRoots.flatMap(runtimeFiles)) {
   }
 }
 
+const passwordGatePath = path.join(repositoryRoot, "apps/api/src/password-gate.ts");
+if (!fs.existsSync(passwordGatePath)) {
+  failures.push("apps/api/src/password-gate.ts: отсутствует общий password gate из ADR-0009");
+} else {
+  const passwordGate = fs.readFileSync(passwordGatePath, "utf8");
+  for (const token of requiredPasswordGateTokens) {
+    if (!passwordGate.includes(token)) {
+      failures.push(`apps/api/src/password-gate.ts: отсутствует обязательный инвариант password gate (${token})`);
+    }
+  }
+}
+
 if (failures.length > 0) {
   process.stderr.write(
-    "Исполнимая модель или пользовательская семантика IAM противоречит ADR-0006:\n" +
+    "Исполнимая модель доступа противоречит ADR-0006/ADR-0009:\n" +
       failures.map((failure) => `- ${failure}`).join("\n") +
-      "\nИзменение продуктовой границы требует нового ADR, а не скрытого возврата ролей.\n"
+      "\nРазрешён один общий password gate; пользователи, роли и ACL требуют отдельного архитектурного решения.\n"
   );
   process.exitCode = 1;
 } else {
-  process.stdout.write("Исполнимая и пользовательская модель IAM отсутствует; разделы остаются общей организационной структурой.\n");
+  process.stdout.write(
+    "Общий password gate присутствует; исполнимая модель пользователей, ролей и ACL отсутствует.\n"
+  );
 }
