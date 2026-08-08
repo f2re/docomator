@@ -94,8 +94,11 @@ export class SpaceIsolatedEmployeeRegistry extends EmployeeRegistry {
     );
     return fields.map((field) => {
       if (field.propertyKey !== undefined) {
-        knowledge.getPropertyDefinition(field.propertyKey);
-        return field;
+        const definition = knowledge.getPropertyDefinition(field.propertyKey);
+        return {
+          ...field,
+          propertyKey: definition.key
+        };
       }
       if (field.definition === undefined) return field;
       const definition = this.resolveDefinition(
