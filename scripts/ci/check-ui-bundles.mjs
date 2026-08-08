@@ -16,6 +16,7 @@ const bundles = {
     "help-project-documents.js",
     "interface-hierarchy.js",
     "database-admin.js",
+    "navigation-contract.js",
     "publication-workspace.js"
   ],
   "document-intake.js": [

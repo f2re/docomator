@@ -1,0 +1,34 @@
+/* Нормативный контракт интерактивных зон: UX-правило минимум 44 × 44 CSS px. */
+
+button,
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+select,
+textarea,
+summary,
+[role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.icon-button {
+  width: 44px;
+  height: 44px;
+}
+
+.quiet-button,
+.quiet-button.compact,
+.nav-item,
+.primary-button,
+.secondary-button,
+.search-field,
+.field input,
+.field select,
+.field textarea,
+.generation-field input,
+.generation-field select,
+.generation-field textarea,
+.context-chip,
+.system-status-control,
+.workspace-switcher-footer button {
+  min-height: 44px;
+}
