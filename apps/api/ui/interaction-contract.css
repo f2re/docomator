@@ -54,6 +54,16 @@ summary,
 .help-center-categories,
 .help-center-start-path,
 .help-center-grid,
+.management-view,
+.management-overview,
+.management-context-card,
+.management-health-card,
+.management-section,
+.management-diagnostics,
+.management-grid,
+.management-tile,
+.management-tile-copy,
+.management-context-metrics,
 .database-admin-view,
 #databaseAdminRoot,
 [data-database-admin-shell],
@@ -68,6 +78,10 @@ summary,
 .space-pane,
 .compact-heading,
 .selection-actions,
+.operation-center,
+.operation-heading,
+.operation-heading > *,
+.operation-list,
 .storage-maintenance-panel,
 .storage-maintenance-panel > *,
 .storage-maintenance-panel .panel-heading,
@@ -88,7 +102,18 @@ summary,
 .section-intro p,
 .panel-heading h2,
 .panel-heading h3,
-.panel-heading p {
+.panel-heading p,
+.management-context-card h2,
+.management-context-card p,
+.management-health-card h3,
+.management-health-card p,
+.management-section h3,
+.management-section p,
+.management-tile-copy strong,
+.management-tile-copy small,
+.management-tile-copy em,
+.operation-heading h3,
+.operation-heading p {
   overflow-wrap: anywhere;
 }
 
@@ -101,8 +126,11 @@ summary,
 .help-center-categories,
 .help-center-start-path,
 .help-center-grid,
+.management-view,
+.management-overview,
 .database-admin-data,
-.database-admin-table-wrap {
+.database-admin-table-wrap,
+.operation-center {
   width: 100%;
 }
 
@@ -130,6 +158,18 @@ summary,
 .database-admin-pagination > * {
   min-width: 0;
   max-width: 100%;
+}
+
+[data-view="knowledge"] .segmented-control {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-view="knowledge"] .segmented-control button {
+  min-width: 0 !important;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .storage-maintenance-panel .generation-progress-grid,
@@ -168,6 +208,21 @@ summary,
   .compact-heading > button {
     width: 100%;
     max-width: 100%;
+  }
+
+  .operation-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .operation-heading .quiet-button {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    align-self: stretch;
+    justify-content: flex-start;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -211,11 +266,51 @@ summary,
     max-width: 100%;
   }
 
+  .management-overview,
+  .management-context-card,
+  .management-health-card,
+  .management-context-metrics,
+  .management-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .management-context-card,
+  .management-health-card,
+  .management-section,
+  .management-diagnostics,
+  .management-tile {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .management-health-icon {
+    justify-self: start;
+  }
+
+  .management-chevron {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  [data-view="knowledge"] .segmented-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  [data-view="knowledge"] .segmented-control button {
+    width: 100%;
+  }
+
   .database-admin-actions,
   .database-admin-export,
   .database-admin-search {
     width: 100%;
     min-width: 0;
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .database-admin-actions button,
@@ -223,6 +318,8 @@ summary,
   .database-admin-search button {
     width: 100%;
     max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .metric-grid.shared-result-metrics,
