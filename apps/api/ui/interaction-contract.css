@@ -62,6 +62,8 @@ summary,
 .storage-maintenance-panel > *,
 .storage-maintenance-panel .panel-heading,
 .storage-maintenance-panel .panel-heading > div,
+.storage-maintenance-panel .generation-field,
+.storage-maintenance-panel .generation-field > *,
 .storage-usage-content,
 .storage-cleanup-plan,
 .storage-cleanup-confirmation {
@@ -96,6 +98,12 @@ summary,
 .storage-maintenance-panel .generation-progress-grid,
 .metric-grid.shared-result-metrics {
   min-width: 0;
+}
+
+.storage-maintenance-panel .generation-field select {
+  width: 100%;
+  min-width: 0 !important;
+  max-width: 100%;
 }
 
 @media (max-width: 900px) {
