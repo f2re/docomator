@@ -105,7 +105,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
-  min-width: 0;
 }
 
 .operations-check {
@@ -113,8 +112,6 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 0.75rem;
-  min-width: 0;
-  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.9rem;
@@ -152,13 +149,10 @@
   display: grid;
   gap: 0.32rem;
   min-width: 0;
-  max-width: 100%;
 }
 
 .operations-check-title {
   display: flex;
-  min-width: 0;
-  max-width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
@@ -167,10 +161,7 @@
 .operations-check-title h3,
 .operations-check-copy strong,
 .operations-check-copy p {
-  min-width: 0;
-  max-width: 100%;
   margin: 0;
-  overflow-wrap: anywhere;
 }
 
 .operations-check-title h3 {
@@ -178,12 +169,9 @@
 }
 
 .operations-check-title span {
-  min-width: 0;
-  max-width: 100%;
   color: var(--muted);
   font-size: 0.72rem;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .operations-check-copy > strong {
@@ -201,8 +189,6 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.45rem;
-  min-width: 0;
-  max-width: 100%;
   margin-top: 0.25rem;
   border-radius: 0.7rem;
   padding: 0.55rem;
@@ -212,10 +198,8 @@
 }
 
 .operations-remediation p {
-  min-width: 0;
   margin: 0;
   line-height: 1.45;
-  overflow-wrap: anywhere;
 }
 
 @media (max-width: 900px) {
@@ -235,13 +219,41 @@
   }
 
   .operations-readiness-summary,
-  .operations-check,
-  .operations-remediation {
+  .operations-check {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .operations-check-title {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* Stage 2: текстовый reflow не должен удерживать intrinsic min-content. */
+.operations-check-list,
+.operations-check,
+.operations-check-copy,
+.operations-check-title,
+.operations-remediation {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.operations-check-title h3,
+.operations-check-title span,
+.operations-check-copy strong,
+.operations-remediation p {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.operations-check-title span {
+  white-space: normal;
+}
+
+@media (max-width: 680px) {
+  .operations-remediation {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
