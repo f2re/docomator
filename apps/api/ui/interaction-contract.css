@@ -60,6 +60,8 @@ summary,
 .database-admin-intro,
 .database-admin-toolbar,
 .database-admin-context,
+.database-admin-data,
+.database-admin-table-wrap,
 #databaseAdminRowsRegion,
 .workspace-layout,
 .workspace-content,
@@ -98,7 +100,9 @@ summary,
 .help-center-search,
 .help-center-categories,
 .help-center-start-path,
-.help-center-grid {
+.help-center-grid,
+.database-admin-data,
+.database-admin-table-wrap {
   width: 100%;
 }
 
@@ -112,6 +116,20 @@ summary,
 .database-admin-view.is-visible,
 .storage-maintenance-panel {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.database-admin-table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.database-admin-toolbar > *,
+.database-admin-search > *,
+.database-admin-context > *,
+.database-admin-data-heading > *,
+.database-admin-pagination > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .storage-maintenance-panel .generation-progress-grid,
