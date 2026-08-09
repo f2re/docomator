@@ -106,6 +106,12 @@ summary,
   max-width: 100%;
 }
 
+.storage-maintenance-panel .generation-field > span,
+.storage-maintenance-panel .generation-field > small {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
 @media (max-width: 900px) {
   .workspace-layout {
     grid-template-columns: minmax(0, 1fr) !important;
