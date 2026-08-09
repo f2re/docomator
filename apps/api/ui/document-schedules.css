@@ -82,6 +82,25 @@
   padding-top: 1rem;
 }
 
+.schedule-content,
+.schedule-list-section,
+.schedule-list,
+.schedule-list-section .generation-history-heading {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.schedule-list-section .generation-history-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.schedule-list-section .generation-history-heading h3,
+.schedule-list-section .generation-history-heading p {
+  overflow-wrap: anywhere;
+}
+
 .schedule-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
