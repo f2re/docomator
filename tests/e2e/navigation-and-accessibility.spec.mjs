@@ -46,6 +46,32 @@ async function overflowDiagnostics(page) {
   });
 }
 
+async function pageOverflowState(page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth
+  );
+  return {
+    overflow,
+    diagnostics: overflow > 0 ? await overflowDiagnostics(page) : null
+  };
+}
+
+async function collectOverflowViolations(page, app, suffix = "") {
+  const violations = [];
+  for (const { view } of CANONICAL_UI_VIEWS) {
+    await app.openView(view);
+    const state = await pageOverflowState(page);
+    if (state.overflow > 0) {
+      violations.push({
+        view: `${view}${suffix}`,
+        overflow: state.overflow,
+        diagnostics: state.diagnostics
+      });
+    }
+  }
+  return violations;
+}
+
 async function interactionViolations(page) {
   return page.evaluate(() =>
     [...document.querySelectorAll(
@@ -76,17 +102,6 @@ async function interactionViolations(page) {
   );
 }
 
-async function expectNoPageOverflow(page, view) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - window.innerWidth
-  );
-  const diagnostics = overflow > 0 ? await overflowDiagnostics(page) : [];
-  expect(
-    overflow,
-    `горизонтальное переполнение в разделе ${view}: ${JSON.stringify(diagnostics)}`
-  ).toBeLessThanOrEqual(0);
-}
-
 test("inventory охватывает все пользовательские view текущей оболочки", async ({
   page
 }) => {
@@ -108,10 +123,11 @@ test("все канонические экраны работают без го�
   const app = new DocomatorPage(page);
   await app.open();
 
-  for (const { view } of CANONICAL_UI_VIEWS) {
-    await app.openView(view);
-    await expectNoPageOverflow(page, view);
-  }
+  const violations = await collectOverflowViolations(page, app);
+  expect(
+    violations,
+    `горизонтальное переполнение найдено в канонических разделах: ${JSON.stringify(violations)}`
+  ).toEqual([]);
 });
 
 test("дополнительные разделы остаются в «Ещё» и не расширяют мобильную панель", async ({
@@ -241,8 +257,9 @@ test("текст при масштабе 200% не создаёт горизон
     text: "html { font-size: 200% !important; }"
   });
 
-  for (const { view } of CANONICAL_UI_VIEWS) {
-    await app.openView(view);
-    await expectNoPageOverflow(page, `${view} при 200%`);
-  }
+  const violations = await collectOverflowViolations(page, app, " при 200%");
+  expect(
+    violations,
+    `горизонтальное переполнение при масштабе 200% найдено в разделах: ${JSON.stringify(violations)}`
+  ).toEqual([]);
 });
