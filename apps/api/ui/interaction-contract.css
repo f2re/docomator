@@ -194,6 +194,15 @@ summary,
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
+  .storage-maintenance-panel .panel-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .storage-maintenance-panel .large-emoji {
+    display: none;
+  }
+
   .compact-heading {
     align-items: stretch;
     flex-direction: column;
@@ -328,12 +337,4 @@ summary,
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  .storage-maintenance-panel .panel-heading {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .storage-maintenance-panel .large-emoji {
-    display: none;
-  }
 }
