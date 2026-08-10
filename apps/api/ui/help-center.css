@@ -450,3 +450,58 @@
     transform: none;
   }
 }
+
+/* Stage 2: руководство reflow без расширения страницы на 200%. */
+.help-center-view,
+#helpCenterIndexPane,
+#helpCenterArticlePane,
+.help-center-view > *,
+.help-center-hero > *,
+.help-center-tools > *,
+.help-center-search,
+.help-center-categories,
+.help-center-start-path,
+.help-center-grid,
+.help-center-card,
+.help-center-article,
+.help-center-article-body,
+.help-center-definition-list,
+.help-center-definition-list > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.help-center-categories {
+  width: 100%;
+  overscroll-behavior-inline: contain;
+}
+
+.help-center-hero h2,
+.help-center-hero p,
+.help-center-start-path strong,
+.help-center-start-path small,
+.help-center-card strong,
+.help-center-card > span:not(.help-center-card-category),
+.help-center-article > header h2,
+.help-center-article > header p,
+.help-center-article-body h4,
+.help-center-article-body p,
+.help-center-definition-list dt,
+.help-center-definition-list dd {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .help-center-categories {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .help-center-categories button {
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 10rem;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}

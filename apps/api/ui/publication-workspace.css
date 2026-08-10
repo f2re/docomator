@@ -466,3 +466,70 @@
     display: none;
   }
 }
+
+/* Stage 2: onboarding и отчёты должны reflow без page-level overflow. */
+.publication-tabs,
+.publication-pane,
+.publication-onboarding,
+.publication-onboarding > *,
+.publication-onboarding .hero-copy,
+.publication-onboarding .hero-copy > *,
+.publication-onboarding .hero-actions,
+.publication-filter-panel,
+.publication-settings-panel,
+.publication-registry-panel,
+.publication-snapshots,
+.publication-filter-form,
+.publication-settings-form,
+.publication-report-result,
+.publication-metrics,
+.publication-table-wrap,
+.publication-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.publication-tabs,
+.publication-table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.publication-filter-form > *,
+.publication-settings-form > *,
+.publication-metrics article {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.publication-onboarding h2,
+.publication-onboarding p,
+.publication-onboarding button,
+.publication-metrics span,
+.publication-metrics strong,
+.publication-metrics small {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+  .publication-onboarding {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .publication-onboarding .hero-copy {
+    width: 100%;
+    padding: 20px 16px;
+  }
+
+  .publication-onboarding .hero-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .publication-onboarding .hero-actions > * {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}

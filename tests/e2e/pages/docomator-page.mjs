@@ -13,15 +13,28 @@ export class DocomatorPage {
   }
 
   async openView(name) {
-    const visibleTarget = this.page
-      .locator(`[data-view-target="${name}"]:visible`)
-      .first();
-    if ((await visibleTarget.count()) > 0) {
-      await visibleTarget.click();
+    if (name === "help") {
+      const sidebarButton = this.page.locator("#helpCenterNavButton:visible");
+      if ((await sidebarButton.count()) > 0) {
+        await sidebarButton.click();
+      } else {
+        await this.openView("settings");
+        await this.page
+          .locator('[data-view="settings"] [data-help-center-open]:visible')
+          .first()
+          .click();
+      }
     } else {
-      await this.page.locator(`[data-view-target="${name}"]`).first().evaluate(
-        (element) => element.click()
-      );
+      const visibleTarget = this.page
+        .locator(`[data-view-target="${name}"]:visible`)
+        .first();
+      if ((await visibleTarget.count()) > 0) {
+        await visibleTarget.click();
+      } else {
+        await this.page.locator(`[data-view-target="${name}"]`).first().evaluate(
+          (element) => element.click()
+        );
+      }
     }
     await expect(this.page.locator(`[data-view="${name}"]`)).toHaveClass(
       /is-visible/

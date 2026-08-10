@@ -256,3 +256,15 @@
     max-height: none;
   }
 }
+
+@media (max-width: 420px) {
+  .entity-workspace-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .entity-workspace-actions button {
+    width: 100%;
+    min-width: 0;
+  }
+}

@@ -565,3 +565,87 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Stage 2: пространство удерживает внутренние scroller'ы в собственной ширине. */
+.workspace-layout,
+.workspace-list-panel,
+.workspace-content,
+.workspace-content > .space-pane,
+.workspace-summary,
+.workspace-summary > *,
+.summary-actions,
+.selection-actions,
+.workspace-tabs,
+.member-list,
+.access-list,
+.snapshot-list,
+.member-row,
+.access-row,
+.snapshot-row,
+.audience-builder,
+.audience-form-grid,
+.audience-form-grid > *,
+.mode-fieldset,
+.mode-card,
+.plan-card,
+.plan-card > div:last-child {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workspace-list,
+.workspace-tabs {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+}
+
+.workspace-summary h2,
+.workspace-summary p,
+.compact-heading h2,
+.compact-heading p,
+.member-copy strong,
+.member-copy small,
+.access-row strong,
+.access-row small,
+.snapshot-row strong,
+.snapshot-row small,
+.mode-card strong,
+.mode-card small,
+.audience-actions p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .workspace-list-item {
+    min-width: min(220px, 100%);
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .summary-actions,
+  .selection-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .summary-actions > *,
+  .selection-actions > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .workspace-list {
+    display: grid;
+    overflow-x: visible;
+  }
+
+  .workspace-list-item {
+    width: 100%;
+    min-width: 0;
+  }
+}

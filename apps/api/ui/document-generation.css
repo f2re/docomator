@@ -428,6 +428,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.9rem;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 0.8rem;
   padding: 0.8rem;
@@ -440,6 +442,7 @@
   display: grid;
   gap: 0.2rem;
   min-width: 0;
+  max-width: 100%;
 }
 
 .generation-output-item span,
@@ -455,25 +458,38 @@
 }
 
 .generation-history {
+  min-width: 0;
+  max-width: 100%;
   border-top: 1px solid var(--border);
   padding-top: 1rem;
 }
 
 .generation-history-heading {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
+.generation-history-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.generation-history-heading h3,
+.generation-history-heading p,
 .generation-history h3,
 .generation-history p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .generation-history-empty {
   color: var(--muted);
   padding: 0.75rem 0;
+  overflow-wrap: anywhere;
 }
 
 .generation-history-empty.is-error {

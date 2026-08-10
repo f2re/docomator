@@ -1,10 +1,13 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
 import { DocomatorPage } from "./pages/docomator-page.mjs";
+import {
+  CANONICAL_UI_VIEWS,
+  installUiRegressionScenario
+} from "./ui-regression-inventory.mjs";
 
 test.beforeEach(async ({ page }) => {
-  await installDocomatorApiMock(page);
+  await installUiRegressionScenario(page);
 });
 
 async function overflowDiagnostics(page) {
@@ -43,6 +46,32 @@ async function overflowDiagnostics(page) {
   });
 }
 
+async function pageOverflowState(page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth
+  );
+  return {
+    overflow,
+    diagnostics: overflow > 0 ? await overflowDiagnostics(page) : null
+  };
+}
+
+async function collectOverflowViolations(page, app, suffix = "") {
+  const violations = [];
+  for (const { view } of CANONICAL_UI_VIEWS) {
+    await app.openView(view);
+    const state = await pageOverflowState(page);
+    if (state.overflow > 0) {
+      violations.push({
+        view: `${view}${suffix}`,
+        overflow: state.overflow,
+        diagnostics: state.diagnostics
+      });
+    }
+  }
+  return violations;
+}
+
 async function interactionViolations(page) {
   return page.evaluate(() =>
     [...document.querySelectorAll(
@@ -73,29 +102,32 @@ async function interactionViolations(page) {
   );
 }
 
-test("основная навигация работает без горизонтального переполнения", async ({
+test("inventory охватывает все пользовательские view текущей оболочки", async ({
+  page
+}) => {
+  const app = new DocomatorPage(page);
+  await app.open();
+  const actual = await page.evaluate(() =>
+    [...document.querySelectorAll("[data-view]")]
+      .map((element) => element.dataset.view)
+      .filter(Boolean)
+      .sort()
+  );
+  const expected = CANONICAL_UI_VIEWS.map(({ view }) => view).sort();
+  expect(actual).toEqual(expected);
+});
+
+test("все канонические экраны работают без горизонтального переполнения", async ({
   page
 }) => {
   const app = new DocomatorPage(page);
   await app.open();
 
-  for (const view of [
-    "overview",
-    "employees",
-    "templates",
-    "generation",
-    "documents"
-  ]) {
-    await app.openView(view);
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - window.innerWidth
-    );
-    const diagnostics = overflow > 0 ? await overflowDiagnostics(page) : [];
-    expect(
-      overflow,
-      `горизонтальное переполнение в разделе ${view}: ${JSON.stringify(diagnostics)}`
-    ).toBeLessThanOrEqual(0);
-  }
+  const violations = await collectOverflowViolations(page, app);
+  expect(
+    violations,
+    `горизонтальное переполнение найдено в канонических разделах: ${JSON.stringify(violations)}`
+  ).toEqual([]);
 });
 
 test("дополнительные разделы остаются в «Ещё» и не расширяют мобильную панель", async ({
@@ -137,7 +169,7 @@ test("видимые элементы управления сохраняют з
   );
   await expect(page.locator("#refreshButton")).toHaveCSS("height", "44px");
 
-  for (const view of ["overview", "employees", "settings", "publications"]) {
+  for (const { view } of CANONICAL_UI_VIEWS) {
     await app.openView(view);
     const violations = await interactionViolations(page);
     expect(
@@ -225,15 +257,9 @@ test("текст при масштабе 200% не создаёт горизон
     text: "html { font-size: 200% !important; }"
   });
 
-  for (const view of ["overview", "employees", "templates", "generation"]) {
-    await app.openView(view);
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - window.innerWidth
-    );
-    const diagnostics = overflow > 0 ? await overflowDiagnostics(page) : [];
-    expect(
-      overflow,
-      `текст в разделе ${view} вышел за viewport ${width}px при 200%: ${JSON.stringify(diagnostics)}`
-    ).toBeLessThanOrEqual(0);
-  }
+  const violations = await collectOverflowViolations(page, app, " при 200%");
+  expect(
+    violations,
+    `горизонтальное переполнение при масштабе 200% найдено в разделах: ${JSON.stringify(violations)}`
+  ).toEqual([]);
 });

@@ -228,3 +228,32 @@
     flex-direction: column;
   }
 }
+
+/* Stage 2: текстовый reflow не должен удерживать intrinsic min-content. */
+.operations-check-list,
+.operations-check,
+.operations-check-copy,
+.operations-check-title,
+.operations-remediation {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.operations-check-title h3,
+.operations-check-title span,
+.operations-check-copy strong,
+.operations-remediation p {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.operations-check-title span {
+  white-space: normal;
+}
+
+@media (max-width: 680px) {
+  .operations-remediation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

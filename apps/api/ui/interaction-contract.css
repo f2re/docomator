@@ -1,4 +1,4 @@
-/* Нормативный контракт интерактивных зон: UX-правило минимум 44 × 44 CSS px. */
+/* Нормативный UI-контракт доступности: зоны 44 × 44 CSS px и безопасный reflow. */
 
 button,
 input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
@@ -6,13 +6,13 @@ select,
 textarea,
 summary,
 [role="button"] {
-  min-height: 44px;
-  min-width: 44px;
+  min-height: 44px !important;
+  min-width: 44px !important;
 }
 
 .icon-button {
-  width: 44px;
-  height: 44px;
+  width: 44px !important;
+  height: 44px !important;
 }
 
 .quiet-button,
@@ -20,6 +20,8 @@ summary,
 .nav-item,
 .primary-button,
 .secondary-button,
+.text-button,
+.segmented-control button,
 .search-field,
 .field input,
 .field select,
@@ -30,5 +32,309 @@ summary,
 .context-chip,
 .system-status-control,
 .workspace-switcher-footer button {
-  min-height: 44px;
+  min-height: 44px !important;
+}
+
+/* Каноническая оболочка не должна удерживать min-content ширину дочернего текста. */
+.topbar,
+.topbar > *,
+.topbar > div:first-child,
+.topbar-actions,
+.view,
+.section-intro,
+.section-intro > *,
+.panel-heading,
+.panel-heading > *,
+.help-center-view,
+#helpCenterIndexPane,
+#helpCenterArticlePane,
+.help-center-hero,
+.help-center-tools,
+.help-center-search,
+.help-center-categories,
+.help-center-start-path,
+.help-center-grid,
+.management-view,
+.management-overview,
+.management-context-card,
+.management-health-card,
+.management-section,
+.management-diagnostics,
+.management-grid,
+.management-tile,
+.management-tile-copy,
+.management-context-metrics,
+.database-admin-view,
+#databaseAdminRoot,
+[data-database-admin-shell],
+.database-admin-intro,
+.database-admin-toolbar,
+.database-admin-context,
+.database-admin-data,
+.database-admin-table-wrap,
+#databaseAdminRowsRegion,
+.workspace-layout,
+.workspace-content,
+.space-pane,
+.compact-heading,
+.selection-actions,
+.operation-center,
+.operation-heading,
+.operation-heading > *,
+.operation-list,
+.storage-maintenance-panel,
+.storage-maintenance-panel > *,
+.storage-maintenance-panel .panel-heading,
+.storage-maintenance-panel .panel-heading > div,
+.storage-maintenance-panel .generation-field,
+.storage-maintenance-panel .generation-field > *,
+.storage-usage-content,
+.storage-cleanup-plan,
+.storage-cleanup-confirmation {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.topbar h1,
+.topbar .eyebrow,
+.section-intro h2,
+.section-intro h3,
+.section-intro p,
+.panel-heading h2,
+.panel-heading h3,
+.panel-heading p,
+.management-context-card h2,
+.management-context-card p,
+.management-health-card h3,
+.management-health-card p,
+.management-section h3,
+.management-section p,
+.management-tile-copy strong,
+.management-tile-copy small,
+.management-tile-copy em,
+.operation-heading h3,
+.operation-heading p {
+  overflow-wrap: anywhere;
+}
+
+.help-center-view,
+#helpCenterIndexPane,
+#helpCenterArticlePane,
+.help-center-hero,
+.help-center-tools,
+.help-center-search,
+.help-center-categories,
+.help-center-start-path,
+.help-center-grid,
+.management-view,
+.management-overview,
+.database-admin-data,
+.database-admin-table-wrap,
+.operation-center {
+  width: 100%;
+}
+
+.help-center-start-path button,
+.help-center-grid button {
+  min-width: 0 !important;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.database-admin-view.is-visible,
+.storage-maintenance-panel {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.database-admin-table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.database-admin-toolbar > *,
+.database-admin-search > *,
+.database-admin-context > *,
+.database-admin-data-heading > *,
+.database-admin-pagination > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-view="knowledge"] .segmented-control {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-view="knowledge"] .segmented-control button {
+  min-width: 0 !important;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.storage-maintenance-panel .generation-progress-grid,
+.metric-grid.shared-result-metrics {
+  min-width: 0;
+}
+
+.storage-maintenance-panel .generation-field select {
+  width: 100%;
+  min-width: 0 !important;
+  max-width: 100%;
+}
+
+.storage-maintenance-panel .generation-field > span,
+.storage-maintenance-panel .generation-field > small {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (max-width: 900px) {
+  .workspace-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .storage-maintenance-panel .panel-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .storage-maintenance-panel .large-emoji {
+    display: none;
+  }
+
+  .compact-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .selection-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .compact-heading > button {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .operation-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .operation-heading .quiet-button {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    align-self: stretch;
+    justify-content: flex-start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 820px) {
+  #employeeAddButtonHeader {
+    display: inline-flex !important;
+    width: 100%;
+  }
+
+  .help-center-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .help-center-hero-mark {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar h1,
+  .topbar .eyebrow {
+    max-width: 100%;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .section-intro,
+  .panel-heading,
+  .database-admin-intro,
+  .database-admin-context,
+  .database-admin-data-heading,
+  .database-admin-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-intro > *,
+  .panel-heading > * {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .management-overview,
+  .management-context-card,
+  .management-health-card,
+  .management-context-metrics,
+  .management-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .management-context-card,
+  .management-health-card,
+  .management-section,
+  .management-diagnostics,
+  .management-tile {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .management-health-icon {
+    justify-self: start;
+  }
+
+  .management-chevron {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  [data-view="knowledge"] .segmented-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  [data-view="knowledge"] .segmented-control button {
+    width: 100%;
+  }
+
+  .database-admin-actions,
+  .database-admin-export,
+  .database-admin-search {
+    width: 100%;
+    min-width: 0;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .database-admin-actions button,
+  .database-admin-export button,
+  .database-admin-search button {
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .metric-grid.shared-result-metrics,
+  .storage-maintenance-panel .generation-progress-grid,
+  .storage-maintenance-controls {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
 }
