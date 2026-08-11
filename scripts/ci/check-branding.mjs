@@ -88,6 +88,35 @@ export async function checkBranding() {
     }
   }
 
+  const baseStylesPath = "apps/api/ui/styles.css";
+  const baseStyles = await inspectText(baseStylesPath);
+  for (const forbidden of [
+    "backdrop-filter: blur",
+    "rgba(57, 121, 246",
+    ".hero-visual",
+    ".live-sheet",
+    "linear-gradient(to bottom, var(--background)"
+  ]) {
+    if (baseStyles?.includes(forbidden)) findings.push(`${baseStylesPath}: найден устаревший эффект ${forbidden}`);
+  }
+
+  const stabilityPath = "apps/api/ui/interface-stability.css";
+  const stability = await inspectText(stabilityPath);
+  for (const fragment of [
+    "min-height: var(--touch-target);",
+    "width: var(--touch-target);",
+    "height: var(--touch-target);"
+  ]) {
+    requireFragment(findings, stability, stabilityPath, fragment);
+  }
+  for (const forbidden of [
+    ".hero-visual",
+    "width: 38px;\n    height: 38px;\n    min-height: 38px;",
+    "width: 36px;\n    height: 36px;\n    min-height: 36px;"
+  ]) {
+    if (stability?.includes(forbidden)) findings.push(`${stabilityPath}: найден устаревший mobile/dead rule ${forbidden}`);
+  }
+
   const routesPath = "apps/api/src/ui-routes.ts";
   const routes = await inspectText(routesPath);
   requireFragment(findings, routes, routesPath, '"brand-tokens.css"');
