@@ -1,0 +1,39 @@
+name: Fix brand release note
+
+on:
+  push:
+    branches:
+      - design/oformlyator-brand-system-v2
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+      - name: Fix current version wording
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('docs/RELEASE_NOTES.md')
+          text = path.read_text(encoding='utf-8')
+          old = 'Номер `0.2.0` обозначает текущий набор возможностей продукта'
+          new = 'Номер `0.2.1` обозначает текущий набор возможностей продукта'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one current-version wording, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/RELEASE_NOTES.md
+          git commit -m "docs(release): align 0.2.1 status wording"
+          git push origin HEAD:design/oformlyator-brand-system-v2
