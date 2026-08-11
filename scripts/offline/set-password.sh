@@ -14,9 +14,13 @@ usage() {
   cat <<'USAGE'
 Использование: sudo set-password.sh [параметры]
 
-Устанавливает или меняет общий пароль входа Оформлятор. В конфигурацию записывается
-только scrypt-хэш; сам пароль не сохраняется. Каждая смена пароля также меняет
-секрет браузерных сессий и немедленно завершает ранее выданные сессии.
+Устанавливает или меняет общий пароль входа Оформлятор. В конфигурацию и базу
+попадает только scrypt-хэш; сам пароль не сохраняется. Каждая смена пароля также
+меняет секрет браузерных сессий и немедленно завершает ранее выданные сессии.
+
+Обычный первый запуск выполняется проще: откройте Оформлятор в браузере и задайте
+общий пароль на странице «Первый запуск». Этот скрипт остаётся локальным запасным
+и recovery-способом, а также способом последующей смены общего пароля.
 
 Параметры:
   --config ФАЙЛ       файл /etc/docomator/docomator.env
@@ -92,8 +96,38 @@ replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET "$SESSION_SECRET"
 if [[ -z "$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_TTL_SECONDS)" ]]; then
   replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_TTL_SECONDS "28800"
 fi
-
 chmod 0640 "$CONFIG_FILE"
+
+DATA_DIR="$(read_env_value "$CONFIG_FILE" DOCOMATOR_DATA_DIR)"
+[[ -n "$DATA_DIR" ]] || DATA_DIR="/var/lib/docomator"
+DATABASE_PATH="$DATA_DIR/docomator.db"
+if [[ -f "$DATABASE_PATH" ]]; then
+  "$NODE_BIN" --input-type=module - "$DATABASE_PATH" "$HASH" <<'NODE'
+import { DatabaseSync } from "node:sqlite";
+const databasePath = process.argv[2];
+const passwordHash = process.argv[3];
+const database = new DatabaseSync(databasePath);
+try {
+  const table = database
+    .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'shared_access_password'")
+    .get();
+  if (table !== undefined) {
+    database.exec("BEGIN IMMEDIATE;");
+    try {
+      database
+        .prepare("INSERT INTO shared_access_password (singleton, password_hash, configured_at) VALUES (1, ?, ?) ON CONFLICT(singleton) DO UPDATE SET password_hash = excluded.password_hash, configured_at = excluded.configured_at")
+        .run(passwordHash, new Date().toISOString());
+      database.exec("COMMIT;");
+    } catch (error) {
+      database.exec("ROLLBACK;");
+      throw error;
+    }
+  }
+} finally {
+  database.close();
+}
+NODE
+fi
 
 if ((NO_RESTART == 0)) && command -v systemctl >/dev/null 2>&1; then
   systemctl restart docomator-api.service

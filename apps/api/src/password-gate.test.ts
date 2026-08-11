@@ -7,6 +7,7 @@ import {
   hashAccessPassword,
   installPasswordGate,
   loadPasswordGateConfig,
+  type PasswordCredentialStore,
   verifyAccessPassword
 } from "./password-gate.js";
 
@@ -149,5 +150,107 @@ test("gate отклоняет cross-origin mutation и временно блок
   });
   assert.equal(rejected.statusCode, 403);
   assert.equal(rejected.json().error.code, "cross_origin_request_rejected");
+  await app.close();
+});
+
+
+test("первый запуск позволяет один раз создать общий пароль из браузера и сразу войти", async () => {
+  let storedHash: string | null = null;
+  const credentials: PasswordCredentialStore = {
+    readPasswordHash: () => storedHash,
+    configurePasswordHash: (passwordHash) => {
+      if (storedHash !== null) return false;
+      storedHash = passwordHash;
+      return true;
+    }
+  };
+  const config = loadPasswordGateConfig({
+    DOCOMATOR_ACCESS_PASSWORD_HASH: "",
+    DOCOMATOR_SESSION_SECRET: "s".repeat(64)
+  });
+  const app = Fastify({ logger: false });
+  app.get("/api/v1/private", async () => ({ data: "secret" }));
+  installPasswordGate(app, config, credentials);
+
+  const page = await app.inject({ method: "GET", url: "/login" });
+  assert.equal(page.statusCode, 200);
+  assert.match(page.body, /Первый запуск/u);
+  assert.match(page.body, /Сохранить пароль и продолжить/u);
+  assert.doesNotMatch(page.body, /set-password\.sh/u);
+
+  const mismatch = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/setup",
+    headers: { host: "docomator.local", origin: "http://docomator.local" },
+    payload: { password: "Надежный-пароль-2026", confirmation: "другой-пароль-2026" }
+  });
+  assert.equal(mismatch.statusCode, 400);
+  assert.equal(mismatch.json().error.code, "password_confirmation_mismatch");
+  assert.equal(storedHash, null);
+
+  const setup = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/setup",
+    headers: { host: "docomator.local", origin: "http://docomator.local" },
+    payload: { password: "Надежный-пароль-2026", confirmation: "Надежный-пароль-2026" }
+  });
+  assert.equal(setup.statusCode, 200);
+  assert.ok(storedHash !== null);
+  assert.equal(verifyAccessPassword("Надежный-пароль-2026", storedHash), true);
+  const cookie = String(setup.headers["set-cookie"] ?? "").split(";", 1)[0] ?? "";
+  const allowed = await app.inject({ method: "GET", url: "/api/v1/private", headers: { cookie } });
+  assert.equal(allowed.statusCode, 200);
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/setup",
+    payload: { password: "Второй-надежный-пароль", confirmation: "Второй-надежный-пароль" }
+  });
+  assert.equal(second.statusCode, 409);
+  assert.equal(second.json().error.code, "password_already_configured");
+  await app.close();
+
+  const restartedConfig = loadPasswordGateConfig({
+    DOCOMATOR_ACCESS_PASSWORD_HASH: "",
+    DOCOMATOR_SESSION_SECRET: "s".repeat(64)
+  });
+  const restarted = Fastify({ logger: false });
+  installPasswordGate(restarted, restartedConfig, credentials);
+  const loginPage = await restarted.inject({ method: "GET", url: "/login" });
+  assert.match(loginPage.body, /<h1>Вход<\/h1>/u);
+  const login = await restarted.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    payload: { password: "Надежный-пароль-2026" }
+  });
+  assert.equal(login.statusCode, 200);
+  await restarted.close();
+});
+
+test("первичная настройка пароля отклоняет cross-origin запрос", async () => {
+  let storedHash: string | null = null;
+  const credentials: PasswordCredentialStore = {
+    readPasswordHash: () => storedHash,
+    configurePasswordHash: (passwordHash) => {
+      if (storedHash !== null) return false;
+      storedHash = passwordHash;
+      return true;
+    }
+  };
+  const app = Fastify({ logger: false });
+  installPasswordGate(app, {
+    mode: "required",
+    passwordHash: null,
+    sessionSecret: "z".repeat(64),
+    sessionTtlSeconds: 3600
+  }, credentials);
+  const rejected = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/setup",
+    headers: { host: "docomator.local", origin: "https://evil.example" },
+    payload: { password: "Надежный-пароль-2026", confirmation: "Надежный-пароль-2026" }
+  });
+  assert.equal(rejected.statusCode, 403);
+  assert.equal(storedHash, null);
   await app.close();
 });

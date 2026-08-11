@@ -287,6 +287,12 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
     cp "$BUNDLE_ROOT/first-run.sh" "$TEMP_RELEASE/first-run.sh"
     chmod 0755 "$TEMP_RELEASE/first-run.sh"
   fi
+  if [[ -x "$BUNDLE_ROOT/set-password.sh" && -f "$BUNDLE_ROOT/lib.sh" ]]; then
+    cp "$BUNDLE_ROOT/set-password.sh" "$TEMP_RELEASE/set-password.sh"
+    cp "$BUNDLE_ROOT/lib.sh" "$TEMP_RELEASE/lib.sh"
+    chmod 0755 "$TEMP_RELEASE/set-password.sh"
+    chmod 0644 "$TEMP_RELEASE/lib.sh"
+  fi
   if [[ -f "$BUNDLE_ROOT/healthcheck.mjs" ]]; then
     cp "$BUNDLE_ROOT/healthcheck.mjs" "$TEMP_RELEASE/healthcheck.mjs"
     chmod 0755 "$TEMP_RELEASE/healthcheck.mjs"
@@ -300,6 +306,16 @@ else
   cmp -s "$BUNDLE_ROOT/release.json" "$RELEASE_DIR/release.json" || \
     die "Версия $VERSION уже установлена с другими сведениями. Подготовьте новый номер версии."
   info "Такой же каталог версии уже существует: $RELEASE_DIR"
+fi
+
+SESSION_SECRET="$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET)"
+if [[ -z "$SESSION_SECRET" ]]; then
+  SESSION_SECRET="$("$RELEASE_DIR/runtime/node/bin/node" -e 'process.stdout.write(require("node:crypto").randomBytes(48).toString("base64url"))')"
+  [[ ${#SESSION_SECRET} -ge 32 ]] || die "Не удалось создать секрет сеансов"
+  replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET "$SESSION_SECRET"
+  chmod 0640 "$CONFIG_FILE"
+  chown root:"$DOCOMATOR_GROUP" "$CONFIG_FILE"
+  info "Создан локальный секрет сеансов; общий пароль задаётся при первом открытии интерфейса"
 fi
 
 if ! DOCOMATOR_DATA_DIR="$DATA_DIR" \
