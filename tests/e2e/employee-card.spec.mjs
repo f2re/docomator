@@ -1,13 +1,13 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 test("пользователь добавляет сотрудника и понятное общее поле", async ({
   page
 }) => {
-  const state = await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  const state = await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   await app.addEmployeeWithField({

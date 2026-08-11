@@ -1,5 +1,5 @@
 [Unit]
-Description=Docomator API
+Description=Оформлятор API
 After=network.target
 Wants=network.target
 

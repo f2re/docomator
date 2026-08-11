@@ -50,7 +50,7 @@ function technicalBinding(fieldId: string, index: number) {
 
 function pdf(label: string): Buffer {
   return Buffer.from(
-    `%PDF-1.4\n% Docomator ${label}\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n`
+    `%PDF-1.4\n% Оформлятор ${label}\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n`
   );
 }
 

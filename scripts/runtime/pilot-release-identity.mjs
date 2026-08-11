@@ -40,7 +40,7 @@ function sessionCookieFromResponse(response) {
 
 export async function createSharedPasswordSession(baseUrl, password) {
   if (typeof password !== "string" || password.length === 0 || password.length > 512) {
-    throw new Error("Пароль для проверки установленного Docomator не задан или имеет недопустимую длину.");
+    throw new Error("Пароль для проверки установленного Оформлятор не задан или имеет недопустимую длину.");
   }
   let endpoint;
   try {
@@ -61,14 +61,14 @@ export async function createSharedPasswordSession(baseUrl, password) {
       signal: AbortSignal.timeout(15_000)
     });
   } catch (error) {
-    throw new Error(`API входа Docomator недоступен: ${errorMessage(error)}`);
+    throw new Error(`API входа Оформлятор недоступен: ${errorMessage(error)}`);
   }
   if (!response.ok) {
     const retryAfter = response.headers.get("retry-after");
     throw new Error(
       response.status === 429 && retryAfter
         ? `Вход временно заблокирован; повторите через ${retryAfter} сек.`
-        : `API входа Docomator вернул HTTP ${response.status}.`
+        : `API входа Оформлятор вернул HTTP ${response.status}.`
     );
   }
   return sessionCookieFromResponse(response);
@@ -250,7 +250,7 @@ export function bindPilotReleaseIdentity(reportInput, identity, failure = null) 
 
 export function pilotMarkdownReport(report) {
   const lines = [
-    "# Акт пилотной проверки Docomator",
+    "# Акт пилотной проверки Оформлятор",
     "",
     `- Дата: ${report.generatedAt}`,
     `- Версия: ${report.version ?? "не указана"}`,

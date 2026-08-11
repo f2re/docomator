@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 
 import { expect, test } from "./fixtures/test.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 import {
   CANONICAL_UI_VIEWS,
   installUiRegressionScenario
@@ -77,7 +77,7 @@ for (const { view, label } of CANONICAL_UI_VIEWS) {
     page
   }, testInfo) => {
     await installUiRegressionScenario(page);
-    const app = new DocomatorPage(page);
+    const app = new ОформляторPage(page);
     await app.open();
     await app.openView(view);
 
@@ -89,7 +89,7 @@ test("диалог сотрудника не содержит машинно-в�
   page
 }, testInfo) => {
   await installUiRegressionScenario(page);
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("employees");
   await page.locator('[data-employee-action="add"]:visible').first().click();

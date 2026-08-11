@@ -25,8 +25,8 @@ function coreProperties(title) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${xmlEscape(title)}</dc:title>
-  <dc:creator>Docomator</dc:creator>
-  <cp:lastModifiedBy>Docomator</cp:lastModifiedBy>
+  <dc:creator>Оформлятор</dc:creator>
+  <cp:lastModifiedBy>Оформлятор</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${FIXED_CREATED_AT}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${FIXED_CREATED_AT}</dcterms:modified>
 </cp:coreProperties>`;
@@ -59,7 +59,7 @@ function docxDocument(values) {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Личная карточка сотрудника</w:t></w:r></w:p>
-    <w:p><w:r><w:t>Учебный шаблон Docomator. Выберите значение после подписи и сопоставьте его с полем карточки.</w:t></w:r></w:p>${fields}
+    <w:p><w:r><w:t>Учебный шаблон Оформлятор. Выберите значение после подписи и сопоставьте его с полем карточки.</w:t></w:r></w:p>${fields}
     <w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Все имена и сведения в примере вымышлены.</w:t></w:r></w:p>
     <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>
   </w:body>
@@ -127,7 +127,7 @@ function docxBuffer(values) {
   return docxPackage(
     docxDocument(values),
     "Личная карточка сотрудника",
-    "Docomator DOCX example"
+    "Оформлятор DOCX example"
   );
 }
 
@@ -144,7 +144,7 @@ function docxHeaderBuffer(value) {
 <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Организация: </w:t></w:r><w:r><w:t>${xmlEscape(value)}</w:t></w:r></w:p>
 </w:hdr>`;
-  return docxPackage(document, "Уведомление с колонтитулом", "Docomator header fixture", {
+  return docxPackage(document, "Уведомление с колонтитулом", "Оформлятор header fixture", {
     contentTypeOverrides:
       '\n  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>',
     documentRelationships:
@@ -157,7 +157,7 @@ function rejectedMacroDocxBuffer() {
   return docxPackage(
     docxDocument(personalTemplateValues),
     "Отклоняемый пример",
-    "Docomator rejected fixture",
+    "Оформлятор rejected fixture",
     {
       contentTypeOverrides:
         '\n  <Override PartName="/word/vbaProject.bin" ContentType="application/vnd.ms-office.vbaProject"/>',
@@ -191,7 +191,7 @@ function docxRegisterDocument(rows) {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Реестр сотрудников</w:t></w:r></w:p>
-    <w:p><w:r><w:t>Учебный сводный шаблон Docomator. Сопоставьте значения строки-образца и включите повтор по участникам аудитории.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Учебный сводный шаблон Оформлятор. Сопоставьте значения строки-образца и включите повтор по участникам аудитории.</w:t></w:r></w:p>
     <w:tbl>
       <w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="9200" w:type="dxa"/></w:tblPr>
       <w:tblGrid><w:gridCol w:w="900"/><w:gridCol w:w="3500"/><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid>
@@ -207,7 +207,7 @@ function docxRegisterBuffer(rows) {
   return docxPackage(
     docxRegisterDocument(rows),
     "Реестр сотрудников",
-    "Docomator aggregate DOCX example"
+    "Оформлятор aggregate DOCX example"
   );
 }
 
@@ -234,7 +234,7 @@ function xlsxWorksheet(rows) {
   <cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="34" customWidth="1"/><col min="3" max="4" width="24" customWidth="1"/></cols>
   <sheetData>
     <row r="1" ht="24" customHeight="1">${inlineCell("A1", "Реестр сотрудников", 1)}</row>
-    <row r="2">${inlineCell("A2", "Учебный пример Docomator; все сведения вымышлены.")}</row>
+    <row r="2">${inlineCell("A2", "Учебный пример Оформлятор; все сведения вымышлены.")}</row>
     <row r="3">${["№", "ФИО", "Должность", "Подразделение"].map((value, index) => inlineCell(`${String.fromCharCode(65 + index)}3`, value, 1)).join("")}</row>
     ${dataRows}
   </sheetData>
@@ -313,7 +313,7 @@ function xlsxPackage(worksheet, options) {
 function xlsxBuffer(rows) {
   return xlsxPackage(xlsxWorksheet(rows), {
     title: "Реестр сотрудников",
-    application: "Docomator XLSX example",
+    application: "Оформлятор XLSX example",
     sheetName: "Реестр"
   });
 }
@@ -348,7 +348,7 @@ function xlsxScalarWorksheet(values) {
 function xlsxScalarBuffer(values) {
   return xlsxPackage(xlsxScalarWorksheet(values), {
     title: "Личная карточка сотрудника",
-    application: "Docomator scalar XLSX fixture",
+    application: "Оформлятор scalar XLSX fixture",
     sheetName: "Карточка"
   });
 }

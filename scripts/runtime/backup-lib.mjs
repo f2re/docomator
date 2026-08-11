@@ -75,7 +75,7 @@ function assertBackupManifest(value) {
     "root"
   );
   if (manifest.format !== BACKUP_FORMAT || manifest.version !== BACKUP_VERSION) {
-    throw new Error("Unsupported Docomator backup format or version");
+    throw new Error("Unsupported Оформлятор backup format or version");
   }
   if (
     typeof manifest.createdAt !== "string" ||

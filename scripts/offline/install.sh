@@ -20,7 +20,7 @@ usage() {
   cat <<'USAGE'
 Использование: ./install.sh [параметры]
 
-Устанавливает проверенный автономный комплект Docomator. Сценарий не обращается
+Устанавливает проверенный автономный комплект Оформлятор. Сценарий не обращается
 к сети. Для существующей установки используйте update.sh.
 
 Параметры:
@@ -107,7 +107,7 @@ if [[ "$PREVIEW_ENABLED" == "true" && $INSTALL_OS_PACKAGES -eq 0 && ! -x "$LIBRE
 fi
 
 if ((UPGRADE == 1)) && [[ ! -L "$CURRENT_LINK" ]]; then
-  die "Не найдена существующая установка Docomator: $CURRENT_LINK"
+  die "Не найдена существующая установка Оформлятор: $CURRENT_LINK"
 fi
 if ((INSTALL_OS_PACKAGES == 1)) && [[ -L "$CURRENT_LINK" ]]; then
   die "Обновление пакетов ОС не входит в транзакцию приложения. Обновите их отдельно по утверждённой процедуре со снимком ОС, затем повторите update.sh без --install-os-packages."
@@ -121,7 +121,7 @@ if ((INSTALL_OS_PACKAGES == 1)); then
   require_command dpkg
   DPKG_AUDIT="$(dpkg --audit)"
   [[ -z "$DPKG_AUDIT" ]] || {
-    die "Состояние пакетной базы требует исправления до установки Docomator"
+    die "Состояние пакетной базы требует исправления до установки Оформлятор"
   }
   APT_CACHE="$(mktemp -d "/tmp/docomator-apt.XXXXXX")"
   trap 'rm -rf "${APT_CACHE:-}"' EXIT
@@ -358,7 +358,7 @@ if ((NO_START == 0)); then
 
   if ! systemctl restart docomator-api.service docomator-worker.service; then
     rollback
-    die "Не удалось запустить службы Docomator"
+    die "Не удалось запустить службы Оформлятор"
   fi
 
   HOST="$(read_env_value "$CONFIG_FILE" DOCOMATOR_HOST)"
@@ -384,7 +384,7 @@ if ((NO_START == 0)); then
   fi
 fi
 
-info "Docomator $VERSION успешно установлен"
+info "Оформлятор $VERSION успешно установлен"
 info "Текущая версия: $(readlink -f "$CURRENT_LINK")"
 info "Файл настроек: $CONFIG_FILE"
 info "Постоянные данные: $DATA_DIR"

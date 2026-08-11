@@ -1,5 +1,5 @@
 [Unit]
-Description=Docomator daily automatic backup
+Description=Оформлятор daily automatic backup
 
 [Timer]
 OnCalendar=*-*-* 03:15:00

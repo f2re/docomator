@@ -83,6 +83,6 @@ if [[ -n "$OUTPUT_DIR" ]]; then
   ARGS+=(--output "$OUTPUT_DIR")
 fi
 
-info "Создаём резервную копию Docomator"
+info "Создаём резервную копию Оформлятор"
 "$NODE" "$BACKUP_CLI" "${ARGS[@]}"
 info "Резервная копия создана и проверена"

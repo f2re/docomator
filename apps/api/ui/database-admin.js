@@ -94,7 +94,7 @@
         "beforeend",
         `<dialog class="create-dialog database-admin-dialog" id="databaseAdminPropertyDialog" aria-labelledby="databaseAdminPropertyTitle">
           <form id="databaseAdminPropertyForm" novalidate>
-            <header class="dialog-header"><div><p class="eyebrow">Безопасное изменение модели</p><h2 id="databaseAdminPropertyTitle">Добавить поле данных</h2><p>Создаётся типизированное поле Docomator. Физические колонки SQLite и применённые миграции не изменяются.</p></div><button class="icon-button" type="button" data-database-admin-close aria-label="Закрыть">×</button></header>
+            <header class="dialog-header"><div><p class="eyebrow">Безопасное изменение модели</p><h2 id="databaseAdminPropertyTitle">Добавить поле данных</h2><p>Создаётся типизированное поле Оформлятор. Физические колонки SQLite и применённые миграции не изменяются.</p></div><button class="icon-button" type="button" data-database-admin-close aria-label="Закрыть">×</button></header>
             <div class="dialog-body database-admin-property-grid">
               <div class="field"><label for="databaseAdminPropertyLabel">Название <span class="required-marker">*</span></label><input id="databaseAdminPropertyLabel" type="text" maxlength="300" required placeholder="Инвентарный номер" /></div>
               <div class="field"><label for="databaseAdminPropertyType">Тип значения</label><select id="databaseAdminPropertyType"><option value="string">Короткий текст</option><option value="text">Длинный текст</option><option value="integer">Целое число</option><option value="number">Число</option><option value="boolean">Да или нет</option><option value="date">Дата</option><option value="date-time">Дата и время</option><option value="enum">Список вариантов</option></select></div>
@@ -668,7 +668,7 @@
       notify(
         "✓",
         "Поле создано",
-        "Физическая схема SQLite не изменялась; поле добавлено в типизированную модель Docomator."
+        "Физическая схема SQLite не изменялась; поле добавлено в типизированную модель Оформлятор."
       );
     } catch (error) {
       errorBox.hidden = false;

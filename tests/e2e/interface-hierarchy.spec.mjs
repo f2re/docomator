@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const failedOperation = {
   id: "document_generation:interface-failed",
@@ -23,8 +23,8 @@ const failedOperation = {
 test("интерфейс показывает компактное состояние, четыре этапа и самостоятельное управление", async ({
   page
 }) => {
-  await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   await expect(page.locator("#systemStatusControl")).toBeVisible();
@@ -60,8 +60,8 @@ test("интерфейс показывает компактное состоя�
 test("ошибки результата подняты над хронологией и отмечены в навигации", async ({
   page
 }) => {
-  await installDocomatorApiMock(page, { operations: [failedOperation] });
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page, { operations: [failedOperation] });
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("documents");
 

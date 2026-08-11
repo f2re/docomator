@@ -1,11 +1,11 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 async function openMockedWorkspace(page) {
-  await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   return app;
 }

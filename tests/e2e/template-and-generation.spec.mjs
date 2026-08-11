@@ -3,9 +3,9 @@ import { expect, test } from "./fixtures/test.mjs";
 import {
   E2E_SECOND_SPACE_ID,
   E2E_SPACE_ID,
-  installDocomatorApiMock
+  installОформляторApiMock
 } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const templateCases = [
   {
@@ -157,8 +157,8 @@ for (const templateCase of templateCases) {
   test(`полный мастер ${templateCase.format.toUpperCase()}: документ → поля → проверка → готово`, async ({
     page
   }) => {
-    await installDocomatorApiMock(page);
-    const app = new DocomatorPage(page);
+    await installОформляторApiMock(page);
+    const app = new ОформляторPage(page);
     await app.open();
     await app.openView("templates");
 
@@ -182,8 +182,8 @@ for (const templateCase of templateCases) {
 test("мастер сохраняет ограниченные настройки числового форматтера", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  const scenario = await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
@@ -216,10 +216,10 @@ test("мастер сохраняет ограниченные настройк�
 test("мастер сохраняет повторяемую строку DOCX только по явному выбору", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page, {
+  const scenario = await installОформляторApiMock(page, {
     repeatTemplate: true
   });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
@@ -255,8 +255,8 @@ test("мастер сохраняет повторяемую строку DOCX �
 test("мастер XLSX выбирает повторяемый диапазон по понятным местам строки", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  const scenario = await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[1]);
@@ -311,8 +311,8 @@ test("мастер XLSX выбирает повторяемый диапазон
 test("ошибка сервера сохраняет пробное значение и показывает идентификатор операции", async ({
   page
 }) => {
-  await installDocomatorApiMock(page, { failTrialOnce: true });
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page, { failTrialOnce: true });
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
@@ -323,8 +323,8 @@ test("ошибка сервера сохраняет пробное значен
 test("после перезагрузки мастер продолжает с сохранённого исходника без повторного выбора файла", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  const scenario = await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
@@ -375,8 +375,8 @@ test("после перезагрузки мастер продолжает с �
 test("мастер отклоняет черновик, который не принадлежит сохранённому исходнику", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  const scenario = await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
@@ -401,8 +401,8 @@ test("мастер отклоняет черновик, который не пр
 test("активный шаблон переживает перезагрузку и не смешивается при смене раздела", async ({
   page
 }) => {
-  await installDocomatorApiMock(page, { secondSpace: true });
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page, { secondSpace: true });
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
@@ -454,12 +454,12 @@ test("активный шаблон переживает перезагрузк�
 test("выпуск создаёт N личных карточек и показывает их в результатах", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page, {
+  const scenario = await installОформляторApiMock(page, {
     employeeCount: 3,
     activeTemplate: true,
     resultListDelayOnceMs: 2_500
   });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("documents");
   await expect.poll(() => scenario.resultListRequests).toBe(1);
@@ -507,12 +507,12 @@ test("выпуск создаёт N личных карточек и показ�
 test("repeat-шаблон выбирает один сводный документ и блокирует персональный режим", async ({
   page
 }) => {
-  await installDocomatorApiMock(page, {
+  await installОформляторApiMock(page, {
     employeeCount: 3,
     activeTemplate: true,
     activeTemplateRepeat: true
   });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("generation");
 
@@ -533,8 +533,8 @@ test("repeat-шаблон выбирает один сводный докуме�
 test("мастер предлагает варианты ФИО и отправляет безопасный формат", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  const scenario = await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);

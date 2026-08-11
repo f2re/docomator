@@ -16,7 +16,7 @@ usage() {
   cat <<'USAGE'
 Usage: ./restore.sh --backup DIR [options]
 
-Verifies and restores a Docomator backup. The script creates a pre-restore
+Verifies and restores a Оформлятор backup. The script creates a pre-restore
 backup first, stops services, restores data, runs current migrations and checks
 readiness. A failed migration/readiness check restores the pre-restore backup.
 
@@ -65,7 +65,7 @@ HEALTHCHECK="$INSTALL_ROOT/current/healthcheck.mjs"
 LOCK_FILE="/run/lock/docomator-maintenance.lock"
 mkdir -p "$(dirname "$LOCK_FILE")"
 exec 9>"$LOCK_FILE"
-flock -n 9 || die "Another Docomator maintenance operation is running"
+flock -n 9 || die "Another Оформлятор maintenance operation is running"
 
 "$NODE" "$RESTORE_CLI" --backup "$BACKUP_DIR" --verify-only >/dev/null
 PRE_RESTORE_DIR="$DATA_DIR/backups/pre-restore-$(date -u +'%Y%m%dT%H%M%SZ')-$$"
@@ -125,7 +125,7 @@ apply_restore() {
 }
 
 if apply_restore "$BACKUP_DIR" && start_services && check_readiness; then
-  info "Docomator backup restored successfully: $BACKUP_DIR"
+  info "Оформлятор backup restored successfully: $BACKUP_DIR"
   exit 0
 fi
 

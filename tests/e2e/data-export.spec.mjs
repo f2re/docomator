@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const entityTypes = [
   { key: "person", label: "Человек", description: "Сотрудник" },
@@ -24,7 +24,7 @@ const properties = [
 test("экспорт выбранного типа предлагает CSV и XLSX и скачивает файл пространства", async ({
   page
 }) => {
-  await installDocomatorApiMock(page, { entityTypes, properties });
+  await installОформляторApiMock(page, { entityTypes, properties });
   await page.route(/\/api\/v1\/spaces\/[^/]+\/data-export\.csv\?entityTypeKey=room$/u, async (route) => {
     await route.fulfill({
       status: 200,
@@ -48,7 +48,7 @@ test("экспорт выбранного типа предлагает CSV и X
     });
   });
 
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("entities");
   await expect(page.locator("#entityWorkspaceType")).toHaveValue("room");

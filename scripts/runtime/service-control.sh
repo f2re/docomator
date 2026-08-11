@@ -28,12 +28,12 @@ usage() {
   cat <<'USAGE'
 Использование: scripts/runtime/service-control.sh КОМАНДА [параметры]
 
-Управление службами Docomator и автозапуском в Astra Linux / Debian systemd.
+Управление службами Оформлятор и автозапуском в Astra Linux / Debian systemd.
 
 Команды:
-  start               Запустить все службы Docomator
-  stop                Остановить все службы Docomator
-  restart             Перезапустить службы Docomator
+  start               Запустить все службы Оформлятор
+  stop                Остановить все службы Оформлятор
+  restart             Перезапустить службы Оформлятор
   status              Показать статус служб и проверку готовности
   enable-autostart    Включить автозапуск служб при загрузке системы
   disable-autostart   Отключить автозапуск служб при загрузке системы
@@ -157,7 +157,7 @@ do_install_services() {
 do_uninstall_services() {
   require_systemd
   require_root_privileges
-  info "Отключаем и удаляем unit-файлы systemd Docomator"
+  info "Отключаем и удаляем unit-файлы systemd Оформлятор"
   do_stop
   systemctl disable docomator-api.service docomator-worker.service docomator-llm.service docomator-backup.timer docomator-backup.service 2>/dev/null || true
 
@@ -168,13 +168,13 @@ do_uninstall_services() {
         /etc/systemd/system/docomator-backup.timer
 
   systemctl daemon-reload
-  info "Службы Docomator успешно удалены из systemd."
+  info "Службы Оформлятор успешно удалены из systemd."
 }
 
 do_enable_autostart() {
   require_systemd
   require_root_privileges
-  info "Включаем автозапуск служб Docomator при старте системы"
+  info "Включаем автозапуск служб Оформлятор при старте системы"
   systemctl enable docomator-api.service docomator-worker.service
 
   if is_llm_enabled; then
@@ -189,21 +189,21 @@ do_enable_autostart() {
     systemctl enable docomator-backup.timer
   fi
 
-  info "Автозапуск служб Docomator успешно настроен."
+  info "Автозапуск служб Оформлятор успешно настроен."
 }
 
 do_disable_autostart() {
   require_systemd
   require_root_privileges
-  info "Отключаем автозапуск служб Docomator при старте системы"
+  info "Отключаем автозапуск служб Оформлятор при старте системы"
   systemctl disable docomator-api.service docomator-worker.service docomator-llm.service docomator-backup.timer 2>/dev/null || true
-  info "Автозапуск служб Docomator отключён."
+  info "Автозапуск служб Оформлятор отключён."
 }
 
 do_start() {
   require_systemd
   require_root_privileges
-  info "Запускаем службы Docomator"
+  info "Запускаем службы Оформлятор"
 
   if is_llm_enabled; then
     info "Запуск службы ИИ docomator-llm.service"
@@ -218,21 +218,21 @@ do_start() {
     systemctl start docomator-backup.timer
   fi
 
-  info "Все службы Docomator успешно запущены."
+  info "Все службы Оформлятор успешно запущены."
 }
 
 do_stop() {
   require_systemd
   require_root_privileges
-  info "Останавливаем службы Docomator"
+  info "Останавливаем службы Оформлятор"
   systemctl stop docomator-backup.timer docomator-backup.service docomator-worker.service docomator-api.service docomator-llm.service 2>/dev/null || true
-  info "Все службы Docomator остановлены."
+  info "Все службы Оформлятор остановлены."
 }
 
 do_restart() {
   require_systemd
   require_root_privileges
-  info "Перезапускаем службы Docomator"
+  info "Перезапускаем службы Оформлятор"
   do_stop
   do_start
 }

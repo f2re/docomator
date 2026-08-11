@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const normalizationPreview = {
   fileName: "Сотрудники.xlsx",
@@ -41,8 +41,8 @@ const normalizationPreview = {
 };
 
 test("импортирует список сотрудников без технических ключей", async ({ page }) => {
-  const state = await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  const state = await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("employees");
   await page.locator("[data-bulk-import-open]:visible").first().click();
@@ -87,10 +87,10 @@ test("импортирует список сотрудников без техн
 });
 
 test("передаёт настройки регистра и разделения ФИО в импорт", async ({ page }) => {
-  const state = await installDocomatorApiMock(page, {
+  const state = await installОформляторApiMock(page, {
     importPreview: normalizationPreview
   });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("employees");
   await page.locator("[data-bulk-import-open]:visible").first().click();

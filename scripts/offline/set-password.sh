@@ -14,13 +14,13 @@ usage() {
   cat <<'USAGE'
 Использование: sudo set-password.sh [параметры]
 
-Устанавливает или меняет общий пароль входа Docomator. В конфигурацию записывается
+Устанавливает или меняет общий пароль входа Оформлятор. В конфигурацию записывается
 только scrypt-хэш; сам пароль не сохраняется. Каждая смена пароля также меняет
 секрет браузерных сессий и немедленно завершает ранее выданные сессии.
 
 Параметры:
   --config ФАЙЛ       файл /etc/docomator/docomator.env
-  --node ФАЙЛ         встроенный node Docomator
+  --node ФАЙЛ         встроенный node Оформлятор
   --password-stdin    прочитать пароль из stdin без повторного запроса
   --no-restart        не перезапускать docomator-api.service
   -h, --help          показать эту справку
@@ -40,12 +40,12 @@ done
 
 require_root
 [[ -f "$CONFIG_FILE" ]] || die "Файл конфигурации не найден: $CONFIG_FILE"
-[[ -x "$NODE_BIN" ]] || die "Node.js Docomator не найден: $NODE_BIN"
+[[ -x "$NODE_BIN" ]] || die "Node.js Оформлятор не найден: $NODE_BIN"
 
 if ((PASSWORD_STDIN == 1)); then
   IFS= read -r PASSWORD || true
 else
-  printf 'Новый общий пароль Docomator: ' >&2
+  printf 'Новый общий пароль приложения «Оформлятор»: ' >&2
   IFS= read -r -s PASSWORD
   printf '\nПовторите пароль: ' >&2
   IFS= read -r -s PASSWORD_REPEAT
@@ -101,4 +101,4 @@ if ((NO_RESTART == 0)) && command -v systemctl >/dev/null 2>&1; then
     die "Пароль сохранён, но docomator-api.service не запустился. Проверьте journalctl -u docomator-api.service"
 fi
 
-printf '✅ Общий пароль Docomator обновлён. Ранее выданные браузерные сессии завершены.\n'
+printf '✅ Общий пароль Оформлятор обновлён. Ранее выданные браузерные сессии завершены.\n'

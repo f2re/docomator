@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 import {
   CANONICAL_UI_VIEWS,
   installUiRegressionScenario
@@ -11,7 +11,7 @@ const compareWithApprovedBaseline =
 
 test("сохраняет явные снимки светлой и тёмной темы", async ({ page }, testInfo) => {
   await installUiRegressionScenario(page);
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   const width = page.viewportSize()?.width || "unknown";
 

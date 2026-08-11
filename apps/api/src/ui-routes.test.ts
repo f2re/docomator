@@ -26,7 +26,7 @@ test("UI shell is served locally with security headers", async () => {
     assert.equal(response.statusCode, 200);
     assert.match(response.headers["content-type"] ?? "", /^text\/html/);
     assert.match(response.headers["content-security-policy"] ?? "", /default-src 'self'/);
-    assert.match(response.body, /Docomator/);
+    assert.match(response.body, /Оформлятор/);
     assert.match(response.body, /aria-live="polite"/);
   } finally {
     await app.close();

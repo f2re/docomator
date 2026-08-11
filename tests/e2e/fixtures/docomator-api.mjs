@@ -267,7 +267,7 @@ function pathSpaceId(path) {
   return path.match(/^\/api\/v1\/spaces\/([^/]+)/)?.[1] || E2E_SPACE_ID;
 }
 
-export function createDocomatorScenario(options = {}) {
+export function createОформляторScenario(options = {}) {
   const primary = createSpaceState(
     options.employeeCount || 0,
     Boolean(options.activeTemplate)
@@ -321,8 +321,8 @@ export function createDocomatorScenario(options = {}) {
   };
 }
 
-export async function installDocomatorApiMock(page, options = {}) {
-  const state = createDocomatorScenario(options);
+export async function installОформляторApiMock(page, options = {}) {
+  const state = createОформляторScenario(options);
 
   await page.route("**/e2e-template-preview.pdf", async (route) => {
     await route.fulfill({
