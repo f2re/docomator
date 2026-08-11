@@ -53,6 +53,15 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
           python3 scripts/ci/apply-brand-system.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/ci/check-branding.mjs')
+          text = path.read_text(encoding='utf-8')
+          block = '''    if (/^\\s*:root(?:\\[|\\s*\\{)/mu.test(text ?? "")) {\n      findings.push(`${relativePath}: найден конкурирующий корневой theme-блок`);\n    }\n'''
+          if text.count(block) != 1:
+              raise SystemExit('branding checker root-selector block not found exactly once')
+          path.write_text(text.replace(block, '', 1), encoding='utf-8')
+          PY
           node --check scripts/ci/check-branding.mjs
           node scripts/ci/check-branding.mjs
           git diff --check
