@@ -121,7 +121,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "space-isolation-ui.js",
       "operation-center.js",
       "operations-readiness.js",
-      "template-row-flow.js"
+      "template-row-flow.js",
+      "guided-flow-simplification.js"
     ],
     contentType: "text/javascript; charset=utf-8",
     cacheControl: "no-store"
