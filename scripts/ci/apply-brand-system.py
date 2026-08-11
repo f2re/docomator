@@ -186,10 +186,10 @@ replace_once(
 index = UI / "index.html"
 replace_once(index, 'content="#f4f5f7" media="(prefers-color-scheme: light)"', 'content="#f3f1eb" media="(prefers-color-scheme: light)"')
 replace_once(index, 'content="#111318" media="(prefers-color-scheme: dark)"', 'content="#151817" media="(prefers-color-scheme: dark)"')
-replace_once(index, '          <span aria-hidden="true">❓</span>', '          <span aria-hidden="true">?</span>')
+replace_once(index, '<button class="quiet-button" id="helpButton" type="button"><span aria-hidden="true">❓</span><span>Помощь</span></button>', '<button class="quiet-button" id="helpButton" type="button"><span aria-hidden="true">?</span><span>Помощь</span></button>')
 replace_once(
     index,
-    '          <div class="hero-visual" aria-hidden="true"><div class="live-sheet"><span></span><span></span><span></span><span></span><span></span></div></div>\n',
+    '            <div class="hero-visual" aria-hidden="true"><div class="live-sheet"><i></i><i></i><i></i><b></b></div></div>\n',
     '',
 )
 
