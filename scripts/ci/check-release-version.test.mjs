@@ -64,7 +64,7 @@ async function fixture(version = "0.1.0") {
     `const version = env.DOCOMATOR_VERSION ?? \"${version}\";\n`
   );
   await fs.mkdir(path.join(root, "docs"), { recursive: true });
-  const statusText = `# ${version}\n\nСтатус выпуска: \`candidate\`\n\nКанал выпуска: \`pilot\`\n`;
+  const statusText = `# ${version}\n\nТекущая версия: \`${version}\`.\n\nСтатус выпуска: \`candidate\`\n\nКанал выпуска: \`pilot\`\n`;
   for (const relativePath of statusDocuments) {
     const target = path.join(root, relativePath);
     await fs.mkdir(path.dirname(target), { recursive: true });
@@ -89,6 +89,19 @@ test("находит дрейф внутренней зависимости", as
   assert.ok(
     (await collectReleaseVersionFindings(root)).some((finding) =>
       finding.includes("@docomator/config")
+    )
+  );
+});
+
+test("находит устаревший маркер текущей версии", async (t) => {
+  const root = await fixture("0.2.0");
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const target = path.join(root, "SECURITY.md");
+  const content = await fs.readFile(target, "utf8");
+  await fs.writeFile(target, content.replace("Текущая версия: `0.2.0`", "Текущая версия: `0.1.0`"));
+  assert.ok(
+    (await collectReleaseVersionFindings(root)).some((finding) =>
+      finding.includes("Текущая версия: `0.2.0`")
     )
   );
 });

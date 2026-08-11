@@ -1,10 +1,10 @@
-# Ближайшие приращения Оформлятор
+# Ближайшие приращения Оформлятора
 
-Актуально на **2026-08-08**.
+Актуально на **2026-08-11**.
 
-Текущий кодовый контур находится в состоянии **`0.1.0 / candidate / pilot`**. Основной пользовательский путь, space isolation, password gate, import/export, deterministic DOCX/XLSX generation, worker recovery и generic offline bundle реализованы и проходят репозиторный CI. Следующая работа — не расширение продукта, а получение эксплуатационных доказательств для stable.
+Текущий кодовый контур находится в состоянии **`0.2.0 / candidate / pilot`**. Основной пользовательский путь, space isolation, password gate, import/export, deterministic DOCX/XLSX generation, worker recovery, автоматические safe-read этапы и generic offline bundle реализованы и проходят репозиторный CI. Следующая работа — прежде всего получение эксплуатационных доказательств для stable, а не неконтролируемое расширение продукта.
 
-Нормативные документы: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [ROADMAP.md](ROADMAP.md).
+Нормативные документы: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [ROADMAP.md](ROADMAP.md), [VERSIONING.md](VERSIONING.md).
 
 ## Принятая модель эксплуатации
 
@@ -25,12 +25,14 @@
 - ✅ CSV/XLSX export выбранного пространства;
 - ✅ безопасный DOCX/XLSX intake и deterministic renderer;
 - ✅ scalar/repeat bindings, preview, immutable activation;
+- ✅ безопасные read-only этапы intake/import/structure запускаются автоматически, mutation остаются явными;
 - ✅ персональный/сводный выпуск, partial success и retry failed only;
 - ✅ persisted worker queue, leases и restart recovery;
 - ✅ SMTP/network delivery и расписания на уровне кода;
 - ✅ общий password gate, scrypt/session cookie/logout/backoff;
 - ✅ UI regression 320/768/1440, keyboard/focus, reduced motion, 200% zoom;
 - ✅ generic offline archive, install/update/rollback/backup/release-evidence tooling;
+- ✅ SemVer product version синхронизируется из `RELEASE_IDENTITY.json`, product-changing PR без bump блокируется CI;
 - 🟡 Debian/Astra/Office/recovery/P5 — только инструменты; реальные целевые акты ещё не получены.
 
 ## Приоритеты до stable
@@ -101,13 +103,15 @@ Debian evidence не закрывает Astra.
 - оба target acts + Office + recovery + UX + пустой blockers registry;
 - успешный `npm run release:evidence` для одного exact commit/version/status/channel.
 
+Все P1 evidence должны относиться к `0.2.0`; материалы `0.1.0` остаются историческими.
+
 ## Условие перехода к stable
 
 Только после выполнения P0/P1:
 
 1. убедиться, что `openBlockers` пуст;
 2. выполнить candidate release-evidence gate;
-3. отдельным PR изменить machine release identity `candidate/pilot` → `stable/production` без ложной смены продуктового смысла;
+3. отдельным PR изменить machine release identity `candidate/pilot` → `stable/production`; переход зрелости не требует bump версии, если состав продукта не меняется;
 4. выполнить полный CI stable commit;
 5. пересобрать Debian/Astra bundles именно из stable commit;
 6. повторить target identity/update/rollback/recovery binding для stable commit;
