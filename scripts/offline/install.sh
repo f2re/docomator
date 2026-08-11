@@ -287,10 +287,11 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
     cp "$BUNDLE_ROOT/first-run.sh" "$TEMP_RELEASE/first-run.sh"
     chmod 0755 "$TEMP_RELEASE/first-run.sh"
   fi
-  if [[ -x "$BUNDLE_ROOT/set-password.sh" && -f "$BUNDLE_ROOT/set-password.mjs" ]]; then
+  if [[ -x "$BUNDLE_ROOT/set-password.sh" && -f "$BUNDLE_ROOT/lib.sh" ]]; then
     cp "$BUNDLE_ROOT/set-password.sh" "$TEMP_RELEASE/set-password.sh"
-    cp "$BUNDLE_ROOT/set-password.mjs" "$TEMP_RELEASE/set-password.mjs"
-    chmod 0755 "$TEMP_RELEASE/set-password.sh" "$TEMP_RELEASE/set-password.mjs"
+    cp "$BUNDLE_ROOT/lib.sh" "$TEMP_RELEASE/lib.sh"
+    chmod 0755 "$TEMP_RELEASE/set-password.sh"
+    chmod 0644 "$TEMP_RELEASE/lib.sh"
   fi
   if [[ -f "$BUNDLE_ROOT/healthcheck.mjs" ]]; then
     cp "$BUNDLE_ROOT/healthcheck.mjs" "$TEMP_RELEASE/healthcheck.mjs"

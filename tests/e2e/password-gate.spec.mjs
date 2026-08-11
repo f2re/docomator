@@ -148,3 +148,59 @@ test("общий пароль закрывает приложение, откр�
     await fs.rm(dataDir, { recursive: true, force: true });
   }
 });
+
+
+test("первый запуск создаёт общий пароль прямо в браузере", async ({ page }) => {
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-first-password-e2e-"));
+  const port = await freePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const firstPassword = "Первый-общий-пароль-2026";
+  const env = {
+    ...process.env,
+    DOCOMATOR_DATA_DIR: dataDir,
+    DOCOMATOR_HOST: "127.0.0.1",
+    DOCOMATOR_PORT: String(port),
+    DOCOMATOR_ACCESS_PASSWORD_HASH: "",
+    DOCOMATOR_SESSION_SECRET: randomBytes(48).toString("base64url"),
+    DOCOMATOR_SESSION_TTL_SECONDS: "3600",
+    DOCOMATOR_PREVIEW_ENABLED: "false"
+  };
+  const migrate = spawnSync(process.execPath, ["scripts/runtime/migrate.mjs"], {
+    cwd: repositoryRoot,
+    env,
+    encoding: "utf8"
+  });
+  expect(migrate.status, migrate.stderr || migrate.stdout).toBe(0);
+  const api = spawn(process.execPath, ["apps/api/dist/server.js"], {
+    cwd: repositoryRoot,
+    env,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  const output = [];
+  api.stdout.on("data", (chunk) => output.push(chunk.toString("utf8")));
+  api.stderr.on("data", (chunk) => output.push(chunk.toString("utf8")));
+  try {
+    await waitUntilReady(origin, api);
+    await page.goto(`${origin}/`);
+    await expect(page.getByRole("heading", { name: "Первый запуск" })).toBeVisible();
+    await page.locator("#password").fill(firstPassword);
+    await page.locator("#confirmation").fill(firstPassword);
+    await page.getByRole("button", { name: "Сохранить пароль и продолжить" }).click();
+    await expect(page).toHaveURL(`${origin}/#overview`);
+    const status = await page.request.get(`${origin}/api/v1/auth/status`);
+    expect(status.status()).toBe(200);
+    expect((await status.json()).data).toMatchObject({ configured: true, authenticated: true });
+
+    await page.context().clearCookies();
+    await page.goto(`${origin}/`);
+    await expect(page.getByRole("heading", { name: "Вход" })).toBeVisible();
+    await page.locator("#password").fill(firstPassword);
+    await page.getByRole("button", { name: "Войти" }).click();
+    await expect(page).toHaveURL(`${origin}/#overview`);
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nFirst-run API output:\n${output.join("").slice(-12_000)}`);
+  } finally {
+    await stop(api);
+    await fs.rm(dataDir, { recursive: true, force: true });
+  }
+});

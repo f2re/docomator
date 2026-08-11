@@ -424,7 +424,6 @@ cp "$SCRIPT_DIR/lib.sh" \
   "$SCRIPT_DIR/restore.sh" \
   "$SCRIPT_DIR/first-run.sh" \
   "$SCRIPT_DIR/set-password.sh" \
-  "$SCRIPT_DIR/set-password.mjs" \
   "$SCRIPT_DIR/healthcheck.mjs" \
   "$SCRIPT_DIR/http-check.mjs" \
   "$SCRIPT_DIR/smoke-test.sh" \
