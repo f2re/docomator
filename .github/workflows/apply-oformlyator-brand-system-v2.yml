@@ -36,11 +36,21 @@ jobs:
           from pathlib import Path
           path = Path('scripts/ci/apply-brand-system.py')
           text = path.read_text(encoding='utf-8')
-          old = "replace_once(index, '          <span aria-hidden=\"true\">❓</span>', '          <span aria-hidden=\"true\">?</span>')"
-          new = "replace_once(index, '<button class=\"quiet-button\" id=\"helpButton\" type=\"button\"><span aria-hidden=\"true\">❓</span><span>Помощь</span></button>', '<button class=\"quiet-button\" id=\"helpButton\" type=\"button\"><span aria-hidden=\"true\">?</span><span>Помощь</span></button>')"
-          if text.count(old) != 1:
-              raise SystemExit('temporary transformer patch marker not found exactly once')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          patches = [
+              (
+                  "replace_once(index, '          <span aria-hidden=\"true\">❓</span>', '          <span aria-hidden=\"true\">?</span>')",
+                  "replace_once(index, '<button class=\"quiet-button\" id=\"helpButton\" type=\"button\"><span aria-hidden=\"true\">❓</span><span>Помощь</span></button>', '<button class=\"quiet-button\" id=\"helpButton\" type=\"button\"><span aria-hidden=\"true\">?</span><span>Помощь</span></button>')",
+              ),
+              (
+                  "'          <div class=\"hero-visual\" aria-hidden=\"true\"><div class=\"live-sheet\"><span></span><span></span><span></span><span></span><span></span></div></div>\\n'",
+                  "'            <div class=\"hero-visual\" aria-hidden=\"true\"><div class=\"live-sheet\"><i></i><i></i><i></i><b></b></div></div>\\n'",
+              ),
+          ]
+          for old, new in patches:
+              if text.count(old) != 1:
+                  raise SystemExit(f'temporary transformer patch marker not found exactly once: {old[:80]}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
           PY
           python3 scripts/ci/apply-brand-system.py
           node --check scripts/ci/check-branding.mjs
