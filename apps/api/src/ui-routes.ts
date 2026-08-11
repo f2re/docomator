@@ -70,7 +70,8 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "help-center.css",
       "interface-hierarchy.css",
       "interface-stability.css",
-      "template-row-flow.css"
+      "template-row-flow.css",
+      "brand-tokens.css"
     ],
     contentType: "text/css; charset=utf-8",
     cacheControl: "no-store"

@@ -1,0 +1,127 @@
+/*
+ * Канонические визуальные токены «Оформлятора».
+ * Нормативное описание: docs/BRANDING.md.
+ * Компонентные CSS-файлы используют эти переменные и не объявляют собственную палитру темы.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "Liberation Sans", "DejaVu Sans", sans-serif;
+  --font-data: ui-monospace, "Cascadia Mono", "Liberation Mono", "DejaVu Sans Mono", monospace;
+
+  --background: #f3f1eb;
+  --sidebar-surface: #ebe9e2;
+  --glass: var(--sidebar-surface);
+  --surface: #fffefa;
+  --surface-2: #eeece5;
+  --surface-hover: #e7e5de;
+  --surface-raised: #fffefa;
+  --text: #20262b;
+  --muted: #59636b;
+  --hint: #646d74;
+  --border: rgba(32, 38, 43, 0.13);
+  --border-strong: rgba(32, 38, 43, 0.24);
+
+  --accent: #176b78;
+  --accent-strong: #105763;
+  --accent-fill: #176b78;
+  --accent-fill-hover: #105763;
+  --accent-soft: rgba(23, 107, 120, 0.12);
+  --focus-ring: rgba(23, 107, 120, 0.32);
+
+  --success: #1f6b4f;
+  --success-soft: rgba(31, 107, 79, 0.12);
+  --warning: #8a5a00;
+  --warning-soft: rgba(138, 90, 0, 0.13);
+  --danger: #a33b3f;
+  --danger-soft: rgba(163, 59, 63, 0.12);
+  --purple: #665b75;
+  --purple-soft: rgba(102, 91, 117, 0.12);
+
+  --shadow: 0 1px 2px rgba(32, 38, 43, 0.05);
+  --shadow-soft: 0 8px 24px rgba(32, 38, 43, 0.07);
+  --shadow-large: 0 20px 54px rgba(21, 25, 28, 0.22);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius-control: 7px;
+  --radius-panel: 10px;
+  --radius-dialog: 14px;
+  --radius: var(--radius-panel);
+
+  --touch-target: 44px;
+  --content-reading: 72ch;
+  --content-max: 1500px;
+  --sidebar: 248px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #151817;
+    --sidebar-surface: #191d1b;
+    --surface: #1e2220;
+    --surface-2: #272c29;
+    --surface-hover: #303632;
+    --surface-raised: #222724;
+    --text: #f3f2ed;
+    --muted: #bdc4bf;
+    --hint: #9ca59f;
+    --border: rgba(243, 242, 237, 0.11);
+    --border-strong: rgba(243, 242, 237, 0.22);
+    --accent: #79c6d1;
+    --accent-strong: #9adbe3;
+    --accent-fill: #1f7184;
+    --accent-fill-hover: #286174;
+    --accent-soft: rgba(121, 198, 209, 0.14);
+    --focus-ring: rgba(121, 198, 209, 0.34);
+    --success: #70cf9e;
+    --success-soft: rgba(112, 207, 158, 0.14);
+    --warning: #e4b660;
+    --warning-soft: rgba(228, 182, 96, 0.14);
+    --danger: #ef8a8e;
+    --danger-soft: rgba(239, 138, 142, 0.14);
+    --purple: #c0b4cf;
+    --purple-soft: rgba(192, 180, 207, 0.14);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.25);
+    --shadow-large: 0 24px 66px rgba(0, 0, 0, 0.48);
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #151817;
+  --sidebar-surface: #191d1b;
+  --surface: #1e2220;
+  --surface-2: #272c29;
+  --surface-hover: #303632;
+  --surface-raised: #222724;
+  --text: #f3f2ed;
+  --muted: #bdc4bf;
+  --hint: #9ca59f;
+  --border: rgba(243, 242, 237, 0.11);
+  --border-strong: rgba(243, 242, 237, 0.22);
+  --accent: #79c6d1;
+  --accent-strong: #9adbe3;
+  --accent-fill: #1f7184;
+  --accent-fill-hover: #286174;
+  --accent-soft: rgba(121, 198, 209, 0.14);
+  --focus-ring: rgba(121, 198, 209, 0.34);
+  --success: #70cf9e;
+  --success-soft: rgba(112, 207, 158, 0.14);
+  --warning: #e4b660;
+  --warning-soft: rgba(228, 182, 96, 0.14);
+  --danger: #ef8a8e;
+  --danger-soft: rgba(239, 138, 142, 0.14);
+  --purple: #c0b4cf;
+  --purple-soft: rgba(192, 180, 207, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.25);
+  --shadow-large: 0 24px 66px rgba(0, 0, 0, 0.48);
+}

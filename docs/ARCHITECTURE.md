@@ -95,7 +95,7 @@ Adapters: SQLite, OOXML, llama-server, LibreOffice, SMTP, filesystem
 UI является локальным HTTP-адаптером модульного монолита и не принимает доменных решений. Он:
 
 - отображает backend state, а не выводит его из таймеров или предположений;
-- использует единую систему design tokens и state components;
+- использует единый визуальный token source `apps/api/ui/brand-tokens.css`; нормативные значения закреплены в `docs/BRANDING.md`;
 - для каждого действия показывает текущий этап, причину ожидания, следующий шаг и recovery action;
 - хранит черновое значение формы до подтверждения backend-а;
 - передаёт/показывает correlation ID;
