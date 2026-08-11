@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 async function openFullGuide(page, app) {
   const sidebarButton = page.locator("#helpCenterNavButton:visible");
@@ -16,8 +16,8 @@ async function openFullGuide(page, app) {
 test("встроенное руководство открывается, ищет кейсы и ведёт к рабочему разделу", async ({
   page
 }) => {
-  await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   await openFullGuide(page, app);
@@ -50,8 +50,8 @@ test("встроенное руководство открывается, ище
 test("пункт Руководство повторно открывает обзор, а не последнюю статью", async ({
   page
 }) => {
-  await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   await openFullGuide(page, app);
@@ -70,8 +70,8 @@ test("пункт Руководство повторно открывает об
 test("контекстная помощь содержит переход к полному локальному руководству", async ({
   page
 }) => {
-  await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   await page.locator("#helpButton:visible, #mobileHelpButton:visible").first().click();

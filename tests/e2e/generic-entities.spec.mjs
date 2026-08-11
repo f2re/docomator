@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const importPreview = {
   fileName: "auditoriums.csv",
@@ -116,13 +116,13 @@ async function installScopedPropertyValueMock(page) {
 test("оператор создаёт и импортирует произвольные объекты одного типа", async ({
   page
 }) => {
-  const state = await installDocomatorApiMock(page, {
+  const state = await installОформляторApiMock(page, {
     entityTypes: roomTypes,
     properties: roomProperties,
     importPreview
   });
   await installScopedPropertyValueMock(page);
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("entities");
 
@@ -202,7 +202,7 @@ test("импорт произвольных объектов принимает 
       }
     ]
   };
-  await installDocomatorApiMock(page, {
+  await installОформляторApiMock(page, {
     entityTypes: roomTypes,
     properties: roomProperties,
     importPreview: invalidPreview
@@ -240,7 +240,7 @@ test("импорт произвольных объектов принимает 
     });
   });
 
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("entities");
   await page.locator('[data-entity-action="import"]').click();

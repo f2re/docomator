@@ -3,9 +3,9 @@ import { expect, test } from "./fixtures/test.mjs";
 import {
   E2E_SECOND_SPACE_ID,
   E2E_SPACE_ID,
-  installDocomatorApiMock
+  installОформляторApiMock
 } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const operationBase = {
   format: "docx",
@@ -69,11 +69,11 @@ const operations = [
 test("центр восстанавливает операции после перезагрузки и изолирует пространства", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page, {
+  const scenario = await installОформляторApiMock(page, {
     operations,
     secondSpace: true
   });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("documents");
 
@@ -138,11 +138,11 @@ test("центр восстанавливает операции после пе
 test("ошибка чтения операций сохраняет понятный повтор и идентификатор", async ({
   page
 }) => {
-  await installDocomatorApiMock(page, {
+  await installОформляторApiMock(page, {
     operations,
     failOperationsOnce: true
   });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("documents");
 

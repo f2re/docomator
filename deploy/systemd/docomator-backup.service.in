@@ -1,5 +1,5 @@
 [Unit]
-Description=Docomator automatic backup
+Description=Оформлятор automatic backup
 After=local-fs.target
 
 [Service]

@@ -157,7 +157,7 @@ async function setupApp() {
 
 function pdf(): Buffer {
   return Buffer.from(
-    "%PDF-1.4\n% Docomator preview\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n"
+    "%PDF-1.4\n% Оформлятор preview\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n"
   );
 }
 

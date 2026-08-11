@@ -1,11 +1,11 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 import { installUiRegressionScenario } from "./ui-regression-inventory.mjs";
 
 test("из непустого списка можно добавить ещё одного сотрудника", async ({ page }) => {
   await installUiRegressionScenario(page);
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("employees");
 

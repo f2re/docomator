@@ -1,13 +1,13 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 test("шаблон автоматически проверяется и строит структуру без лишних кнопок", async ({
   page
 }) => {
-  await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
 
@@ -40,8 +40,8 @@ test("шаблон автоматически проверяется и стро
 });
 
 test("CSV или XLSX автоматически читается после выбора файла", async ({ page }) => {
-  await installDocomatorApiMock(page);
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("employees");
   await page.locator("[data-bulk-import-open]:visible").first().click();

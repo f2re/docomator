@@ -209,7 +209,7 @@ export async function collectAuditRemediationFindings(
       );
     }
   }
-  if (realStack.includes("installDocomatorApiMock")) {
+  if (realStack.includes("installОформляторApiMock")) {
     findings.push(
       "tests/e2e/real-stack-document-flow.spec.mjs: настоящий сценарий не должен подменять API"
     );

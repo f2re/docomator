@@ -1,4 +1,4 @@
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
 
 export const CANONICAL_UI_VIEWS = Object.freeze([
   Object.freeze({ view: "overview", label: "Главная", tier: "primary" }),
@@ -100,7 +100,7 @@ async function installDatabaseRegressionScenario(page) {
 }
 
 export async function installUiRegressionScenario(page) {
-  const state = await installDocomatorApiMock(page, {
+  const state = await installОформляторApiMock(page, {
     employeeCount: 3,
     activeTemplate: true
   });

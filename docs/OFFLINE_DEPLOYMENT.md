@@ -277,7 +277,7 @@ sudo "$BUNDLE_ROOT/install.sh" --no-systemd
 
 `--install-os-packages` разрешён только при первой установке, когда прежнего application release ещё нет. Сначала `apt-get --simulate --no-remove` проверяет план: каждый устанавливаемый пакет должен присутствовать в подписанном inventory. Реальная команда использует `--no-download --no-remove`, поэтому не обращается к repository и не удаляет системные пакеты. Если package closure неполон, установка приложения не начинается.
 
-Системный package manager не является частью SQLite/application rollback. Поэтому первый прогон выполняется на чистой VM со snapshot до установки. Если maintainer script `.deb` аварийно завершится уже после начала package phase, VM возвращается к этому snapshot; повторный запуск поверх незавершённого состояния блокируется через `dpkg --audit`. Для действующей установки package phase через Docomator запрещена полностью.
+Системный package manager не является частью SQLite/application rollback. Поэтому первый прогон выполняется на чистой VM со snapshot до установки. Если maintainer script `.deb` аварийно завершится уже после начала package phase, VM возвращается к этому snapshot; повторный запуск поверх незавершённого состояния блокируется через `dpkg --audit`. Для действующей установки package phase через Оформлятор запрещена полностью.
 
 Custom paths:
 

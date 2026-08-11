@@ -510,7 +510,7 @@ export async function initializeEvidenceRoot(rootDirectory) {
   ]);
   await fs.writeFile(
     path.join(root, "README.md"),
-    "# Доказательства выпуска Docomator\n\nСкопируйте полные каталоги target-acceptance в targets/debian и targets/astra, заполните UX, recovery, Office и blockers, затем выполните release:evidence.\n",
+    "# Доказательства выпуска Оформлятор\n\nСкопируйте полные каталоги target-acceptance в targets/debian и targets/astra, заполните UX, recovery, Office и blockers, затем выполните release:evidence.\n",
     { encoding: "utf8", mode: 0o600 }
   );
   return root;

@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const DOCX = {
   name: "Темы студентов.docx",
@@ -31,10 +31,10 @@ async function openConfiguredRow(page) {
 test("общая проверка обновляет изменившийся черновик и сохраняет введённые примеры", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page, {
+  const scenario = await installОформляторApiMock(page, {
     studentRosterTemplate: true
   });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await openConfiguredRow(page);

@@ -1,13 +1,13 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const tablePresentations = {
   entities: {
     label: "Объекты и сотрудники",
     category: "Основные данные",
-    description: "Карточки людей и других объектов, доступных в разделах Docomator.",
+    description: "Карточки людей и других объектов, доступных в разделах Оформлятор.",
     sensitivity: "personal"
   },
   audit_log: {
@@ -158,14 +158,14 @@ async function setEnhancedSelect(page, selector, value) {
 }
 
 async function openDatabaseAdmin(page) {
-  await installDocomatorApiMock(page, {
+  await installОформляторApiMock(page, {
     entityTypes: [
       { key: "person", label: "Человек", description: "Сотрудник" },
       { key: "equipment", label: "Оборудование", description: "Инвентарь" }
     ]
   });
   const admin = await installDatabaseAdminMock(page);
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("settings");
   await page.locator('[data-view-target="database"]').click();

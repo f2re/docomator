@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "./fixtures/test.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const realStackEnabled = process.env.DOCOMATOR_E2E_REAL_STACK === "1";
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -113,7 +113,7 @@ async function verifyAndActivateTemplate(page, displayName) {
 }
 
 async function generateAndDownload(page) {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.openView("generation");
   await expect(page.locator("#generationTemplate option")).toHaveCount(1, {
     timeout: 20_000
@@ -145,7 +145,7 @@ async function generateAndDownload(page) {
 }
 
 async function verifyEmployeeInSecondContext(page, displayName, fieldLabel, fieldValue) {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("employees");
 
@@ -193,7 +193,7 @@ test("настоящий UI → API → SQLite → worker формирует и 
   test.setTimeout(150_000);
 
   await fs.access(personalCardFixture);
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await expectWorkerReady(page);
 

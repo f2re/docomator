@@ -179,7 +179,7 @@ test("находит отсутствие фактического лимита 
   await write(
     root,
     "tests/e2e/real-stack-document-flow.spec.mjs",
-    "installDocomatorApiMock(page);\n"
+    "installОформляторApiMock(page);\n"
   );
   await write(
     root,

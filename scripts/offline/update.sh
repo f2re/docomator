@@ -26,6 +26,6 @@ require_trusted_bundle "$SCRIPT_DIR"
 LOCK_FILE="/run/lock/docomator-update.lock"
 mkdir -p "$(dirname "$LOCK_FILE")"
 exec 9>"$LOCK_FILE"
-flock -n 9 || die "Another Docomator installation or update is running"
+flock -n 9 || die "Another Оформлятор installation or update is running"
 
 exec "$SCRIPT_DIR/install.sh" --upgrade "$@"

@@ -30,10 +30,10 @@ Debian/Astra Linux: проверка комплекта, root smoke, core/LibreO
 
 Параметры:
   --output КАТАЛОГ        новый каталог целевых свидетельств
-  --password-file ФАЙЛ    обычный файл 0600 с общим паролем Docomator
+  --password-file ФАЙЛ    обычный файл 0600 с общим паролем приложения «Оформлятор»
   --bundle-root КАТАЛОГ   распакованный автономный комплект
-  --config ФАЙЛ           настройки установленного Docomator
-  --base-url URL          локальный адрес Docomator
+  --config ФАЙЛ           настройки установленного Оформлятор
+  --base-url URL          локальный адрес Оформлятор
   --pilot-launcher ФАЙЛ   установленный pilot-check.sh
   --require-network       сделать сетевую папку обязательной
   --require-smtp          сделать SMTP обязательным

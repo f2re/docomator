@@ -29,7 +29,7 @@ function usage() {
   database-admin.mjs create-property --space <пространство> --label <название> --type <тип> --applies-to <тип-объекта> [--unit <единица>] [--sensitivity internal|public|personal|restricted]
 
 Команды не исполняют произвольный SQL и не изменяют физическую схему SQLite.
-Новые поля создаются как типизированные определения выбранного пространства Docomator.
+Новые поля создаются как типизированные определения выбранного пространства Оформлятор.
 `);
 }
 

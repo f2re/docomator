@@ -67,7 +67,7 @@ function technicalBinding(fieldId: string, index: number) {
 
 function pdf(): Buffer {
   return Buffer.from(
-    "%PDF-1.4\n% Docomator multi release\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n"
+    "%PDF-1.4\n% Оформлятор multi release\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n"
   );
 }
 

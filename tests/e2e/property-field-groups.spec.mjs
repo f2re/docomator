@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 function property(key, label, uiGroup, aliases = []) {
   return {
@@ -55,11 +55,11 @@ async function uploadRoster(page) {
 test("поля преподавателя и студента разделены, а большой список имеет поиск", async ({
   page
 }) => {
-  await installDocomatorApiMock(page, {
+  await installОформляторApiMock(page, {
     properties,
     studentRosterTemplate: true
   });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");
   await uploadRoster(page);

@@ -101,7 +101,7 @@ test("database admin API lists, sorts, audits exports and checks tables without 
     assert.equal(entitiesTable.category, "Основные данные");
     assert.equal(
       entitiesTable.description,
-      "Карточки людей и других объектов, доступных в разделах Docomator."
+      "Карточки людей и других объектов, доступных в разделах Оформлятор."
     );
     assert.equal(entitiesTable.sensitivity, "personal");
 
@@ -130,7 +130,7 @@ test("database admin API lists, sorts, audits exports and checks tables without 
       label: "Объекты и сотрудники",
       category: "Основные данные",
       description:
-        "Карточки людей и других объектов, доступных в разделах Docomator.",
+        "Карточки людей и других объектов, доступных в разделах Оформлятор.",
       sensitivity: "personal"
     });
 

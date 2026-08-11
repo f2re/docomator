@@ -277,12 +277,12 @@ function apiError(
 
 function loginHtml(configured: boolean): string {
   const setup = configured
-    ? "Введите общий пароль Docomator."
+    ? "Введите общий пароль приложения «Оформлятор»."
     : "Пароль ещё не настроен. На сервере выполните scripts/offline/set-password.sh, затем обновите эту страницу.";
   return `<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Вход — Docomator</title><style>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Вход — Оформлятор</title><style>
 :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:light dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5f7;color:#20242b}.card{width:min(420px,calc(100% - 32px));background:#fff;border:1px solid #d9dde3;border-radius:18px;padding:28px;box-shadow:0 18px 50px rgba(30,40,55,.08)}h1{margin:0 0 8px;font-size:28px}p{margin:0 0 22px;color:#626b78;line-height:1.45}label{display:block;font-weight:650;margin-bottom:8px}input{width:100%;min-height:46px;padding:10px 12px;border:1px solid #b8c0cb;border-radius:10px;font:inherit}button{width:100%;min-height:46px;margin-top:14px;border:0;border-radius:10px;background:#3659d9;color:white;font:inherit;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:default}.error{margin-top:14px;color:#b42318;font-size:14px}.brand{font-size:13px;color:#737b87;margin-bottom:18px}@media(prefers-color-scheme:dark){body{background:#111318;color:#f3f5f7}.card{background:#191c22;border-color:#343a44}.brand,p{color:#aeb6c2}input{background:#111318;color:#f3f5f7;border-color:#4c5562}}</style><script src="/auth.js" defer></script></head>
-<body><main class="card"><div class="brand">Docomator · локальный контур</div><h1>Вход</h1><p>${setup}</p><form id="loginForm"${configured ? "" : " hidden"}><label for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button id="loginButton" type="submit">Войти</button><div class="error" id="loginError" role="alert" hidden></div></form></main></body></html>`;
+<body><main class="card"><div class="brand">Оформлятор · локальный контур</div><h1>Вход</h1><p>${setup}</p><form id="loginForm"${configured ? "" : " hidden"}><label for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button id="loginButton" type="submit">Войти</button><div class="error" id="loginError" role="alert" hidden></div></form></main></body></html>`;
 }
 
 const authScript = `(() => {\n  const form = document.querySelector("#loginForm");\n  if (!form) return;\n  const password = document.querySelector("#password");\n  const button = document.querySelector("#loginButton");\n  const error = document.querySelector("#loginError");\n  form.addEventListener("submit", async (event) => {\n    event.preventDefault();\n    error.hidden = true;\n    button.disabled = true;\n    try {\n      const response = await fetch("/api/v1/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: password.value }) });\n      const body = await response.json().catch(() => ({}));\n      if (!response.ok) throw new Error(body?.error?.message || "Не удалось войти.");\n      const next = new URLSearchParams(location.search).get("next") || "/";\n      location.replace(next.startsWith("/") && !next.startsWith("//") ? next : "/");\n    } catch (cause) {\n      error.textContent = cause instanceof Error ? cause.message : "Не удалось войти.";\n      error.hidden = false;\n      password.select();\n    } finally { button.disabled = false; }\n  });\n})();\n`;
@@ -323,7 +323,7 @@ export function installPasswordGate(
         reply,
         403,
         "cross_origin_request_rejected",
-        "Запрос с другого сайта отклонён. Откройте Docomator напрямую."
+        "Запрос с другого сайта отклонён. Откройте «Оформлятор» напрямую."
       );
     }
     if (sessionFromRequest(request, config).valid) return;
@@ -333,7 +333,7 @@ export function installPasswordGate(
         reply,
         401,
         "authentication_required",
-        "Сессия входа отсутствует или истекла. Войдите в Docomator снова."
+        "Сессия входа отсутствует или истекла. Войдите в «Оформлятор» снова."
       );
     }
     const next = request.url.startsWith("/") && !request.url.startsWith("//")
@@ -404,7 +404,7 @@ export function installPasswordGate(
           reply,
           503,
           "password_not_configured",
-          "Пароль Docomator ещё не настроен на сервере."
+          "Пароль Оформлятор ещё не настроен на сервере."
         );
       }
       const key = request.ip;

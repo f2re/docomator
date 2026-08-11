@@ -369,7 +369,7 @@ test("XLSX compiler creates a defined name and preserves worksheet bytes", async
   assert.ok(workbookXml.indexOf("</definedNames>") < workbookXml.indexOf("<calcPr"));
   assert.match(
     workbookXml,
-    /<sheet name="_AI_META" sheetId="3" state="veryHidden" r:id="rIdDocomatorMeta"\/>/u
+    /<sheet name="_AI_META" sheetId="3" state="veryHidden" r:id="rIdОформляторMeta"\/>/u
   );
   assert.ok(outputEntries.some((entry) => entry.name === XLSX_METADATA_PART));
   assert.deepEqual(

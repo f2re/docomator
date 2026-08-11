@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const runningOperation = {
   id: "document_generation:csp-running",
@@ -29,8 +29,8 @@ test("рабочие экраны не создают ошибок Content-Secur
     }
   });
 
-  await installDocomatorApiMock(page, { operations: [runningOperation] });
-  const app = new DocomatorPage(page);
+  await installОформляторApiMock(page, { operations: [runningOperation] });
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("documents");
   const progress = page.locator("#operationCenterList progress");

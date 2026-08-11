@@ -133,7 +133,7 @@ function smtpPublic(env: NodeJS.ProcessEnv): SmtpPublicConfig {
   const enabled = parseBoolean(env.DOCOMATOR_SMTP_ENABLED, false);
   const fromAddress = optionalText(env.DOCOMATOR_SMTP_FROM);
   const fromName = validateHeaderValue(
-    env.DOCOMATOR_SMTP_FROM_NAME ?? "Docomator",
+    env.DOCOMATOR_SMTP_FROM_NAME ?? "Оформлятор",
     "DOCOMATOR_SMTP_FROM_NAME",
     200
   );

@@ -1,10 +1,10 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 async function openImport(page) {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("employees");
   await page.locator("[data-bulk-import-open]:visible").first().click();
@@ -14,7 +14,7 @@ async function openImport(page) {
 test("принимает CSV/XLSX перетаскиванием и не растягивает настройку полей", async ({
   page
 }) => {
-  await installDocomatorApiMock(page);
+  await installОформляторApiMock(page);
   await openImport(page);
 
   const dropZone = page.locator("#bulkDataImportPanel .bulk-import-drop-zone");
@@ -59,7 +59,7 @@ test("принимает CSV/XLSX перетаскиванием и не рас�
 test("ошибка импорта подсвечивает колонку и даёт переход к исправлению", async ({
   page
 }) => {
-  await installDocomatorApiMock(page, {
+  await installОформляторApiMock(page, {
     importPreview: {
       fileName: "Сотрудники.xlsx",
       fileFormat: "xlsx",
@@ -143,7 +143,7 @@ test("ошибка импорта подсвечивает колонку и д�
 test("запросы определений полей автоматически получают текущее пространство", async ({
   page
 }) => {
-  await installDocomatorApiMock(page);
+  await installОформляторApiMock(page);
   await openImport(page);
   const requested = [];
   page.on("request", (request) => {

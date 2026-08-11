@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 import {
   CANONICAL_UI_VIEWS,
   installUiRegressionScenario
@@ -105,7 +105,7 @@ async function interactionViolations(page) {
 test("inventory охватывает все пользовательские view текущей оболочки", async ({
   page
 }) => {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   const actual = await page.evaluate(() =>
     [...document.querySelectorAll("[data-view]")]
@@ -120,7 +120,7 @@ test("inventory охватывает все пользовательские vie
 test("все канонические экраны работают без горизонтального переполнения", async ({
   page
 }) => {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   const violations = await collectOverflowViolations(page, app);
@@ -133,7 +133,7 @@ test("все канонические экраны работают без го�
 test("дополнительные разделы остаются в «Ещё» и не расширяют мобильную панель", async ({
   page
 }) => {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   const mobileNavigation = page.locator(".mobile-nav");
@@ -161,7 +161,7 @@ test("дополнительные разделы остаются в «Ещё»
 test("видимые элементы управления сохраняют зону не меньше 44 на 44", async ({
   page
 }) => {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await expect(page.locator('link[data-interaction-contract]')).toHaveAttribute(
     "href",
@@ -182,7 +182,7 @@ test("видимые элементы управления сохраняют з
 test("светлая и тёмная темы применяются из локальной настройки", async ({
   page
 }) => {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   await page.evaluate(() => localStorage.setItem("docomator.theme", "light"));
@@ -205,7 +205,7 @@ test("светлая и тёмная темы применяются из лок
 test("клавиатурный фокус видим и ссылка пропуска переводит к содержимому", async ({
   page
 }) => {
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   await page.keyboard.press("Tab");
@@ -224,7 +224,7 @@ test("режим уменьшения движения отключает дли
   page
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
 
   const result = await page.locator("#homeNextAction").evaluate((element) => ({
@@ -243,7 +243,7 @@ test("текст при масштабе 200% не создаёт горизон
 }) => {
   const width = page.viewportSize()?.width || 0;
   test.skip(width > 768, "Критерий применяется к ширинам 320 и 768 px.");
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("DOM.enable");

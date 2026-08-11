@@ -126,7 +126,7 @@ async function setupFixture() {
 }
 
 function pdf(label = "preview"): Buffer {
-  return Buffer.from(`%PDF-1.4\n% Docomator ${label}\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n`);
+  return Buffer.from(`%PDF-1.4\n% Оформлятор ${label}\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n`);
 }
 
 test("preview request is idempotent and enqueues one persistent job", async () => {

@@ -446,7 +446,7 @@ test("XLSX renderer rejects partial or inconsistent _AI_META artifacts", async (
       label: "идентификатор связи",
       code: "invalid_xlsx_metadata",
       entries: replacePart("xl/_rels/workbook.xml.rels", (xml) =>
-        xml.replace('Id="rIdDocomatorMeta"', 'Id="rIdChangedMeta"')
+        xml.replace('Id="rIdОформляторMeta"', 'Id="rIdChangedMeta"')
       )
     },
     {
@@ -471,8 +471,8 @@ test("XLSX renderer rejects partial or inconsistent _AI_META artifacts", async (
       code: "invalid_xlsx_metadata",
       entries: replacePart("xl/_rels/workbook.xml.rels", (xml) =>
         xml.replace(
-          'Id="rIdDocomatorMeta" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"',
-          'Id="rIdDocomatorMeta" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme"'
+          'Id="rIdОформляторMeta" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"',
+          'Id="rIdОформляторMeta" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme"'
         )
       )
     },

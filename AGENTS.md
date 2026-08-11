@@ -1,4 +1,4 @@
-# Docomator agent instructions
+# Оформлятор: инструкции для агентов
 
 ## Mission
 
@@ -27,7 +27,7 @@ Do not silently weaken a MUST requirement. Update requirements and add an ADR wh
 - SMTP and network destinations are allowlisted.
 - Network share writes must verify mount + sentinel and use temp-file/atomic-rename semantics.
 - Keep the modular monolith. Do not introduce a broker, cache server, microservice, or vector database without measured need and an ADR.
-- ADR-0009 adds one shared application password. Docomator still has no user accounts, roles, personal cabinets or section-level ACL: every successfully authenticated client works with the same shared data. Do not turn the password gate into IAM without a superseding ADR.
+- ADR-0009 adds one shared application password. Оформлятор still has no user accounts, roles, personal cabinets or section-level ACL: every successfully authenticated client works with the same shared data. Do not turn the password gate into IAM without a superseding ADR.
 - Spaces are hard data partitions, not authorization scopes. Authentication must never weaken or replace `spaceId` validation and database isolation.
 
 ## Repository structure

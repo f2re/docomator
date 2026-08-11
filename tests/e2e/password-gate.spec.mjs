@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(testDirectory, "../..");
-const password = "Общий-пароль-Docomator-2026";
+const password = "Общий-пароль-Оформлятор-2026";
 
 function passwordHash(value) {
   const salt = randomBytes(16);

@@ -162,7 +162,7 @@ function buildMimeMessage(input: SmtpMailInput): string {
     `Subject: ${encodedWord(subject)}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    "X-Mailer: Docomator"
+    "X-Mailer: Оформлятор"
   ];
   const parts = [
     `--${boundary}`,

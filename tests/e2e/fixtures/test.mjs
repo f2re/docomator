@@ -18,7 +18,7 @@ const test = base.extend({
         });
         expect(
           response.status(),
-          "offline UX-приёмка не смогла войти по общему паролю Docomator"
+          "offline UX-приёмка не смогла войти по общему паролю Оформлятор"
         ).toBe(200);
       }
       await use();

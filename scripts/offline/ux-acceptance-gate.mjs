@@ -70,7 +70,7 @@ function localBaseURL(value) {
   try {
     parsed = new URL(value);
   } catch {
-    fail("Адрес Docomator должен быть корректным локальным HTTP URL.");
+    fail("Адрес Оформлятор должен быть корректным локальным HTTP URL.");
   }
   if (
     parsed.protocol !== "http:" ||
@@ -255,7 +255,7 @@ function sessionCookie(response) {
   const source = response.headers.get("set-cookie") ?? "";
   const cookie = source.split(";", 1)[0]?.trim() ?? "";
   if (!cookie.startsWith("docomator_session=") || cookie.length > 4096) {
-    fail("Локальный Docomator не выдал корректную сессионную cookie.");
+    fail("Локальный Оформлятор не выдал корректную сессионную cookie.");
   }
   return cookie;
 }
@@ -277,10 +277,10 @@ async function requestReleaseIdentity(baseURL, password) {
         signal: AbortSignal.timeout(10_000)
       });
     } catch {
-      fail("Не удалось обратиться к локальному API входа Docomator.");
+      fail("Не удалось обратиться к локальному API входа Оформлятор.");
     }
     if (!login.ok) {
-      fail(`Локальный API входа Docomator вернул HTTP ${login.status}.`);
+      fail(`Локальный API входа Оформлятор вернул HTTP ${login.status}.`);
     }
     cookie = sessionCookie(login);
   }
@@ -296,7 +296,7 @@ async function requestReleaseIdentity(baseURL, password) {
       signal: AbortSignal.timeout(10_000)
     });
   } catch {
-    fail("Локальный Docomator не предоставил идентичность установленного релиза.");
+    fail("Локальный Оформлятор не предоставил идентичность установленного релиза.");
   }
   const source = await response.text();
   if (Buffer.byteLength(source, "utf8") > 64 * 1024) {
@@ -305,7 +305,7 @@ async function requestReleaseIdentity(baseURL, password) {
   if (!response.ok) {
     fail(
       response.status === 401
-        ? "Для UX-приёмки требуется общий пароль Docomator; укажите --password-file."
+        ? "Для UX-приёмки требуется общий пароль приложения «Оформлятор»; укажите --password-file."
         : `API идентичности релиза вернул HTTP ${response.status}.`
     );
   }
@@ -420,7 +420,7 @@ try {
     servedRelease.releaseMetadataSha256 !== releaseMetadataSha256 ||
     servedRelease.source !== "installed"
   ) {
-    fail("Запущенный Docomator не совпадает с проверенным автономным комплектом.");
+    fail("Запущенный Оформлятор не совпадает с проверенным автономным комплектом.");
   }
 
   const outputDirectory = await trustedNewOutput(options.outputDirectory);

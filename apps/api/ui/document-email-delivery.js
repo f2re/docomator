@@ -170,7 +170,7 @@ async function appendDocumentEmailPanel(job) {
     panel.id = "documentEmailDeliveryPanel";
     panel.className = "generation-history document-email-panel";
     const defaultSubject = `Документы: ${job.templateTitle}`;
-    const defaultText = `Документы сформированы в Docomator.\n\nРезультат находится во вложении.`;
+    const defaultText = `Документы сформированы в Оформлятор.\n\nРезультат находится во вложении.`;
     panel.innerHTML = `
       <div class="generation-history-heading">
         <div><p class="eyebrow">Доставка</p><h3>Отправить результат по электронной почте</h3></div>

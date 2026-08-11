@@ -1,12 +1,12 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 test("проверка целостности запускается только по кнопке и показывает read-only отчёт", async ({
   page
 }) => {
-  await installDocomatorApiMock(page);
+  await installОформляторApiMock(page);
   let reconciliationCalls = 0;
   await page.route("**/api/v1/storage/reconciliation*", async (route) => {
     reconciliationCalls += 1;
@@ -60,7 +60,7 @@ test("проверка целостности запускается тольк�
     });
   });
 
-  const app = new DocomatorPage(page);
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("documents");
 

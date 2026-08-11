@@ -66,7 +66,7 @@ const EXACT_TABLE_PRESENTATIONS: Readonly<
   entities: {
     label: "Объекты и сотрудники",
     category: "Основные данные",
-    description: "Карточки людей и других объектов, доступных в разделах Docomator.",
+    description: "Карточки людей и других объектов, доступных в разделах Оформлятор.",
     sensitivity: "personal"
   },
   entity_types: {

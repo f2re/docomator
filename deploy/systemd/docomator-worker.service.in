@@ -1,5 +1,5 @@
 [Unit]
-Description=Docomator background worker
+Description=Оформлятор background worker
 After=docomator-api.service
 Requires=docomator-api.service
 

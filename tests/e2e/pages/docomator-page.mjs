@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 
-export class DocomatorPage {
+export class ОформляторPage {
   constructor(page) {
     this.page = page;
   }

@@ -1,13 +1,13 @@
 import { expect, test } from "./fixtures/test.mjs";
 
-import { installDocomatorApiMock } from "./fixtures/docomator-api.mjs";
-import { DocomatorPage } from "./pages/docomator-page.mjs";
+import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 test("оператор управляет группой из 120 сотрудников без потери выбора между страницами", async ({
   page
 }) => {
-  const scenario = await installDocomatorApiMock(page, { employeeCount: 120 });
-  const app = new DocomatorPage(page);
+  const scenario = await installОформляторApiMock(page, { employeeCount: 120 });
+  const app = new ОформляторPage(page);
   await app.open();
   await app.openView("employees");
 

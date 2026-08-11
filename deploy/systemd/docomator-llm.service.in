@@ -1,5 +1,5 @@
 [Unit]
-Description=Docomator local llama.cpp server
+Description=Оформлятор local llama.cpp server
 After=network.target
 
 [Service]

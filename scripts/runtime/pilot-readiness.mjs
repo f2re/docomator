@@ -13,7 +13,7 @@ import { createSharedPasswordSession } from "./pilot-release-identity.mjs";
 const execFileAsync = promisify(execFile);
 
 function usage() {
-  process.stdout.write(`Использование: pilot-readiness.mjs [параметры]\n\nПараметры:\n  --config ФАЙЛ       файл настроек Docomator\n  --url АДРЕС         явный адрес API\n  --output КАТАЛОГ    каталог отчётов\n  --password-file ФАЙЛ файл 0600 с общим паролем только для текущего прогона\n  --run-backup        создать резервную копию перед проверкой\n  --require-network   считать сетевую папку обязательной\n  --require-smtp      считать SMTP обязательным\n  --json-only         вывести только JSON-результат\n  -h, --help          показать справку\n\nКоды завершения:\n  0  пилотный контур готов\n  1  есть предупреждения, основной контур не заблокирован\n  2  обнаружена блокирующая ошибка\n`);
+  process.stdout.write(`Использование: pilot-readiness.mjs [параметры]\n\nПараметры:\n  --config ФАЙЛ       файл настроек Оформлятор\n  --url АДРЕС         явный адрес API\n  --output КАТАЛОГ    каталог отчётов\n  --password-file ФАЙЛ файл 0600 с общим паролем только для текущего прогона\n  --run-backup        создать резервную копию перед проверкой\n  --require-network   считать сетевую папку обязательной\n  --require-smtp      считать SMTP обязательным\n  --json-only         вывести только JSON-результат\n  -h, --help          показать справку\n\nКоды завершения:\n  0  пилотный контур готов\n  1  есть предупреждения, основной контур не заблокирован\n  2  обнаружена блокирующая ошибка\n`);
 }
 
 function parseArguments(argv) {
@@ -312,7 +312,7 @@ async function atomicWrite(filePath, content) {
 }
 
 function markdownReport(report) {
-  const lines = ["# Акт пилотной проверки Docomator", "", `- Дата: ${report.generatedAt}`, `- Версия: ${report.version ?? "не указана"}`, `- Итог: **${report.status === "passed" ? "готово" : report.status === "attention" ? "требуется внимание" : "пилот заблокирован"}**`, `- ОС: ${report.environment.os.name ?? "не определена"}`, `- Архитектура: ${report.environment.architecture}`, "", "## Проверки", "", "| Проверка | Состояние | Обязательная | Результат |", "|---|---|---:|---|"];
+  const lines = ["# Акт пилотной проверки Оформлятор", "", `- Дата: ${report.generatedAt}`, `- Версия: ${report.version ?? "не указана"}`, `- Итог: **${report.status === "passed" ? "готово" : report.status === "attention" ? "требуется внимание" : "пилот заблокирован"}**`, `- ОС: ${report.environment.os.name ?? "не определена"}`, `- Архитектура: ${report.environment.architecture}`, "", "## Проверки", "", "| Проверка | Состояние | Обязательная | Результат |", "|---|---|---:|---|"];
   for (const item of report.checks) {
     const state = item.state === "ok" ? "✅" : item.state === "warning" ? "⚠️" : item.state === "disabled" ? "➖" : "⛔";
     lines.push(`| ${String(item.title).replaceAll("|", "\\|")} | ${state} | ${item.required ? "да" : "нет"} | ${String(item.summary).replaceAll("|", "\\|")} |`);
