@@ -32,6 +32,16 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/ci/apply-brand-system.py')
+          text = path.read_text(encoding='utf-8')
+          old = "replace_once(index, '          <span aria-hidden=\"true\">❓</span>', '          <span aria-hidden=\"true\">?</span>')"
+          new = "replace_once(index, '<button class=\"quiet-button\" id=\"helpButton\" type=\"button\"><span aria-hidden=\"true\">❓</span><span>Помощь</span></button>', '<button class=\"quiet-button\" id=\"helpButton\" type=\"button\"><span aria-hidden=\"true\">?</span><span>Помощь</span></button>')"
+          if text.count(old) != 1:
+              raise SystemExit('temporary transformer patch marker not found exactly once')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
           python3 scripts/ci/apply-brand-system.py
           node --check scripts/ci/check-branding.mjs
           node scripts/ci/check-branding.mjs
