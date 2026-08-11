@@ -44,7 +44,8 @@ const bundles = {
     "space-isolation-ui.js",
     "operation-center.js",
     "operations-readiness.js",
-    "template-row-flow.js"
+    "template-row-flow.js",
+    "guided-flow-simplification.js"
   ]
 };
 
