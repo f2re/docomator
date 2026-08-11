@@ -35,7 +35,7 @@ test("шаблон автоматически проверяется и стро
     timeout: 6_000
   });
   await expect(page.locator("#documentStructureButton")).toHaveText(
-    "Построить сейчас"
+    "Построить заново"
   );
 });
 
