@@ -1,0 +1,56 @@
+name: Regenerate Oformlyator examples
+
+on:
+  push:
+    branches:
+      - fix/oformlyator-branding
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Read Node.js version
+        id: node-version
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ steps.node-version.outputs.version }}
+          cache: npm
+      - name: Install and build
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Regenerate deterministic examples
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run generate:examples
+          npm run check:examples
+          git diff --check
+      - name: Commit only regenerated corpus
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add examples
+          if git diff --cached --quiet; then
+            echo "Example corpus already matches the generator."
+            exit 0
+          fi
+          git diff --cached --check
+          git commit -m "test: regenerate Оформлятор example corpus"
+          git push origin HEAD:fix/oformlyator-branding
