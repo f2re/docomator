@@ -101,12 +101,13 @@ export async function collectReleaseVersionFindings(rootDirectory = defaultRoot)
     findings.push("packages/config/src/index.ts: версия по умолчанию не совпадает с RELEASE_IDENTITY.json");
   }
 
+  const currentVersionMarker = `Текущая версия: \`${version}\``;
   const statusMarker = `Статус выпуска: \`${status}\``;
   const channelMarker = `Канал выпуска: \`${channel}\``;
   for (const relativePath of statusDocuments) {
     const content = await fs.readFile(path.join(root, relativePath), "utf8");
-    if (!content.includes(version)) {
-      findings.push(`${relativePath}: текущая версия ${version} не указана`);
+    if (!content.includes(currentVersionMarker)) {
+      findings.push(`${relativePath}: отсутствует машинно-сверяемый маркер «${currentVersionMarker}»`);
     }
     if (!content.includes(statusMarker)) {
       findings.push(`${relativePath}: отсутствует машинно-сверяемый маркер «${statusMarker}»`);
