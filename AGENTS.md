@@ -112,6 +112,9 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Install into versioned immutable directories and switch an atomic symlink.
 - Back up database/config before migration and roll back on failed readiness.
 - A new installation must remain locked until a shared password is explicitly configured on the target host; updates must preserve the password hash and session secret unless the operator changes them.
+- Product versioning follows `docs/VERSIONING.md`: use `npm run version:bump -- patch` for backward-compatible fixes and `-- minor` for new compatible capabilities. Do not keep an old product version merely because release maturity is still `candidate`.
+- `version` describes the product capability/compatibility set; `status` and `channel` describe release maturity. A `candidate/pilot` release may and must receive a new SemVer when product behavior changes.
+- Product-changing PRs must update `RELEASE_IDENTITY.json.version`; CI must reject a runtime/product change that keeps the previous version. A pure `candidate/pilot → stable/production` maturity transition may retain the same version when product behavior is unchanged.
 - Quote shell variables; use `set -Eeuo pipefail`; run `bash -n` for every changed shell script.
 
 ## Definition of done
@@ -122,6 +125,7 @@ A change is done when:
 - code, tests and docs agree;
 - error/fallback paths are implemented;
 - security and offline impact are reviewed;
+- product-changing behavior has the SemVer bump required by `docs/VERSIONING.md`;
 - `npm run check` passes;
 - migration/rollback notes are present when applicable;
 - roadmap status is updated when a milestone changes.
