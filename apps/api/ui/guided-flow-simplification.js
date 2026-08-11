@@ -12,9 +12,11 @@
 
   function guidedFlowSecondaryAction(button, label) {
     if (!(button instanceof HTMLButtonElement)) return;
-    button.classList.remove("primary-button");
-    button.classList.add("secondary-button");
-    button.textContent = label;
+    if (button.classList.contains("primary-button")) {
+      button.classList.remove("primary-button");
+      button.classList.add("secondary-button");
+    }
+    if (button.textContent !== label) button.textContent = label;
   }
 
   function guidedFlowSchedule(button, beforeStart) {
