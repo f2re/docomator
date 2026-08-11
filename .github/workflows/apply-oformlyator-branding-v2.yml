@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   apply-branding:
-    if: github.event.head_commit.message != 'chore: rename product to Оформлятор [branding-applied]'
+    if: "github.event.head_commit.message != 'chore: rename product to Оформлятор [branding-applied]'"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
