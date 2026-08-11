@@ -10,13 +10,16 @@
     }
   }
 
-  function guidedFlowSecondaryAction(button, label) {
+  function guidedFlowSecondaryAction(button, label, idleLabels) {
     if (!(button instanceof HTMLButtonElement)) return;
+    if (button.disabled || button.hidden) return;
+    const currentLabel = String(button.textContent || "").trim();
+    if (!idleLabels.includes(currentLabel) && currentLabel !== label) return;
     if (button.classList.contains("primary-button")) {
       button.classList.remove("primary-button");
       button.classList.add("secondary-button");
     }
-    if (button.textContent !== label) button.textContent = label;
+    if (currentLabel !== label) button.textContent = label;
   }
 
   function guidedFlowSchedule(button, beforeStart) {
@@ -38,7 +41,7 @@
     const dropZone = document.querySelector("#documentIntakeDropZone");
     if (!(input instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) return;
 
-    guidedFlowSecondaryAction(button, "Проверить сейчас");
+    guidedFlowSecondaryAction(button, "Проверить сейчас", ["Проверить файл"]);
     if (button.dataset.guidedAutoBound === "true") return;
     button.dataset.guidedAutoBound = "true";
 
@@ -63,7 +66,7 @@
     const button = document.querySelector("#bulkImportPreviewButton");
     if (!(input instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) return;
 
-    guidedFlowSecondaryAction(button, "Прочитать сейчас");
+    guidedFlowSecondaryAction(button, "Прочитать сейчас", ["Прочитать файл", "Продолжить"]);
     if (button.dataset.guidedAutoBound === "true") return;
     button.dataset.guidedAutoBound = "true";
 
@@ -98,7 +101,7 @@
       return;
     }
 
-    guidedFlowSecondaryAction(button, "Построить сейчас");
+    guidedFlowSecondaryAction(button, "Построить сейчас", ["Построить структуру"]);
     if (button.dataset.guidedAutoBound !== "true") {
       button.dataset.guidedAutoBound = "true";
       button.addEventListener(
@@ -113,8 +116,8 @@
     if (button.dataset.guidedAutoAttempted === "true") return;
     if (document.querySelector("#documentStructureResult .structure-element")) return;
 
-    button.dataset.guidedAutoAttempted = "true";
     guidedFlowSchedule(button, () => {
+      button.dataset.guidedAutoAttempted = "true";
       const status = document.querySelector("#templateWizardStatus");
       if (status) {
         status.textContent =
