@@ -1,104 +1,51 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib.sh
-source "$SCRIPT_DIR/lib.sh"
-
 CONFIG_FILE="/etc/docomator/docomator.env"
-NODE_BIN="/opt/docomator/current/runtime/node/bin/node"
-PASSWORD_STDIN=0
-NO_RESTART=0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-usage() {
-  cat <<'USAGE'
-Использование: sudo set-password.sh [параметры]
+if [[ ${1:-} == "--config" ]]; then
+  CONFIG_FILE="$2"
+  shift 2
+fi
+(($# == 0)) || { printf 'Использование: set-password.sh [--config ФАЙЛ]\n' >&2; exit 2; }
+[[ -t 0 ]] || { printf 'Пароль задаётся интерактивно из терминала.\n' >&2; exit 2; }
 
-Устанавливает или меняет общий пароль входа Оформлятор. В конфигурацию записывается
-только scrypt-хэш; сам пароль не сохраняется. Каждая смена пароля также меняет
-секрет браузерных сессий и немедленно завершает ранее выданные сессии.
-
-Параметры:
-  --config ФАЙЛ       файл /etc/docomator/docomator.env
-  --node ФАЙЛ         встроенный node Оформлятор
-  --password-stdin    прочитать пароль из stdin без повторного запроса
-  --no-restart        не перезапускать docomator-api.service
-  -h, --help          показать эту справку
-USAGE
+read_value() {
+  local key="$1"
+  [[ -f "$CONFIG_FILE" ]] || return 0
+  grep -E "^[[:space:]]*${key}=" "$CONFIG_FILE" | tail -n 1 | cut -d= -f2- || true
 }
 
-while (($# > 0)); do
-  case "$1" in
-    --config) CONFIG_FILE="$2"; shift 2 ;;
-    --node) NODE_BIN="$2"; shift 2 ;;
-    --password-stdin) PASSWORD_STDIN=1; shift ;;
-    --no-restart) NO_RESTART=1; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) die "Неизвестный параметр: $1" ;;
-  esac
+HOST="$(read_value DOCOMATOR_HOST)"
+PORT="$(read_value DOCOMATOR_PORT)"
+[[ -n "$HOST" ]] || HOST="127.0.0.1"
+[[ -n "$PORT" ]] || PORT="8080"
+case "$HOST" in 0.0.0.0|::) HOST="127.0.0.1" ;; esac
+URL="http://${HOST}:${PORT}"
+
+NODE=""
+HELPER=""
+for candidate in \
+  /opt/docomator/current/runtime/node/bin/node \
+  "$SCRIPT_DIR/payload/runtime/node/bin/node"; do
+  [[ -x "$candidate" ]] && NODE="$candidate" && break
 done
+for candidate in \
+  /opt/docomator/current/set-password.mjs \
+  "$SCRIPT_DIR/set-password.mjs"; do
+  [[ -f "$candidate" ]] && HELPER="$candidate" && break
+done
+[[ -n "$NODE" && -n "$HELPER" ]] || { printf 'Не найден локальный помощник настройки пароля.\n' >&2; exit 1; }
 
-require_root
-[[ -f "$CONFIG_FILE" ]] || die "Файл конфигурации не найден: $CONFIG_FILE"
-[[ -x "$NODE_BIN" ]] || die "Node.js Оформлятор не найден: $NODE_BIN"
-
-if ((PASSWORD_STDIN == 1)); then
-  IFS= read -r PASSWORD || true
-else
-  printf 'Новый общий пароль приложения «Оформлятор»: ' >&2
-  IFS= read -r -s PASSWORD
-  printf '\nПовторите пароль: ' >&2
-  IFS= read -r -s PASSWORD_REPEAT
-  printf '\n' >&2
-  [[ "$PASSWORD" == "$PASSWORD_REPEAT" ]] || die "Пароли не совпадают"
-  unset PASSWORD_REPEAT
+read -r -s -p 'Новый общий пароль (не менее 12 символов): ' PASSWORD
+printf '\n'
+read -r -s -p 'Повторите пароль: ' CONFIRMATION
+printf '\n'
+if [[ "$PASSWORD" != "$CONFIRMATION" ]]; then
+  unset PASSWORD CONFIRMATION
+  printf 'Пароли не совпадают.\n' >&2
+  exit 2
 fi
-
-HASH="$({ printf '%s' "$PASSWORD"; } | "$NODE_BIN" --input-type=module -e '
-  import { randomBytes, scryptSync } from "node:crypto";
-  let password = "";
-  process.stdin.setEncoding("utf8");
-  for await (const chunk of process.stdin) password += chunk;
-  const length = [...password].length;
-  if (length < 12 || length > 512) {
-    console.error("Пароль должен содержать от 12 до 512 символов.");
-    process.exit(2);
-  }
-  const salt = randomBytes(16);
-  const digest = scryptSync(password, salt, 32, {
-    N: 16384,
-    r: 8,
-    p: 1,
-    maxmem: 64 * 1024 * 1024
-  });
-  process.stdout.write([
-    "scrypt-v1",
-    "16384",
-    "8",
-    "1",
-    salt.toString("base64url"),
-    digest.toString("base64url")
-  ].join(":"));
-')"
-unset PASSWORD
-
-SESSION_SECRET="$($NODE_BIN --input-type=module -e '
-  import { randomBytes } from "node:crypto";
-  process.stdout.write(randomBytes(48).toString("base64url"));
-')"
-
-replace_env_value "$CONFIG_FILE" DOCOMATOR_ACCESS_PASSWORD_HASH "$HASH"
-replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET "$SESSION_SECRET"
-if [[ -z "$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_TTL_SECONDS)" ]]; then
-  replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_TTL_SECONDS "28800"
-fi
-
-chmod 0640 "$CONFIG_FILE"
-
-if ((NO_RESTART == 0)) && command -v systemctl >/dev/null 2>&1; then
-  systemctl restart docomator-api.service
-  systemctl is-active --quiet docomator-api.service || \
-    die "Пароль сохранён, но docomator-api.service не запустился. Проверьте journalctl -u docomator-api.service"
-fi
-
-printf '✅ Общий пароль Оформлятор обновлён. Ранее выданные браузерные сессии завершены.\n'
+printf '%s\n%s\n' "$PASSWORD" "$CONFIRMATION" | "$NODE" "$HELPER" --url "$URL"
+unset PASSWORD CONFIRMATION
