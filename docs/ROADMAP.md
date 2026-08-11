@@ -2,9 +2,9 @@
 
 Актуально на **2026-08-11**.
 
-Текущий машинный статус выпуска задаётся `RELEASE_IDENTITY.json`: **`0.1.0 / candidate / pilot`**. Кодовый baseline кандидата собран и проходит полный CI, но выпуск **не является stable** до фактической Debian/Astra/Office/recovery/P5-приёмки. Точный порядок оставшихся работ: [NEXT_ITERATIONS.md](NEXT_ITERATIONS.md).
+Текущий машинный статус выпуска задаётся `RELEASE_IDENTITY.json`: **`0.2.0 / candidate / pilot`**. Версия описывает состав возможностей продукта, а `candidate/pilot` — степень готовности этого состава. Кодовый baseline кандидата проходит репозиторные проверки, но выпуск **не является stable** до фактической Debian/Astra/Office/recovery/P5-приёмки. Точный порядок оставшихся работ: [NEXT_ITERATIONS.md](NEXT_ITERATIONS.md).
 
-Нормативные источники: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md).
+Нормативные источники: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md), [VERSIONING.md](VERSIONING.md).
 
 ## Обозначения
 
@@ -29,7 +29,7 @@
 | M9 Структурные шаблоны | 🟡 | один ограниченный repeat-row/range DOCX/XLSX поддержан; произвольные вложенные структуры не заявлены |
 | M10 Импорт и экспорт | ✅ код / 🟡 target | guided CSV/XLSX import, typed errors, CSV/XLSX export; нагрузка 10/100/1000 ждёт внешней приёмки |
 | M11 Локальный LLM-помощник | ⬜ | только после стабилизации детерминированного пути; LLM не является обязательным runtime |
-| R1 Stable `0.1.0` | 🟡 | кандидат готов к внешней приёмке; stable заблокирован release evidence |
+| R1 Stable `0.2.0` | 🟡 | кандидат готовится к внешней приёмке; stable заблокирован release evidence |
 
 ## Что уже считается закрытым
 
@@ -81,6 +81,7 @@
 - generic offline archive собирается и повторно проверяется в CI;
 - install/update/rollback/backup/restore и target-acceptance tooling присутствуют;
 - release identity имеет один машинный источник и CI проверяет version/status/channel во всех производных местах;
+- SemVer bump выполняется штатной командой и product-changing PR без смены версии блокируется CI;
 - текущий статус намеренно `candidate/pilot`;
 - stable release evidence работает fail-closed.
 
@@ -105,7 +106,7 @@
 
 ## После stable
 
-До завершения перечисленных release blockers крупные новые функции не приоритетны. После стабильного `0.1.0` допускаются отдельными ADR/итерациями:
+До завершения перечисленных release blockers крупные новые функции не приоритетны. После стабильного `0.2.0` допускаются отдельными ADR/итерациями:
 
 - более сложные повторяемые и вложенные области DOCX/XLSX;
 - изображения, штрихкоды и вычисляемые значения в пределах детерминированного renderer;
