@@ -63,7 +63,7 @@ jobs:
               raise SystemExit('branding checker root-selector block not found exactly once')
           checker.write_text(text.replace(block, '', 1), encoding='utf-8')
 
-          for name in ['docs/BRANDING.md', 'docs/INTERFACE_HIERARCHY.md']:
+          for name in ['docs/BRANDING.md', 'docs/BRAND_DESIGN_STUDY.md', 'docs/INTERFACE_HIERARCHY.md']:
               path = Path(name)
               lines = path.read_text(encoding='utf-8').splitlines()
               path.write_text('\n'.join(line.rstrip() for line in lines) + '\n', encoding='utf-8')
