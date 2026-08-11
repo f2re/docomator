@@ -91,8 +91,11 @@ async function refreshPreparedGenerationPreflight() {
   );
   try {
     const preflight = await inspectPreparedGeneration();
-    if (preflight?.missingMemberCount === 0) {
-      await startPreparedGeneration();
+    const message = document.querySelector("#generationFormMessage");
+    if (preflight?.missingMemberCount === 0 && message) {
+      message.className = "is-success";
+      message.textContent =
+        "Все обязательные данные заполнены. Проверьте итог и нажмите «Начать формирование».";
     }
   } catch (error) {
     holder.innerHTML = `<div class="generation-state is-error"><span aria-hidden="true">⛔</span><div><strong>Проверку выполнить не удалось</strong><p>${generationEscape(error?.message || "Повторите действие.")}</p></div></div>`;
