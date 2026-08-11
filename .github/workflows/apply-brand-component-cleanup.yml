@@ -37,8 +37,9 @@ jobs:
 
           def replace_once(path, old, new):
               text = path.read_text(encoding='utf-8')
-              if text.count(old) != 1:
-                  raise SystemExit(f'{path}: replacement count {text.count(old)} for {old[:90]!r}')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: replacement count {count} for {old[:100]!r}')
               path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
           styles = Path('apps/api/ui/styles.css')
@@ -61,10 +62,26 @@ jobs:
           replace_once(styles, visual_block, '')
           replace_once(
               styles,
+              '.drawer-backdrop { position: absolute; inset: 0; background: rgba(10, 12, 16, .4); backdrop-filter: blur(4px); }',
+              '.drawer-backdrop { position: absolute; inset: 0; background: rgba(10, 12, 16, .4); }',
+          )
+          replace_once(
+              styles,
+              '.create-dialog::backdrop { background: rgba(10, 12, 16, .4); backdrop-filter: blur(6px); }',
+              '.create-dialog::backdrop { background: rgba(10, 12, 16, .4); }',
+          )
+          replace_once(
+              styles,
               '  .mobile-nav { position: fixed; z-index: 70; inset: auto 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); min-height: calc(62px + var(--safe-bottom)); padding: 5px 4px var(--safe-bottom); background: var(--glass); border-top: 1px solid var(--border); backdrop-filter: blur(24px); }',
               '  .mobile-nav { position: fixed; z-index: 70; inset: auto 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); min-height: calc(62px + var(--safe-bottom)); padding: 5px 4px var(--safe-bottom); background: var(--glass); border-top: 1px solid var(--border); }',
           )
           replace_once(styles, '  .hero-visual { display: none; }\n', '')
+          replace_once(styles, '.quiet-button { display: inline-flex; min-height: 42px;', '.quiet-button { display: inline-flex; min-height: var(--touch-target);')
+          replace_once(styles, '.quiet-button.compact { min-height: 34px;', '.quiet-button.compact { min-height: var(--touch-target);')
+          replace_once(styles, '.text-button { min-height: 40px;', '.text-button { min-height: var(--touch-target);')
+          replace_once(styles, '.segmented-control button { min-height: 36px;', '.segmented-control button { min-height: var(--touch-target);')
+          replace_once(styles, '  .topbar .context-chip { display: inline-flex !important; min-height: 36px;', '  .topbar .context-chip { display: inline-flex !important; min-height: var(--touch-target);')
+          replace_once(styles, '  .topbar .icon-button { width: 40px; height: 40px; }', '  .topbar .icon-button { width: var(--touch-target); height: var(--touch-target); }')
 
           stability = Path('apps/api/ui/interface-stability.css')
           replace_once(stability, '  min-height: 42px;\n  grid-template-columns: 22px minmax(0, 1fr) auto;', '  min-height: var(--touch-target);\n  grid-template-columns: 22px minmax(0, 1fr) auto;')
@@ -73,11 +90,13 @@ jobs:
           replace_once(stability, '  width: 40px;\n  height: 40px;', '  width: var(--touch-target);\n  height: var(--touch-target);')
           replace_once(stability, '  min-height: 42px;\n  padding: 0 15px;', '  min-height: var(--touch-target);\n  padding: 0 15px;')
           replace_once(stability, '.home-hero .hero-visual {\n  display: none;\n}\n\n', '')
+          replace_once(stability, '    width: 38px;\n    height: 38px;\n    min-height: 38px;', '    width: var(--touch-target);\n    height: var(--touch-target);\n    min-height: var(--touch-target);')
+          replace_once(stability, '    width: 36px;\n    height: 36px;\n    min-height: 36px;', '    width: var(--touch-target);\n    height: var(--touch-target);\n    min-height: var(--touch-target);')
 
           checker = Path('scripts/ci/check-branding.mjs')
           text = checker.read_text(encoding='utf-8')
           marker = '''  for (const relativePath of [\n    "apps/api/ui/styles.css",\n    "apps/api/ui/interface-hierarchy.css",\n    "apps/api/ui/interface-stability.css"\n  ]) {\n    const text = await inspectText(relativePath);\n    if (text?.includes("--accent:")) {\n      findings.push(`${relativePath}: палитра должна жить только в brand-tokens.css`);\n    }\n  }\n'''
-          replacement = marker + '''\n  const baseStylesPath = "apps/api/ui/styles.css";\n  const baseStyles = await inspectText(baseStylesPath);\n  for (const forbidden of [\n    "backdrop-filter: blur",\n    "rgba(57, 121, 246",\n    ".hero-visual",\n    ".live-sheet",\n    "linear-gradient(to bottom, var(--background)"\n  ]) {\n    if (baseStyles?.includes(forbidden)) findings.push(`${baseStylesPath}: найден устаревший эффект ${forbidden}`);\n  }\n\n  const stabilityPath = "apps/api/ui/interface-stability.css";\n  const stability = await inspectText(stabilityPath);\n  for (const fragment of [\n    "min-height: var(--touch-target);",\n    "width: var(--touch-target);",\n    "height: var(--touch-target);"\n  ]) {\n    requireFragment(findings, stability, stabilityPath, fragment);\n  }\n  if (stability?.includes(".hero-visual")) findings.push(`${stabilityPath}: найден селектор удалённой hero-иллюстрации`);\n'''
+          replacement = marker + '''\n  const baseStylesPath = "apps/api/ui/styles.css";\n  const baseStyles = await inspectText(baseStylesPath);\n  for (const forbidden of [\n    "backdrop-filter: blur",\n    "rgba(57, 121, 246",\n    ".hero-visual",\n    ".live-sheet",\n    "linear-gradient(to bottom, var(--background)"\n  ]) {\n    if (baseStyles?.includes(forbidden)) findings.push(`${baseStylesPath}: найден устаревший эффект ${forbidden}`);\n  }\n\n  const stabilityPath = "apps/api/ui/interface-stability.css";\n  const stability = await inspectText(stabilityPath);\n  for (const fragment of [\n    "min-height: var(--touch-target);",\n    "width: var(--touch-target);",\n    "height: var(--touch-target);"\n  ]) {\n    requireFragment(findings, stability, stabilityPath, fragment);\n  }\n  for (const forbidden of [\n    ".hero-visual",\n    "width: 38px;\\n    height: 38px;\\n    min-height: 38px;",\n    "width: 36px;\\n    height: 36px;\\n    min-height: 36px;"\n  ]) {\n    if (stability?.includes(forbidden)) findings.push(`${stabilityPath}: найден устаревший mobile/dead rule ${forbidden}`);\n  }\n'''
           if text.count(marker) != 1:
               raise SystemExit('branding checker component marker not found exactly once')
           checker.write_text(text.replace(marker, replacement, 1), encoding='utf-8')
