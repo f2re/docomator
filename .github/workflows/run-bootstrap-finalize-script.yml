@@ -1,0 +1,65 @@
+name: Run bootstrap finalization script
+
+on:
+  push:
+    branches:
+      - fix/first-run-password-bootstrap
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+      - name: Guard
+        id: guard
+        shell: bash
+        run: |
+          if [[ "$(git log -1 --pretty=%s)" == "fix(auth): preserve bootstrap and password rotation [bootstrap-finalized]" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Apply and verify
+        if: steps.guard.outputs.skip == 'false'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ci/apply-bootstrap-finalize.py
+          bash -n scripts/offline/set-password.sh scripts/offline/first-run.sh scripts/offline/install.sh scripts/offline/prepare-bundle.sh
+          node --check scripts/offline/password-bootstrap.test.mjs tests/e2e/password-gate.spec.mjs
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npm run test -w @docomator/api
+          node --test scripts/offline/password-bootstrap.test.mjs
+          npm run check:migrations
+          npm run check:release-version
+          npm run check:language
+          git diff --check
+      - name: Commit
+        if: steps.guard.outputs.skip == 'false'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(auth): preserve bootstrap and password rotation [bootstrap-finalized]"
+          git push origin HEAD:fix/first-run-password-bootstrap
