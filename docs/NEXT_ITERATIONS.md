@@ -2,7 +2,7 @@
 
 Актуально на **2026-08-11**.
 
-Текущий кодовый контур находится в состоянии **`0.2.0 / candidate / pilot`**. Основной пользовательский путь, space isolation, password gate, import/export, deterministic DOCX/XLSX generation, worker recovery, автоматические safe-read этапы и generic offline bundle реализованы и проходят репозиторный CI. Следующая работа — прежде всего получение эксплуатационных доказательств для stable, а не неконтролируемое расширение продукта.
+Текущий кодовый контур находится в состоянии **`0.2.1 / candidate / pilot`**. Основной пользовательский путь, space isolation, password gate, import/export, deterministic DOCX/XLSX generation, worker recovery, автоматические safe-read этапы и generic offline bundle реализованы и проходят репозиторный CI. Следующая работа — прежде всего получение эксплуатационных доказательств для stable, а не неконтролируемое расширение продукта.
 
 Нормативные документы: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [ROADMAP.md](ROADMAP.md), [VERSIONING.md](VERSIONING.md).
 
@@ -103,7 +103,7 @@ Debian evidence не закрывает Astra.
 - оба target acts + Office + recovery + UX + пустой blockers registry;
 - успешный `npm run release:evidence` для одного exact commit/version/status/channel.
 
-Все P1 evidence должны относиться к `0.2.0`; материалы `0.1.0` остаются историческими.
+Все P1 evidence должны относиться к `0.2.1`; материалы `0.1.0` остаются историческими.
 
 ## Условие перехода к stable
 

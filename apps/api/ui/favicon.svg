@@ -1,12 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Оформлятор">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6ea8ff"/>
-      <stop offset="1" stop-color="#6f6ce8"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="16" fill="url(#g)"/>
-  <path d="M20 14h17l9 9v27H20z" fill="white" opacity=".96"/>
-  <path d="M37 14v10h9" fill="none" stroke="#6f6ce8" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M26 31h14M26 38h14M26 45h9" stroke="#6f6ce8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M14 7h26l10 10v40H14z" fill="#fffefa" stroke="#176b78" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M40 7v11h10" fill="#dcebed" stroke="#176b78" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M22 28h20M22 36h20" fill="none" stroke="#20262b" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22 45h12" fill="none" stroke="#176b78" stroke-width="3" stroke-linecap="round"/>
 </svg>
