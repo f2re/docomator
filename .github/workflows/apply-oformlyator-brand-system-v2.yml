@@ -55,12 +55,18 @@ jobs:
           python3 scripts/ci/apply-brand-system.py
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('scripts/ci/check-branding.mjs')
-          text = path.read_text(encoding='utf-8')
+
+          checker = Path('scripts/ci/check-branding.mjs')
+          text = checker.read_text(encoding='utf-8')
           block = '''    if (/^\\s*:root(?:\\[|\\s*\\{)/mu.test(text ?? "")) {\n      findings.push(`${relativePath}: найден конкурирующий корневой theme-блок`);\n    }\n'''
           if text.count(block) != 1:
               raise SystemExit('branding checker root-selector block not found exactly once')
-          path.write_text(text.replace(block, '', 1), encoding='utf-8')
+          checker.write_text(text.replace(block, '', 1), encoding='utf-8')
+
+          for name in ['docs/BRANDING.md', 'docs/INTERFACE_HIERARCHY.md']:
+              path = Path(name)
+              lines = path.read_text(encoding='utf-8').splitlines()
+              path.write_text('\n'.join(line.rstrip() for line in lines) + '\n', encoding='utf-8')
           PY
           node --check scripts/ci/check-branding.mjs
           node scripts/ci/check-branding.mjs
