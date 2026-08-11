@@ -75,7 +75,7 @@
       guidedFlowSchedule(button, () => {
         const message = document.querySelector("#bulkImportMessage");
         if (message) {
-          message.className = "bulk-import-message is-success";
+          message.className = "bulk-import-message is-loading";
           message.textContent =
             "Файл выбран. Читаем колонки автоматически; до подтверждения импорта данные не сохраняются.";
         }
