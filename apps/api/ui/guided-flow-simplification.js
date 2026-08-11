@@ -90,15 +90,30 @@
     const currentStep = document.querySelector(
       '[data-template-step="2"][data-wizard-state="current"]'
     );
-    if (!(button instanceof HTMLButtonElement) || !currentStep) return;
+    if (!(button instanceof HTMLButtonElement)) return;
+
+    if (!currentStep) {
+      delete button.dataset.guidedAutoAttempted;
+      guidedFlowClear(button);
+      return;
+    }
 
     guidedFlowSecondaryAction(button, "Построить сейчас");
     if (button.dataset.guidedAutoBound !== "true") {
       button.dataset.guidedAutoBound = "true";
-      button.addEventListener("click", () => guidedFlowClear(button), { capture: true });
+      button.addEventListener(
+        "click",
+        () => {
+          button.dataset.guidedAutoAttempted = "true";
+          guidedFlowClear(button);
+        },
+        { capture: true }
+      );
     }
+    if (button.dataset.guidedAutoAttempted === "true") return;
     if (document.querySelector("#documentStructureResult .structure-element")) return;
 
+    button.dataset.guidedAutoAttempted = "true";
     guidedFlowSchedule(button, () => {
       const status = document.querySelector("#templateWizardStatus");
       if (status) {
