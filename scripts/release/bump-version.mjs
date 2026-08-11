@@ -45,6 +45,10 @@ export function incrementVersion(current, change) {
 }
 
 function replaceRequired(content, pattern, replacement, label) {
+  if (typeof pattern === "string") {
+    if (!content.includes(pattern)) throw new Error(`Не найден маркер версии: ${label}`);
+    return content.replace(pattern, replacement);
+  }
   if (!pattern.test(content)) throw new Error(`Не найден маркер версии: ${label}`);
   pattern.lastIndex = 0;
   return content.replace(pattern, replacement);
@@ -107,7 +111,7 @@ async function syncRuntimeDefaults(oldVersion, nextVersion) {
     configPath,
     replaceRequired(
       config,
-      new RegExp(`env\\.DOCOMATOR_VERSION \\?\\? \\"${oldVersion.replaceAll(".", "\\.")}\\"`, "u"),
+      `env.DOCOMATOR_VERSION ?? "${oldVersion}"`,
       `env.DOCOMATOR_VERSION ?? "${nextVersion}"`,
       "packages/config/src/index.ts"
     )
