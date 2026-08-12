@@ -1,5 +1,6 @@
 import {
   DocumentFormattingRegistry,
+  toJsonValue,
   type JsonValue
 } from "@docomator/storage";
 import {
@@ -46,12 +47,19 @@ export function createDocumentFormattingHandler(options: {
         const source = await options.objectStore.getBuffer(item.sha256);
         const result = await formatDocumentToProfile(source, settings);
         const stored = await options.objectStore.putBuffer(result.buffer);
-        options.registry.completeItem(spaceId, job.id, item.itemId, stored, outputName(item.fileName, settings.profile), {
-          profile: settings.profile,
-          changedParts: result.changedParts,
-          untouchedParts: result.untouchedParts,
-          before: result.analysisBefore
-        });
+        options.registry.completeItem(
+          spaceId,
+          job.id,
+          item.itemId,
+          stored,
+          outputName(item.fileName, settings.profile),
+          toJsonValue({
+            profile: settings.profile,
+            changedParts: result.changedParts,
+            untouchedParts: result.untouchedParts,
+            before: result.analysisBefore
+          })
+        );
       } catch (error) {
         options.registry.failItem(spaceId, job.id, item.itemId, errorJson(error));
       }
