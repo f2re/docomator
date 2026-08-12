@@ -9,7 +9,6 @@ import {
 import { registerBibliographyRoutes } from "./bibliography-routes.js";
 import { registerDocumentFormattingRoutes } from "./document-formatting-routes.js";
 import { registerProductUiBundle } from "./product-ui-routes.js";
-import { registerPublicationRoutes } from "./publication-routes.js";
 import { registerPublicDocumentFormattingRoutes } from "./public-document-formatting-routes.js";
 
 export function registerProductRoutes(
@@ -17,8 +16,10 @@ export function registerProductRoutes(
   store: SqliteStore,
   objectStore: ContentAddressedObjectStore
 ): void {
+  // Publication routes and their base UI are already registered by the existing
+  // object-cleanup/document-generation bootstrap. Reuse the same scoped storage
+  // model here instead of registering the HTTP surface a second time.
   const publications = new SpaceScopedPublicationRegistry(store);
-  registerPublicationRoutes(app, publications);
   registerBibliographyRoutes(app, store, publications);
   registerDocumentFormattingRoutes(app, new DocumentFormattingRegistry(store), objectStore);
   registerPublicDocumentFormattingRoutes(app);
