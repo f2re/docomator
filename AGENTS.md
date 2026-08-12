@@ -129,3 +129,16 @@ A change is done when:
 - `npm run check` passes;
 - migration/rollback notes are present when applicable;
 - roadmap status is updated when a milestone changes.
+
+
+## GitHub write workflow
+
+- Для изменений удалённого репозитория сначала обнаружить доступные GitHub write actions; отсутствие `gh`, локального OAuth-токена или локального `.git` не означает отсутствие возможности коммита.
+- Перед изменением получить точный `refs/heads/main`, нормативные документы, открытые Issues, последние commits и CI.
+- Создать короткую рабочую ветку от проверенного SHA `main`; не использовать прямое изменение `main` вместо обычного PR.
+- Для нескольких связанных файлов предпочтителен один атомарный commit через `create_blob → create_tree → create_commit → update_ref`. `update_file` допустим для одиночного файла.
+- После commit проверить `compare_commits`, открыть PR в `main` и дождаться всех обязательных jobs. Локальные/фокусные проверки не заменяют полный CI.
+- Перед merge повторно проверить head SHA, mergeability, review threads и обязательные checks. Сливать squash-методом с `expected_head_sha`.
+- После merge получить новый `refs/heads/main` и дождаться успешного post-merge CI на этом exact SHA.
+- Не сообщать о commit, push, PR, merge или зелёном CI, пока соответствующий объект фактически не получен через GitHub API.
+- Если write actions действительно отсутствуют после discovery, прямо сообщить об этом; не подменять удалённый commit локальным patch и не придумывать SHA.

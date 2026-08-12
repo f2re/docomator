@@ -56,7 +56,7 @@ function bulkImportShowFileMessage(text, kind = "warning") {
 function bulkImportValidateDroppedFile(file) {
   if (!(file instanceof File)) return "Не удалось получить файл из операции перетаскивания.";
   const extension = file.name.toLocaleLowerCase("ru-RU").split(".").pop() || "";
-  if (!new Set(["csv", "xlsx"]).has(extension)) {
+  if (!new Set(["csv", "xlsx", "xls"]).has(extension)) {
     return "Поддерживаются только файлы CSV и XLSX. Выбранный файл не отправлен.";
   }
   if (file.size === 0) return "Файл пуст. Выберите таблицу с заголовками и данными.";
@@ -164,77 +164,90 @@ function installBulkImportDropZone() {
 }
 
 function bulkImportErrorColumn(error) {
-  if (typeof error?.column === "string" && error.column.trim()) {
-    return error.column.trim();
-  }
-  const message = String(error?.message || "");
-  const explicit = /колонк(?:а|е|у|ой)\s+«([^»]+)»/iu.exec(message)?.[1];
-  if (explicit && bulkImportPreview?.headers?.includes(explicit)) return explicit;
-
-  const rowNumbers = Array.isArray(bulkImportPreview?.sourceRowNumbers)
-    ? bulkImportPreview.sourceRowNumbers
-    : [];
-  const rowIndex = rowNumbers.findIndex(
-    (value) => Number(value) === Number(error?.rowNumber)
-  );
-  const row = rowIndex >= 0 ? bulkImportPreview?.rows?.[rowIndex] : null;
-  if (!row) return "";
-  const quotedValues = [...message.matchAll(/«([^»]+)»/gu)].map((match) =>
-    normalizeBulkImportText(match[1])
-  );
-  for (const quoted of quotedValues) {
-    if (!quoted) continue;
-    const matches = (bulkImportPreview.headers || []).filter(
-      (header) => normalizeBulkImportText(row[header]) === quoted
-    );
-    if (matches.length === 1) return matches[0];
+  const candidates = [
+    error?.column,
+    error?.repair?.column,
+    error?.issue?.column,
+    error?.issue?.repair?.column
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const column = candidate.trim();
+    if (!column) continue;
+    if (!Array.isArray(bulkImportPreview?.headers) || bulkImportPreview.headers.includes(column)) {
+      return column;
+    }
   }
   return "";
 }
 
-function bulkImportErrorHint(message) {
-  const text = String(message || "").toLocaleLowerCase("ru-RU");
-  if (/не является числом|не является целым/u.test(text)) {
-    return "Если в колонке находятся коды или номера, выберите тип «Короткий текст». Если это число — исправьте значение в исходной таблице.";
-  }
-  if (/не распознано как дата|недопустимую дату/u.test(text)) {
-    return "Используйте ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. Если это не дата, смените тип поля на текстовый.";
-  }
-  if (/да\/нет|значение «да\/нет»/u.test(text)) {
-    return "Допустимы да/нет, 1/0, true/false, +/−. Иначе выберите текстовый тип.";
-  }
-  if (/повторяется внутри файла|несколько объектов с одинаков/u.test(text)) {
-    return "Для поиска прежней записи выберите колонку с уникальным табельным номером, ID или рабочей почтой.";
-  }
-  if (/не заполнена колонка/u.test(text)) {
-    return "Заполните эту ячейку в Excel либо выберите другую колонку для ФИО/поиска прежней записи и повторите проверку.";
-  }
-  if (/несколько полей|выберите конкретное поле/u.test(text)) {
-    return "В сопоставлении этой колонки выберите конкретное существующее поле вместо автоматического варианта.";
-  }
-  if (/два или три слова|фио/u.test(text)) {
-    return "Проверьте порядок ФИО или отключите разделение на фамилию, имя и отчество для неоднозначных строк.";
-  }
-  return "Проверьте сопоставление и тип поля. Настройки на экране сохранены; после исправления снова нажмите «Проверить».";
+function bulkImportErrorHint(error) {
+  const action = error?.suggestedAction ?? error?.issue?.suggestedAction;
+  return typeof action === "string" && action.trim()
+    ? action.trim()
+    : "Проверьте отмеченное место. Выбранный файл и остальные настройки сохранены; после исправления снова нажмите «Проверить».";
+}
+
+function bulkImportErrorRawValue(error) {
+  const value = error?.rawValue ?? error?.issue?.rawValue;
+  return typeof value === "string" ? value : null;
+}
+
+function bulkImportErrorRowNumber(error) {
+  const value = Number(error?.rowNumber ?? error?.sourceRow ?? error?.issue?.rowNumber);
+  return Number.isInteger(value) && value > 0 ? value : null;
 }
 
 function clearBulkImportProblemHighlights() {
   document.querySelectorAll("[data-bulk-mapping-row].has-import-error").forEach((row) => {
     row.classList.remove("has-import-error");
     row.querySelector("[data-bulk-field-error-note]")?.remove();
+    row.querySelectorAll('[aria-invalid="true"]').forEach((control) => {
+      control.removeAttribute("aria-invalid");
+      control.removeAttribute("aria-describedby");
+    });
   });
+  document.querySelectorAll(".bulk-import-table .has-import-error-row").forEach((row) => {
+    row.classList.remove("has-import-error-row");
+  });
+  document.querySelectorAll(".bulk-import-table .has-import-error-cell").forEach((cell) => {
+    cell.classList.remove("has-import-error-cell");
+  });
+}
+
+function bulkImportSourceCell(rowNumber, column) {
+  if (!rowNumber || !column) return null;
+  const row = [...document.querySelectorAll(".bulk-import-table tbody tr[data-source-row-number]")]
+    .find((candidate) => Number(candidate.dataset.sourceRowNumber) === Number(rowNumber));
+  if (!row) return null;
+  return [...row.querySelectorAll("[data-source-column]")]
+    .find((cell) => cell.dataset.sourceColumn === column) || null;
 }
 
 function highlightBulkImportProblems(errors) {
   clearBulkImportProblemHighlights();
   const grouped = new Map();
+  let highlightedSource = false;
   for (const error of Array.isArray(errors) ? errors : []) {
     const column = bulkImportErrorColumn(error);
-    if (!column) continue;
-    const list = grouped.get(column) || [];
-    list.push(error);
-    grouped.set(column, list);
+    const rowNumber = bulkImportErrorRowNumber(error);
+    if (column) {
+      const list = grouped.get(column) || [];
+      list.push(error);
+      grouped.set(column, list);
+    }
+    const cell = bulkImportSourceCell(rowNumber, column);
+    if (cell) {
+      cell.classList.add("has-import-error-cell");
+      cell.closest("tr")?.classList.add("has-import-error-row");
+      highlightedSource = true;
+    }
   }
+  if (highlightedSource) {
+    const details = document.querySelector(".bulk-import-source-preview");
+    if (details instanceof HTMLDetailsElement) details.open = true;
+  }
+  let index = 0;
   for (const [column, items] of grouped) {
     const row = bulkImportColumnRow(column);
     if (!row) continue;
@@ -243,13 +256,25 @@ function highlightBulkImportProblems(errors) {
     const note = document.createElement("div");
     note.dataset.bulkFieldErrorNote = "";
     note.className = "bulk-import-field-error-note";
+    note.id = `bulkImportFieldError${index++}`;
     const rowList = items
       .slice(0, 5)
-      .map((item) => item.rowNumber)
+      .map((item) => bulkImportErrorRowNumber(item))
       .filter(Boolean)
       .join(", ");
     note.textContent = `${items.length} ошибк${items.length === 1 ? "а" : "и"}${rowList ? ` · строки ${rowList}` : ""}`;
     target.append(note);
+    const wantsType = items.some(
+      (item) => (item?.repair?.kind ?? item?.issue?.repair?.kind) === "change_field_type"
+    );
+    const mode = row.querySelector("[data-bulk-mapping-mode]")?.value || "";
+    const control = wantsType && mode === "create"
+      ? row.querySelector("[data-bulk-value-type]")
+      : row.querySelector("[data-bulk-mapping-mode]");
+    if (control) {
+      control.setAttribute("aria-invalid", "true");
+      control.setAttribute("aria-describedby", note.id);
+    }
   }
 }
 
@@ -260,14 +285,19 @@ function renderFriendlyBulkImportErrors(errors) {
   );
   const cards = errors.slice(0, 100).map((error) => {
     const column = bulkImportErrorColumn(error);
-    const title = column
-      ? `Строка ${error.rowNumber} · ${column}`
-      : `Строка ${error.rowNumber}`;
+    const rowNumber = bulkImportErrorRowNumber(error);
+    const rawValue = bulkImportErrorRawValue(error);
+    const title = [rowNumber ? `Строка ${rowNumber}` : "Ошибка импорта", column]
+      .filter(Boolean)
+      .join(" · ");
     const action = column
-      ? `<button class="secondary-button compact" type="button" data-bulk-fix-column="${escapeHtml(column)}">Проверить поле</button>`
+      ? `<button class="secondary-button compact" type="button" data-bulk-fix-column="${escapeHtml(column)}"${rowNumber ? ` data-bulk-fix-row="${rowNumber}"` : ""}>Показать место</button>`
       : "";
+    const raw = rawValue === null
+      ? ""
+      : `<small class="bulk-import-error-value"><strong>Значение:</strong> «${escapeHtml(rawValue)}»</small>`;
     return `<article class="bulk-import-error-card"${column ? ` data-error-column="${escapeHtml(column)}"` : ""}>
-      <div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(error.message)}</p><small>${escapeHtml(bulkImportErrorHint(error.message))}</small></div>
+      <div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(error?.message || "Импорт требует проверки.")}</p>${raw}<small><strong>Что сделать:</strong> ${escapeHtml(bulkImportErrorHint(error))}</small></div>
       ${action}
     </article>`;
   });
@@ -275,9 +305,37 @@ function renderFriendlyBulkImportErrors(errors) {
     ? `<p class="bulk-import-error-overflow">Показаны первые 100 из ${errors.length} ошибок.</p>`
     : "";
   return `<section class="bulk-import-error-guide" role="alert">
-      <div><strong>Нужно исправить ${errors.length} строк${uniqueColumns.size ? ` в ${uniqueColumns.size} полях` : ""}</strong><p>Ничего не сохранено во время проверки. Перейдите к отмеченному полю, исправьте сопоставление/тип или исходную таблицу и запустите проверку ещё раз.</p></div>
+      <div><strong>Нужно проверить ${errors.length} строк${uniqueColumns.size ? ` в ${uniqueColumns.size} полях` : ""}</strong><p>Корректные строки не блокируются и могут быть импортированы. Ошибочные строки будут пропущены; файл и сопоставления остаются на экране.</p></div>
     </section>
     <div class="bulk-import-error-list">${cards.join("")}</div>${omitted}`;
+}
+
+let bulkImportLastOperationIssue = null;
+
+function showBulkImportOperationIssue(error) {
+  const issue = error?.issue && typeof error.issue === "object" ? error.issue : null;
+  bulkImportLastOperationIssue = issue;
+  if (!issue) return;
+  if (issue.scope === "file") {
+    document.querySelector("#bulkImportFile")
+      ?.closest(".bulk-import-drop-zone")
+      ?.classList.add("is-error");
+    return;
+  }
+  if (issue.scope !== "mapping") return;
+  highlightBulkImportProblems([issue]);
+  const root = document.querySelector("#bulkImportPlan");
+  if (root) {
+    root.innerHTML = renderFriendlyBulkImportErrors([issue]);
+  }
+  setBulkImportStep(2);
+  const column = bulkImportErrorColumn(issue);
+  const row = column ? bulkImportColumnRow(column) : null;
+  if (row) {
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    const control = row.querySelector('[aria-invalid="true"]') || row.querySelector("[data-bulk-mapping-mode]");
+    control?.focus();
+  }
 }
 
 function installBulkImportErrorUx() {
@@ -316,6 +374,13 @@ function installBulkImportErrorUx() {
     const button = event.target.closest?.("[data-bulk-fix-column]");
     if (!button) return;
     const column = button.dataset.bulkFixColumn || "";
+    const sourceRow = Number(button.dataset.bulkFixRow || 0);
+    const sourceCell = bulkImportSourceCell(sourceRow, column);
+    if (sourceCell) {
+      const details = sourceCell.closest("details");
+      if (details instanceof HTMLDetailsElement) details.open = true;
+      sourceCell.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }
     const row = bulkImportColumnRow(column);
     if (!row) return;
     row.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -348,8 +413,9 @@ function installBulkImportRecoveryHint() {
     const hint = document.createElement("div");
     hint.id = "bulkImportRecoveryHint";
     hint.className = "bulk-import-recovery-hint";
-    hint.innerHTML =
-      "<strong>Что сделать</strong><span>Проверьте формат CSV/XLSX, строку заголовков и размер файла. Ваши настройки не сброшены; после исправления выберите файл повторно.</span>";
+    const action = bulkImportLastOperationIssue?.suggestedAction ||
+      "Проверьте формат CSV/XLSX, строку заголовков и размер файла. Ваши настройки не сброшены; после исправления повторите чтение.";
+    hint.innerHTML = `<strong>Что сделать</strong><span>${escapeHtml(action)}</span>`;
     message.insertAdjacentElement("afterend", hint);
   };
   new MutationObserver(render).observe(message, {

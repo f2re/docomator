@@ -2,7 +2,7 @@
 
 Актуально на **2026-08-11**.
 
-Текущий машинный статус выпуска задаётся `RELEASE_IDENTITY.json`: **`0.3.0 / candidate / pilot`**. Версия описывает состав и совместимость продукта, а `candidate/pilot` — степень готовности этого состава. Кодовый baseline кандидата проходит репозиторные проверки, но выпуск **не является stable** до фактической Debian/Astra/Office/recovery/P5-приёмки. Точный порядок оставшихся работ: [NEXT_ITERATIONS.md](NEXT_ITERATIONS.md).
+Текущий машинный статус выпуска задаётся `RELEASE_IDENTITY.json`: **`0.3.1 / candidate / pilot`**. Версия описывает состав и совместимость продукта, а `candidate/pilot` — степень готовности этого состава. Кодовый baseline кандидата проходит репозиторные проверки, но выпуск **не является stable** до фактической Debian/Astra/Office/recovery/P5-приёмки. Точный порядок оставшихся работ: [NEXT_ITERATIONS.md](NEXT_ITERATIONS.md).
 
 Нормативные источники: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md), [VERSIONING.md](VERSIONING.md).
 
@@ -29,7 +29,7 @@
 | M9 Структурные шаблоны | 🟡 | один ограниченный repeat-row/range DOCX/XLSX поддержан; произвольные вложенные структуры не заявлены |
 | M10 Импорт и экспорт | ✅ код / 🟡 target | guided CSV/XLSX import, typed errors, CSV/XLSX export; нагрузка 10/100/1000 ждёт внешней приёмки |
 | M11 Локальный LLM-помощник | ⬜ | только после стабилизации детерминированного пути; LLM не является обязательным runtime |
-| R1 Stable `0.3.0` | 🟡 | кандидат должен пройти новый release-bound внешний контур; stable заблокирован evidence |
+| R1 Stable `0.3.1` | 🟡 | кандидат должен пройти новый release-bound внешний контур; stable заблокирован evidence |
 
 ## Что уже считается закрытым
 
@@ -105,13 +105,13 @@
 11. включённая защита `main` и обязательные CI checks;
 12. пустой `openBlockers` и успешный `release:evidence` для одного точного candidate commit.
 
-Старый evidence `0.1.0` остаётся историческим и не закрывает эти критерии для `0.3.0`.
+Старый evidence `0.1.0` остаётся историческим и не закрывает эти критерии для `0.3.1`.
 
 Подробный протокол: [FINALIZATION.md](FINALIZATION.md) и [UX_ACCEPTANCE_PROTOCOL.md](UX_ACCEPTANCE_PROTOCOL.md).
 
 ## После stable
 
-До завершения перечисленных release blockers крупные новые функции не приоритетны. После стабильного `0.3.0` допускаются отдельными ADR/итерациями:
+До завершения перечисленных release blockers крупные новые функции не приоритетны. После стабильного `0.3.1` допускаются отдельными ADR/итерациями:
 
 - более сложные повторяемые и вложенные области DOCX/XLSX;
 - изображения, штрихкоды и вычисляемые значения в пределах детерминированного renderer;

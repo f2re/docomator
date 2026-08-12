@@ -2,16 +2,17 @@ import {
   AssistedDataImportRegistry,
   DataImportConflictError,
   DataImportValidationError,
+  KnowledgeConflictError,
   SpaceConflictError,
   SpaceRegistry,
   SpaceValidationError,
+  dataImportOperationIssue,
+  type DataImportOperationIssue,
   assistedDataImportRegistryFromSpaceRegistry,
   validateExistingImportIdentityProperty,
   type AssistedDataImportPropertyMapping
 } from "@docomator/storage";
-import type { FastifyInstance, FastifyRequest } from "fastify";
-
-import { DocumentIntakeError } from "@docomator/document-intake";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   createImportPreviewToken,
@@ -73,6 +74,56 @@ function responseEnvelope<T>(request: FastifyRequest, data: T) {
   return { data, correlationId: correlationId(request) };
 }
 
+function importIssueResponse(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  statusCode: number,
+  issue: DataImportOperationIssue
+): FastifyReply {
+  return reply.code(statusCode).header("cache-control", "no-store").send({
+    error: { code: issue.code, message: issue.message, issue },
+    correlationId: correlationId(request)
+  });
+}
+
+function operationIssueFromError(error: unknown): {
+  statusCode: number;
+  issue: DataImportOperationIssue;
+} | null {
+  if (error instanceof DataImportValidationError) {
+    return {
+      statusCode: 400,
+      issue:
+        error.issue ??
+        dataImportOperationIssue({
+          code: "mapping_invalid",
+          scope: "mapping",
+          blockingEffect: "mapping",
+          message: error.message,
+          suggestedAction:
+            "Проверьте отмеченное сопоставление и тип поля. Выбранный файл и остальные настройки сохранены."
+        })
+    };
+  }
+  if (error instanceof DataImportConflictError || error instanceof KnowledgeConflictError) {
+    return {
+      statusCode: 409,
+      issue:
+        error instanceof DataImportConflictError && error.issue !== null
+          ? error.issue
+          : dataImportOperationIssue({
+              code: "mapping_ambiguous",
+              scope: "mapping",
+              blockingEffect: "mapping",
+              message: error instanceof Error ? error.message : "Сопоставление неоднозначно.",
+              suggestedAction:
+                "Выберите конкретное поле для проблемной колонки. Остальные настройки сохранены."
+            })
+    };
+  }
+  return null;
+}
+
 function importOperation<T>(operation: () => T): T {
   try {
     return operation();
@@ -100,14 +151,33 @@ function validateIdentityMapping(body: ExecuteImportBody): void {
       normalizeKey(mapping.propertyKey) === identityPropertyKey
   );
   if (mappings.length > 1) {
-    throw new SpaceValidationError(
-      "Свойство устойчивого ключа сопоставлено более одного раза."
+    const message = "Свойство устойчивого ключа сопоставлено более одного раза.";
+    throw new DataImportValidationError(
+      message,
+      dataImportOperationIssue({
+        code: "mapping_duplicate_target",
+        scope: "mapping",
+        blockingEffect: "mapping",
+        message,
+        suggestedAction: "Оставьте одно сопоставление для устойчивого ключа.",
+        propertyKey: body.identityPropertyKey
+      })
     );
   }
   const mapping = mappings[0];
   if (mapping !== undefined && mapping.column !== body.identityColumn) {
-    throw new SpaceValidationError(
-      "Свойство устойчивого ключа должно быть сопоставлено с выбранной колонкой устойчивого ключа."
+    const message = "Свойство устойчивого ключа должно быть сопоставлено с выбранной колонкой устойчивого ключа.";
+    throw new DataImportValidationError(
+      message,
+      dataImportOperationIssue({
+        code: "mapping_invalid",
+        scope: "mapping",
+        blockingEffect: "mapping",
+        message,
+        suggestedAction: "Сопоставьте устойчивый ключ с той же колонкой, которая выбрана для поиска прежней записи.",
+        column: mapping.column,
+        propertyKey: body.identityPropertyKey
+      })
     );
   }
   if (
@@ -115,8 +185,18 @@ function validateIdentityMapping(body: ExecuteImportBody): void {
     mapping.valueType !== undefined &&
     mapping.valueType !== "string"
   ) {
-    throw new SpaceValidationError(
-      "Новое свойство устойчивого ключа должно иметь тип «Короткая строка»."
+    const message = "Новое свойство устойчивого ключа должно иметь тип «Короткая строка».";
+    throw new DataImportValidationError(
+      message,
+      dataImportOperationIssue({
+        code: "mapping_type_mismatch",
+        scope: "mapping",
+        blockingEffect: "mapping",
+        message,
+        suggestedAction: "Выберите для устойчивого ключа тип «Короткий текст».",
+        column: mapping.column,
+        propertyKey: body.identityPropertyKey
+      })
     );
   }
 }
@@ -173,15 +253,13 @@ function validateLegacyIdentity(
 ): void {
   validateIdentityMapping(body);
   if (body.identityPropertyKey === undefined) return;
-  importOperation(() =>
-    validateExistingImportIdentityProperty({
-      spaces,
-      spaceIdentity,
-      entityTypeKey: body.entityTypeKey ?? "person",
-      identityPropertyKey: body.identityPropertyKey ?? "",
-      mappings: body.mappings
-    })
-  );
+  validateExistingImportIdentityProperty({
+    spaces,
+    spaceIdentity,
+    entityTypeKey: body.entityTypeKey ?? "person",
+    identityPropertyKey: body.identityPropertyKey ?? "",
+    mappings: body.mappings
+  });
 }
 
 function importResultForClient<T extends {
@@ -364,14 +442,8 @@ export function registerDataImportRoutes(
         reply.header("cache-control", "no-store");
         return responseEnvelope(request, preview);
       } catch (error) {
-        if (error instanceof Error) {
-          throw new DocumentIntakeError(
-            error instanceof DataImportParseError
-              ? "data_import_parse_failed"
-              : "data_import_read_failed",
-            422,
-            error.message
-          );
+        if (error instanceof DataImportParseError) {
+          return importIssueResponse(request, reply, 422, error.issue);
         }
         throw error;
       }
@@ -388,18 +460,29 @@ export function registerDataImportRoutes(
       }
     },
     async (request, reply) => {
-      validatePreviewToken(request.body);
-      validateLegacyIdentity(spaces, request.params.spaceId, request.body);
-      const plan = importOperation(() =>
-        registry.plan(
+      try {
+        validatePreviewToken(request.body);
+        validateLegacyIdentity(spaces, request.params.spaceId, request.body);
+        const plan = registry.plan(
           request.params.spaceId,
           registryInput(request.body),
           mutationContextFromRequest(request)
-        )
-      );
-      const { mappingResolutions: _mappingResolutions, ...publicPlan } = plan;
-      reply.header("cache-control", "no-store");
-      return responseEnvelope(request, publicPlan);
+        );
+        const { mappingResolutions: _mappingResolutions, ...publicPlan } = plan;
+        reply.header("cache-control", "no-store");
+        return responseEnvelope(request, publicPlan);
+      } catch (error) {
+        const operation = operationIssueFromError(error);
+        if (operation !== null) {
+          return importIssueResponse(
+            request,
+            reply,
+            operation.statusCode,
+            operation.issue
+          );
+        }
+        throw error;
+      }
     }
   );
 
@@ -413,23 +496,34 @@ export function registerDataImportRoutes(
       }
     },
     async (request, reply) => {
-      validatePreviewToken(request.body);
-      validateLegacyIdentity(spaces, request.params.spaceId, request.body);
-      const result = importOperation(() =>
-        registry.execute(
+      try {
+        validatePreviewToken(request.body);
+        validateLegacyIdentity(spaces, request.params.spaceId, request.body);
+        const result = registry.execute(
           request.params.spaceId,
           registryInput(request.body),
           mutationContextFromRequest(request)
-        )
-      );
-      reply.code(201).header("cache-control", "no-store");
-      return responseEnvelope(
-        request,
-        importResultForClient(
-          result,
-          request.body.identityPropertyKey !== undefined
-        )
-      );
+        );
+        reply.code(201).header("cache-control", "no-store");
+        return responseEnvelope(
+          request,
+          importResultForClient(
+            result,
+            request.body.identityPropertyKey !== undefined
+          )
+        );
+      } catch (error) {
+        const operation = operationIssueFromError(error);
+        if (operation !== null) {
+          return importIssueResponse(
+            request,
+            reply,
+            operation.statusCode,
+            operation.issue
+          );
+        }
+        throw error;
+      }
     }
   );
 

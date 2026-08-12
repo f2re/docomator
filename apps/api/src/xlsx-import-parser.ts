@@ -2,8 +2,32 @@ import path from "node:path";
 
 import { readOoxmlPackage } from "@docomator/template-compiler";
 
+export type XlsxImportParseErrorCode =
+  | "xlsx_unsafe_content"
+  | "xlsx_worksheet_missing"
+  | "xlsx_structure_invalid"
+  | "xlsx_too_many_rows";
+
 export class XlsxImportParseError extends Error {
   override readonly name = "XlsxImportParseError";
+
+  readonly code: XlsxImportParseErrorCode;
+  readonly suggestedAction: string;
+
+  constructor(
+    codeOrMessage: XlsxImportParseErrorCode | string,
+    message?: string,
+    suggestedAction?: string
+  ) {
+    const typed = message !== undefined;
+    super(typed ? message : codeOrMessage);
+    this.code = typed
+      ? (codeOrMessage as XlsxImportParseErrorCode)
+      : "xlsx_structure_invalid";
+    this.suggestedAction = typed
+      ? (suggestedAction ?? "Откройте книгу в Excel/LibreOffice, сохраните обычный XLSX и повторите импорт.")
+      : "Откройте книгу в Excel/LibreOffice, сохраните обычный XLSX и повторите импорт.";
+  }
 }
 
 export interface ParsedXlsxImportRow {
@@ -406,7 +430,11 @@ export async function parseXlsxImportRows(buffer: Uint8Array): Promise<ParsedXls
   );
   const sheetName = firstWorksheetName(byName);
   if (sheetName === undefined) {
-    throw new XlsxImportParseError("В XLSX не найден рабочий лист.");
+    throw new XlsxImportParseError(
+      "xlsx_worksheet_missing",
+      "В XLSX не найден рабочий лист.",
+      "Проверьте книгу в Excel/LibreOffice и сохраните её заново как XLSX с хотя бы одним рабочим листом."
+    );
   }
 
   const xml = byName.get(sheetName) ?? "";

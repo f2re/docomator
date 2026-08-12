@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { buildZipFixture } from "@docomator/document-intake/testing";
 
-import { parseDataImportBuffer } from "./data-import-parser.js";
+import { DataImportParseError, parseDataImportBuffer } from "./data-import-parser.js";
 
 function xlsxFixture(sheetXml: string): Buffer {
   return buildZipFixture([
@@ -124,4 +124,58 @@ test("CSV preserves the starting physical line of a quoted multiline record", as
   assert.equal(parsed.rows[0]?.["Примечание"], "Строка 1\nСтрока 2");
   assert.deepEqual(parsed.sourceRowNumbers, [2, 5]);
   assert.match(parsed.warnings.join(" "), /пустые строки/u);
+});
+
+
+test("legacy XLS is reported as a structured recoverable file error", async () => {
+  const source = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00]);
+  await assert.rejects(
+    () => parseDataImportBuffer({ buffer: source, fileName: "employees.xls" }),
+    (error: unknown) => {
+      assert.ok(error instanceof DataImportParseError);
+      assert.equal(error.issue.code, "unsupported_legacy_xls");
+      assert.equal(error.issue.scope, "file");
+      assert.equal(error.issue.blockingEffect, "file");
+      assert.match(error.issue.suggestedAction, /XLSX или CSV/u);
+      return true;
+    }
+  );
+});
+
+test("renamed OLE XLS is detected by signature instead of extension", async () => {
+  const source = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00]);
+  await assert.rejects(
+    () => parseDataImportBuffer({ buffer: source, fileName: "employees.xlsx" }),
+    (error: unknown) => {
+      assert.ok(error instanceof DataImportParseError);
+      assert.equal(error.issue.code, "unsupported_legacy_xls");
+      return true;
+    }
+  );
+});
+
+test("invalid XLSX container has a stable file-level code", async () => {
+  await assert.rejects(
+    () =>
+      parseDataImportBuffer({
+        buffer: Buffer.from("not-a-zip", "utf8"),
+        fileName: "employees.xlsx"
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof DataImportParseError);
+      assert.equal(error.issue.code, "xlsx_invalid_container");
+      assert.match(error.issue.suggestedAction, /сохраните/u);
+      return true;
+    }
+  );
+});
+
+test("single-column pasted table is accepted without an artificial delimiter error", async () => {
+  const parsed = await parseDataImportBuffer({
+    buffer: Buffer.from("ФИО\nИванов Иван Иванович\nПетров Пётр Петрович\n", "utf8"),
+    fileName: "Вставленная таблица.csv"
+  });
+  assert.deepEqual(parsed.headers, ["ФИО"]);
+  assert.equal(parsed.rowCount, 2);
+  assert.deepEqual(parsed.sourceRowNumbers, [2, 3]);
 });

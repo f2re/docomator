@@ -240,3 +240,41 @@
     min-height: 8rem;
   }
 }
+
+
+.bulk-import-table tr.has-import-error-row > td:first-child {
+  font-weight: 800;
+  color: var(--danger);
+}
+
+.bulk-import-table td.has-import-error-cell {
+  position: relative;
+  background: var(--danger-soft);
+  box-shadow: inset 0 0 0 2px var(--danger);
+  font-weight: 700;
+}
+
+.bulk-import-table td.has-import-error-cell::after {
+  content: "Ошибка";
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--danger);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.bulk-import-mapping-row [aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.bulk-import-error-value {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 0.45rem;
+  padding: 0.3rem 0.45rem;
+  background: var(--danger-soft);
+  color: var(--text) !important;
+  overflow-wrap: anywhere;
+}

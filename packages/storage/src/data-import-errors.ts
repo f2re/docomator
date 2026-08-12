@@ -14,6 +14,94 @@ export const DATA_IMPORT_ERROR_CODES = [
 
 export type DataImportErrorCode = (typeof DATA_IMPORT_ERROR_CODES)[number];
 export type DataImportIssueSeverity = "error" | "warning";
+
+export const DATA_IMPORT_OPERATION_ERROR_CODES = [
+  "unsupported_import_format",
+  "unsupported_legacy_xls",
+  "import_file_empty",
+  "import_file_too_large",
+  "import_structure_invalid",
+  "csv_invalid_encoding",
+  "csv_unclosed_quote",
+  "csv_too_many_rows",
+  "xlsx_invalid_container",
+  "xlsx_unsafe_content",
+  "xlsx_worksheet_missing",
+  "xlsx_structure_invalid",
+  "xlsx_too_many_rows",
+  "mapping_invalid",
+  "mapping_ambiguous",
+  "mapping_type_mismatch",
+  "mapping_duplicate_target",
+  "mapping_target_missing"
+] as const;
+
+export type DataImportOperationErrorCode =
+  (typeof DATA_IMPORT_OPERATION_ERROR_CODES)[number];
+export type DataImportIssueScope = "file" | "mapping" | "row" | "cell";
+export type DataImportBlockingEffect = "file" | "mapping" | "row" | "none";
+
+export interface DataImportOperationRepair {
+  kind: "replace_file" | "choose_mapping" | "change_field_type" | "review_mapping";
+  column?: string;
+  propertyKey?: string;
+  acceptedFormats?: string[];
+}
+
+export interface DataImportOperationIssue {
+  code: DataImportOperationErrorCode;
+  scope: "file" | "mapping";
+  blockingEffect: "file" | "mapping";
+  severity: DataImportIssueSeverity;
+  message: string;
+  suggestedAction: string;
+  column?: string;
+  propertyKey?: string;
+  rawValue?: string;
+  repair: DataImportOperationRepair;
+}
+
+export interface DataImportOperationIssueInput
+  extends Omit<DataImportOperationIssue, "severity" | "repair"> {
+  severity?: DataImportIssueSeverity;
+  repair?: DataImportOperationRepair;
+}
+
+export function dataImportOperationIssue(
+  input: DataImportOperationIssueInput
+): DataImportOperationIssue {
+  const repair =
+    input.repair ??
+    (input.scope === "file"
+      ? { kind: "replace_file" as const, acceptedFormats: ["CSV", "XLSX"] }
+      : input.code === "mapping_type_mismatch"
+        ? {
+            kind: "change_field_type" as const,
+            ...(input.column === undefined ? {} : { column: input.column }),
+            ...(input.propertyKey === undefined
+              ? {}
+              : { propertyKey: input.propertyKey })
+          }
+        : {
+            kind: "choose_mapping" as const,
+            ...(input.column === undefined ? {} : { column: input.column }),
+            ...(input.propertyKey === undefined
+              ? {}
+              : { propertyKey: input.propertyKey })
+          });
+  return {
+    code: input.code,
+    scope: input.scope,
+    blockingEffect: input.blockingEffect,
+    severity: input.severity ?? "error",
+    message: input.message,
+    suggestedAction: input.suggestedAction,
+    ...(input.column === undefined ? {} : { column: input.column }),
+    ...(input.propertyKey === undefined ? {} : { propertyKey: input.propertyKey }),
+    ...(input.rawValue === undefined ? {} : { rawValue: input.rawValue }),
+    repair
+  };
+}
 export type DataImportRepairKind =
   | "edit_cell"
   | "choose_identity_column"
@@ -31,6 +119,8 @@ export interface DataImportRowError {
   rowNumber: number;
   externalKey: string | null;
   code: DataImportErrorCode;
+  scope: "row" | "cell";
+  blockingEffect: "row";
   message: string;
   column?: string;
   propertyKey?: string;
@@ -118,6 +208,8 @@ export function dataImportRowIssue(input: DataImportRowIssueInput): DataImportRo
     rowNumber: input.rowNumber,
     externalKey: input.externalKey,
     code: input.code,
+    scope: input.column === undefined ? "row" : "cell",
+    blockingEffect: "row",
     message: input.message,
     ...(input.column === undefined ? {} : { column: input.column }),
     ...(input.propertyKey === undefined ? {} : { propertyKey: input.propertyKey }),
