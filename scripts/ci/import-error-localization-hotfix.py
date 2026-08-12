@@ -78,7 +78,8 @@ new_class = '''export class DataImportParseError extends Error {
           propertyKey: null,
           rawValue: null,
           message: issueOrMessage,
-          suggestedAction: "Исправьте файл по описанию ошибки и повторите проверку; выбранные настройки импорта сохранены."
+          suggestedAction: "Исправьте файл по описанию ошибки и повторите проверку; выбранные настройки импорта сохранены.",
+          repair: null
         } as DataImportOperationIssue)
       : issueOrMessage;
     super(issue.message);
@@ -101,7 +102,8 @@ function parseFailure(
     propertyKey: null,
     rawValue: null,
     message,
-    suggestedAction
+    suggestedAction,
+    repair: null
   } as DataImportOperationIssue);
 }
 '''
