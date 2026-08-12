@@ -46,6 +46,21 @@ jobs:
         run: |
           set -Eeuo pipefail
           cat scripts/ci/import-error-localization.part* | tr -d '\n\r' | base64 -d | gzip -dc > /tmp/apply-import-error-localization.py
+          python3 - <<'PY'
+          from pathlib import Path
+          patcher = Path('/tmp/apply-import-error-localization.py')
+          text = patcher.read_text(encoding='utf-8')
+          old = '''  constructor(\n    readonly code: XlsxImportParseErrorCode,\n    message: string,\n    readonly suggestedAction: string\n  ) {\n    super(message);\n  }'''
+          new = '''  readonly code: XlsxImportParseErrorCode;\n  readonly suggestedAction: string;\n\n  constructor(\n    codeOrMessage: XlsxImportParseErrorCode | string,\n    message?: string,\n    suggestedAction?: string\n  ) {\n    const typed = message !== undefined;\n    super(typed ? message : codeOrMessage);\n    this.code = typed\n      ? (codeOrMessage as XlsxImportParseErrorCode)\n      : "xlsx_structure_invalid";\n    this.suggestedAction = typed\n      ? (suggestedAction ?? "Откройте книгу в Excel/LibreOffice, сохраните обычный XLSX и повторите импорт.")\n      : "Откройте книгу в Excel/LibreOffice, сохраните обычный XLSX и повторите импорт.";\n  }'''
+          if old not in text:
+              raise SystemExit('xlsx constructor patch target not found')
+          text = text.replace(old, new, 1)
+          guard = '''# Guard against forgotten old constructor calls.\nif re.search(r'new XlsxImportParseError\\(\\s*["`]', text):\n    raise SystemExit('unconverted XlsxImportParseError constructor remains')\n'''
+          if guard not in text:
+              raise SystemExit('xlsx constructor guard not found')
+          text = text.replace(guard, '# Remaining one-argument XLSX errors use the typed generic fallback.\n', 1)
+          patcher.write_text(text, encoding='utf-8')
+          PY
           python3 /tmp/apply-import-error-localization.py
           npm run version:bump -- patch
           python3 /tmp/apply-import-error-localization.py --after-bump
@@ -59,7 +74,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           git config user.name "github-actions[bot]"
-          git config user.email "4189823+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --check
           git commit -m "fix(import): localize typed import errors [import-fix-applied]"
