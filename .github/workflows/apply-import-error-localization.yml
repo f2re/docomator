@@ -50,8 +50,8 @@ jobs:
           from pathlib import Path
           patcher = Path('/tmp/apply-import-error-localization.py')
           text = patcher.read_text(encoding='utf-8')
-          old = '''  constructor(\n    readonly code: XlsxImportParseErrorCode,\n    message: string,\n    readonly suggestedAction: string\n  ) {\n    super(message);\n  }'''
-          new = '''  readonly code: XlsxImportParseErrorCode;\n  readonly suggestedAction: string;\n\n  constructor(\n    codeOrMessage: XlsxImportParseErrorCode | string,\n    message?: string,\n    suggestedAction?: string\n  ) {\n    const typed = message !== undefined;\n    super(typed ? message : codeOrMessage);\n    this.code = typed\n      ? (codeOrMessage as XlsxImportParseErrorCode)\n      : "xlsx_structure_invalid";\n    this.suggestedAction = typed\n      ? (suggestedAction ?? "Откройте книгу в Excel/LibreOffice, сохраните обычный XLSX и повторите импорт.")\n      : "Откройте книгу в Excel/LibreOffice, сохраните обычный XLSX и повторите импорт.";\n  }'''
+          old = r'''  constructor(\n    readonly code: XlsxImportParseErrorCode,\n    message: string,\n    readonly suggestedAction: string\n  ) {\n    super(message);\n  }'''
+          new = r'''  readonly code: XlsxImportParseErrorCode;\n  readonly suggestedAction: string;\n\n  constructor(\n    codeOrMessage: XlsxImportParseErrorCode | string,\n    message?: string,\n    suggestedAction?: string\n  ) {\n    const typed = message !== undefined;\n    super(typed ? message : codeOrMessage);\n    this.code = typed\n      ? (codeOrMessage as XlsxImportParseErrorCode)\n      : "xlsx_structure_invalid";\n    this.suggestedAction = typed\n      ? (suggestedAction ?? "Откройте книгу в Excel/LibreOffice, сохраните обычный XLSX и повторите импорт.")\n      : "Откройте книгу в Excel/LibreOffice, сохраните обычный XLSX и повторите импорт.";\n  }'''
           if old not in text:
               raise SystemExit('xlsx constructor patch target not found')
           text = text.replace(old, new, 1)
