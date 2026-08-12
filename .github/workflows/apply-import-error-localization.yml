@@ -45,7 +45,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          base64 -d scripts/ci/apply-import-error-localization.py.gz.b64 | gzip -dc > /tmp/apply-import-error-localization.py
+          cat scripts/ci/import-error-localization.part* | tr -d '\n\r' | base64 -d | gzip -dc > /tmp/apply-import-error-localization.py
           python3 /tmp/apply-import-error-localization.py
           npm run version:bump -- patch
           python3 /tmp/apply-import-error-localization.py --after-bump
@@ -59,7 +59,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "4189823+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --check
           git commit -m "fix(import): localize typed import errors [import-fix-applied]"
