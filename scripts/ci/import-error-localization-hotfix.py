@@ -33,20 +33,30 @@ text = text.replace(old_marker, new_marker, 1)
 parser_step = r"""# 7. Parser wraps CSV/XLSX failures into structured file-level issues and detects legacy XLS.
 parser_path = Path("apps/api/src/data-import-parser.ts")
 text = read(parser_path)
-text = replace_once(
+
+def replace_source_once(source, old, new, label):
+    count = source.count(old)
+    if count != 1:
+        raise SystemExit(f"{label}: expected one match, found {count}")
+    return source.replace(old, new, 1)
+
+text = replace_source_once(
     text,
     'import { createHash } from "node:crypto";\n\n',
-    'import { createHash } from "node:crypto";\n\nimport type { DataImportOperationIssue } from "@docomator/storage";\n\n'
+    'import { createHash } from "node:crypto";\n\nimport type { DataImportOperationIssue } from "@docomator/storage";\n\n',
+    "parser storage issue import"
 )
-text = replace_once(
+text = replace_source_once(
     text,
     'import { parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";',
-    'import { CsvImportParseError, parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";'
+    'import { CsvImportParseError, parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";',
+    "parser CSV error import"
 )
-text = replace_once(
+text = replace_source_once(
     text,
     'import { parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";',
-    'import { XlsxImportParseError, parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";'
+    'import { XlsxImportParseError, parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";',
+    "parser XLSX error import"
 )
 old_class = '''export class DataImportParseError extends Error {
   override readonly name = "DataImportParseError";
@@ -95,7 +105,7 @@ function parseFailure(
   } as DataImportOperationIssue);
 }
 '''
-text = replace_once(text, old_class, new_class)
+text = replace_source_once(text, old_class, new_class, "parser typed error class")
 start = text.index('export async function parseDataImportBuffer(input: {')
 new_parse = '''export async function parseDataImportBuffer(input: {
   buffer: Uint8Array;
