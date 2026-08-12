@@ -43,7 +43,7 @@ def replace_source_once(source, old, new, label):
 text = replace_source_once(
     text,
     'import { createHash } from "node:crypto";\n\n',
-    'import { createHash } from "node:crypto";\n\nimport type { DataImportOperationIssue } from "@docomator/storage";\n\n',
+    'import { createHash } from "node:crypto";\n\nimport { dataImportOperationIssue, type DataImportOperationErrorCode, type DataImportOperationIssue } from "@docomator/storage";\n\n',
     "parser storage issue import"
 )
 text = replace_source_once(
@@ -68,19 +68,13 @@ new_class = '''export class DataImportParseError extends Error {
 
   constructor(issueOrMessage: DataImportOperationIssue | string) {
     const issue = typeof issueOrMessage === "string"
-      ? ({
-          code: "data_import_parse_failed",
+      ? dataImportOperationIssue({
+          code: "import_structure_invalid",
           scope: "file",
           blockingEffect: "file",
-          severity: "error",
-          rowNumber: null,
-          column: null,
-          propertyKey: null,
-          rawValue: null,
           message: issueOrMessage,
-          suggestedAction: "Исправьте файл по описанию ошибки и повторите проверку; выбранные настройки импорта сохранены.",
-          repair: null
-        } as DataImportOperationIssue)
+          suggestedAction: "Исправьте файл по описанию ошибки и повторите проверку; выбранные настройки импорта сохранены."
+        })
       : issueOrMessage;
     super(issue.message);
     this.issue = issue;
@@ -88,23 +82,19 @@ new_class = '''export class DataImportParseError extends Error {
 }
 
 function parseFailure(
-  code: string,
+  code: DataImportOperationErrorCode,
   message: string,
   suggestedAction: string
 ): DataImportParseError {
-  return new DataImportParseError({
-    code,
-    scope: "file",
-    blockingEffect: "file",
-    severity: "error",
-    rowNumber: null,
-    column: null,
-    propertyKey: null,
-    rawValue: null,
-    message,
-    suggestedAction,
-    repair: null
-  } as DataImportOperationIssue);
+  return new DataImportParseError(
+    dataImportOperationIssue({
+      code,
+      scope: "file",
+      blockingEffect: "file",
+      message,
+      suggestedAction
+    })
+  );
 }
 '''
 text = replace_source_once(text, old_class, new_class, "parser typed error class")
@@ -114,11 +104,18 @@ new_parse = '''export async function parseDataImportBuffer(input: {
   fileName: string;
 }): Promise<ParsedDataImportTable> {
   const buffer = Buffer.from(input.buffer);
-  if (buffer.length < 1 || buffer.length > MAX_FILE_BYTES) {
+  if (buffer.length < 1) {
     throw parseFailure(
-      "data_import_file_size_invalid",
-      "Файл импорта должен иметь размер от 1 байта до 8 МБ.",
-      "Выберите непустой CSV/XLSX размером не более 8 МБ."
+      "import_file_empty",
+      "Файл импорта пуст.",
+      "Выберите непустой CSV/XLSX."
+    );
+  }
+  if (buffer.length > MAX_FILE_BYTES) {
+    throw parseFailure(
+      "import_file_too_large",
+      "Файл импорта превышает допустимый размер 8 МБ.",
+      "Уменьшите файл до 8 МБ или разделите данные на несколько импортов."
     );
   }
   const fileName = input.fileName.normalize("NFKC").trim();
@@ -184,7 +181,7 @@ new_parse = '''export async function parseDataImportBuffer(input: {
   }
 
   throw parseFailure(
-    "data_import_format_unsupported",
+    "unsupported_import_format",
     "Поддерживаются файлы CSV и XLSX.",
     "Выберите CSV/XLSX. Для старого .xls сначала сохраните таблицу как XLSX или CSV."
   );
