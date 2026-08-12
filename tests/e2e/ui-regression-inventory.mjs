@@ -5,6 +5,7 @@ export const CANONICAL_UI_VIEWS = Object.freeze([
   Object.freeze({ view: "employees", label: "Сотрудники", tier: "primary" }),
   Object.freeze({ view: "entities", label: "Объекты", tier: "primary" }),
   Object.freeze({ view: "templates", label: "Шаблоны", tier: "primary" }),
+  Object.freeze({ view: "gost-formatting", label: "Форматирование по ГОСТ", tier: "primary" }),
   Object.freeze({ view: "generation", label: "Создать документы", tier: "primary" }),
   Object.freeze({ view: "documents", label: "Результаты", tier: "primary" }),
   Object.freeze({ view: "automations", label: "Расписания", tier: "primary" }),

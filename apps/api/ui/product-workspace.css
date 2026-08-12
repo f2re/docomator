@@ -18,5 +18,7 @@
 .product-issues{display:grid;gap:8px;margin:0;padding:0;list-style:none}.product-issues li{padding:10px 12px;border-left:3px solid var(--border-strong,var(--border));background:var(--surface-2);border-radius:0 var(--radius-sm,8px) var(--radius-sm,8px) 0}.product-issues li[data-severity="blocking"]{border-left-color:var(--danger,#a33b3f)}
 .gost-standard-note{font-size:.92rem;color:var(--muted);line-height:1.5}.gost-results{display:grid;gap:10px}
 .bibliography-panel{margin-block:var(--space-5,20px)}
+.bibliography-actions a.secondary-button{color:var(--text);text-decoration:none}
+.bibliography-actions a.secondary-button:visited{color:var(--text)}
 @media (max-width:760px){:where(.publication-header-actions,.gost-actions,.bibliography-actions,.gost-result-actions,.product-action-row)>button,:where(.publication-header-actions,.gost-actions,.bibliography-actions,.gost-result-actions,.product-action-row)>a{flex:1 1 100%}.product-file-row,.bibliography-preview-row{grid-template-columns:1fr}.gost-panel,.bibliography-panel{padding:var(--space-4,16px)}}
 @media (forced-colors:active){.gost-drop,.bibliography-drop,.gost-panel,.bibliography-panel{border:1px solid CanvasText}}
