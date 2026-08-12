@@ -11,6 +11,7 @@ export * from "./database-admin.js";
 export * from "./data-import-normalization.js";
 export * from "./document-delivery.js";
 export * from "./document-email-delivery.js";
+export * from "./document-formatting.js";
 export * from "./document-generation.js";
 export * from "./document-member-properties.js";
 export * from "./space-compatible-document-generation.js";

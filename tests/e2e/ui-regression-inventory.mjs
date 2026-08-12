@@ -5,6 +5,7 @@ export const CANONICAL_UI_VIEWS = Object.freeze([
   Object.freeze({ view: "employees", label: "Сотрудники", tier: "primary" }),
   Object.freeze({ view: "entities", label: "Объекты", tier: "primary" }),
   Object.freeze({ view: "templates", label: "Шаблоны", tier: "primary" }),
+  Object.freeze({ view: "gost-formatting", label: "Форматирование по ГОСТ", tier: "primary" }),
   Object.freeze({ view: "generation", label: "Создать документы", tier: "primary" }),
   Object.freeze({ view: "documents", label: "Результаты", tier: "primary" }),
   Object.freeze({ view: "automations", label: "Расписания", tier: "primary" }),
@@ -105,6 +106,38 @@ export async function installUiRegressionScenario(page) {
     activeTemplate: true
   });
 
+  await page.route("**/api/v1/document-formatting/profiles", (route) =>
+    fulfillJson(route, [
+      {
+        id: "gost-r-7.0.97-2025",
+        label: "ГОСТ Р 7.0.97-2025",
+        scope: "Базовое оформление организационно-распорядительного DOCX; параметры остаются редактируемыми.",
+        settings: {
+          profile: "gost-r-7.0.97-2025",
+          fontFamily: "Times New Roman",
+          fontSizePt: 14,
+          lineSpacing: 1.5,
+          firstLineIndentMm: 12.5,
+          marginsMm: { top: 20, right: 10, bottom: 20, left: 20 },
+          bodyAlignment: "both"
+        }
+      },
+      {
+        id: "eskd-gost-r-2.105-2019",
+        label: "ЕСКД — ГОСТ Р 2.105-2019",
+        scope: "Базовое оформление текстового DOCX ЕСКД без синтеза рамок и основных надписей.",
+        settings: {
+          profile: "eskd-gost-r-2.105-2019",
+          fontFamily: "Times New Roman",
+          fontSizePt: 14,
+          lineSpacing: 1.5,
+          firstLineIndentMm: 12.5,
+          marginsMm: { top: 20, right: 10, bottom: 20, left: 20 },
+          bodyAlignment: "both"
+        }
+      }
+    ])
+  );
   await page.route(
     /\/api\/v1\/spaces\/[^/]+\/publications\/config(?:\?.*)?$/u,
     (route) => fulfillJson(route, null)

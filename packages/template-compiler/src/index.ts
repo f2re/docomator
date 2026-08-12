@@ -70,6 +70,22 @@ export type {
   XlsxRepeatTechnicalBinding
 } from "./xlsx-repeat.js";
 
+export type {
+  DocumentFormattingAnalysis,
+  DocumentFormattingFinding,
+  DocumentFormattingProfile,
+  DocumentFormattingResult,
+  DocumentFormattingSettings
+} from "./gost-formatting.js";
+export {
+  DocumentFormattingError,
+  analyzeDocumentFormatting,
+  documentFormattingProfile,
+  documentFormattingProfileLabel,
+  formatDocumentToProfile,
+  normalizeDocumentFormattingSettings
+} from "./gost-formatting.js";
+
 export {
   defaultScalarFormatter,
   formatScalarDisplay,
