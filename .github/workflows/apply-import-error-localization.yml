@@ -59,6 +59,11 @@ jobs:
           if guard not in text:
               raise SystemExit('xlsx constructor guard not found')
           text = text.replace(guard, '# Remaining one-argument XLSX errors use the typed generic fallback.\n', 1)
+          old_marker = r'''marker = 'Физический номер исходной строки сохраняется и показывается в отчёте ошибок.\n' '''.rstrip()
+          new_marker = r'''marker = 'В предварительном просмотре отображается колонка **Строка файла** и предупреждения парсера. Это позволяет сверить разреженную таблицу до изменения базы.\n' '''.rstrip()
+          if old_marker not in text:
+              raise SystemExit('import docs source marker target not found')
+          text = text.replace(old_marker, new_marker, 1)
           patcher.write_text(text, encoding='utf-8')
           PY
           python3 /tmp/apply-import-error-localization.py
