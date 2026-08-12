@@ -40,7 +40,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Apply vertical fix
+      - name: Apply vertical fix and verify final tree
         if: steps.guard.outputs.skip == 'false'
         shell: bash
         run: |
@@ -48,12 +48,25 @@ jobs:
           cat scripts/ci/import-error-localization.part* | tr -d '\n\r' | base64 -d | gzip -dc > /tmp/apply-import-error-localization.py
           python3 scripts/ci/import-error-localization-hotfix.py /tmp/apply-import-error-localization.py
           python3 /tmp/apply-import-error-localization.py
-          sed -n '1,240p' packages/storage/src/data-import-errors.ts
           npm run version:bump -- patch
           python3 /tmp/apply-import-error-localization.py --after-bump
+
+          rm -f \
+            .github/workflows/apply-import-error-localization.yml \
+            scripts/ci/apply-import-error-localization.py.gz.b64 \
+            scripts/ci/import-error-localization-hotfix.py \
+            scripts/ci/import-error-localization.part01 \
+            scripts/ci/import-error-localization.part02 \
+            scripts/ci/import-error-localization.part03 \
+            scripts/ci/import-error-localization.part04 \
+            scripts/ci/import-error-localization.part05 \
+            scripts/ci/import-error-localization.part06
+
           npm ci --ignore-scripts --no-audit --no-fund
           npm run check
           git diff --check
+          test ! -e .github/workflows/apply-import-error-localization.yml
+          test -z "$(find scripts/ci -maxdepth 1 -name 'import-error-localization*' -o -name 'apply-import-error-localization*' -print -quit)"
 
       - name: Commit verified implementation
         if: steps.guard.outputs.skip == 'false'
