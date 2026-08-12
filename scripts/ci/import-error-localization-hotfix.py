@@ -36,20 +36,17 @@ text = read(parser_path)
 text = replace_once(
     text,
     'import { createHash } from "node:crypto";\n\n',
-    'import { createHash } from "node:crypto";\n\nimport type { DataImportOperationIssue } from "@docomator/storage";\n\n',
-    "parser storage issue import"
+    'import { createHash } from "node:crypto";\n\nimport type { DataImportOperationIssue } from "@docomator/storage";\n\n'
 )
 text = replace_once(
     text,
     'import { parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";',
-    'import { CsvImportParseError, parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";',
-    "parser CSV error import"
+    'import { CsvImportParseError, parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";'
 )
 text = replace_once(
     text,
     'import { parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";',
-    'import { XlsxImportParseError, parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";',
-    "parser XLSX error import"
+    'import { XlsxImportParseError, parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";'
 )
 old_class = '''export class DataImportParseError extends Error {
   override readonly name = "DataImportParseError";
@@ -98,7 +95,7 @@ function parseFailure(
   } as DataImportOperationIssue);
 }
 '''
-text = replace_once(text, old_class, new_class, "parser typed error class")
+text = replace_once(text, old_class, new_class)
 start = text.index('export async function parseDataImportBuffer(input: {')
 new_parse = '''export async function parseDataImportBuffer(input: {
   buffer: Uint8Array;
