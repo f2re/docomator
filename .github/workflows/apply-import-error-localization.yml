@@ -61,12 +61,13 @@ jobs:
             scripts/ci/import-error-localization.part04 \
             scripts/ci/import-error-localization.part05 \
             scripts/ci/import-error-localization.part06
+          git add -A
 
           npm ci --ignore-scripts --no-audit --no-fund
           npm run check
           git diff --check
           test ! -e .github/workflows/apply-import-error-localization.yml
-          test -z "$(find scripts/ci -maxdepth 1 -name 'import-error-localization*' -o -name 'apply-import-error-localization*' -print -quit)"
+          test -z "$(find scripts/ci -maxdepth 1 \( -name 'import-error-localization*' -o -name 'apply-import-error-localization*' \) -print -quit)"
 
       - name: Commit verified implementation
         if: steps.guard.outputs.skip == 'false'
