@@ -48,6 +48,7 @@ jobs:
           cat scripts/ci/import-error-localization.part* | tr -d '\n\r' | base64 -d | gzip -dc > /tmp/apply-import-error-localization.py
           python3 scripts/ci/import-error-localization-hotfix.py /tmp/apply-import-error-localization.py
           python3 /tmp/apply-import-error-localization.py
+          sed -n '1,240p' packages/storage/src/data-import-errors.ts
           npm run version:bump -- patch
           python3 /tmp/apply-import-error-localization.py --after-bump
           npm ci --ignore-scripts --no-audit --no-fund
