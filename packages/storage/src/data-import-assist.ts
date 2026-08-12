@@ -1,4 +1,5 @@
 import {
+  DataImportConflictError,
   DataImportRegistry,
   DataImportValidationError,
   type DataImportPlanRecord,
@@ -20,6 +21,7 @@ import { SpaceScopedKnowledgeRegistry } from "./space-scoped-knowledge.js";
 import { SpaceScopedOperatorAssistRegistry } from "./space-scoped-operator-assist.js";
 import { SpaceRegistry } from "./spaces.js";
 import type { DataImportValueTransform } from "./data-import-normalization.js";
+import { dataImportOperationIssue } from "./data-import-errors.js";
 
 export interface AssistedDataImportPropertyMapping
   extends DataImportPropertyMapping {
@@ -58,6 +60,25 @@ export interface AssistedDataImportRunRecord extends DataImportRunRecord {
 interface PreparedAssistedImport {
   input: ExecuteDataImportInput;
   mappingResolutions: AssistedDataImportMappingResolution[];
+}
+
+
+function mappingIssue(
+  code: "mapping_invalid" | "mapping_ambiguous" | "mapping_type_mismatch" | "mapping_duplicate_target" | "mapping_target_missing",
+  message: string,
+  suggestedAction: string,
+  column?: string,
+  propertyKey?: string
+) {
+  return dataImportOperationIssue({
+    code,
+    scope: "mapping",
+    blockingEffect: "mapping",
+    message,
+    suggestedAction,
+    ...(column === undefined ? {} : { column }),
+    ...(propertyKey === undefined ? {} : { propertyKey })
+  });
 }
 
 class AssistedDataImportPlanRollback extends Error {
@@ -145,8 +166,15 @@ function importedColumnValues(
     const raw = String(row[column] ?? "").normalize("NFKC").trim();
     if (raw.length === 0) continue;
     if (raw.length > 160) {
+      const message = `В колонке «${column}» найден вариант списка длиннее 160 знаков.`;
       throw new DataImportValidationError(
-        `В колонке «${column}» найден вариант списка длиннее 160 знаков.`
+        message,
+        mappingIssue(
+          "mapping_invalid",
+          message,
+          "Сократите значение либо выберите текстовое поле для этой колонки.",
+          column
+        )
       );
     }
     const identity = normalizeIdentity(raw);
@@ -155,8 +183,15 @@ function importedColumnValues(
       values.push(raw);
     }
     if (values.length > 500) {
+      const message = `В колонке «${column}» больше 500 разных вариантов. Используйте текстовое поле.`;
       throw new DataImportValidationError(
-        `В колонке «${column}» больше 500 разных вариантов. Используйте текстовое поле.`
+        message,
+        mappingIssue(
+          "mapping_type_mismatch",
+          message,
+          "Выберите для этой колонки тип «Короткий текст» или «Длинный текст».",
+          column
+        )
       );
     }
   }
@@ -299,8 +334,15 @@ export class AssistedDataImportRegistry {
       } else {
         const matches = byLabel.get(normalizeIdentity(requestedLabel)) ?? [];
         if (matches.length > 1) {
-          throw new KnowledgeConflictError(
-            `Найдено несколько полей с названием «${requestedLabel}». Выберите конкретное поле.`
+          const message = `Найдено несколько полей с названием «${requestedLabel}». Выберите конкретное поле.`;
+          throw new DataImportConflictError(
+            message,
+            mappingIssue(
+              "mapping_ambiguous",
+              message,
+              "В сопоставлении этой колонки выберите конкретное существующее поле.",
+              column
+            )
           );
         }
         definition = matches[0];
@@ -368,8 +410,16 @@ export class AssistedDataImportRegistry {
           source.valueType.trim().length > 0 &&
           source.valueType !== definition.valueType
         ) {
+          const message = `Колонка «${column}» сопоставлена с полем «${definition.label}» другого типа.`;
           throw new DataImportValidationError(
-            `Колонка «${column}» сопоставлена с полем «${definition.label}» другого типа.`
+            message,
+            mappingIssue(
+              "mapping_type_mismatch",
+              message,
+              "Выберите поле подходящего типа либо измените тип создаваемого поля.",
+              column,
+              definition.key
+            )
           );
         }
         definition = this.enrichExistingDefinition(
@@ -436,8 +486,15 @@ export class AssistedDataImportRegistry {
       for (const part of derived) {
         const matches = byLabel.get(normalizeIdentity(part.label)) ?? [];
         if (matches.length > 1) {
-          throw new KnowledgeConflictError(
-            `Найдено несколько полей «${part.label}». Оставьте одно поле или отключите разделение ФИО.`
+          const message = `Найдено несколько полей «${part.label}». Оставьте одно поле или отключите разделение ФИО.`;
+          throw new DataImportConflictError(
+            message,
+            mappingIssue(
+              "mapping_ambiguous",
+              message,
+              "Выберите одно поле для части ФИО либо отключите разделение ФИО.",
+              input.displayNameColumn
+            )
           );
         }
         let definition = matches[0];
@@ -459,8 +516,16 @@ export class AssistedDataImportRegistry {
           byLabel.set(normalizeIdentity(definition.label), [definition]);
           created = true;
         } else if (definition.valueType !== "string") {
+          const message = `Поле «${part.label}» должно иметь тип «Короткий текст».`;
           throw new DataImportValidationError(
-            `Поле «${part.label}» должно иметь тип «Короткий текст».`
+            message,
+            mappingIssue(
+              "mapping_type_mismatch",
+              message,
+              "Измените тип поля на «Короткий текст» либо отключите разделение ФИО.",
+              input.displayNameColumn,
+              definition.key
+            )
           );
         }
         if (
@@ -468,8 +533,16 @@ export class AssistedDataImportRegistry {
             (mapping) => mapping.propertyKey === definition?.key
           )
         ) {
+          const message = `Поле «${part.label}» уже сопоставлено с другой колонкой. Отключите ручное сопоставление либо разделение ФИО.`;
           throw new DataImportValidationError(
-            `Поле «${part.label}» уже сопоставлено с другой колонкой. Отключите ручное сопоставление либо разделение ФИО.`
+            message,
+            mappingIssue(
+              "mapping_duplicate_target",
+              message,
+              "Оставьте одно сопоставление для этого поля либо отключите разделение ФИО.",
+              input.displayNameColumn,
+              definition.key
+            )
           );
         }
         preparedMappings.push({
@@ -571,8 +644,16 @@ export class AssistedDataImportRegistry {
       mapping.enumValues !== undefined ||
       mapping.allowCustom !== undefined
     ) {
+      const message = `Настройки списка вариантов нельзя применить к полю «${current.label}».`;
       throw new DataImportValidationError(
-        `Настройки списка вариантов нельзя применить к полю «${current.label}».`
+        message,
+        mappingIssue(
+          "mapping_type_mismatch",
+          message,
+          "Уберите настройки списка либо выберите поле типа «Список вариантов».",
+          column,
+          current.key
+        )
       );
     }
 

@@ -4,6 +4,7 @@ import { AuditRepository } from "./audit.js";
 import {
   DataImportCellError,
   dataImportRowIssue,
+  type DataImportOperationIssue,
   storedDataImportRowError,
   type DataImportErrorCode,
   type DataImportRowError
@@ -161,10 +162,24 @@ interface ImportRunRow {
 
 export class DataImportValidationError extends Error {
   override readonly name = "DataImportValidationError";
+
+  constructor(
+    message: string,
+    readonly issue: DataImportOperationIssue | null = null
+  ) {
+    super(message);
+  }
 }
 
 export class DataImportConflictError extends Error {
   override readonly name = "DataImportConflictError";
+
+  constructor(
+    message: string,
+    readonly issue: DataImportOperationIssue | null = null
+  ) {
+    super(message);
+  }
 }
 
 class DataImportPlanRollback extends Error {

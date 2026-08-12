@@ -63,6 +63,18 @@ function bulkImportSpaceMatches(spaceId) {
   return Boolean(spaceId) && bulkImportCurrentSpaceId() === spaceId;
 }
 
+function bulkImportResponseError(body, response, fallback) {
+  const error = new Error(body?.error?.message || fallback);
+  error.code = body?.error?.code || "import_request_failed";
+  error.issue =
+    body?.error?.issue && typeof body.error.issue === "object"
+      ? body.error.issue
+      : null;
+  error.correlationId =
+    body?.correlationId || response.headers.get("x-correlation-id") || "";
+  return error;
+}
+
 async function bulkImportApi(url, options = {}) {
   const response = await fetch(url, {
     ...options,
@@ -74,12 +86,11 @@ async function bulkImportApi(url, options = {}) {
   });
   const body = await response.json();
   if (!response.ok) {
-    const error = new Error(
-      body?.error?.message || `Сервер вернул код ${response.status}.`
+    throw bulkImportResponseError(
+      body,
+      response,
+      `Сервер вернул код ${response.status}.`
     );
-    error.correlationId =
-      body?.correlationId || response.headers.get("x-correlation-id") || "";
-    throw error;
   }
   if (url.endsWith("/data-import/execute")) {
     writeBulkImportMappingMemory(body?.data?.mappingResolutions);
@@ -411,6 +422,8 @@ async function previewBulkImportBytes(fileName, bytes) {
   if (bulkImportBusy) return;
   const message = document.querySelector("#bulkImportMessage");
   if (!message) return;
+  const previousPreview = bulkImportPreview;
+  const previousSpaceId = bulkImportSpaceId;
   const spaceId = bulkImportCurrentSpaceId();
   if (!spaceId) {
     message.textContent = "Сначала выберите раздел данных.";
@@ -432,7 +445,7 @@ async function previewBulkImportBytes(fileName, bytes) {
     });
     const body = await response.json();
     if (requestSession !== bulkImportSession || !bulkImportSpaceMatches(spaceId)) return;
-    if (!response.ok) throw new Error(body?.error?.message || "Не удалось прочитать таблицу.");
+    if (!response.ok) throw bulkImportResponseError(body, response, "Не удалось прочитать таблицу.");
     bulkImportPreview = body.data;
     message.className = "bulk-import-message is-success";
     message.textContent = `Таблица прочитана: ${body.data.rowCount} строк. Проверьте автоматическое сопоставление.`;
@@ -441,12 +454,13 @@ async function previewBulkImportBytes(fileName, bytes) {
     document.querySelector("#bulkImportDisplayNameColumn")?.focus();
   } catch (error) {
     if (requestSession !== bulkImportSession) return;
-    bulkImportPreview = null;
-    bulkImportSpaceId = null;
+    bulkImportPreview = previousPreview;
+    bulkImportSpaceId = previousSpaceId;
     message.className = "bulk-import-message is-error";
     message.textContent = error instanceof Error ? error.message : "Не удалось прочитать таблицу.";
-    const root = document.querySelector("#bulkImportPreview");
-    if (root) root.innerHTML = "";
+    if (typeof showBulkImportOperationIssue === "function") {
+      showBulkImportOperationIssue(error);
+    }
   } finally {
     if (requestSession === bulkImportSession) bulkImportBusy = false;
   }
@@ -473,7 +487,7 @@ function initializeBulkImportSources() {
   const upload = panel.querySelector(".bulk-import-upload");
   if (upload) {
     upload.innerHTML = `<div class="bulk-import-source-tabs" role="group" aria-label="Источник данных"><button class="secondary-button is-active" type="button" data-bulk-import-source="file" aria-pressed="true">Файл CSV или XLSX</button><button class="secondary-button" type="button" data-bulk-import-source="paste" aria-pressed="false">Вставить из Excel</button></div>
-      <section id="bulkImportFileSource"><label class="generation-field"><span>Таблица с людьми и данными</span><input id="bulkImportFile" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><small>До 8 МБ, 100 колонок и 1000 строк. В XLSX используется первый рабочий лист.</small></label><button class="primary-button" id="bulkImportPreviewButton" type="button">Прочитать файл</button></section>
+      <section id="bulkImportFileSource"><label class="generation-field"><span>Таблица с людьми и данными</span><input id="bulkImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><small>До 8 МБ, 100 колонок и 1000 строк. В XLSX используется первый рабочий лист.</small></label><button class="primary-button" id="bulkImportPreviewButton" type="button">Прочитать файл</button></section>
       <section id="bulkImportPasteSource" hidden><label class="generation-field"><span>Вставьте диапазон вместе с заголовками</span><textarea id="bulkImportPaste" rows="10" placeholder="ФИО&#9;Номер зачётной книжки&#9;Тема научной работы&#9;Научный руководитель"></textarea><small>Скопируйте диапазон из Excel или LibreOffice. Первая строка должна содержать названия колонок.</small></label><div class="bulk-import-paste-actions"><button class="secondary-button" id="bulkImportStudentExample" type="button">Пример: студенты и темы</button><button class="primary-button" id="bulkImportPastePreview" type="button">Разобрать таблицу</button></div></section>`;
     upload.querySelector("#bulkImportPreviewButton")?.addEventListener("click", previewBulkImportFile);
     upload.querySelectorAll("[data-bulk-import-source]").forEach((button) => button.addEventListener("click", () => switchBulkImportSource(button.dataset.bulkImportSource)));
@@ -579,7 +593,7 @@ function renderBulkImportPreview(preview) {
     <div id="bulkImportMappings" class="bulk-import-mappings">${mappingHtml}</div>
     <label class="bulk-import-group-option"><input id="bulkImportCreateGroup" type="checkbox"${studentDetected ? " checked" : ""} /><span><strong>Собрать импортированных людей в группу</strong><small>Группа нужна для одного сводного документа и расписаний.</small></span></label>
     <div id="bulkImportGroupFields" class="bulk-import-group-fields"${studentDetected ? "" : " hidden"}><label class="generation-field"><span>Название группы</span><input id="bulkImportGroupName" type="text" maxlength="300" value="${studentDetected ? "Студенты — темы научных работ" : `Импорт от ${new Date().toLocaleDateString("ru-RU")}`}" /></label></div>
-    <details class="bulk-import-source-preview"><summary>Посмотреть первые строки</summary><div class="bulk-import-table-wrap"><table class="bulk-import-table"><thead><tr>${preview.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${preview.sampleRows.slice(0, 10).map((row) => `<tr>${preview.headers.map((header) => `<td>${escapeHtml(row[header] || "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>
+    <details class="bulk-import-source-preview"><summary>Посмотреть первые строки</summary><div class="bulk-import-table-wrap"><table class="bulk-import-table"><thead><tr>${preview.headers.map((header) => `<th data-source-column="${escapeHtml(header)}">${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${preview.sampleRows.slice(0, 10).map((row, rowIndex) => `<tr data-source-row-number="${escapeHtml(String(preview.sampleRowNumbers?.[rowIndex] ?? preview.sourceRowNumbers?.[rowIndex] ?? rowIndex + 2))}">${preview.headers.map((header) => `<td data-source-column="${escapeHtml(header)}">${escapeHtml(row[header] || "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>
     <div id="bulkImportPlan" class="bulk-import-plan"><p>Нажмите «Проверить»: система выполнит полный импорт в транзакции и откатит его, чтобы показать точный результат без сохранения.</p></div>
     <div class="bulk-import-submit-row"><button class="primary-button" id="bulkImportPlanButton" type="button">Проверить ${preview.rowCount} строк</button><p>Пустые ячейки не стирают уже заполненные сведения.</p></div>
   </section>`;
@@ -685,7 +699,7 @@ function createBulkImportPanel() {
     <div class="bulk-import-upload">
       <label class="generation-field">
         <span>Список сотрудников</span>
-        <input id="bulkImportFile" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+        <input id="bulkImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
         <small>CSV или XLSX до 8 МБ и 1000 строк. В XLSX используется первый лист.</small>
       </label>
       <button class="primary-button" id="bulkImportPreviewButton" type="button">Продолжить</button>
@@ -719,6 +733,8 @@ function createBulkImportPanel() {
 async function previewBulkImportFile() {
   if (bulkImportBusy) return;
   const file = document.querySelector("#bulkImportFile")?.files?.[0];
+  const previousPreview = bulkImportPreview;
+  const previousSpaceId = bulkImportSpaceId;
   const message = document.querySelector("#bulkImportMessage");
   const button = document.querySelector("#bulkImportPreviewButton");
   if (!file || !message || !button) {
@@ -756,7 +772,7 @@ async function previewBulkImportFile() {
     ) {
       return;
     }
-    if (!response.ok) throw new Error(body?.error?.message || "Не удалось прочитать файл.");
+    if (!response.ok) throw bulkImportResponseError(body, response, "Не удалось прочитать файл.");
     bulkImportPreview = body.data;
     message.className = "bulk-import-message is-success";
     message.textContent = `Файл прочитан: ${body.data.rowCount} строк. Теперь проверьте назначение колонок.`;
@@ -765,12 +781,13 @@ async function previewBulkImportFile() {
     document.querySelector("#bulkImportDisplayNameColumn")?.focus();
   } catch (error) {
     if (requestSession !== bulkImportSession) return;
-    bulkImportPreview = null;
-    bulkImportSpaceId = null;
+    bulkImportPreview = previousPreview;
+    bulkImportSpaceId = previousSpaceId;
     message.className = "bulk-import-message is-error";
     message.textContent = error instanceof Error ? error.message : "Не удалось прочитать файл.";
-    const root = document.querySelector("#bulkImportPreview");
-    if (root) root.innerHTML = "";
+    if (typeof showBulkImportOperationIssue === "function") {
+      showBulkImportOperationIssue(error);
+    }
   } finally {
     if (requestSession === bulkImportSession) {
       bulkImportBusy = false;
@@ -900,6 +917,9 @@ async function planBulkImport() {
     bulkImportPlanSpaceId = null;
     message.className = "bulk-import-message is-error";
     message.textContent = error instanceof Error ? error.message : "Не удалось проверить импорт.";
+    if (typeof showBulkImportOperationIssue === "function") {
+      showBulkImportOperationIssue(error);
+    }
   } finally {
     if (requestSession === bulkImportSession) {
       bulkImportBusy = false;

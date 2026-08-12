@@ -1,5 +1,18 @@
+export type CsvImportParseErrorCode =
+  | "csv_invalid_encoding"
+  | "csv_unclosed_quote"
+  | "csv_too_many_rows";
+
 export class CsvImportParseError extends Error {
   override readonly name = "CsvImportParseError";
+
+  constructor(
+    readonly code: CsvImportParseErrorCode,
+    message: string,
+    readonly suggestedAction: string
+  ) {
+    super(message);
+  }
 }
 
 export interface ParsedCsvImportRow {
@@ -53,22 +66,25 @@ export function parseCsvImportRows(buffer: Uint8Array): ParsedCsvImport {
   if (text.startsWith("\ufeff")) text = text.slice(1);
   if (text.includes("\ufffd")) {
     throw new CsvImportParseError(
-      "CSV должен быть сохранён в кодировке UTF-8."
+      "csv_invalid_encoding",
+      "CSV должен быть сохранён в кодировке UTF-8.",
+      "Сохраните таблицу как CSV UTF-8 или как XLSX и выберите файл снова."
     );
   }
 
   const firstRecord = firstLogicalRecord(text);
-  const delimiter = [";", ",", "\t"]
+  const detectedDelimiter = [";", ",", "\t"]
     .map((candidate) => ({
       candidate,
       count: countDelimiter(firstRecord, candidate)
     }))
     .sort((left, right) => right.count - left.count)[0];
-  if (delimiter === undefined || delimiter.count < 1) {
-    throw new CsvImportParseError(
-      "Не удалось определить разделитель CSV. Используйте точку с запятой, запятую или табуляцию."
-    );
-  }
+  // Один столбец — допустимая таблица. В этом случае разделитель физически
+  // отсутствует; выбираем табуляцию как нейтральный символ, которого нет в записи.
+  const delimiter =
+    detectedDelimiter === undefined || detectedDelimiter.count < 1
+      ? { candidate: "\t", count: 0 }
+      : detectedDelimiter;
 
   const rows: ParsedCsvImportRow[] = [];
   let row: string[] = [];
@@ -84,7 +100,9 @@ export function parseCsvImportRows(buffer: Uint8Array): ParsedCsvImport {
     row = [];
     if (rows.length > MAX_LOGICAL_ROWS) {
       throw new CsvImportParseError(
-        "CSV содержит более 1000 строк данных."
+        "csv_too_many_rows",
+        "CSV содержит более 1000 строк данных.",
+        "Разделите таблицу на несколько файлов не более чем по 1000 строк данных."
       );
     }
   };
@@ -125,7 +143,11 @@ export function parseCsvImportRows(buffer: Uint8Array): ParsedCsvImport {
   }
 
   if (quoted) {
-    throw new CsvImportParseError("В CSV не закрыта кавычка поля.");
+    throw new CsvImportParseError(
+      "csv_unclosed_quote",
+      "В CSV не закрыта кавычка поля.",
+      "Исправьте кавычки в исходном CSV либо сохраните диапазон заново из Excel/LibreOffice."
+    );
   }
   if (field.length > 0 || row.length > 0) {
     finishRow();

@@ -281,3 +281,124 @@ test("explicit technical import contract remains available for automation", asyn
     fixture.cleanup();
   }
 });
+
+
+test("preview keeps a structured legacy XLS error instead of a generic parse failure", async () => {
+  const fixture = migratedFixture();
+  const app = buildApp(
+    loadApiConfig({
+      DOCOMATOR_DATA_DIR: fixture.directory,
+      DOCOMATOR_LOG_LEVEL: "fatal"
+    }),
+    { store: fixture.store }
+  );
+  try {
+    const spaceId = await createSpace(app);
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${spaceId}/data-import/preview?fileName=employees.xls`,
+      headers: { ...requestHeaders, "content-type": "application/octet-stream" },
+      payload: Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
+    });
+    assert.equal(response.statusCode, 422, response.body);
+    const body = response.json() as {
+      error: {
+        code: string;
+        message: string;
+        issue: {
+          scope: string;
+          blockingEffect: string;
+          suggestedAction: string;
+          repair: { kind: string; acceptedFormats?: string[] };
+        };
+      };
+    };
+    assert.equal(body.error.code, "unsupported_legacy_xls");
+    assert.equal(body.error.issue.scope, "file");
+    assert.equal(body.error.issue.blockingEffect, "file");
+    assert.equal(body.error.issue.repair.kind, "replace_file");
+    assert.deepEqual(body.error.issue.repair.acceptedFormats, ["CSV", "XLSX"]);
+  } finally {
+    await app.close();
+    fixture.cleanup();
+  }
+});
+
+test("mapping validation returns a column coordinate without parsing Russian text", async () => {
+  const fixture = migratedFixture();
+  const app = buildApp(
+    loadApiConfig({
+      DOCOMATOR_DATA_DIR: fixture.directory,
+      DOCOMATOR_LOG_LEVEL: "fatal"
+    }),
+    { store: fixture.store }
+  );
+  try {
+    const spaceId = await createSpace(app);
+    new SpaceScopedKnowledgeRegistry(fixture.store, spaceId).createPropertyDefinition(
+      {
+        label: "Возраст",
+        valueType: "number",
+        appliesTo: ["person"],
+        sensitivity: "personal"
+      },
+      {
+        correlationId: "corr-mapping-type",
+        actorType: "test",
+        actorId: "operator-1",
+        now: "2026-08-12T06:00:00.000Z"
+      }
+    );
+    const rows = [
+      { "Табельный номер": "001", "ФИО": "Иванов Иван", "Возраст": "35" }
+    ];
+    const sourceSha256 = "c".repeat(64);
+    const headers = ["Табельный номер", "ФИО", "Возраст"];
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${spaceId}/data-import/plan`,
+      headers: requestHeaders,
+      payload: {
+        fileName: "employees.xlsx",
+        fileFormat: "xlsx",
+        sourceSha256,
+        previewToken: createImportPreviewToken({ sourceSha256, headers, rows }),
+        identityColumn: "Табельный номер",
+        displayNameColumn: "ФИО",
+        headers,
+        rows,
+        mappings: [
+          {
+            column: "Возраст",
+            createIfMissing: true,
+            label: "Возраст",
+            valueType: "string"
+          }
+        ]
+      }
+    });
+    assert.equal(response.statusCode, 400, response.body);
+    const body = response.json() as {
+      error: {
+        code: string;
+        issue: {
+          code: string;
+          scope: string;
+          blockingEffect: string;
+          column?: string;
+          suggestedAction: string;
+          repair: { kind: string; column?: string };
+        };
+      };
+    };
+    assert.equal(body.error.code, "mapping_type_mismatch");
+    assert.equal(body.error.issue.scope, "mapping");
+    assert.equal(body.error.issue.blockingEffect, "mapping");
+    assert.equal(body.error.issue.column, "Возраст");
+    assert.equal(body.error.issue.repair.kind, "change_field_type");
+    assert.match(body.error.issue.suggestedAction, /тип/u);
+  } finally {
+    await app.close();
+    fixture.cleanup();
+  }
+});

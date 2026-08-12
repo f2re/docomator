@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 
-import { parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";
-import { parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";
+import { dataImportOperationIssue, type DataImportOperationErrorCode, type DataImportOperationIssue } from "@docomator/storage";
+
+import { CsvImportParseError, parseCsvImportRows, type ParsedCsvImportRow } from "./csv-import-parser.js";
+import { XlsxImportParseError, parseXlsxImportRows, type ParsedXlsxImportRow } from "./xlsx-import-parser.js";
 
 export interface ParsedDataImportTable {
   fileName: string;
@@ -20,6 +22,37 @@ export interface ParsedDataImportTable {
 
 export class DataImportParseError extends Error {
   override readonly name = "DataImportParseError";
+  readonly issue: DataImportOperationIssue;
+
+  constructor(issueOrMessage: DataImportOperationIssue | string) {
+    const issue = typeof issueOrMessage === "string"
+      ? dataImportOperationIssue({
+          code: "import_structure_invalid",
+          scope: "file",
+          blockingEffect: "file",
+          message: issueOrMessage,
+          suggestedAction: "Исправьте файл по описанию ошибки и повторите проверку; выбранные настройки импорта сохранены."
+        })
+      : issueOrMessage;
+    super(issue.message);
+    this.issue = issue;
+  }
+}
+
+function parseFailure(
+  code: DataImportOperationErrorCode,
+  message: string,
+  suggestedAction: string
+): DataImportParseError {
+  return new DataImportParseError(
+    dataImportOperationIssue({
+      code,
+      scope: "file",
+      blockingEffect: "file",
+      message,
+      suggestedAction
+    })
+  );
 }
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -159,35 +192,85 @@ export async function parseDataImportBuffer(input: {
   fileName: string;
 }): Promise<ParsedDataImportTable> {
   const buffer = Buffer.from(input.buffer);
-  if (buffer.length < 1 || buffer.length > MAX_FILE_BYTES) {
-    throw new DataImportParseError(
-      "Файл импорта должен иметь размер от 1 байта до 8 МБ."
+  if (buffer.length < 1) {
+    throw parseFailure(
+      "import_file_empty",
+      "Файл импорта пуст.",
+      "Выберите непустой CSV/XLSX."
+    );
+  }
+  if (buffer.length > MAX_FILE_BYTES) {
+    throw parseFailure(
+      "import_file_too_large",
+      "Файл импорта превышает допустимый размер 8 МБ.",
+      "Уменьшите файл до 8 МБ или разделите данные на несколько импортов."
     );
   }
   const fileName = input.fileName.normalize("NFKC").trim();
   const extension = /\.([^.]+)$/u.exec(fileName)?.[1]?.toLowerCase();
   const sourceSha256 = createHash("sha256").update(buffer).digest("hex");
+  const oleSignature =
+    buffer.length >= 8 &&
+    buffer.subarray(0, 8).equals(
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
+    );
+
+  if (extension === "xls" || oleSignature) {
+    throw parseFailure(
+      "unsupported_legacy_xls",
+      "Этот файл сохранён в старом формате Excel 97–2003 (.xls).",
+      "Откройте таблицу в Excel или LibreOffice, сохраните её как XLSX или CSV и загрузите снова. Сопоставления и введённые настройки не сбрасываются."
+    );
+  }
+
   if (extension === "csv") {
-    const parsed = parseCsvImportRows(buffer);
-    return buildTable({
-      fileName,
-      fileFormat: "csv",
-      sourceSha256,
-      sourceRows: parsed.rows,
-      warnings: [
-        `Разделитель CSV: ${parsed.delimiter === "\t" ? "табуляция" : parsed.delimiter}`
-      ]
-    });
+    try {
+      const parsed = parseCsvImportRows(buffer);
+      return buildTable({
+        fileName,
+        fileFormat: "csv",
+        sourceSha256,
+        sourceRows: parsed.rows,
+        warnings: [
+          `Разделитель CSV: ${parsed.delimiter === "\t" ? "табуляция" : parsed.delimiter}`
+        ]
+      });
+    } catch (error) {
+      if (error instanceof CsvImportParseError) {
+        throw parseFailure(error.code, error.message, error.suggestedAction);
+      }
+      throw error;
+    }
   }
+
   if (extension === "xlsx") {
-    const parsed = await parseXlsxImportRows(buffer);
-    return buildTable({
-      fileName,
-      fileFormat: "xlsx",
-      sourceSha256,
-      sourceRows: parsed.rows,
-      warnings: parsed.warnings
-    });
+    if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+      throw parseFailure(
+        "xlsx_invalid_container",
+        "Файл с расширением .xlsx не является книгой XLSX.",
+        "Откройте исходный файл в Excel или LibreOffice и сохраните его как обычный XLSX."
+      );
+    }
+    try {
+      const parsed = await parseXlsxImportRows(buffer);
+      return buildTable({
+        fileName,
+        fileFormat: "xlsx",
+        sourceSha256,
+        sourceRows: parsed.rows,
+        warnings: parsed.warnings
+      });
+    } catch (error) {
+      if (error instanceof XlsxImportParseError) {
+        throw parseFailure(error.code, error.message, error.suggestedAction);
+      }
+      throw error;
+    }
   }
-  throw new DataImportParseError("Поддерживаются файлы CSV и XLSX.");
+
+  throw parseFailure(
+    "unsupported_import_format",
+    "Поддерживаются файлы CSV и XLSX.",
+    "Выберите CSV/XLSX. Для старого .xls сначала сохраните таблицу как XLSX или CSV."
+  );
 }
