@@ -219,7 +219,7 @@ test("same import field label is independent in two spaces", () => {
   }
 });
 
-test("duplicate identity returns typed coordinates and preview leaves no data", () => {
+test("duplicate identity rejects every ambiguous row and preview leaves no data", () => {
   const fixture = createMigratedTestStore();
   try {
     const spaces = new SpaceRegistry(fixture.store);
@@ -228,41 +228,47 @@ test("duplicate identity returns typed coordinates and preview leaves no data", 
       { key: "staff", name: "Сотрудники" },
       context("corr-space")
     );
-    const plan = imports.plan(
-      space.id,
-      employeeImport([
-        {
-          "Табельный номер": "001",
-          "ФИО": "Иванов Иван",
-          "Должность": "Инженер"
-        },
-        {
-          "Табельный номер": "001",
-          "ФИО": "Петров Пётр",
-          "Должность": "Мастер"
-        }
-      ]),
-      context("corr-plan")
-    );
-
-    assert.equal(plan.createdCount, 1);
-    assert.equal(plan.failedCount, 1);
-    assert.deepEqual(
+    const input = employeeImport([
       {
-        code: plan.errors[0]?.code,
-        column: plan.errors[0]?.column,
-        rawValue: plan.errors[0]?.rawValue,
-        severity: plan.errors[0]?.severity,
-        repair: plan.errors[0]?.repair.kind
+        "Табельный номер": "001",
+        "ФИО": "Иванов Иван",
+        "Должность": "Инженер"
       },
       {
-        code: "duplicate_identity",
-        column: "Табельный номер",
-        rawValue: "001",
-        severity: "error",
-        repair: "choose_identity_column"
+        "Табельный номер": "001",
+        "ФИО": "Петров Пётр",
+        "Должность": "Мастер"
       }
-    );
+    ]);
+    const plan = imports.plan(space.id, input, context("corr-plan"));
+
+    assert.equal(plan.createdCount, 0);
+    assert.equal(plan.failedCount, 2);
+    assert.equal(plan.errors.length, 2);
+    for (const error of plan.errors) {
+      assert.deepEqual(
+        {
+          code: error.code,
+          column: error.column,
+          rawValue: error.rawValue,
+          severity: error.severity,
+          repair: error.repair.kind
+        },
+        {
+          code: "duplicate_identity",
+          column: "Табельный номер",
+          rawValue: "001",
+          severity: "error",
+          repair: "choose_identity_column"
+        }
+      );
+    }
+    assert.equal(spaces.listEntities(space.id).length, 0);
+
+    const result = imports.execute(space.id, input, context("corr-execute"));
+    assert.equal(result.createdCount, 0);
+    assert.equal(result.failedCount, 2);
+    assert.equal(result.errors.length, 2);
     assert.equal(spaces.listEntities(space.id).length, 0);
   } finally {
     fixture.cleanup();

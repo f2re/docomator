@@ -191,6 +191,7 @@ test("API returns typed duplicate coordinates during planning", async () => {
       data: {
         failedCount: number;
         errors: Array<{
+          rowNumber: number;
           code: string;
           column?: string;
           rawValue?: string;
@@ -200,24 +201,36 @@ test("API returns typed duplicate coordinates during planning", async () => {
         }>;
       };
     };
-    assert.equal(result.data.failedCount, 1);
+    assert.equal(result.data.failedCount, 2);
     assert.deepEqual(
-      {
-        code: result.data.errors[0]?.code,
-        column: result.data.errors[0]?.column,
-        rawValue: result.data.errors[0]?.rawValue,
-        severity: result.data.errors[0]?.severity,
-        repair: result.data.errors[0]?.repair.kind
-      },
-      {
-        code: "duplicate_identity",
-        column: "Табельный номер",
-        rawValue: "001",
-        severity: "error",
-        repair: "choose_identity_column"
-      }
+      result.data.errors.map((error) => ({
+        rowNumber: error.rowNumber,
+        code: error.code,
+        column: error.column,
+        rawValue: error.rawValue,
+        severity: error.severity,
+        repair: error.repair.kind
+      })),
+      [
+        {
+          rowNumber: 2,
+          code: "duplicate_identity",
+          column: "Табельный номер",
+          rawValue: "001",
+          severity: "error",
+          repair: "choose_identity_column"
+        },
+        {
+          rowNumber: 3,
+          code: "duplicate_identity",
+          column: "Табельный номер",
+          rawValue: "001",
+          severity: "error",
+          repair: "choose_identity_column"
+        }
+      ]
     );
-    assert.ok((result.data.errors[0]?.suggestedAction ?? "").length > 0);
+    assert.ok(result.data.errors.every((error) => error.suggestedAction.length > 0));
   } finally {
     await app.close();
     fixture.cleanup();

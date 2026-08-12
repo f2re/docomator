@@ -775,7 +775,19 @@ export class DataImportRegistry {
       });
     }
 
-    const seenExternalKeys = new Set<string>();
+    const identityValueCounts = new Map<string, number>();
+    for (const row of rows) {
+      const externalKey = row[identityColumn] ?? "";
+      if (externalKey.length === 0) continue;
+      const lookupKey = identityCaseInsensitive
+        ? caseInsensitiveImportKey(externalKey)
+        : externalKey;
+      identityValueCounts.set(
+        lookupKey,
+        (identityValueCounts.get(lookupKey) ?? 0) + 1
+      );
+    }
+
     const preparedRows: PreparedRow[] = [];
     const errors: DataImportRowError[] = [];
     let skippedCount = 0;
@@ -808,7 +820,7 @@ export class DataImportRegistry {
       const lookupKey = identityCaseInsensitive
         ? caseInsensitiveImportKey(externalKey)
         : externalKey;
-      if (seenExternalKeys.has(lookupKey)) {
+      if ((identityValueCounts.get(lookupKey) ?? 0) > 1) {
         errors.push(
           dataImportRowIssue({
             rowNumber,
@@ -821,7 +833,6 @@ export class DataImportRegistry {
         );
         return;
       }
-      seenExternalKeys.add(lookupKey);
 
       let displayName: string;
       try {
