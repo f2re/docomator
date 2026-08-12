@@ -24,6 +24,27 @@ CREATE INDEX idx_document_formatting_space_job
 CREATE INDEX idx_document_formatting_job_state
   ON document_formatting_items(worker_job_id, state, created_at);
 
+CREATE TRIGGER trg_document_formatting_items_space_source_insert
+BEFORE INSERT ON document_formatting_items
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM document_quarantine_records source
+  WHERE source.id = NEW.source_record_id
+    AND source.space_id = NEW.space_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'document formatting source belongs to another space');
+END;
+
+CREATE TRIGGER trg_document_formatting_items_scope_immutable
+BEFORE UPDATE OF worker_job_id, space_id, source_record_id ON document_formatting_items
+WHEN NEW.worker_job_id <> OLD.worker_job_id
+  OR NEW.space_id <> OLD.space_id
+  OR NEW.source_record_id <> OLD.source_record_id
+BEGIN
+  SELECT RAISE(ABORT, 'document formatting scope is immutable');
+END;
+
 CREATE TABLE publication_bibliography_sources (
   publication_entity_id TEXT PRIMARY KEY REFERENCES entities(id) ON DELETE CASCADE,
   space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
@@ -35,5 +56,26 @@ CREATE TABLE publication_bibliography_sources (
   correlation_id TEXT NOT NULL,
   imported_at TEXT NOT NULL
 );
+
 CREATE INDEX idx_publication_bibliography_sources_space
   ON publication_bibliography_sources(space_id, imported_at DESC);
+
+CREATE TRIGGER trg_publication_bibliography_sources_space_insert
+BEFORE INSERT ON publication_bibliography_sources
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM space_entity_ownership ownership
+  WHERE ownership.space_id = NEW.space_id
+    AND ownership.entity_id = NEW.publication_entity_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'publication bibliography source belongs to another space');
+END;
+
+CREATE TRIGGER trg_publication_bibliography_sources_scope_immutable
+BEFORE UPDATE OF publication_entity_id, space_id ON publication_bibliography_sources
+WHEN NEW.publication_entity_id <> OLD.publication_entity_id
+  OR NEW.space_id <> OLD.space_id
+BEGIN
+  SELECT RAISE(ABORT, 'publication bibliography scope is immutable');
+END;
