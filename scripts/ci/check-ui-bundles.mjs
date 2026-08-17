@@ -22,6 +22,7 @@ const bundles = {
   "document-intake.js": [
     "document-intake.js",
     "document-structure.js",
+    "template-visual-editor.js",
     "template-placement-guidance.js",
     "template-repeat-assistant.js",
     "template-row-editor.js",

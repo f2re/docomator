@@ -48,6 +48,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "intake.css",
       "quarantine.css",
       "structure.css",
+      "template-visual-editor.css",
       "template-field.css",
       "template-repeat-assistant.css",
       "template-workflow.css",
@@ -98,6 +99,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
     fileName: "document-intake.js",
     appendFileNames: [
       "document-structure.js",
+      "template-visual-editor.js",
       "generic-template-entities.js",
       "template-placement-guidance.js",
       "template-repeat-assistant.js",

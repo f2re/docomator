@@ -1,8 +1,8 @@
 # Ближайшие приращения Оформлятора
 
-Актуально на **2026-08-11**.
+Актуально на **2026-08-17**.
 
-Текущий кодовый контур находится в состоянии **`0.3.1 / candidate / pilot`**. Основной пользовательский путь, space isolation, password gate, import/export, deterministic DOCX/XLSX generation, worker recovery, автоматические safe-read этапы и generic offline bundle реализованы и проходят репозиторный CI. Следующая работа — прежде всего получение эксплуатационных доказательств для stable, а не неконтролируемое расширение продукта.
+Текущий кодовый контур находится в состоянии **`0.5.0 / candidate / pilot`**. Основной пользовательский путь, space isolation, password gate, import/export, deterministic DOCX/XLSX generation, worker recovery, автоматические safe-read этапы, визуальная разметка DOCX v1 и generic offline bundle реализованы на уровне кода. Следующая работа — прежде всего получение эксплуатационных доказательств для stable и расширение визуального редактора только отдельными безопасными вертикальными приращениями.
 
 Нормативные документы: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [ROADMAP.md](ROADMAP.md), [VERSIONING.md](VERSIONING.md).
 
@@ -25,6 +25,7 @@
 - ✅ CSV/XLSX export выбранного пространства;
 - ✅ безопасный DOCX/XLSX intake и deterministic renderer;
 - ✅ scalar/repeat bindings, preview, immutable activation;
+- ✅ DOCX visual binding v1: основной текст, header/footer, сноски, обычные таблицы и bold/italic выводятся из проверенного Document IR, а прямое выделение преобразуется в прежние `elementId + UTF-16 offsets`;
 - ✅ безопасные read-only этапы intake/import/structure запускаются автоматически, mutation остаются явными;
 - ✅ персональный/сводный выпуск, partial success и retry failed only;
 - ✅ persisted worker queue, leases и restart recovery;
@@ -33,6 +34,7 @@
 - ✅ UI regression 320/768/1440, keyboard/focus, reduced motion, 200% zoom;
 - ✅ generic offline archive, install/update/rollback/backup/release-evidence tooling;
 - ✅ SemVer product version синхронизируется из `RELEASE_IDENTITY.json`, product-changing PR без bump блокируется CI;
+- 🟡 XLSX visual grid, DrawingML/image binding и сложные вложенные Office-конструкции не заявлены как готовые и требуют отдельных контрактов/fixtures;
 - 🟡 Debian/Astra/Office/recovery/P5 — только инструменты; реальные целевые акты ещё не получены.
 
 ## Приоритеты до stable
@@ -60,6 +62,7 @@
 - systemd API/worker/backup timer;
 - настоящий LibreOffice без `SKIPPED`;
 - Chromium/Playwright/axe из target inventory;
+- визуальная DOCX-разметка и последующая пробная/точная проверка проходят на target без сетевых ресурсов;
 - контрольная backup;
 - update/rollback;
 - сохранённый release-bound `target-acceptance.json` и manifest.
@@ -72,6 +75,7 @@
 - чистая offline-установка;
 - обязательные `--require-network --require-smtp`;
 - LibreOffice/Chromium, CIFS/NFS и SMTP TLS;
+- визуальная DOCX-разметка работает в поставляемом Chromium без внешних шрифтов/CDN;
 - временные сетевые/SMTP ошибки и повтор;
 - update/rollback без потери данных;
 - отдельный Astra target act.
@@ -84,6 +88,7 @@ Debian evidence не закрывает Astra.
 
 - ≥20 реальных DOCX + ≥20 реальных XLSX с provenance/SHA-256;
 - LibreOffice + Microsoft Office;
+- для DOCX отдельно проверить visual binding на основном тексте, header/footer, таблицах, пустых местах и смешанном оформлении без повреждения нетронутого OOXML;
 - импорт и выпуск 10/100/1000;
 - проверка space isolation на рабочем объёме;
 - worker restart без дубля результата;
@@ -97,13 +102,14 @@ Debian evidence не закрывает Astra.
 Задача #70:
 
 - два новых пользователя без устной инструкции;
-- полный основной сценарий от login и пространства до импорта, шаблона, выпуска, скачивания и logout;
+- полный основной сценарий от login и пространства до импорта, визуальной разметки DOCX, проверки шаблона, выпуска, скачивания и logout;
+- пользователь должен без знания OOXML выбрать поле прямо на документе и понимать, что точный layout проверяется в пробной копии/PDF;
 - клавиатура, экранный диктор, 320/768/1440 × light/dark, 200% zoom;
 - `ux/ux-acceptance.json` с реальными людьми и target binding;
 - оба target acts + Office + recovery + UX + пустой blockers registry;
 - успешный `npm run release:evidence` для одного exact commit/version/status/channel.
 
-Все P1 evidence должны относиться к `0.3.1`; материалы `0.1.0` остаются историческими.
+Все P1 evidence должны относиться к `0.5.0`; материалы `0.1.0`—`0.4.0` остаются историческими.
 
 ## Условие перехода к stable
 
@@ -126,7 +132,8 @@ Debian evidence не закрывает Astra.
 - новый frontend framework;
 - микросервисы, Kubernetes, brokers и cloud dependencies;
 - произвольные LLM tools/side effects;
-- крупное расширение document model;
+- произвольный HTML→DOCX round-trip или второй production renderer;
+- крупное расширение document model без отдельного renderer contract, fixtures и recovery проверки;
 - функции, не необходимые для финального сценария установки → импорт → шаблон → выпуск → restart → backup/restore → update/rollback.
 
 После закрытия текущего списка требуется новый полный аудит фактического `main`, а не автоматический переход к старому backlog.
