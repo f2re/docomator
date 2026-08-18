@@ -32,6 +32,10 @@ test("оболочка следует направлению документн�
 }) => {
   await openMockedWorkspace(page);
 
+  const pathGrid = page.locator(".path-grid");
+  await expect(pathGrid).toBeVisible();
+  await expect(pathGrid.locator(".path-card")).toHaveCount(3);
+
   const styles = await page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
     const body = getComputedStyle(document.body);
@@ -41,7 +45,7 @@ test("оболочка следует направлению документн�
     const primary = getComputedStyle(
       document.querySelector(".home-hero .primary-button")
     );
-    const routes = getComputedStyle(document.querySelector(".route-steps"));
+    const path = getComputedStyle(document.querySelector(".path-grid"));
     return {
       background: root.getPropertyValue("--background").trim(),
       accent: root.getPropertyValue("--accent").trim(),
@@ -52,7 +56,7 @@ test("оболочка следует направлению документн�
       heroShadow: hero.boxShadow,
       heroRadius: Number.parseFloat(hero.borderTopLeftRadius),
       primaryShadow: primary.boxShadow,
-      routeColumns: routes.gridTemplateColumns
+      pathDisplay: path.display
     };
   });
 
@@ -64,11 +68,11 @@ test("оболочка следует направлению документн�
   expect(styles.heroShadow).toBe("none");
   expect(styles.primaryShadow).toBe("none");
   expect(styles.heroRadius).toBeLessThanOrEqual(12);
+  expect(styles.pathDisplay).toBe("grid");
 
   const accent = parseHexColor(styles.accent);
   expect(colorDistance(accent, parseHexColor("#6ea8ff"))).toBeGreaterThan(80);
   expect(colorDistance(accent, parseHexColor("#6f6ce8"))).toBeGreaterThan(60);
-  expect(styles.routeColumns.split(" ")).toHaveLength(4);
 
   await expect(page.locator(".brand-mark")).toContainText("Оф");
   await expect(page.locator(".home-hero")).not.toContainText("ИИ");
@@ -94,6 +98,7 @@ test("пространства не возвращают карточный шу
     return {
       summaryShadow: summary.boxShadow,
       summaryRadius: Number.parseFloat(summary.borderTopLeftRadius),
+      summaryMarkerWidth: Number.parseFloat(summary.borderInlineStartWidth),
       paneShadow: pane.boxShadow,
       paneRadius: Number.parseFloat(pane.borderTopLeftRadius),
       avatarBackgroundImage: avatar.backgroundImage,
@@ -109,6 +114,7 @@ test("пространства не возвращают карточный шу
   expect(styles.memberShadow).toBe("none");
   expect(styles.avatarBackgroundImage).toBe("none");
   expect(styles.summaryRadius).toBeLessThanOrEqual(10);
+  expect(styles.summaryMarkerWidth).toBeGreaterThanOrEqual(3);
   expect(styles.paneRadius).toBeLessThanOrEqual(10);
   expect(styles.avatarRadius).toBeLessThanOrEqual(7);
   expect(styles.memberRadius).toBeLessThanOrEqual(7);

@@ -108,6 +108,22 @@ body,
   box-shadow: none;
 }
 
+/*
+ * Модуль выбора пространства использует более специфичные data-tone правила.
+ * Цвет пространства остаётся тонкой идентификационной границей, но не тенью.
+ */
+.workspace-list-item[data-space-tone].is-active {
+  padding-inline-start: 7px;
+  border-inline-start: 3px solid var(--space-color);
+  box-shadow: none;
+}
+
+.workspace-summary[data-space-tone] {
+  border-color: var(--border);
+  border-inline-start: 3px solid var(--space-color);
+  box-shadow: none;
+}
+
 .member-row.is-selected {
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
 }
