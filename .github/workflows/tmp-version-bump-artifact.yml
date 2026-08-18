@@ -1,0 +1,38 @@
+name: Temporary version bump artifact
+
+on:
+  push:
+    branches:
+      - tmp/version-bump-artifact-052
+
+permissions:
+  contents: read
+
+jobs:
+  build-version-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch state
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+
+      - name: Run canonical version bump
+        run: node scripts/release/bump-version.mjs 0.5.2
+
+      - name: Validate generated files
+        run: |
+          git diff --check
+          git diff --name-status
+          git diff --name-only -z | tar --null -T - -czf /tmp/docomator-version-0.5.2.tar.gz
+
+      - name: Upload generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: docomator-version-0.5.2
+          path: /tmp/docomator-version-0.5.2.tar.gz
+          if-no-files-found: error
+          retention-days: 1
