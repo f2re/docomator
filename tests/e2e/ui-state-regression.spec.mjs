@@ -145,7 +145,14 @@ for (const state of mockedStates) {
       await page.keyboard.press("Escape");
       await expect(root).not.toBeVisible();
       if (state.returnFocus) {
-        await expect(page.locator(state.returnFocus).first()).toBeFocused();
+        const focusReturned = await page.evaluate(
+          (selector) => document.activeElement?.matches(selector) === true,
+          state.returnFocus
+        );
+        expect(
+          focusReturned,
+          `после закрытия «${state.label}» фокус должен вернуться на фактическую кнопку открытия`
+        ).toBe(true);
       }
     }
   });

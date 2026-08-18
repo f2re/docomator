@@ -90,7 +90,32 @@ summary,
 .storage-maintenance-panel .generation-field > *,
 .storage-usage-content,
 .storage-cleanup-plan,
-.storage-cleanup-confirmation {
+.storage-cleanup-confirmation,
+#bulkDataImportPanel,
+#bulkDataImportPanel > *,
+#bulkDataImportPanel .bulk-import-panel,
+#bulkDataImportPanel .bulk-import-upload,
+#bulkDataImportPanel .bulk-import-config,
+#bulkDataImportPanel .bulk-import-core-fields,
+#bulkDataImportPanel .bulk-import-mappings,
+#bulkDataImportPanel .bulk-import-mapping-row,
+#bulkDataImportPanel .bulk-import-mapping-row > *,
+#bulkDataImportPanel .bulk-import-source-tabs,
+#bulkDataImportPanel #bulkImportFileSource,
+#bulkDataImportPanel #bulkImportPasteSource,
+#bulkDataImportPanel .bulk-import-source-preview,
+#bulkDataImportPanel .bulk-import-table-wrap,
+#templateWizard,
+#templateWizard > *,
+#templateWizard [data-template-wizard-panel],
+#templateWizard [data-template-wizard-panel] > *,
+#templateWizard .template-trial-card,
+#templateWizard .template-trial-card > *,
+#entityImportDialog,
+#entityImportDialog form,
+#entityImportDialog .dialog-body,
+#entityImportDialog .field,
+#entityImportDialog #entityImportWorkspace {
   min-width: 0;
   max-width: 100%;
 }
@@ -113,7 +138,22 @@ summary,
 .management-tile-copy small,
 .management-tile-copy em,
 .operation-heading h3,
-.operation-heading p {
+.operation-heading p,
+#bulkDataImportPanel h2,
+#bulkDataImportPanel h3,
+#bulkDataImportPanel p,
+#bulkDataImportPanel strong,
+#bulkDataImportPanel small,
+#templateWizard h2,
+#templateWizard h3,
+#templateWizard p,
+#templateWizard strong,
+#templateWizard small,
+#entityImportDialog h2,
+#entityImportDialog h3,
+#entityImportDialog p,
+#entityImportDialog strong,
+#entityImportDialog small {
   overflow-wrap: anywhere;
 }
 
@@ -130,7 +170,9 @@ summary,
 .management-overview,
 .database-admin-data,
 .database-admin-table-wrap,
-.operation-center {
+.operation-center,
+#bulkDataImportPanel,
+#templateWizard {
   width: 100%;
 }
 
@@ -146,7 +188,8 @@ summary,
   grid-template-columns: minmax(0, 1fr);
 }
 
-.database-admin-table-wrap {
+.database-admin-table-wrap,
+.bulk-import-table-wrap {
   overflow-x: auto;
   overscroll-behavior-inline: contain;
 }
@@ -187,6 +230,11 @@ summary,
 .storage-maintenance-panel .generation-field > small {
   overflow-wrap: anywhere;
   word-break: normal;
+}
+
+#entityImportFile {
+  min-height: 44px !important;
+  max-width: 100%;
 }
 
 @media (max-width: 900px) {
@@ -337,4 +385,25 @@ summary,
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
+  #bulkDataImportPanel .bulk-import-source-tabs,
+  #bulkDataImportPanel #bulkImportFileSource,
+  #bulkDataImportPanel #bulkImportPasteSource,
+  #bulkDataImportPanel .bulk-import-upload,
+  #bulkDataImportPanel .bulk-import-core-fields,
+  #bulkDataImportPanel .bulk-import-group-fields,
+  #bulkDataImportPanel .bulk-import-submit-row,
+  #bulkDataImportPanel .bulk-import-mapping-row,
+  #templateWizard [data-template-wizard-panel],
+  #templateWizard .template-trial-card {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #bulkDataImportPanel .bulk-import-source-tabs button,
+  #bulkDataImportPanel #bulkImportFileSource > button,
+  #bulkDataImportPanel #bulkImportPasteSource > button,
+  #templateWizard button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
