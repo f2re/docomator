@@ -90,9 +90,7 @@ test("дополнительный раздел сохраняет назван�
   );
 });
 
-test("поздно подключённый экран не повторяет заголовок верхней панели", async ({
-  page
-}) => {
+test("повторный заголовок скрывается без потери пояснения экрана", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const app = await openAuditedWorkspace(page);
   await app.openView("gost-formatting");
@@ -100,9 +98,27 @@ test("поздно подключённый экран не повторяет �
   await expect(page.locator('.nav-list [data-view-target="gost-formatting"]')).toHaveClass(
     /is-active/u
   );
-  await expect(
-    page.locator('[data-view="gost-formatting"] .section-intro').first()
-  ).toBeHidden();
+  const intro = page.locator('[data-view="gost-formatting"] .section-intro').first();
+  await expect(intro).toBeVisible();
+  await expect(intro.locator("h2")).toBeHidden();
+  await expect(intro.locator("p:not(.eyebrow)")).toBeVisible();
+});
+
+test("повторный заголовок не скрывает основное действие на узком экране", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  const app = await openAuditedWorkspace(page);
+
+  for (const width of [320, 768]) {
+    await page.setViewportSize({ width, height: 900 });
+    await app.openView("employees");
+
+    const intro = page.locator('[data-view="employees"] .section-intro').first();
+    await expect(intro).toBeVisible();
+    await expect(intro.locator("h2")).toBeHidden();
+    await expect(page.locator("#employeeAddButtonHeader")).toBeVisible();
+  }
 });
 
 test("на телефоне оформление по ГОСТ остаётся доступным через Ещё", async ({ page }) => {

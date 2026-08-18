@@ -13,11 +13,9 @@
   margin-top: var(--space-2);
 }
 
-.section-intro[data-navigation-duplicate-intro="true"] > div:first-child {
-  display: none !important;
-}
-
-.section-intro[data-navigation-heading-only="true"] {
+.section-intro[data-navigation-duplicate-intro="true"] > div:first-child > h1,
+.section-intro[data-navigation-duplicate-intro="true"] > div:first-child > h2,
+.section-intro[data-navigation-duplicate-intro="true"] > div:first-child > h3 {
   display: none !important;
 }
 
