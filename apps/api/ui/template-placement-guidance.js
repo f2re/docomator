@@ -34,3 +34,65 @@
     return placementBaseReadyMessage(form);
   };
 }
+
+{
+  loadVisualLayout = async function loadVisualLayoutWithSafeFallback(
+    report,
+    operationId,
+    requestVersion
+  ) {
+    const spaceId = globalThis.docomatorTemplateWizard?.spaceId() || "";
+    const draftId = structureDraft?.id || structureWizardArtifacts().draftId || "";
+    if (!spaceId || !draftId) return;
+    try {
+      const response = await structureFetchJson(
+        `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts/${encodeURIComponent(draftId)}/visual-layout`
+      );
+      if (requestVersion !== visualLayoutRequestVersion) return;
+      const layout = response.data;
+      if (
+        layout?.sourceSha256 !== report.sourceSha256 ||
+        layout?.format !== report.format
+      ) {
+        throw new Error(
+          "Визуальное представление не соответствует сохранённому исходнику."
+        );
+      }
+      if (report.format === "docx") {
+        renderVisualDocxStructure(report, layout, operationId);
+      } else {
+        renderVisualXlsxStructure(report, layout, operationId);
+      }
+    } catch (error) {
+      if (requestVersion !== visualLayoutRequestVersion) return;
+      const result = document.querySelector(
+        "#documentStructureResult .structure-report"
+      );
+      if (!result || result.querySelector("[data-visual-fallback-warning]")) return;
+      result.insertAdjacentHTML(
+        "afterbegin",
+        `<div class="structure-warning" data-visual-fallback-warning><span aria-hidden="true">⚠️</span><p><strong>Подробное оформление сейчас не показано.</strong> ${structureEscape(error?.message || "Локальный анализ оформления недоступен.")} Привязки и данные не изменены; используйте показанное безопасное представление и пробную копию.</p></div>`
+      );
+    }
+  };
+
+  renderStructure = function renderStructureWithSafeRichFallback(
+    report,
+    operationId
+  ) {
+    if (report?.format !== "docx" && report?.format !== "xlsx") {
+      return renderStructureElementList(report, operationId);
+    }
+    const requestVersion = ++visualLayoutRequestVersion;
+    if (report.format === "docx") {
+      renderVisualDocxStructure(
+        report,
+        { warnings: [], docx: null, xlsx: null },
+        operationId
+      );
+    } else {
+      renderStructureElementList(report, operationId);
+    }
+    void loadVisualLayout(report, operationId, requestVersion);
+  };
+}

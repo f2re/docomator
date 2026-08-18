@@ -18,27 +18,22 @@ jobs:
     name: Build, test, docs, and shell
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 2
-
       - name: Read Node.js version
         id: node
         shell: bash
         run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
-
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-
       - name: Verify repository
         id: repository_check
         continue-on-error: true
@@ -46,7 +41,6 @@ jobs:
         run: |
           set -o pipefail
           npm run check 2>&1 | tee repository-check.log
-
       - name: Upload repository-check diagnostic
         if: steps.repository_check.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -55,11 +49,9 @@ jobs:
           path: repository-check.log
           if-no-files-found: error
           retention-days: 3
-
       - name: Stop after failed repository check
         if: steps.repository_check.outcome == 'failure'
         run: exit 1
-
       - name: Smoke-test migration on a fresh database
         env:
           DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-data
@@ -70,36 +62,28 @@ jobs:
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
       - name: Read Node.js version
         id: node
         shell: bash
         run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
-
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-
       - name: Install locked Chromium
         run: npx playwright install --with-deps chromium
-
       - name: Build application
         run: npm run build
-
       - name: Prepare browser database
         env:
           DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
         run: npm run migrate
-
       - name: Start local application and worker
         env:
           DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
@@ -129,17 +113,22 @@ jobs:
             cat "$RUNNER_TEMP/docomator-browser-worker.log"
             exit 1
           fi
-
       - name: Run Chromium user flows
         env:
           DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
         run: npm run test:e2e
-
       - name: Run real-stack Chromium smoke
         env:
           DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
         run: npm run test:e2e:real-stack
-
+      - name: Upload Template Studio screenshots
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: template-studio-screenshots
+          path: tests/e2e/.tmp/docs-screenshots
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -158,25 +147,20 @@ jobs:
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
       - name: Read Node.js version
         id: node
         shell: bash
         run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ steps.node.outputs.version }}
           cache: npm
-
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-
       - name: Assemble generic offline archive
         shell: bash
         run: |
@@ -190,7 +174,6 @@ jobs:
             --without-ux-acceptance \
             --skip-tests \
             --force
-
       - name: Verify archive after extraction
         shell: bash
         run: |
