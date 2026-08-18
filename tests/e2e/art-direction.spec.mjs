@@ -1,100 +1,161 @@
-import { expect, test } from "./fixtures/test.mjs";
-
+import { test, expect } from "@playwright/test";
 import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
 import { ОформляторPage } from "./pages/docomator-page.mjs";
 
-async function openMockedWorkspace(page) {
-  await installОформляторApiMock(page);
+function parseHexColor(value) {
+  const hex = value.replace("#", "");
+  return [
+    Number.parseInt(hex.slice(0, 2), 16),
+    Number.parseInt(hex.slice(2, 4), 16),
+    Number.parseInt(hex.slice(4, 6), 16)
+  ];
+}
+
+function colorDistance(first, second) {
+  return Math.sqrt(
+    first.reduce((sum, component, index) => {
+      const delta = component - second[index];
+      return sum + delta * delta;
+    }, 0)
+  );
+}
+
+async function openMockedWorkspace(page, options = {}) {
+  await installОформляторApiMock(page, options);
   const app = new ОформляторPage(page);
   await app.open();
   return app;
 }
 
-test("рабочий стол использует документную композицию без маркетингового hero", async ({
+test("оболочка следует направлению документного рабочего стола", async ({
   page
 }) => {
   await openMockedWorkspace(page);
-
-  await expect(page.locator(".home-hero .hero-visual")).toBeHidden();
-  await expect(page.locator(".home-hero .pill-accent")).toHaveText(/Текущ|Следующ/u);
-  await expect(page.locator(".path-grid .path-card")).toHaveCount(4);
 
   const styles = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
     const body = getComputedStyle(document.body);
     const sidebar = getComputedStyle(document.querySelector(".sidebar"));
+    const topbar = getComputedStyle(document.querySelector(".topbar"));
     const hero = getComputedStyle(document.querySelector(".home-hero"));
-    const route = getComputedStyle(document.querySelector(".path-grid"));
+    const primary = getComputedStyle(
+      document.querySelector(".home-hero .primary-button")
+    );
+    const routes = getComputedStyle(document.querySelector(".route-steps"));
     return {
+      background: root.getPropertyValue("--background").trim(),
+      accent: root.getPropertyValue("--accent").trim(),
       bodyBackgroundImage: body.backgroundImage,
       sidebarBackdropFilter: sidebar.backdropFilter,
-      heroRadius: hero.borderRadius,
-      routeColumns: route.gridTemplateColumns
+      topbarBackdropFilter: topbar.backdropFilter,
+      heroBackgroundImage: hero.backgroundImage,
+      heroShadow: hero.boxShadow,
+      heroRadius: Number.parseFloat(hero.borderTopLeftRadius),
+      primaryShadow: primary.boxShadow,
+      routeColumns: routes.gridTemplateColumns
     };
   });
 
+  expect(styles.background.toLowerCase()).toBe("#f3f1eb");
   expect(styles.bodyBackgroundImage).toBe("none");
   expect(styles.sidebarBackdropFilter).toBe("none");
-  expect(parseFloat(styles.heroRadius)).toBeLessThanOrEqual(12);
-  expect(styles.routeColumns.split(" ")).toHaveLength(1);
+  expect(styles.topbarBackdropFilter).toBe("none");
+  expect(styles.heroBackgroundImage).toBe("none");
+  expect(styles.heroShadow).toBe("none");
+  expect(styles.primaryShadow).toBe("none");
+  expect(styles.heroRadius).toBeLessThanOrEqual(12);
+
+  const accent = parseHexColor(styles.accent);
+  expect(colorDistance(accent, parseHexColor("#6ea8ff"))).toBeGreaterThan(80);
+  expect(colorDistance(accent, parseHexColor("#6f6ce8"))).toBeGreaterThan(60);
+  expect(styles.routeColumns.split(" ")).toHaveLength(4);
+
+  await expect(page.locator(".brand-mark")).toContainText("Оф");
+  await expect(page.locator(".home-hero")).not.toContainText("ИИ");
 });
 
-test("узкая верхняя панель не обрезает название раздела", async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 800 });
-  const app = await openMockedWorkspace(page);
-  await app.openView("employees");
-
-  await expect(page.locator("#viewTitle")).toHaveText("Сотрудники");
-  const layout = await page.evaluate(() => {
-    const title = document.querySelector("#viewTitle");
-    const actions = document.querySelector(".topbar-actions");
-    const titleBox = title.getBoundingClientRect();
-    const actionsBox = actions.getBoundingClientRect();
-    return {
-      titleFits: title.scrollWidth <= title.clientWidth + 1,
-      actionsBelowTitle: actionsBox.top >= titleBox.bottom - 1,
-      pageFits: document.documentElement.scrollWidth <= window.innerWidth + 1
-    };
-  });
-
-  expect(layout.titleFits).toBe(true);
-  expect(layout.actionsBelowTitle).toBe(true);
-  expect(layout.pageFits).toBe(true);
-});
-
-test("экран выпуска не повторяет заголовок верхней панели", async ({ page }) => {
-  const app = await openMockedWorkspace(page);
-  await app.openView("generation");
-
-  await expect(page.locator("#viewTitle")).toHaveText("Создать документы");
-  await expect(page.locator("[data-view='generation'] .generation-heading")).toBeHidden();
-  await expect(page.locator(".generation-step-rail")).toBeVisible();
-});
-
-test("на телефоне пустой отчёт проверки не растягивает первый шаг шаблона", async ({
+test("пространства не возвращают карточный шум и сохраняют крупные цели", async ({
   page
 }) => {
-  await page.setViewportSize({ width: 320, height: 800 });
-  const app = await openMockedWorkspace(page);
-  await app.openView("templates");
+  const app = await openMockedWorkspace(page, { employeeCount: 1 });
+  await app.openView("spaces");
 
-  await expect(page.locator(".intake-panel")).toBeVisible();
-  await expect(page.locator(".intake-result-panel")).toBeHidden();
-  await expect(page.locator("#documentIntakeButton")).toBeVisible();
-});
+  await expect(page.locator(".workspace-summary")).toBeVisible();
+  await expect(page.locator(".space-pane.is-visible")).toBeVisible();
+  await expect(page.locator(".workspace-avatar").first()).toBeVisible();
+  await expect(page.locator(".member-row").first()).toBeVisible();
 
-test("видимый фокус сохраняется на основной навигации", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await openMockedWorkspace(page);
-  const employees = page.locator('.nav-item[data-view-target="employees"]');
-  await page.keyboard.press("Tab");
-  await employees.focus();
-  const outline = await employees.evaluate((element) => {
-    const style = getComputedStyle(element);
+  const styles = await page.evaluate(() => {
+    const summary = getComputedStyle(document.querySelector(".workspace-summary"));
+    const pane = getComputedStyle(document.querySelector(".space-pane.is-visible"));
+    const avatar = getComputedStyle(document.querySelector(".workspace-avatar"));
+    const member = getComputedStyle(document.querySelector(".member-row"));
+    const tab = getComputedStyle(document.querySelector(".workspace-tabs button"));
     return {
-      style: style.outlineStyle,
-      width: parseFloat(style.outlineWidth)
+      summaryShadow: summary.boxShadow,
+      summaryRadius: Number.parseFloat(summary.borderTopLeftRadius),
+      paneShadow: pane.boxShadow,
+      paneRadius: Number.parseFloat(pane.borderTopLeftRadius),
+      avatarBackgroundImage: avatar.backgroundImage,
+      avatarRadius: Number.parseFloat(avatar.borderTopLeftRadius),
+      memberShadow: member.boxShadow,
+      memberRadius: Number.parseFloat(member.borderTopLeftRadius),
+      tabMinHeight: Number.parseFloat(tab.minHeight)
     };
   });
-  expect(outline.style).not.toBe("none");
-  expect(outline.width).toBeGreaterThanOrEqual(2);
+
+  expect(styles.summaryShadow).toBe("none");
+  expect(styles.paneShadow).toBe("none");
+  expect(styles.memberShadow).toBe("none");
+  expect(styles.avatarBackgroundImage).toBe("none");
+  expect(styles.summaryRadius).toBeLessThanOrEqual(10);
+  expect(styles.paneRadius).toBeLessThanOrEqual(10);
+  expect(styles.avatarRadius).toBeLessThanOrEqual(7);
+  expect(styles.memberRadius).toBeLessThanOrEqual(7);
+  expect(styles.tabMinHeight).toBeGreaterThanOrEqual(44);
+});
+
+test("локальное руководство остаётся плоской рабочей поверхностью", async ({
+  page
+}) => {
+  const app = await openMockedWorkspace(page);
+  await app.openView("help");
+
+  await expect(page.locator(".help-center-hero")).toBeVisible();
+  await expect(page.locator(".help-center-card").first()).toBeVisible();
+
+  const styles = await page.evaluate(() => {
+    const hero = getComputedStyle(document.querySelector(".help-center-hero"));
+    const card = getComputedStyle(document.querySelector(".help-center-card"));
+    const category = getComputedStyle(
+      document.querySelector(".help-center-categories button")
+    );
+    return {
+      heroBackgroundImage: hero.backgroundImage,
+      heroShadow: hero.boxShadow,
+      heroRadius: Number.parseFloat(hero.borderTopLeftRadius),
+      cardShadow: card.boxShadow,
+      cardRadius: Number.parseFloat(card.borderTopLeftRadius),
+      categoryMinHeight: Number.parseFloat(category.minHeight)
+    };
+  });
+
+  expect(styles.heroBackgroundImage).toBe("none");
+  expect(styles.heroShadow).toBe("none");
+  expect(styles.cardShadow).toBe("none");
+  expect(styles.heroRadius).toBeLessThanOrEqual(10);
+  expect(styles.cardRadius).toBeLessThanOrEqual(10);
+  expect(styles.categoryMinHeight).toBeGreaterThanOrEqual(44);
+});
+
+test("HTML не содержит декоративную маркетинговую иллюстрацию", async ({
+  request
+}) => {
+  const response = await request.get("/");
+  expect(response.ok()).toBeTruthy();
+  const html = await response.text();
+  expect(html).not.toContain('class="hero-visual"');
+  expect(html).not.toContain('class="live-sheet"');
+  expect(html).not.toContain("fonts.googleapis.com");
+  expect(html).not.toContain("fonts.gstatic.com");
 });

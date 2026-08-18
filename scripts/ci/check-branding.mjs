@@ -29,6 +29,22 @@ function requireFragment(findings, text, relativePath, fragment) {
   if (!text?.includes(fragment)) findings.push(`${relativePath}: отсутствует ${fragment}`);
 }
 
+function forbidFragment(findings, text, relativePath, fragment) {
+  if (text?.includes(fragment)) findings.push(`${relativePath}: найден запрещённый фрагмент ${fragment}`);
+}
+
+function requireOrderedFragments(findings, text, relativePath, fragments) {
+  let cursor = 0;
+  for (const fragment of fragments) {
+    const position = text?.indexOf(fragment, cursor) ?? -1;
+    if (position < 0) {
+      findings.push(`${relativePath}: нарушен порядок каскада, не найден ${fragment}`);
+      return;
+    }
+    cursor = position + fragment.length;
+  }
+}
+
 export async function checkBranding() {
   const findings = [];
   for (const relativePath of trackedFiles()) {
@@ -80,7 +96,8 @@ export async function checkBranding() {
   for (const relativePath of [
     "apps/api/ui/styles.css",
     "apps/api/ui/interface-hierarchy.css",
-    "apps/api/ui/interface-stability.css"
+    "apps/api/ui/interface-stability.css",
+    "apps/api/ui/navigation-contract.css"
   ]) {
     const text = await inspectText(relativePath);
     if (text?.includes("--accent:")) {
@@ -105,21 +122,69 @@ export async function checkBranding() {
   for (const fragment of [
     "min-height: var(--touch-target);",
     "width: var(--touch-target);",
-    "height: var(--touch-target);"
+    "height: var(--touch-target);",
+    "backdrop-filter: none;",
+    "box-shadow: none;"
   ]) {
     requireFragment(findings, stability, stabilityPath, fragment);
   }
   for (const forbidden of [
     ".hero-visual",
+    "linear-gradient(",
+    "radial-gradient(",
+    "backdrop-filter: blur",
+    "border-radius: 999px;",
     "width: 38px;\n    height: 38px;\n    min-height: 38px;",
     "width: 36px;\n    height: 36px;\n    min-height: 36px;"
   ]) {
-    if (stability?.includes(forbidden)) findings.push(`${stabilityPath}: найден устаревший mobile/dead rule ${forbidden}`);
+    forbidFragment(findings, stability, stabilityPath, forbidden);
+  }
+
+  const runtimeContractPath = "apps/api/ui/navigation-contract.css";
+  const runtimeContract = await inspectText(runtimeContractPath);
+  for (const fragment of [
+    "background-image: none;",
+    "backdrop-filter: none;",
+    ".workspace-list-panel,\n.workspace-content > .space-pane,\n.workspace-summary,\n.audience-builder,\n.plan-card {",
+    "border-radius: var(--radius-panel);",
+    "border-radius: var(--radius-control);",
+    "box-shadow: none;",
+    "min-height: var(--touch-target);",
+    "color-mix(in srgb, var(--accent) 30%, var(--border))"
+  ]) {
+    requireFragment(findings, runtimeContract, runtimeContractPath, fragment);
+  }
+  for (const forbidden of [
+    "linear-gradient(",
+    "radial-gradient(",
+    "backdrop-filter: blur",
+    "border-radius: 999px;",
+    "box-shadow: var(--shadow);",
+    "box-shadow: var(--shadow-soft);",
+    "rgba(57, 121, 246",
+    "#6ea8ff",
+    "#6f6ce8"
+  ]) {
+    forbidFragment(findings, runtimeContract, runtimeContractPath, forbidden);
   }
 
   const routesPath = "apps/api/src/ui-routes.ts";
   const routes = await inspectText(routesPath);
   requireFragment(findings, routes, routesPath, '"brand-tokens.css"');
+  requireOrderedFragments(findings, routes, routesPath, [
+    '"interface-hierarchy.css"',
+    '"interface-stability.css"',
+    '"brand-tokens.css"'
+  ]);
+
+  const navigationContractPath = "apps/api/ui/navigation-contract.js";
+  const navigationContract = await inspectText(navigationContractPath);
+  requireFragment(
+    findings,
+    navigationContract,
+    navigationContractPath,
+    'link.href = "/ui/navigation-contract.css";'
+  );
 
   const indexPath = "apps/api/ui/index.html";
   const index = await inspectText(indexPath);
