@@ -82,6 +82,45 @@ test("на телефоне пустой отчёт проверки не рас
   await expect(page.locator("#documentIntakeButton")).toBeVisible();
 });
 
+test("desktop-навигация оставляет только ежедневные задачи", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const app = await openMockedWorkspace(page);
+  const navigation = page.locator(".nav-list > [data-view-target]");
+
+  await expect(navigation).toHaveCount(7);
+  expect(await navigation.evaluateAll((nodes) => nodes.map((node) => node.dataset.viewTarget))).toEqual([
+    "overview",
+    "employees",
+    "templates",
+    "generation",
+    "documents",
+    "automations",
+    "settings"
+  ]);
+
+  await app.openView("settings");
+  await expect(page.locator('[data-navigation-overflow="entities"]')).toBeVisible();
+  await expect(
+    page.locator('[data-view="settings"] .settings-grid [data-view-target="automations"]')
+  ).toHaveCount(0);
+});
+
+test("автоматическая проверка шаблона не выглядит обязательной кнопкой", async ({ page }) => {
+  const app = await openMockedWorkspace(page);
+  await app.openView("templates");
+
+  const check = page.locator("#documentIntakeButton");
+  await expect(check).toHaveClass(/secondary-button/u);
+  await expect(check).not.toHaveClass(/primary-button/u);
+  await expect(check).toHaveText("Проверить сейчас");
+
+  const disclosure = page.locator(".intake-checks-disclosure");
+  await expect(disclosure).toBeVisible();
+  await expect(disclosure.locator("summary")).toHaveText("Что проверяется");
+  await expect(disclosure).not.toHaveAttribute("open", "");
+  await expect(disclosure.locator(".intake-limits")).toBeHidden();
+});
+
 test("видимый фокус сохраняется на основной навигации", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openMockedWorkspace(page);
