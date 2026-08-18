@@ -1,0 +1,80 @@
+/*
+ * Иерархия навигации: ежедневный маршрут остаётся на первом уровне,
+ * специализированные задачи раскрываются по запросу без потери доступности.
+ */
+
+.nav-overflow {
+  min-width: 0;
+}
+
+.nav-overflow > summary {
+  width: 100%;
+  list-style: none;
+}
+
+.nav-overflow > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-overflow-summary {
+  grid-template-columns: 22px minmax(0, 1fr) 18px;
+}
+
+.nav-overflow-summary .nav-symbol {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+}
+
+.nav-overflow-chevron {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  color: var(--hint);
+  font-family: var(--font-data);
+  transition: transform 0.14s ease;
+}
+
+.nav-overflow[open] > .nav-overflow-summary .nav-overflow-chevron {
+  transform: rotate(90deg);
+}
+
+.nav-overflow.is-current > .nav-overflow-summary {
+  color: var(--text);
+}
+
+.nav-overflow.is-current:not([open]) > .nav-overflow-summary {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.nav-overflow-content {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  margin: 2px 0 5px 11px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+.nav-overflow-content .nav-item {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+.nav-overflow-content .nav-item > span:not(.nav-symbol):not(.nav-badge) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-footer > [data-navigation-placement="footer"] {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-overflow-chevron {
+    transition: none;
+  }
+}
