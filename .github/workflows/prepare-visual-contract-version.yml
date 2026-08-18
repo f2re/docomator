@@ -1,6 +1,9 @@
 name: Prepare visual contract version artifact
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - fix/visual-interface-contract-20260818
