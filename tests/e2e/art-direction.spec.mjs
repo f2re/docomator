@@ -34,7 +34,7 @@ test("оболочка следует направлению документн�
 
   const pathGrid = page.locator(".path-grid");
   await expect(pathGrid).toBeVisible();
-  await expect(pathGrid.locator(".path-card")).toHaveCount(3);
+  await expect(pathGrid.locator(".path-card")).toHaveCount(4);
 
   const styles = await page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
@@ -86,12 +86,16 @@ test("пространства не возвращают карточный шу
 
   await expect(page.locator(".workspace-summary")).toBeVisible();
   await expect(page.locator(".space-pane.is-visible")).toBeVisible();
+  await expect(page.locator(".workspace-list-item.is-active")).toBeVisible();
   await expect(page.locator(".workspace-avatar").first()).toBeVisible();
   await expect(page.locator(".member-row").first()).toBeVisible();
 
   const styles = await page.evaluate(() => {
     const summary = getComputedStyle(document.querySelector(".workspace-summary"));
     const pane = getComputedStyle(document.querySelector(".space-pane.is-visible"));
+    const activeWorkspace = getComputedStyle(
+      document.querySelector(".workspace-list-item.is-active")
+    );
     const avatar = getComputedStyle(document.querySelector(".workspace-avatar"));
     const member = getComputedStyle(document.querySelector(".member-row"));
     const tab = getComputedStyle(document.querySelector(".workspace-tabs button"));
@@ -101,17 +105,21 @@ test("пространства не возвращают карточный шу
       summaryMarkerWidth: Number.parseFloat(summary.borderInlineStartWidth),
       paneShadow: pane.boxShadow,
       paneRadius: Number.parseFloat(pane.borderTopLeftRadius),
+      activeWorkspaceShadow: activeWorkspace.boxShadow,
       avatarBackgroundImage: avatar.backgroundImage,
       avatarRadius: Number.parseFloat(avatar.borderTopLeftRadius),
       memberShadow: member.boxShadow,
       memberRadius: Number.parseFloat(member.borderTopLeftRadius),
+      tabShadow: tab.boxShadow,
       tabMinHeight: Number.parseFloat(tab.minHeight)
     };
   });
 
   expect(styles.summaryShadow).toBe("none");
   expect(styles.paneShadow).toBe("none");
+  expect(styles.activeWorkspaceShadow).toBe("none");
   expect(styles.memberShadow).toBe("none");
+  expect(styles.tabShadow).toBe("none");
   expect(styles.avatarBackgroundImage).toBe("none");
   expect(styles.summaryRadius).toBeLessThanOrEqual(10);
   expect(styles.summaryMarkerWidth).toBeGreaterThanOrEqual(3);
