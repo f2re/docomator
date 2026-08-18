@@ -1,8 +1,8 @@
 # Ближайшие приращения Оформлятора
 
-Актуально на **2026-08-17**.
+Актуально на **2026-08-18**.
 
-Текущий кодовый контур находится в состоянии **`0.5.0 / candidate / pilot`**. Основной пользовательский путь, space isolation, password gate, import/export, deterministic DOCX/XLSX generation, worker recovery, автоматические safe-read этапы, визуальная разметка DOCX v1 и generic offline bundle реализованы на уровне кода. Следующая работа — прежде всего получение эксплуатационных доказательств для stable и расширение визуального редактора только отдельными безопасными вертикальными приращениями.
+Текущий кодовый контур находится в состоянии **`0.5.1 / candidate / pilot`**. Основной пользовательский путь, space isolation, password gate, import/export, deterministic DOCX/XLSX generation, worker recovery, автоматические safe-read этапы, визуальная разметка DOCX v1, единая навигационная иерархия и generic offline bundle реализованы на уровне кода. Следующая работа — прежде всего получение эксплуатационных доказательств для stable и расширение визуального редактора только отдельными безопасными вертикальными приращениями.
 
 Нормативные документы: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [ROADMAP.md](ROADMAP.md), [VERSIONING.md](VERSIONING.md).
 
@@ -27,6 +27,7 @@
 - ✅ scalar/repeat bindings, preview, immutable activation;
 - ✅ DOCX visual binding v1: основной текст, header/footer, сноски, обычные таблицы и bold/italic выводятся из проверенного Document IR, а прямое выделение преобразуется в прежние `elementId + UTF-16 offsets`;
 - ✅ безопасные read-only этапы intake/import/structure запускаются автоматически, mutation остаются явными;
+- ✅ единый desktop/mobile navigation contract удерживает ежедневные задачи на верхнем уровне и переводит редкие инструменты в «Управление»/«Ещё» без потери доступности;
 - ✅ персональный/сводный выпуск, partial success и retry failed only;
 - ✅ persisted worker queue, leases и restart recovery;
 - ✅ SMTP/network delivery и расписания на уровне кода;
@@ -63,6 +64,7 @@
 - настоящий LibreOffice без `SKIPPED`;
 - Chromium/Playwright/axe из target inventory;
 - визуальная DOCX-разметка и последующая пробная/точная проверка проходят на target без сетевых ресурсов;
+- desktop/mobile navigation сохраняет утверждённый набор основных задач, а дополнительные разделы доступны через «Управление»/«Ещё»;
 - контрольная backup;
 - update/rollback;
 - сохранённый release-bound `target-acceptance.json` и manifest.
@@ -76,6 +78,7 @@
 - обязательные `--require-network --require-smtp`;
 - LibreOffice/Chromium, CIFS/NFS и SMTP TLS;
 - визуальная DOCX-разметка работает в поставляемом Chromium без внешних шрифтов/CDN;
+- единая навигационная иерархия работает в поставляемом Chromium без внешних ресурсов и page-level overflow;
 - временные сетевые/SMTP ошибки и повтор;
 - update/rollback без потери данных;
 - отдельный Astra target act.
@@ -104,12 +107,13 @@ Debian evidence не закрывает Astra.
 - два новых пользователя без устной инструкции;
 - полный основной сценарий от login и пространства до импорта, визуальной разметки DOCX, проверки шаблона, выпуска, скачивания и logout;
 - пользователь должен без знания OOXML выбрать поле прямо на документе и понимать, что точный layout проверяется в пробной копии/PDF;
+- пользователь должен различать ежедневные и редкие операции, находить ГОСТ/ЕСКД, публикации и расписания через понятную desktop/mobile навигацию без подсказки;
 - клавиатура, экранный диктор, 320/768/1440 × light/dark, 200% zoom;
 - `ux/ux-acceptance.json` с реальными людьми и target binding;
 - оба target acts + Office + recovery + UX + пустой blockers registry;
 - успешный `npm run release:evidence` для одного exact commit/version/status/channel.
 
-Все P1 evidence должны относиться к `0.5.0`; материалы `0.1.0`—`0.4.0` остаются историческими.
+Все P1 evidence должны относиться к `0.5.1`; материалы `0.1.0`—`0.5.0` остаются историческими.
 
 ## Условие перехода к stable
 

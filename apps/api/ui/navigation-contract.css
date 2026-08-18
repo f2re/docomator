@@ -1,0 +1,151 @@
+/*
+ * Единая информационная и визуальная иерархия оболочки.
+ * Верхний уровень показывает только ежедневные задачи; редкие инструменты
+ * остаются доступны в спокойном реестре «Управление».
+ */
+
+.nav-list [data-navigation-tier="overflow"],
+.nav-list #helpCenterNavButton {
+  display: none !important;
+}
+
+.nav-list [data-view-target="settings"] {
+  margin-top: var(--space-2);
+}
+
+.section-intro[data-navigation-duplicate-intro="true"] > div:first-child > h1,
+.section-intro[data-navigation-duplicate-intro="true"] > div:first-child > h2,
+.section-intro[data-navigation-duplicate-intro="true"] > div:first-child > h3 {
+  display: none !important;
+}
+
+.settings-grid.management-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.settings-grid.management-grid > .settings-row.management-tile,
+.settings-grid.management-grid > .settings-row.management-tile:nth-child(even),
+.settings-grid.management-grid > .settings-row.management-tile:nth-last-child(-n + 2) {
+  min-height: 76px;
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-grid.management-grid > .settings-row.management-tile:last-child {
+  border-bottom: 0;
+}
+
+.navigation-overflow-shortcut .management-tile-copy {
+  min-width: 0;
+}
+
+.navigation-overflow-shortcut .management-tile-copy strong,
+.navigation-overflow-shortcut .management-tile-copy small {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Финальный визуальный контракт поздно подключаемых модулей.
+ * Обычные рабочие поверхности плоские; тень остаётся только у диалогов,
+ * всплывающих меню и других действительно поднятых слоёв.
+ */
+body,
+.topbar,
+.home-hero,
+.help-center-hero {
+  background-image: none;
+}
+
+.sidebar,
+.topbar,
+.mobile-nav,
+.create-dialog::backdrop,
+.drawer-backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.primary-button,
+.secondary-button,
+.icon-button,
+.nav-item,
+.path-card,
+.settings-row,
+.help-center-card,
+.operation-row,
+.employee-row {
+  box-shadow: none;
+}
+
+.workspace-list-panel,
+.workspace-content > .space-pane,
+.workspace-summary,
+.audience-builder,
+.plan-card {
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: none;
+}
+
+.workspace-list-item,
+.member-row,
+.access-row,
+.snapshot-row,
+.mode-card,
+.mini-empty.horizontal,
+.skeleton-line {
+  border-radius: var(--radius-control);
+  box-shadow: none;
+}
+
+.workspace-avatar,
+.member-avatar,
+.snapshot-icon,
+.plan-icon {
+  background: var(--surface-2);
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+/*
+ * Модуль выбора пространства использует более специфичные data-tone правила.
+ * Цвет пространства остаётся тонкой идентификационной границей, но не тенью.
+ */
+.workspace-list-item[data-space-tone].is-active {
+  padding-inline-start: 7px;
+  border-inline-start: 3px solid var(--space-color);
+  box-shadow: none;
+}
+
+.workspace-summary[data-space-tone] {
+  border-color: var(--border);
+  border-inline-start: 3px solid var(--space-color);
+  box-shadow: none;
+}
+
+.member-row.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.plan-card {
+  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+}
+
+.segmented-control button,
+.help-center-categories button,
+.shared-result-actions .primary-button,
+.shared-result-actions .secondary-button,
+.compact-button {
+  min-height: var(--touch-target);
+}
+
+.segmented-control button[aria-selected="true"] {
+  box-shadow: none;
+}
+
+@media (max-width: 820px) {
+  .settings-grid.management-grid > .settings-row.management-tile {
+    min-height: 72px;
+  }
+}
