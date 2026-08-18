@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { analyzeOoxmlVisualLayout } from "@docomator/document-intake";
 import {
   compileScalarField,
   renderScalarValue,
@@ -52,6 +53,12 @@ function mediaType(format: "docx" | "xlsx"): string {
     : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 }
 
+function sourceFileName(title: string, format: "docx" | "xlsx"): string {
+  return title.toLocaleLowerCase("en-US").endsWith(`.${format}`)
+    ? title
+    : `${title}.${format}`;
+}
+
 function downloadName(
   versionNumber: number,
   kind: "compiled" | "trial",
@@ -81,6 +88,32 @@ export function registerTemplateTestVersionRoutes(
   draftRegistry: TemplateDraftRegistry,
   versionRegistry: TemplateTestVersionRegistry
 ): void {
+  app.get<{ Params: DraftParams }>(
+    "/api/v1/spaces/:spaceId/template-drafts/:draftId/visual-layout",
+    {
+      schema: { params: draftParamsSchema }
+    },
+    async (request, reply) => {
+      const draft = draftRegistry.getDraft(
+        request.params.spaceId,
+        request.params.draftId
+      );
+      const source = await objectStore.getBuffer(draft.sourceSha256);
+      const visual = await analyzeOoxmlVisualLayout({
+        buffer: source,
+        fileName: sourceFileName(draft.title, draft.format),
+        mediaType: mediaType(draft.format)
+      });
+      if (visual.sourceSha256 !== draft.sourceSha256) {
+        throw new TemplateDraftValidationError(
+          "Визуальное представление не соответствует сохранённому исходнику. Данные не изменены."
+        );
+      }
+      reply.header("cache-control", "private, no-store");
+      return responseEnvelope(request, visual);
+    }
+  );
+
   app.post<{ Params: DraftParams; Body: TrialBody }>(
     "/api/v1/spaces/:spaceId/template-drafts/:draftId/trial",
     {

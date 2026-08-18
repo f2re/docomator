@@ -74,3 +74,53 @@ test("ошибки результата подняты над хронологи
     page.locator('[data-view-target="documents"]:visible [data-interface-attention-badge]')
   ).toHaveText("1");
 });
+
+test("настольная навигация оставляет ежедневный маршрут на первом уровне", async ({
+  page
+}) => {
+  await installОформляторApiMock(page);
+  const app = new ОформляторPage(page);
+  await app.open();
+
+  const navigation = page.locator(".nav-list");
+  const overflow = navigation.locator(":scope > .nav-overflow");
+  const summary = overflow.locator(":scope > summary");
+
+  await expect
+    .poll(() =>
+      navigation
+        .locator(":scope > [data-view-target]")
+        .evaluateAll((items) => items.map((item) => item.dataset.viewTarget))
+    )
+    .toEqual([
+      "overview",
+      "employees",
+      "templates",
+      "generation",
+      "documents",
+      "automations"
+    ]);
+
+  await expect(
+    page.locator('.sidebar-footer > [data-view-target="settings"]')
+  ).toBeVisible();
+  await expect(overflow).not.toHaveAttribute("open", "");
+  await expect(overflow.locator('[data-view-target="entities"]')).toHaveCount(1);
+
+  const summaryBox = await summary.boundingBox();
+  expect(summaryBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(overflow).toHaveAttribute("open", "");
+  await page.keyboard.press("Enter");
+  await expect(overflow).not.toHaveAttribute("open", "");
+
+  await app.openView("entities");
+  await expect(overflow).toHaveAttribute("open", "");
+  await expect(overflow).toHaveClass(/is-current/u);
+  await expect(
+    overflow.locator('[data-view-target="entities"]')
+  ).toHaveAttribute("aria-current", "page");
+  await expect(summary).not.toHaveAttribute("aria-current");
+});
