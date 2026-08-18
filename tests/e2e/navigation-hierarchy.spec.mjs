@@ -55,6 +55,12 @@ test("редкие инструменты доступны единым реес
   await expect(
     page.locator('[data-view="settings"] [data-view-target="automations"]')
   ).toBeVisible();
+  await expect(
+    page.locator('[data-view="settings"] [data-help-center-open]')
+  ).toHaveCount(1);
+  await expect(
+    page.locator('[data-view="settings"] [data-navigation-overflow="help"]')
+  ).toHaveCount(0);
 
   await expect
     .poll(() =>

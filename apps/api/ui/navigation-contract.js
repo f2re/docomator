@@ -139,6 +139,9 @@
       navigationQuery(".settings-grid.management-grid") ||
       navigationQuery(".settings-grid");
     if (!grid || !target || target === "settings") return;
+    if (target === "help" && navigationQuery("[data-help-center-open]", grid)) {
+      return;
+    }
     if (navigationQuery(`[data-view-target="${CSS.escape(target)}"]`, grid)) return;
 
     const button = managementShortcutMarkup(
