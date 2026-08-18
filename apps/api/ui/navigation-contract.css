@@ -1,0 +1,53 @@
+/*
+ * Единая информационная иерархия оболочки.
+ * Верхний уровень показывает только ежедневные задачи; редкие инструменты
+ * остаются доступны в спокойном реестре «Управление».
+ */
+
+.nav-list [data-navigation-tier="overflow"],
+.nav-list #helpCenterNavButton {
+  display: none !important;
+}
+
+.nav-list [data-view-target="settings"] {
+  margin-top: var(--space-2);
+}
+
+.section-intro[data-navigation-duplicate-intro="true"] > div:first-child {
+  display: none !important;
+}
+
+.section-intro[data-navigation-heading-only="true"] {
+  display: none !important;
+}
+
+.settings-grid.management-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.settings-grid.management-grid > .settings-row.management-tile,
+.settings-grid.management-grid > .settings-row.management-tile:nth-child(even),
+.settings-grid.management-grid > .settings-row.management-tile:nth-last-child(-n + 2) {
+  min-height: 76px;
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-grid.management-grid > .settings-row.management-tile:last-child {
+  border-bottom: 0;
+}
+
+.navigation-overflow-shortcut .management-tile-copy {
+  min-width: 0;
+}
+
+.navigation-overflow-shortcut .management-tile-copy strong,
+.navigation-overflow-shortcut .management-tile-copy small {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 820px) {
+  .settings-grid.management-grid > .settings-row.management-tile {
+    min-height: 72px;
+  }
+}
