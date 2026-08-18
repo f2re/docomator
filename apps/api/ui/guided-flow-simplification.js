@@ -12,7 +12,7 @@
 
   function guidedFlowSecondaryAction(button, label, idleLabels) {
     if (!(button instanceof HTMLButtonElement)) return;
-    if (button.disabled || button.hidden) return;
+    if (button.hidden) return;
     const currentLabel = String(button.textContent || "").trim();
     if (!idleLabels.includes(currentLabel) && currentLabel !== label) return;
     if (button.classList.contains("primary-button")) {
@@ -35,13 +35,26 @@
     guidedFlowTimers.set(button, timer);
   }
 
+  function guidedFlowInstallDocumentIntakeDisclosure() {
+    const limits = document.querySelector(".intake-limits");
+    if (!(limits instanceof HTMLUListElement) || limits.closest("details")) return;
+
+    const disclosure = document.createElement("details");
+    disclosure.className = "technical-details intake-checks-disclosure";
+    const summary = document.createElement("summary");
+    summary.textContent = "Что проверяется";
+    limits.before(disclosure);
+    disclosure.append(summary, limits);
+  }
+
   function guidedFlowInstallDocumentIntake() {
     const input = document.querySelector("#documentIntakeFile");
     const button = document.querySelector("#documentIntakeButton");
     const dropZone = document.querySelector("#documentIntakeDropZone");
     if (!(input instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) return;
 
-    guidedFlowSecondaryAction(button, "Проверить сейчас", ["Проверить файл"]);
+    guidedFlowInstallDocumentIntakeDisclosure();
+    guidedFlowSecondaryAction(button, "Проверить сейчас", ["Проверить файл", "Проверить документ"]);
     if (button.dataset.guidedAutoBound === "true") return;
     button.dataset.guidedAutoBound = "true";
 

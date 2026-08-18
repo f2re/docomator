@@ -1,6 +1,6 @@
 {
   "name": "docomator",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Автономная платформа формирования и автоматизации документов DOCX и XLSX с локальной поддержкой ИИ.",
   "type": "module",
