@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(testDirectory, "../..");
-const password = "Общий-пароль-Оформлятор-2026";
+const accessCode = "4821";
 
-function passwordHash(value) {
+function accessCodeHash(value) {
   const salt = randomBytes(16);
   const digest = scryptSync(value, salt, 32, {
     N: 16_384,
@@ -50,7 +50,7 @@ async function waitUntilReady(origin, child) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
-      throw new Error(`Auth-enabled API завершился с кодом ${child.exitCode}`);
+      throw new Error(`API с кодом доступа завершился с кодом ${child.exitCode}`);
     }
     try {
       const response = await fetch(`${origin}/readyz`);
@@ -60,7 +60,7 @@ async function waitUntilReady(origin, child) {
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("Auth-enabled API не стал готов за 15 секунд");
+  throw new Error("API с кодом доступа не стал готов за 15 секунд");
 }
 
 async function stop(child) {
@@ -73,8 +73,8 @@ async function stop(child) {
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-test("общий пароль закрывает приложение, открывает сессию и выход снова закрывает доступ", async ({ page }) => {
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-password-e2e-"));
+test("четырёхзначный код закрывает приложение без логина и выход снова закрывает доступ", async ({ page }) => {
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-access-code-e2e-"));
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const env = {
@@ -82,7 +82,8 @@ test("общий пароль закрывает приложение, откр�
     DOCOMATOR_DATA_DIR: dataDir,
     DOCOMATOR_HOST: "127.0.0.1",
     DOCOMATOR_PORT: String(port),
-    DOCOMATOR_ACCESS_PASSWORD_HASH: passwordHash(password),
+    DOCOMATOR_ACCESS_CODE_HASH: accessCodeHash(accessCode),
+    DOCOMATOR_ACCESS_PASSWORD_HASH: "",
     DOCOMATOR_SESSION_SECRET: randomBytes(48).toString("base64url"),
     DOCOMATOR_SESSION_TTL_SECONDS: "3600",
     DOCOMATOR_PREVIEW_ENABLED: "false"
@@ -109,18 +110,25 @@ test("общий пароль закрывает приложение, откр�
 
     const unauthenticated = await page.request.get(`${origin}/api/v1/spaces`);
     expect(unauthenticated.status()).toBe(401);
+    expect(unauthenticated.headers()["www-authenticate"]).toBeUndefined();
 
     await page.goto(`${origin}/`);
-    await expect(page).toHaveURL(new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/login\\?next=`));
-    await expect(page.getByRole("heading", { name: "Вход" })).toBeVisible();
-    await expect(page.locator("#password")).toBeFocused();
+    await expect(page).toHaveURL(
+      new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/login\\?next=`)
+    );
+    await expect(page.getByRole("heading", { name: "Код доступа" })).toBeVisible();
+    await expect(page.locator("#accessCode")).toBeFocused();
+    await expect(page.locator('input[name="username"]')).toHaveCount(0);
+    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    await expect(page.getByText("Логин не нужен")).toBeVisible();
+    await expect(page.getByText("Не помню код")).toBeVisible();
 
-    await page.locator("#password").fill("неверный-пароль");
-    await page.getByRole("button", { name: "Войти" }).click();
-    await expect(page.locator("#loginError")).toContainText("Неверный пароль");
+    await page.locator("#accessCode").fill("0000");
+    await page.getByRole("button", { name: "Открыть Оформлятор" }).click();
+    await expect(page.locator("#loginError")).toContainText("Неверный код доступа");
 
-    await page.locator("#password").fill(password);
-    await page.getByRole("button", { name: "Войти" }).click();
+    await page.locator("#accessCode").fill(accessCode);
+    await page.getByRole("button", { name: "Открыть Оформлятор" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
     await expect(page.locator("#main-content")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Главная", level: 1 })).toBeVisible();
@@ -141,7 +149,7 @@ test("общий пароль закрывает приложение, откр�
     expect(deniedAgain.status()).toBe(401);
   } catch (error) {
     throw new Error(
-      `${error instanceof Error ? error.message : String(error)}\nAuth API output:\n${output.join("").slice(-12_000)}`
+      `${error instanceof Error ? error.message : String(error)}\nAccess-code API output:\n${output.join("").slice(-12_000)}`
     );
   } finally {
     await stop(api);
@@ -149,17 +157,17 @@ test("общий пароль закрывает приложение, откр�
   }
 });
 
-
-test("первый запуск создаёт общий пароль прямо в браузере", async ({ page }) => {
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-first-password-e2e-"));
+test("первый запуск создаёт общий четырёхзначный код прямо в браузере", async ({ page }) => {
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-first-code-e2e-"));
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
-  const firstPassword = "Первый-общий-пароль-2026";
+  const firstCode = "7314";
   const env = {
     ...process.env,
     DOCOMATOR_DATA_DIR: dataDir,
     DOCOMATOR_HOST: "127.0.0.1",
     DOCOMATOR_PORT: String(port),
+    DOCOMATOR_ACCESS_CODE_HASH: "",
     DOCOMATOR_ACCESS_PASSWORD_HASH: "",
     DOCOMATOR_SESSION_SECRET: randomBytes(48).toString("base64url"),
     DOCOMATOR_SESSION_TTL_SECONDS: "3600",
@@ -182,23 +190,34 @@ test("первый запуск создаёт общий пароль прям�
   try {
     await waitUntilReady(origin, api);
     await page.goto(`${origin}/`);
-    await expect(page.getByRole("heading", { name: "Первый запуск" })).toBeVisible();
-    await page.locator("#password").fill(firstPassword);
-    await page.locator("#confirmation").fill(firstPassword);
-    await page.getByRole("button", { name: "Сохранить пароль и продолжить" }).click();
+    await expect(page.getByText("Первый запуск")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Код доступа" })).toBeVisible();
+    await expect(page.locator("#accessCode")).toHaveAttribute("maxlength", "4");
+    await expect(page.locator("#accessCode")).toHaveAttribute("inputmode", "numeric");
+    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    await expect(page.locator("#confirmation")).toHaveCount(0);
+    await page.locator("#accessCode").fill(firstCode);
+    await page.getByRole("button", { name: "Сохранить код" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
     const status = await page.request.get(`${origin}/api/v1/auth/status`);
     expect(status.status()).toBe(200);
-    expect((await status.json()).data).toMatchObject({ configured: true, authenticated: true });
+    expect((await status.json()).data).toMatchObject({
+      configured: true,
+      authenticated: true,
+      accessMode: "code"
+    });
 
     await page.context().clearCookies();
     await page.goto(`${origin}/`);
-    await expect(page.getByRole("heading", { name: "Вход" })).toBeVisible();
-    await page.locator("#password").fill(firstPassword);
-    await page.getByRole("button", { name: "Войти" }).click();
+    await expect(page.getByRole("heading", { name: "Код доступа" })).toBeVisible();
+    await expect(page.getByText("Логин не нужен")).toBeVisible();
+    await page.locator("#accessCode").fill(firstCode);
+    await page.getByRole("button", { name: "Открыть Оформлятор" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
   } catch (error) {
-    throw new Error(`${error instanceof Error ? error.message : String(error)}\nFirst-run API output:\n${output.join("").slice(-12_000)}`);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nFirst-run API output:\n${output.join("").slice(-12_000)}`
+    );
   } finally {
     await stop(api);
     await fs.rm(dataDir, { recursive: true, force: true });
