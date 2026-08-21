@@ -7,9 +7,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { canonicalUiState } from "./ui-regression-inventory.mjs";
+
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(testDirectory, "../..");
 const password = "Общий-пароль-Оформлятор-2026";
+const loginState = canonicalUiState("login");
+const firstRunState = canonicalUiState("first-run");
 
 function passwordHash(value) {
   const salt = randomBytes(16);
@@ -73,7 +77,38 @@ async function stop(child) {
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-test("общий пароль закрывает приложение, открывает сессию и выход снова закрывает доступ", async ({ page }) => {
+async function expectAuthSurface(page, state, testInfo) {
+  await expect(page.getByRole("heading", { name: state.expectedText })).toBeVisible();
+  const control = page.locator(state.selector);
+  await expect(control).toBeVisible();
+  const box = await control.boundingBox();
+  expect(box, `не удалось измерить auth control ${state.id}`).not.toBeNull();
+  expect(box.height, `высота auth control ${state.id}`).toBeGreaterThanOrEqual(44);
+  expect(box.width, `ширина auth control ${state.id}`).toBeGreaterThanOrEqual(44);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+    `горизонтальное переполнение на поверхности ${state.id}`
+  ).toBeLessThanOrEqual(0);
+
+  if ((page.viewportSize()?.width || 0) <= 768) {
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty("font-size", "200%", "important");
+    });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+      `горизонтальное переполнение 200% на поверхности ${state.id}`
+    ).toBeLessThanOrEqual(0);
+  }
+
+  if (["chromium-320", "chromium-1440"].includes(testInfo.project.name)) {
+    await testInfo.attach(`auth-${state.id}`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png"
+    });
+  }
+}
+
+test("общий пароль закрывает приложение, открывает сессию и выход снова закрывает доступ", async ({ page }, testInfo) => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-password-e2e-"));
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
@@ -112,14 +147,14 @@ test("общий пароль закрывает приложение, откр�
 
     await page.goto(`${origin}/`);
     await expect(page).toHaveURL(new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/login\\?next=`));
-    await expect(page.getByRole("heading", { name: "Вход" })).toBeVisible();
-    await expect(page.locator("#password")).toBeFocused();
+    await expectAuthSurface(page, loginState, testInfo);
+    await expect(page.locator(loginState.selector)).toBeFocused();
 
-    await page.locator("#password").fill("неверный-пароль");
+    await page.locator(loginState.selector).fill("неверный-пароль");
     await page.getByRole("button", { name: "Войти" }).click();
     await expect(page.locator("#loginError")).toContainText("Неверный пароль");
 
-    await page.locator("#password").fill(password);
+    await page.locator(loginState.selector).fill(password);
     await page.getByRole("button", { name: "Войти" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
     await expect(page.locator("#main-content")).toBeVisible();
@@ -150,7 +185,7 @@ test("общий пароль закрывает приложение, откр�
 });
 
 
-test("первый запуск создаёт общий пароль прямо в браузере", async ({ page }) => {
+test("первый запуск создаёт общий пароль прямо в браузере", async ({ page }, testInfo) => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-first-password-e2e-"));
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
@@ -182,9 +217,9 @@ test("первый запуск создаёт общий пароль прям�
   try {
     await waitUntilReady(origin, api);
     await page.goto(`${origin}/`);
-    await expect(page.getByRole("heading", { name: "Первый запуск" })).toBeVisible();
-    await page.locator("#password").fill(firstPassword);
-    await page.locator("#confirmation").fill(firstPassword);
+    await expectAuthSurface(page, firstRunState, testInfo);
+    await page.locator(loginState.selector).fill(firstPassword);
+    await page.locator(firstRunState.selector).fill(firstPassword);
     await page.getByRole("button", { name: "Сохранить пароль и продолжить" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
     const status = await page.request.get(`${origin}/api/v1/auth/status`);
@@ -193,8 +228,8 @@ test("первый запуск создаёт общий пароль прям�
 
     await page.context().clearCookies();
     await page.goto(`${origin}/`);
-    await expect(page.getByRole("heading", { name: "Вход" })).toBeVisible();
-    await page.locator("#password").fill(firstPassword);
+    await expect(page.getByRole("heading", { name: loginState.expectedText })).toBeVisible();
+    await page.locator(loginState.selector).fill(firstPassword);
     await page.getByRole("button", { name: "Войти" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
   } catch (error) {

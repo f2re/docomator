@@ -17,6 +17,96 @@ export const CANONICAL_UI_VIEWS = Object.freeze([
   Object.freeze({ view: "database", label: "Администрирование БД", tier: "advanced" })
 ]);
 
+export const CANONICAL_UI_STATES = Object.freeze([
+  Object.freeze({
+    id: "employee-card",
+    label: "Добавление сотрудника",
+    view: "employees",
+    selector: "#employeeDialog",
+    expectedText: "Сотрудник",
+    runner: "critical-state",
+    checks: Object.freeze(["overflow", "touch", "axe", "zoom", "keyboard"])
+  }),
+  Object.freeze({
+    id: "employee-import",
+    label: "Импорт сотрудников",
+    view: "employees",
+    selector: "#bulkDataImportPanel",
+    expectedText: "Импортировать людей",
+    runner: "critical-state",
+    checks: Object.freeze(["overflow", "touch", "axe", "zoom", "keyboard"])
+  }),
+  Object.freeze({
+    id: "entity-import",
+    label: "Импорт произвольных объектов",
+    view: "entities",
+    selector: "#entityImportDialog",
+    expectedText: "Импорт",
+    runner: "critical-state",
+    checks: Object.freeze(["overflow", "touch", "axe", "zoom", "keyboard"])
+  }),
+  Object.freeze({
+    id: "publication-relations",
+    label: "Связи публикации",
+    view: "publications",
+    selector: "#publicationRelationsDialog",
+    expectedText: "Авторы и классификация",
+    runner: "critical-state",
+    checks: Object.freeze(["overflow", "touch", "axe", "zoom", "keyboard"])
+  }),
+  Object.freeze({
+    id: "template-trial-error",
+    label: "Ошибка пробного заполнения шаблона",
+    view: "templates",
+    selector: "#templateTrialResult",
+    expectedText: "Пробное заполнение не прошло",
+    runner: "critical-state",
+    checks: Object.freeze(["overflow", "touch", "axe", "zoom", "recovery", "state-preservation", "correlation-id"])
+  }),
+  Object.freeze({
+    id: "generation-preflight",
+    label: "Незаполненные обязательные данные выпуска",
+    view: "generation",
+    selector: "#documentGenerationStatus",
+    expectedText: "Найдены незаполненные обязательные поля",
+    runner: "critical-state",
+    checks: Object.freeze(["overflow", "touch", "axe", "zoom", "recovery"])
+  }),
+  Object.freeze({
+    id: "operation-error",
+    label: "Ошибка центра операций",
+    view: "documents",
+    selector: "#operationCenter",
+    expectedText: "Не удалось получить операции",
+    runner: "critical-state",
+    checks: Object.freeze(["overflow", "touch", "axe", "zoom", "recovery", "state-preservation", "correlation-id"])
+  }),
+  Object.freeze({
+    id: "login",
+    label: "Вход по общему паролю",
+    view: null,
+    selector: "#password",
+    expectedText: "Вход",
+    runner: "password-gate",
+    checks: Object.freeze(["keyboard", "error", "session"])
+  }),
+  Object.freeze({
+    id: "first-run",
+    label: "Первый запуск",
+    view: null,
+    selector: "#confirmation",
+    expectedText: "Первый запуск",
+    runner: "password-gate",
+    checks: Object.freeze(["keyboard", "state-preservation", "session"])
+  })
+]);
+
+export function canonicalUiState(id) {
+  const state = CANONICAL_UI_STATES.find((candidate) => candidate.id === id);
+  if (!state) throw new Error(`Неизвестное каноническое состояние UI: ${id}`);
+  return state;
+}
+
 const JSON_HEADERS = {
   "cache-control": "no-store",
   "content-type": "application/json; charset=utf-8",
@@ -100,10 +190,11 @@ async function installDatabaseRegressionScenario(page) {
   });
 }
 
-export async function installUiRegressionScenario(page) {
+export async function installUiRegressionScenario(page, options = {}) {
   const state = await installОформляторApiMock(page, {
     employeeCount: 3,
-    activeTemplate: true
+    activeTemplate: true,
+    ...options
   });
 
   await page.route("**/api/v1/document-formatting/profiles", (route) =>
