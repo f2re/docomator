@@ -4,6 +4,7 @@ import path from "node:path";
 
 const ATTACHMENT_NAME = "docomator-axe-result";
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const EVIDENCE_CONTRACT_VERSION = 3;
 
 function object(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -32,7 +33,7 @@ function validatedRecord(value, status) {
     !object(value) ||
     value.version !== 1 ||
     value.kind !== "docomator.axe-result" ||
-    value.contractVersion !== 2 ||
+    value.contractVersion !== EVIDENCE_CONTRACT_VERSION ||
     !text(value.project) ||
     !text(value.title) ||
     !text(value.label) ||
@@ -146,7 +147,7 @@ export default class AxeJsonReporter {
     const report = {
       version: 1,
       kind: "docomator.axe-report",
-      contractVersion: 2,
+      contractVersion: EVIDENCE_CONTRACT_VERSION,
       binding: this.binding,
       generatedAt: new Date().toISOString(),
       runStatus: result.status,

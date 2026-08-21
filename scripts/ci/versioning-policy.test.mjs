@@ -16,6 +16,9 @@ test("version policy требует bump только для продуктов�
   assert.equal(isProductChange("packages/storage/src/index.ts"), true);
   assert.equal(isProductChange("migrations/0031_example.sql"), true);
   assert.equal(isProductChange("scripts/offline/install.sh"), true);
+  assert.equal(isProductChange("scripts/runtime/backup.mjs"), true);
+  assert.equal(isProductChange("scripts/runtime/ux-acceptance-report-contracts.mjs"), false);
+  assert.equal(isProductChange("scripts/runtime/ux-ui-inventory.mjs"), false);
   assert.equal(isProductChange("apps/api/src/server.test.ts"), false);
   assert.equal(isProductChange("tests/e2e/flow.spec.mjs"), false);
   assert.equal(isProductChange("docs/VERSIONING.md"), false);

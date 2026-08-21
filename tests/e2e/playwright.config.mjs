@@ -6,7 +6,7 @@ const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const artifactDirectory = process.env.DOCOMATOR_E2E_ARTIFACT_DIR
   ? path.resolve(process.env.DOCOMATOR_E2E_ARTIFACT_DIR)
   : path.join(testDirectory, ".tmp");
-const evidenceContractVersion = 2;
+const evidenceContractVersion = 3;
 const chromiumExecutable = process.env.DOCOMATOR_E2E_CHROMIUM_BIN;
 const acceptanceRun = process.env.DOCOMATOR_E2E_ACCEPTANCE === "1";
 const realStackRun = process.env.DOCOMATOR_E2E_REAL_STACK === "1";

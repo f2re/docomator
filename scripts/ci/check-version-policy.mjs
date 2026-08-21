@@ -32,9 +32,18 @@ const derivedVersionFiles = new Set([
   "config/docomator.env.example"
 ]);
 
+// Эти файлы поставляются рядом с runtime, но определяют только release-evidence/P5:
+// они не меняют API, worker, storage, renderer, install/update или пользовательские данные.
+// Остальные scripts/runtime по-прежнему считаются продуктовыми изменениями.
+const releaseEvidenceOnlyFiles = new Set([
+  "scripts/runtime/ux-acceptance-report-contracts.mjs",
+  "scripts/runtime/ux-ui-inventory.mjs"
+]);
+
 export function isProductChange(relativePath) {
   const normalized = String(relativePath).replaceAll("\\", "/");
   if (derivedVersionFiles.has(normalized)) return false;
+  if (releaseEvidenceOnlyFiles.has(normalized)) return false;
   if (normalized.startsWith("tests/")) return false;
   if (/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(normalized)) return false;
   return productPrefixes.some((prefix) => normalized.startsWith(prefix));
