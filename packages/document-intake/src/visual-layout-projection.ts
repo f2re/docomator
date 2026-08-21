@@ -37,9 +37,9 @@ function mergeCoordinate(ref: string): MergeCoordinate | null {
     String(ref || "").toUpperCase()
   );
   if (!match) return null;
-  const startColumn = xlsxColumnNumber(match[1]);
+  const startColumn = xlsxColumnNumber(match[1] ?? "");
   const startRow = Number(match[2]);
-  const endColumn = xlsxColumnNumber(match[3]);
+  const endColumn = xlsxColumnNumber(match[3] ?? "");
   const endRow = Number(match[4]);
   if (endRow < startRow || endColumn < startColumn) return null;
   return { startRow, startColumn, endRow, endColumn };
@@ -129,12 +129,10 @@ export async function analyzeOoxmlVisualLayout(
   }
 
   const tableKeys = new Set(
-    structure.elements
-      .filter((element) => element.kind === "paragraph" && element.tableLocation)
-      .map(
-        (element) =>
-          `${element.part}\u0000${element.tableLocation!.tableIndex}`
-      )
+    structure.elements.flatMap((element) => {
+      if (element.kind !== "paragraph" || !element.tableLocation) return [];
+      return [`${element.part}\u0000${element.tableLocation.tableIndex}`];
+    })
   );
 
   return {
