@@ -9,6 +9,14 @@
   min-width: 0;
 }
 
+.bulk-import-panel,
+#bulkImportPreview,
+.bulk-import-config,
+.bulk-import-mappings {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
 .bulk-import-drop-zone {
   display: grid;
   gap: 0.75rem;
@@ -116,6 +124,23 @@
   min-width: 0;
 }
 
+/* Не даём общей форме переопределять геометрию нативного checkbox.
+   Интерактивная строка остаётся не ниже 40–44 px, сам индикатор — 18 px. */
+.bulk-import-mapping-row .operator-check input[type="checkbox"],
+.bulk-import-config .operator-check input[type="checkbox"],
+.bulk-import-normalization .operator-check input[type="checkbox"] {
+  box-sizing: border-box;
+  width: 18px;
+  min-width: 18px;
+  max-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  flex: 0 0 18px;
+  background: transparent;
+}
+
 .bulk-import-column-name,
 .bulk-import-column-name strong,
 .bulk-import-column-name small,
@@ -164,6 +189,14 @@
   display: grid;
   gap: 0.25rem;
   min-width: 0;
+}
+
+.bulk-import-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .bulk-import-error-card strong,
@@ -220,6 +253,16 @@
   color: var(--muted);
 }
 
+.bulk-import-table-wrap,
+.bulk-import-source-preview {
+  max-width: 100%;
+}
+
+.bulk-import-table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
 @media (max-width: 720px) {
   #bulkImportFileSource,
   #bulkImportPasteSource,
@@ -232,8 +275,14 @@
   }
 
   #bulkImportFileSource > button,
-  .bulk-import-error-card > button {
+  .bulk-import-error-card > button,
+  .bulk-import-error-actions,
+  .bulk-import-error-actions > button {
     width: 100%;
+  }
+
+  .bulk-import-error-actions {
+    justify-content: stretch;
   }
 
   .bulk-import-drop-zone {
