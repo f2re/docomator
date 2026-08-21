@@ -27,8 +27,9 @@ Do not silently weaken a MUST requirement. Update requirements and add an ADR wh
 - SMTP and network destinations are allowlisted.
 - Network share writes must verify mount + sentinel and use temp-file/atomic-rename semantics.
 - Keep the modular monolith. Do not introduce a broker, cache server, microservice, or vector database without measured need and an ADR.
-- ADR-0009 adds one shared application password. Оформлятор still has no user accounts, roles, personal cabinets or section-level ACL: every successfully authenticated client works with the same shared data. Do not turn the password gate into IAM without a superseding ADR.
-- Spaces are hard data partitions, not authorization scopes. Authentication must never weaken or replace `spaceId` validation and database isolation.
+- ADR-0011 defines one shared 4-digit application access code. Оформлятор still has no login, user accounts, roles, personal cabinets or section-level ACL: every client with the code works with the same shared data. Do not turn the access-code gate into IAM without a superseding ADR.
+- The 4-digit code is only an anti-accidental-access barrier inside the trusted corporate perimeter; it must not be presented as Internet-grade authentication or replace firewall/reverse proxy/HTTPS.
+- Spaces are hard data partitions, not authorization scopes. The access-code gate must never weaken or replace `spaceId` validation and database isolation.
 
 ## Repository structure
 
@@ -71,7 +72,7 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Do not perform side effects at module import time except executable entrypoints.
 - Handle SIGTERM/SIGINT and bounded shutdown in long-running processes.
 - Use UTC ISO timestamps internally; store timezone separately where schedules require it.
-- Never log passwords, password hashes, session secrets, raw authorization headers, session cookies or restricted values.
+- Never log access codes, credential/password hashes, SMTP passwords, session secrets, raw authorization headers, session cookies or restricted values.
 
 ## SQLite and queue rules
 
@@ -97,7 +98,8 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - State copy explains the current step, why it is happening, what comes next, and whether data is preserved.
 - Preserve form values after server errors and expose correlation IDs.
 - Keep runtime UI offline: no CDN, remote fonts, analytics, or external assets.
-- Expired authentication must lead to the login screen without losing the user's understanding of what happened; after successful login the user returns to a safe local path.
+- Expired access session must lead to the one-field «Код доступа» screen without losing the user's understanding of what happened; after successful code entry the user returns to a safe local path.
+- The access screen must not ask for a username/login or separate password and must not trigger HTTP Basic Auth/`WWW-Authenticate`.
 
 - User-facing interface, API messages, installation help, notifications, roles, and states are Russian by default.
 - Do not expose raw English library/database errors or unexplained machine values to ordinary users.
@@ -111,7 +113,8 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Verify SHA-256 before system changes.
 - Install into versioned immutable directories and switch an atomic symlink.
 - Back up database/config before migration and roll back on failed readiness.
-- A new installation must remain locked until a shared password is explicitly configured on the target host; updates must preserve the password hash and session secret unless the operator changes them.
+- A new installation must remain locked until the shared 4-digit access code is explicitly configured on the target host; updates must preserve the credential hash and session secret unless the operator changes the code.
+- The canonical installed recovery path is `sudo /opt/docomator/current/first-run.sh --reset-code`; it must not require the old code and must not change user data.
 - Product versioning follows `docs/VERSIONING.md`: use `npm run version:bump -- patch` for backward-compatible fixes and `-- minor` for new compatible capabilities. Do not keep an old product version merely because release maturity is still `candidate`.
 - `version` describes the product capability/compatibility set; `status` and `channel` describe release maturity. A `candidate/pilot` release may and must receive a new SemVer when product behavior changes.
 - Product-changing PRs must update `RELEASE_IDENTITY.json.version`; CI rejects a runtime/product change that keeps the previous version. A pure `candidate/pilot → stable/production` maturity transition may retain the same version when product behavior is unchanged.
@@ -129,7 +132,6 @@ A change is done when:
 - `npm run check` passes;
 - migration/rollback notes are present when applicable;
 - roadmap status is updated when a milestone changes.
-
 
 ## GitHub write workflow
 
