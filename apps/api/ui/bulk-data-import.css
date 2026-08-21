@@ -152,10 +152,10 @@
 }
 
 .bulk-import-mapping-row select,
-.bulk-import-mapping-row input,
+.bulk-import-mapping-row input:not([type="checkbox"]):not([type="radio"]),
 .bulk-import-core-fields select,
-.bulk-import-core-fields input,
-.bulk-import-group-fields input {
+.bulk-import-core-fields input:not([type="checkbox"]):not([type="radio"]),
+.bulk-import-group-fields input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
   min-height: 2.75rem;
   border: 1px solid var(--border);
@@ -197,16 +197,27 @@
 }
 
 .bulk-import-table-wrap {
+  width: 100%;
   max-width: 100%;
-  overflow: auto;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  contain: inline-size;
+  box-sizing: border-box;
 }
 
 .bulk-import-source-preview {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 0.8rem;
   background: var(--surface-2);
+  contain: inline-size;
+  box-sizing: border-box;
 }
 
 .bulk-import-source-preview summary {
@@ -272,11 +283,13 @@
 
 .bulk-import-table th,
 .bulk-import-table td {
+  min-width: 100px;
   max-width: 18rem;
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
   padding: 0.6rem 0.7rem;
   text-align: left;
+  word-break: break-word;
   overflow-wrap: anywhere;
 }
 

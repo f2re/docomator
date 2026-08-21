@@ -487,10 +487,25 @@ function initializeBulkImportSources() {
   const upload = panel.querySelector(".bulk-import-upload");
   if (upload) {
     upload.innerHTML = `<div class="bulk-import-source-tabs" role="group" aria-label="Источник данных"><button class="secondary-button is-active" type="button" data-bulk-import-source="file" aria-pressed="true">Файл CSV или XLSX</button><button class="secondary-button" type="button" data-bulk-import-source="paste" aria-pressed="false">Вставить из Excel</button></div>
-      <section id="bulkImportFileSource"><label class="generation-field"><span>Таблица с людьми и данными</span><input id="bulkImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><small>До 8 МБ, 100 колонок и 1000 строк. В XLSX используется первый рабочий лист.</small></label><button class="primary-button" id="bulkImportPreviewButton" type="button">Прочитать файл</button></section>
-      <section id="bulkImportPasteSource" hidden><label class="generation-field"><span>Вставьте диапазон вместе с заголовками</span><textarea id="bulkImportPaste" rows="10" placeholder="ФИО&#9;Номер зачётной книжки&#9;Тема научной работы&#9;Научный руководитель"></textarea><small>Скопируйте диапазон из Excel или LibreOffice. Первая строка должна содержать названия колонок.</small></label><div class="bulk-import-paste-actions"><button class="secondary-button" id="bulkImportStudentExample" type="button">Пример: студенты и темы</button><button class="primary-button" id="bulkImportPastePreview" type="button">Разобрать таблицу</button></div></section>`;
+      <section id="bulkImportFileSource"><label class="generation-field"><span>Таблица с людьми и данными</span><input id="bulkImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><small>До 8 МБ, 100 колонок и 1000 строк. В XLSX используется первый рабочий лист.</small></label><div class="bulk-import-paste-actions"><button class="secondary-button" id="bulkImportDownloadTemplate" type="button">Скачать образец таблицы (.csv)</button><button class="primary-button" id="bulkImportPreviewButton" type="button">Прочитать файл</button></div></section>
+      <section id="bulkImportPasteSource" hidden><label class="generation-field"><span>Вставьте диапазон вместе с заголовками</span><textarea id="bulkImportPaste" rows="10" placeholder="ФИО&#9;Табельный номер&#9;Должность&#9;Подразделение&#9;Телефон"></textarea><small>Скопируйте диапазон из Excel или LibreOffice. Первая строка должна содержать названия колонок.</small></label><div class="bulk-import-paste-actions"><button class="secondary-button" id="bulkImportEmployeeExample" type="button">Пример: сотрудники</button><button class="secondary-button" id="bulkImportStudentExample" type="button">Пример: студенты</button><button class="primary-button" id="bulkImportPastePreview" type="button">Разобрать таблицу</button></div></section>`;
     upload.querySelector("#bulkImportPreviewButton")?.addEventListener("click", previewBulkImportFile);
     upload.querySelectorAll("[data-bulk-import-source]").forEach((button) => button.addEventListener("click", () => switchBulkImportSource(button.dataset.bulkImportSource)));
+    upload.querySelector("#bulkImportDownloadTemplate")?.addEventListener("click", () => {
+      const sampleContent = "\uFEFFФИО\tТабельный номер\tДолжность\tПодразделение\tТелефон\tЭлектронная почта\nИванов Иван Иванович\t1042\tВедущий инженер\tОтдел разработки\t+7 (999) 123-45-67\tivanov@company.local\nПетрова Анна Сергеевна\t1043\tГлавный специалист\tБухгалтерия\t+7 (999) 234-56-78\tpetrova@company.local\n";
+      const blob = new Blob([sampleContent], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "Шаблон_импорта_сотрудников.csv";
+      anchor.click();
+      URL.revokeObjectURL(url);
+    });
+    upload.querySelector("#bulkImportEmployeeExample")?.addEventListener("click", () => {
+      const textarea = document.querySelector("#bulkImportPaste");
+      textarea.value = "ФИО\tТабельный номер\tДолжность\tПодразделение\tТелефон\tЭлектронная почта\nИванов Иван Иванович\t1042\tВедущий инженер\tОтдел разработки\t+7 (999) 123-45-67\tivanov@company.local\nПетрова Анна Сергеевна\t1043\tГлавный специалист\tБухгалтерия\t+7 (999) 234-56-78\tpetrova@company.local\nСидоров Алексей Михайлович\t1044\tАналитик данных\tОтдел аналитики\t+7 (999) 345-67-89\tsidorov@company.local";
+      textarea.focus();
+    });
     upload.querySelector("#bulkImportStudentExample")?.addEventListener("click", () => {
       const textarea = document.querySelector("#bulkImportPaste");
       textarea.value = "ФИО\tНомер зачётной книжки\tУчебная группа\tТема научной работы\tНаучный руководитель\nИванов Иван Иванович\tЗК-001\tМ-21\tОценка точности краткосрочного прогноза осадков\tПетров Пётр Петрович\nСмирнова Анна Сергеевна\tЗК-002\tМ-21\tАвтоматизация обработки данных радиозондирования\tСидорова Мария Андреевна";

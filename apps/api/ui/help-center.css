@@ -284,11 +284,14 @@
 }
 
 .help-center-article-body table {
-  width: 100%;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
   margin: 0.8rem 0;
   border-collapse: separate;
   border-spacing: 0;
-  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   font-size: 0.82rem;

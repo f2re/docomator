@@ -42,8 +42,10 @@ function countDelimiter(record: string, delimiter: string): number {
   return count;
 }
 
-function firstLogicalRecord(text: string): string {
+function sampleLogicalRecords(text: string, maxRecords = 10): string[] {
+  const records: string[] = [];
   let quoted = false;
+  let start = 0;
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
     if (character === '"') {
@@ -52,13 +54,52 @@ function firstLogicalRecord(text: string): string {
       continue;
     }
     if (!quoted && (character === "\n" || character === "\r")) {
-      const record = text.slice(0, index);
-      if (record.trim().length > 0) return record;
-      const next = character === "\r" && text[index + 1] === "\n" ? index + 2 : index + 1;
-      return firstLogicalRecord(text.slice(next));
+      const record = text.slice(start, index).trim();
+      if (record.length > 0) {
+        records.push(record);
+        if (records.length >= maxRecords) return records;
+      }
+      if (character === "\r" && text[index + 1] === "\n") index += 1;
+      start = index + 1;
     }
   }
-  return text;
+  const remaining = text.slice(start).trim();
+  if (remaining.length > 0) records.push(remaining);
+  return records;
+}
+
+function detectCsvDelimiter(text: string): string {
+  const records = sampleLogicalRecords(text, 10);
+  if (records.length === 0) return "\t";
+
+  const firstRecord = records[0]!;
+  const tabCount = countDelimiter(firstRecord, "\t");
+  const semicolonCount = countDelimiter(firstRecord, ";");
+  const commaCount = countDelimiter(firstRecord, ",");
+
+  if (tabCount > 0) {
+    const tabCounts = records.map((r) => countDelimiter(r, "\t"));
+    const consistentTabs = tabCounts.every((c) => c === tabCount);
+    if (consistentTabs || tabCount >= Math.max(semicolonCount, commaCount)) {
+      return "\t";
+    }
+  }
+
+  const candidates = [";", ",", "\t"] as const;
+  const scored = candidates.map((candidate) => {
+    const counts = records.map((r) => countDelimiter(r, candidate));
+    const first = counts[0] ?? 0;
+    if (first === 0) return { candidate, score: -1 };
+    const consistent = counts.every((c) => c === first);
+    const weight = candidate === ";" ? 3 : candidate === "," ? 2 : 1;
+    return {
+      candidate,
+      score: (consistent ? 1000 : 0) + first * 10 + weight
+    };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0]?.score && scored[0].score > 0 ? scored[0].candidate : "\t";
 }
 
 export function parseCsvImportRows(buffer: Uint8Array): ParsedCsvImport {
@@ -72,19 +113,8 @@ export function parseCsvImportRows(buffer: Uint8Array): ParsedCsvImport {
     );
   }
 
-  const firstRecord = firstLogicalRecord(text);
-  const detectedDelimiter = [";", ",", "\t"]
-    .map((candidate) => ({
-      candidate,
-      count: countDelimiter(firstRecord, candidate)
-    }))
-    .sort((left, right) => right.count - left.count)[0];
-  // Один столбец — допустимая таблица. В этом случае разделитель физически
-  // отсутствует; выбираем табуляцию как нейтральный символ, которого нет в записи.
-  const delimiter =
-    detectedDelimiter === undefined || detectedDelimiter.count < 1
-      ? { candidate: "\t", count: 0 }
-      : detectedDelimiter;
+  const delimiterCandidate = detectCsvDelimiter(text);
+  const delimiter = { candidate: delimiterCandidate, count: 0 };
 
   const rows: ParsedCsvImportRow[] = [];
   let row: string[] = [];

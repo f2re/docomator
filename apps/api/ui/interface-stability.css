@@ -317,10 +317,12 @@ time,
 .primary-button,
 .secondary-button {
   min-height: var(--touch-target);
-  padding: 0 15px;
+  padding: 0 18px;
   font-weight: 700;
   border-radius: var(--radius-control);
   box-shadow: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .primary-button {
@@ -647,10 +649,10 @@ time,
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-.field input,
+.field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]),
 .field select,
 .field textarea,
-.generation-field input,
+.generation-field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]),
 .generation-field select,
 .generation-field textarea {
   min-height: 42px;
@@ -660,14 +662,39 @@ time,
   border-radius: var(--radius-control);
 }
 
-.field input:focus,
+.field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):focus,
 .field select:focus,
 .field textarea:focus,
-.generation-field input:focus,
+.generation-field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):focus,
 .generation-field select:focus,
 .generation-field textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+:where(input[type="checkbox"], input[type="radio"]) {
+  appearance: auto;
+  box-sizing: border-box;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  flex: 0 0 18px !important;
+  accent-color: var(--accent-fill, var(--accent));
+  cursor: pointer;
+}
+
+:where(label:has(> input[type="checkbox"]), label:has(> input[type="radio"]), .operator-check, .bulk-import-group-option, .product-check) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-height: var(--touch-target, 44px);
+  cursor: pointer;
 }
 
 .employee-toolbar {
@@ -1276,7 +1303,7 @@ th {
     width: var(--touch-target);
     height: var(--touch-target);
     min-height: var(--touch-target);
-    flex: 0 0 38px;
+    flex: 0 0 var(--touch-target);
   }
 
   .system-status-control {
@@ -1543,7 +1570,7 @@ th {
     width: var(--touch-target);
     height: var(--touch-target);
     min-height: var(--touch-target);
-    flex-basis: 36px;
+    flex: 0 0 var(--touch-target);
   }
 
   .context-chip {

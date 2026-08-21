@@ -516,3 +516,59 @@ test("finalization failure rolls back imported rows, history, audit and outbox",
     fixture.cleanup();
   }
 });
+
+test("parses flexible date and number formats from Excel and clipboard", () => {
+  const fixture = createMigratedTestStore();
+  try {
+    const spaces = new SpaceRegistry(fixture.store);
+    const imports = new DataImportRegistry(fixture.store, { spaces });
+    const space = spaces.createSpace(
+      { key: "staff-dates", name: "Сотрудники и даты" },
+      context("corr-space-dates")
+    );
+    const input: ExecuteDataImportInput = {
+      ...employeeImport(
+        [
+          {
+            "Табельный номер": "001",
+            "ФИО": "Иванов Иван",
+            "Оклад": "150 000,50 ₽",
+            "Дата приема": "1.5.2024"
+          },
+          {
+            "Табельный номер": "002",
+            "ФИО": "Петрова Анна",
+            "Оклад": "1,250.00",
+            "Дата приема": "21/08/26"
+          },
+          {
+            "Табельный номер": "003",
+            "ФИО": "Сидоров Петр",
+            "Оклад": "75 000 руб.",
+            "Дата приема": "2024-11-15T10:30:00.000Z"
+          }
+        ],
+        [
+          {
+            column: "Оклад",
+            createIfMissing: true,
+            label: "Оклад",
+            valueType: "number"
+          },
+          {
+            column: "Дата приема",
+            createIfMissing: true,
+            label: "Дата приема",
+            valueType: "date"
+          }
+        ]
+      )
+    };
+    const result = imports.execute(space.id, input, context("corr-import-dates"));
+    assert.equal(result.createdCount, 3);
+    assert.equal(result.failedCount, 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+

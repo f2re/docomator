@@ -199,9 +199,14 @@
 }
 
 .database-admin-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   max-height: min(62vh, 720px);
   overflow: auto;
   overscroll-behavior: contain;
+  contain: inline-size;
+  box-sizing: border-box;
 }
 
 .database-admin-table {

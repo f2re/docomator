@@ -287,7 +287,17 @@ function normalizeRows(
 }
 
 function parseNumber(raw: string): number {
-  const normalized = raw.replace(/[\s\u00a0]/gu, "").replace(",", ".");
+  let normalized = raw
+    .replace(/[\s\u00a0\u202F]/gu, "")
+    .replace(/[₽$€%]/gu, "")
+    .replace(/руб\.?/giu, "");
+
+  if (/^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/u.test(normalized)) {
+    normalized = normalized.replaceAll(",", "");
+  } else {
+    normalized = normalized.replace(",", ".");
+  }
+
   const value = Number(normalized);
   if (!Number.isFinite(value)) {
     throw new DataImportValidationError(`«${raw}» не является числом.`);
@@ -310,20 +320,49 @@ function parseBoolean(raw: string): boolean {
 
 function parseDate(raw: string): string {
   const normalized = raw.trim();
-  const russian = /^(\d{2})[.\/-](\d{2})[.\/-](\d{4})$/u.exec(normalized);
-  const candidate = russian
-    ? `${russian[3]}-${russian[2]}-${russian[1]}`
-    : normalized;
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(candidate)) {
-    throw new DataImportValidationError(
-      `«${raw}» не распознано как дата. Используйте ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.`
-    );
+  if (/^\d{4}-\d{2}-\d{2}T/u.test(normalized)) {
+    const isoDate = normalized.slice(0, 10);
+    const date = new Date(`${isoDate}T00:00:00.000Z`);
+    if (!Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === isoDate) {
+      return isoDate;
+    }
   }
-  const date = new Date(`${candidate}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== candidate) {
-    throw new DataImportValidationError(`«${raw}» содержит недопустимую дату.`);
+
+  const russianFull = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/u.exec(normalized);
+  if (russianFull) {
+    const day = russianFull[1]!.padStart(2, "0");
+    const month = russianFull[2]!.padStart(2, "0");
+    const year = russianFull[3]!;
+    const candidate = `${year}-${month}-${day}`;
+    const date = new Date(`${candidate}T00:00:00.000Z`);
+    if (!Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === candidate) {
+      return candidate;
+    }
   }
-  return candidate;
+
+  const russianShort = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})$/u.exec(normalized);
+  if (russianShort) {
+    const day = russianShort[1]!.padStart(2, "0");
+    const month = russianShort[2]!.padStart(2, "0");
+    const shortYear = Number.parseInt(russianShort[3]!, 10);
+    const year = shortYear <= 49 ? `20${russianShort[3]}` : `19${russianShort[3]}`;
+    const candidate = `${year}-${month}-${day}`;
+    const date = new Date(`${candidate}T00:00:00.000Z`);
+    if (!Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === candidate) {
+      return candidate;
+    }
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(normalized)) {
+    const date = new Date(`${normalized}T00:00:00.000Z`);
+    if (!Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === normalized) {
+      return normalized;
+    }
+  }
+
+  throw new DataImportValidationError(
+    `«${raw}» не распознано как дата. Используйте ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.`
+  );
 }
 
 function propertyEnumValues(property: PropertyDefinitionRecord): string[] {

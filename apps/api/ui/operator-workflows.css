@@ -8,7 +8,7 @@
 .operator-employee-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .operator-employee-field-card { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 13px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; }
 .operator-employee-field-card.is-filled { border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); background: color-mix(in srgb, var(--accent-soft) 38%, var(--surface-2)); }
-.operator-employee-field-card input,
+.operator-employee-field-card input:not([type="checkbox"]):not([type="radio"]),
 .operator-employee-field-card select,
 .operator-employee-field-card textarea { width: 100%; min-height: 44px; padding: 9px 11px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 11px; }
 .operator-employee-field-card textarea { min-height: 84px; resize: vertical; }

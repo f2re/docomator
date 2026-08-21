@@ -254,21 +254,29 @@
 }
 
 .bulk-import-table-wrap,
-.bulk-import-source-preview {
+.bulk-import-source-preview,
+.bulk-import-config,
+.bulk-import-mappings {
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
+  contain: inline-size;
+  box-sizing: border-box;
 }
 
 .bulk-import-table-wrap {
   overflow-x: auto;
   overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 820px) {
   #bulkImportFileSource,
   #bulkImportPasteSource,
   .bulk-import-core-fields,
   .bulk-import-group-fields,
   .bulk-import-submit-row,
+  .bulk-import-mapping-row,
   .bulk-import-mapping-row-enhanced,
   .bulk-import-error-card {
     grid-template-columns: 1fr;

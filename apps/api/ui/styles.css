@@ -45,7 +45,7 @@ small { color: var(--hint); }
 .view-description { max-width: 720px; font-size: .92rem; }
 .topbar-actions, .hero-actions, .dialog-footer > div { display: flex; align-items: center; gap: 10px; }
 .icon-button { display: grid; width: 44px; height: 44px; place-items: center; color: var(--muted); font-size: 1.2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 13px; box-shadow: var(--shadow); }
-.primary-button, .secondary-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 7px; padding: 0 16px; font-weight: 700; border-radius: 13px; }
+.primary-button, .secondary-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; font-weight: 700; border-radius: 13px; white-space: nowrap; flex-shrink: 0; }
 .primary-button { color: white; background: var(--accent-fill); }
 .primary-button:hover { background: var(--accent-fill-hover); }
 .secondary-button { background: var(--surface); border: 1px solid var(--border-strong); }
@@ -248,9 +248,9 @@ small { color: var(--hint); }
 .field { display: grid; gap: 7px; }
 .field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .field label { font-size: .85rem; font-weight: 700; }
-.field input, .field select, .field textarea { width: 100%; min-height: 44px; padding: 10px 12px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 12px; }
+.field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), .field select, .field textarea { width: 100%; min-height: 44px; padding: 10px 12px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 12px; }
 .field textarea { min-height: 94px; resize: vertical; }
-.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: 0; }
+.field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: 0; }
 .field small { color: var(--hint); font-size: .75rem; line-height: 1.42; }
 .required-marker { color: var(--danger); }
 .form-error { margin: 0 24px 20px; padding: 13px 14px; color: var(--danger); font-size: .82rem; background: var(--danger-soft); border-radius: 12px; }
