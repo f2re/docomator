@@ -78,8 +78,9 @@ const assets: Readonly<Record<string, UiAsset>> = {
     cacheControl: "no-store"
   },
   "/ui/app.js": {
-    fileName: "field-groups-ui.js",
+    fileName: "access-session.js",
     appendFileNames: [
+      "field-groups-ui.js",
       "searchable-select.js",
       "space-property-scope.js",
       "app.js",

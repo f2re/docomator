@@ -10,8 +10,8 @@ import { fileURLToPath } from "node:url";
 import { loadApiConfig } from "@docomator/config";
 import { buildZipFixture } from "@docomator/document-intake/testing";
 import { ContentAddressedObjectStore, SqliteStore } from "@docomator/storage";
+import { installAccessCodeGate } from "./access-code-gate.js";
 import { buildApp } from "./app.js";
-import { installPasswordGate } from "./password-gate.js";
 import { registerProductRoutes } from "./product-routes.js";
 
 function migrate(dataDir: string): void {
@@ -33,13 +33,13 @@ function docx(): Buffer {
   ]);
 }
 
-test("ГОСТ доступен без cookie, но пространства остаются за password gate", async () => {
+test("ГОСТ доступен без кода, но пространства остаются за access-code gate", async () => {
   const dataDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), "docomator-public-gost-"));
   migrate(dataDir);
   const store = new SqliteStore({ databasePath: path.join(dataDir, "docomator.db") });
   const objectStore = new ContentAddressedObjectStore(path.join(dataDir, "objects"));
   const app = buildApp(loadApiConfig({ DOCOMATOR_DATA_DIR: dataDir, DOCOMATOR_LOG_LEVEL: "fatal" }), { store, objectStore });
-  installPasswordGate(app, { mode: "required", passwordHash: null, sessionSecret: "s".repeat(64), sessionTtlSeconds: 3600 });
+  installAccessCodeGate(app, { mode: "required", credentialHash: null, sessionSecret: "s".repeat(64), sessionTtlSeconds: 3600 });
   registerProductRoutes(app, store, objectStore);
   try {
     const page = await app.inject({ method: "GET", url: "/gost" });
@@ -60,6 +60,7 @@ test("ГОСТ доступен без cookie, но пространства о�
 
     const protectedApi = await app.inject({ method: "GET", url: "/api/v1/spaces" });
     assert.equal(protectedApi.statusCode, 401, protectedApi.body);
+    assert.equal(protectedApi.json().error.code, "access_code_required");
   } finally {
     await app.close();
     store.close();

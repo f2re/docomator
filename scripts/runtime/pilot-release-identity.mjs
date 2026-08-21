@@ -2,6 +2,7 @@ const MAXIMUM_RELEASE_RESPONSE_BYTES = 64 * 1024;
 const COMMIT_PATTERN = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+~_-]{0,127}$/u;
+const ACCESS_CODE_PATTERN = /^[0-9]{4}$/u;
 const RELEASE_KEYS = [
   "gitCommit",
   "name",
@@ -33,20 +34,20 @@ function sessionCookieFromResponse(response) {
   const source = response.headers.get("set-cookie") ?? "";
   const cookie = source.split(";", 1)[0]?.trim() ?? "";
   if (!cookie.startsWith("docomator_session=") || cookie.length > 4096) {
-    throw new Error("API входа не выдал корректную сессионную cookie.");
+    throw new Error("API кода доступа не выдал корректную сессионную cookie.");
   }
   return cookie;
 }
 
-export async function createSharedPasswordSession(baseUrl, password) {
-  if (typeof password !== "string" || password.length === 0 || password.length > 512) {
-    throw new Error("Пароль для проверки установленного Оформлятор не задан или имеет недопустимую длину.");
+export async function createAccessCodeSession(baseUrl, code) {
+  if (typeof code !== "string" || !ACCESS_CODE_PATTERN.test(code)) {
+    throw new Error("Для проверки установленного Оформлятора нужен код доступа из 4 цифр.");
   }
   let endpoint;
   try {
-    endpoint = new URL("/api/v1/auth/login", baseUrl);
+    endpoint = new URL("/api/v1/access/unlock", baseUrl);
   } catch {
-    throw new Error("Адрес API для входа некорректен.");
+    throw new Error("Адрес API кода доступа некорректен.");
   }
   let response;
   try {
@@ -57,18 +58,18 @@ export async function createSharedPasswordSession(baseUrl, password) {
         "content-type": "application/json",
         origin: endpoint.origin
       },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ code }),
       signal: AbortSignal.timeout(15_000)
     });
   } catch (error) {
-    throw new Error(`API входа Оформлятор недоступен: ${errorMessage(error)}`);
+    throw new Error(`API кода доступа Оформлятора недоступен: ${errorMessage(error)}`);
   }
   if (!response.ok) {
     const retryAfter = response.headers.get("retry-after");
     throw new Error(
       response.status === 429 && retryAfter
-        ? `Вход временно заблокирован; повторите через ${retryAfter} сек.`
-        : `API входа Оформлятор вернул HTTP ${response.status}.`
+        ? `Ввод кода временно заблокирован; повторите через ${retryAfter} сек.`
+        : `API кода доступа Оформлятора вернул HTTP ${response.status}.`
     );
   }
   return sessionCookieFromResponse(response);
@@ -112,7 +113,7 @@ export function validateInstalledReleaseIdentity(value, expectedVersion = null) 
 export async function fetchInstalledReleaseIdentity(
   baseUrl,
   expectedVersion = null,
-  password = null
+  accessCode = null
 ) {
   let endpoint;
   try {
@@ -121,8 +122,8 @@ export async function fetchInstalledReleaseIdentity(
     throw new Error("Адрес API для проверки релиза некорректен.");
   }
   let cookie = null;
-  if (password !== null) {
-    cookie = await createSharedPasswordSession(baseUrl, password);
+  if (accessCode !== null) {
+    cookie = await createAccessCodeSession(baseUrl, accessCode);
   }
   let response;
   try {
@@ -232,7 +233,7 @@ export function bindPilotReleaseIdentity(reportInput, identity, failure = null) 
         summary: "Не удалось подтвердить установленный релиз",
         detail: failure || "Причина не указана",
         remediation:
-          "Проверьте общий пароль, /api/v1/system/release, release.json текущего каталога и настройки службы API."
+          "Проверьте 4-значный код доступа, /api/v1/system/release, release.json текущего каталога и настройки службы API."
       })
     );
   }

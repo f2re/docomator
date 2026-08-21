@@ -59,23 +59,32 @@ export async function collectAuditRemediationFindings(
     findings.push("apps/api/src/app.ts: отсутствует явная регистрация импорта данных");
   }
 
-  const passwordGate = await readRequired(
+  const accessCodeGate = await readRequired(
     root,
-    "apps/api/src/password-gate.ts",
+    "apps/api/src/access-code-gate.ts",
     findings
   );
   for (const required of [
-    "DOCOMATOR_ACCESS_PASSWORD_HASH",
+    "DOCOMATOR_ACCESS_CODE_HASH",
     "DOCOMATOR_SESSION_SECRET",
     "scryptSync(",
     "timingSafeEqual(",
     "HttpOnly",
     "SameSite=Strict",
-    "login_temporarily_blocked"
+    "access_code_temporarily_blocked",
+    "/api/v1/access/unlock",
+    "/access"
   ]) {
-    if (!passwordGate.includes(required)) {
+    if (!accessCodeGate.includes(required)) {
       findings.push(
-        `apps/api/src/password-gate.ts: неполный общий password gate из ADR-0009: «${required}»`
+        `apps/api/src/access-code-gate.ts: неполный общий code gate из ADR-0011: «${required}»`
+      );
+    }
+  }
+  for (const forbidden of ['name="username"', 'type="password"', "WWW-Authenticate"]) {
+    if (accessCodeGate.includes(forbidden)) {
+      findings.push(
+        `apps/api/src/access-code-gate.ts: обнаружен запрещённый остаток login/password модели: «${forbidden}»`
       );
     }
   }
@@ -86,32 +95,36 @@ export async function collectAuditRemediationFindings(
     findings
   );
   for (const required of [
-    "DOCOMATOR_ACCESS_PASSWORD_HASH=",
+    "DOCOMATOR_ACCESS_CODE_HASH=",
     "DOCOMATOR_SESSION_SECRET=",
     "DOCOMATOR_SESSION_TTL_SECONDS="
   ]) {
     if (!envExample.includes(required)) {
       findings.push(
-        `config/docomator.env.example: отсутствует настройка общего password gate: «${required}»`
+        `config/docomator.env.example: отсутствует настройка общего code gate: «${required}»`
       );
     }
   }
+  if (envExample.includes("DOCOMATOR_ACCESS_PASSWORD_HASH=")) {
+    findings.push("config/docomator.env.example: новый config не должен публиковать legacy password key");
+  }
 
-  const passwordSetup = await readRequired(
+  const codeSetup = await readRequired(
     root,
-    "scripts/offline/set-password.sh",
+    "scripts/offline/set-access-code.sh",
     findings
   );
   for (const required of [
+    "^[0-9]{4}$",
     "scryptSync",
     "randomBytes(48)",
-    "DOCOMATOR_ACCESS_PASSWORD_HASH",
+    "DOCOMATOR_ACCESS_CODE_HASH",
     "DOCOMATOR_SESSION_SECRET",
     "systemctl restart docomator-api.service"
   ]) {
-    if (!passwordSetup.includes(required)) {
+    if (!codeSetup.includes(required)) {
       findings.push(
-        `scripts/offline/set-password.sh: неполная локальная настройка password gate: «${required}»`
+        `scripts/offline/set-access-code.sh: неполная локальная настройка кода доступа: «${required}»`
       );
     }
   }

@@ -42,7 +42,7 @@ export async function checkBranding() {
     "docs/BRAND_DESIGN_STUDY.md",
     "apps/api/ui/index.html",
     "apps/api/ui/help-center.js",
-    "apps/api/src/password-gate.ts",
+    "apps/api/src/access-code-gate.ts",
     "apps/api/ui/brand-tokens.css"
   ];
   for (const relativePath of required) {
@@ -136,12 +136,12 @@ export async function checkBranding() {
     findings.push(`${faviconPath}: знак не использует канонические бумагу и чернила`);
   }
 
-  const loginPath = "apps/api/src/password-gate.ts";
-  const login = (await inspectText(loginPath))?.toLowerCase() ?? "";
+  const accessPath = "apps/api/src/access-code-gate.ts";
+  const accessSurface = (await inspectText(accessPath))?.toLowerCase() ?? "";
   for (const fragment of ["#f3f1eb", "#fffefa", "#176b78", "#151817"]) {
-    if (!login.includes(fragment)) findings.push(`${loginPath}: login surface не содержит ${fragment}`);
+    if (!accessSurface.includes(fragment)) findings.push(`${accessPath}: экран кода доступа не содержит ${fragment}`);
   }
-  if (login.includes("font-family:inter")) findings.push(`${loginPath}: login не должен вводить отдельный шрифт Inter`);
+  if (accessSurface.includes("font-family:inter")) findings.push(`${accessPath}: экран кода не должен вводить отдельный шрифт Inter`);
 
   const brandingPath = "docs/BRANDING.md";
   const branding = await inspectText(brandingPath);
