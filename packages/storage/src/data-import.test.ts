@@ -40,7 +40,11 @@ function employeeImport(
     sourceSha256: "a".repeat(64),
     identityColumn: "Табельный номер",
     displayNameColumn: "ФИО",
-    headers: ["Табельный номер", "ФИО", "Должность"],
+    headers: [
+      "Табельный номер",
+      "ФИО",
+      ...mappings.map((mapping) => mapping.column)
+    ],
     rows,
     mappings,
     group: { name: "Летний импорт" }
@@ -571,4 +575,3 @@ test("parses flexible date and number formats from Excel and clipboard", () => {
     fixture.cleanup();
   }
 });
-
