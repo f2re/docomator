@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { expect, test } from "./fixtures/test.mjs";
 import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const realStackEnabled = process.env.DOCOMATOR_E2E_REAL_STACK === "1";
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+const xlsxFixture = path.join(currentDirectory, "fixtures", "import-employees.xlsx");
 
 async function openEmployeeImport(page) {
   const app = new ОформляторPage(page);
@@ -51,13 +55,9 @@ async function pasteImport(page, text, fieldColumn) {
   await planAndExecute(page);
 }
 
-async function csvImport(page, fileName, text, fieldColumn) {
+async function fileImport(page, file, fieldColumn) {
   await page.locator('[data-bulk-import-source="file"]').click();
-  await page.locator("#bulkImportFile").setInputFiles({
-    name: fileName,
-    mimeType: "text/csv",
-    buffer: Buffer.from(text, "utf8")
-  });
+  await page.locator("#bulkImportFile").setInputFiles(file);
   await page.locator("#bulkImportPreviewButton").click();
   await expect(page.locator("#bulkImportMessage")).toContainText(
     "Файл прочитан",
@@ -65,6 +65,18 @@ async function csvImport(page, fileName, text, fieldColumn) {
   );
   await configureTextMapping(page, fieldColumn);
   await planAndExecute(page);
+}
+
+async function csvImport(page, fileName, text, fieldColumn) {
+  await fileImport(
+    page,
+    {
+      name: fileName,
+      mimeType: "text/csv",
+      buffer: Buffer.from(text, "utf8")
+    },
+    fieldColumn
+  );
 }
 
 async function expectEmployeeField(page, displayName, fieldLabel, fieldValue) {
@@ -129,4 +141,21 @@ test("CSV file-flow через настоящий API и SQLite остаётся
     fieldColumn
   );
   await expectEmployeeField(page, displayName, fieldColumn, "Лаборатория");
+});
+
+test("XLSX file-flow через настоящий API и SQLite остаётся рабочим", async ({ page }) => {
+  test.skip(
+    !realStackEnabled,
+    "Сценарий запускается только с настоящими API и SQLite."
+  );
+  test.setTimeout(90_000);
+
+  await openEmployeeImport(page);
+  await fileImport(page, xlsxFixture, "Подразделение XLSX");
+  await expectEmployeeField(
+    page,
+    "Орлова Ольга XLSX-REAL",
+    "Подразделение XLSX",
+    "Испытательная лаборатория"
+  );
 });
