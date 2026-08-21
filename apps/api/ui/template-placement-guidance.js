@@ -35,12 +35,6 @@
   };
 }
 
-/*
- * CSP-safe rich Office projection.
- * The base visual editor parses the rich layout contract, while this final layer
- * renders only data tokens. Per-document formatting comes from a same-origin
- * stylesheet endpoint, so the global style-src remains 'self' without unsafe-inline.
- */
 {
   const visualStylesheetId = "templateVisualLayoutStylesheet";
 
@@ -278,7 +272,7 @@
     const sheets = layout?.xlsx?.sheets || [];
     const tabs = sheets.map((sheet, index) => `<button type="button" role="tab" class="template-xlsx-tab${index === 0 ? " is-active" : ""}" data-visual-sheet-tab="${structureEscape(sheet.path)}" aria-selected="${index === 0 ? "true" : "false"}">${structureEscape(sheet.name)}</button>`).join("");
     const sheetMarkup = sheets.map(cspXlsxSheetMarkup).join("");
-    result.innerHTML = `<article class="structure-report template-visual-editor template-visual-xlsx"><header><div><p class="eyebrow">Разметка полей</p><h3>${structureEscape(report.fileName)}</h3><p>Книга показана как безопасная сетка Excel/Calc: размеры, объединения и оформление ячеек читаются из сохранённого XLSX.</p></div><span class="pill pill-success">Листы и оформление прочитаны</span></header><div class="structure-metrics"><div><strong>${summary.sheets ?? 0}</strong><span>листов</span></div><div><strong>${summary.cells ?? 0}</strong><span>ячеек</span></div><div><strong>${summary.formulas ?? 0}</strong><span>формул</span></div></div>${visualWarnings(layout)}<div class="template-visual-accuracy-note"><strong>Формулы не становятся полями.</strong><span>Показывается последнее сохранённое значение и оформление. Для привязки доступна только обычная ячейка; backend повторно проверяет адрес. Изображения показаны около их якорной ячейки.</span></div><div class="template-visual-workspace"><div class="template-visual-canvas template-xlsx-canvas" aria-label="Визуальное представление XLSX"><div class="template-xlsx-tabs" role="tablist" aria-label="Листы книги">${tabs}</div>${sheetMarkup || '<p class="template-visual-empty-region">В книге нет доступных ячеек.</p>'}</div><aside class="structure-selection template-visual-inspector" id="documentStructureSelection" hidden aria-live="polite"></aside></div><details class="template-visual-fallback"><summary>Список ячеек книги</summary><p>Резервный способ выбора. Использует те же проверяемые адреса ячеек.</p><div class="template-visual-list">${visualFallbackList(report)}</div></details>${visualTechnical(report, operationId)}</article>`;
+    result.innerHTML = `<article class="structure-report template-visual-editor template-visual-xlsx"><header><div><p class="eyebrow">Разметка полей</p><h3>${structureEscape(report.fileName)}</h3><p>Книга показана как безопасная сетка Excel/Calc: размеры, объединения и оформление ячеек читаются из сохранённого XLSX.</p></div><span class="pill pill-success">Листы и оформление прочитаны</span></header><div class="structure-metrics"><div><strong>${summary.sheets ?? 0}</strong><span>листов</span></div><div><strong>${summary.cells ?? 0}</strong><span>ячеек</span></div><div><strong>${summary.formulas ?? 0}</strong><span>формул</span></div></div>${visualWarnings(layout)}<div class="template-visual-accuracy-note"><strong>Формулы не становятся полями.</strong><span>Показывается последнее сохранённое значение и оформление. Для привязки доступна только обычная ячейка; серверная часть повторно проверяет адрес. Изображения показаны около их якорной ячейки.</span></div><div class="template-visual-workspace"><div class="template-visual-canvas template-xlsx-canvas" aria-label="Визуальное представление XLSX"><div class="template-xlsx-tabs" role="tablist" aria-label="Листы книги">${tabs}</div>${sheetMarkup || '<p class="template-visual-empty-region">В книге нет доступных ячеек.</p>'}</div><aside class="structure-selection template-visual-inspector" id="documentStructureSelection" hidden aria-live="polite"></aside></div><details class="template-visual-fallback"><summary>Список ячеек книги</summary><p>Резервный способ выбора. Использует те же проверяемые адреса ячеек.</p><div class="template-visual-list">${visualFallbackList(report)}</div></details>${visualTechnical(report, operationId)}</article>`;
     if (result.dataset.visualInteractionsBound !== "true") {
       attachVisualInteractions(result);
       result.dataset.visualInteractionsBound = "true";
