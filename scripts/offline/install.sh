@@ -105,8 +105,18 @@ require_command cmp
 require_command stat
 
 BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
-require_operator_owned_bundle "$SCRIPT_DIR"
-[[ "$BUNDLE_ROOT" == "$SCRIPT_DIR" ]] || require_operator_owned_bundle "$BUNDLE_ROOT"
+if [[ "$(stat -c '%u' -- "$SCRIPT_DIR")" == "0" ]]; then
+  require_trusted_bundle "$SCRIPT_DIR"
+else
+  require_operator_owned_bundle "$SCRIPT_DIR"
+fi
+if [[ "$BUNDLE_ROOT" != "$SCRIPT_DIR" ]]; then
+  if [[ "$(stat -c '%u' -- "$BUNDLE_ROOT")" == "0" ]]; then
+    require_trusted_bundle "$BUNDLE_ROOT"
+  else
+    require_operator_owned_bundle "$BUNDLE_ROOT"
+  fi
+fi
 "$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
 VERSION="$(<"$BUNDLE_ROOT/VERSION")"
 [[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || \
