@@ -155,10 +155,38 @@
     more?.setAttribute("aria-current", "page");
   }
 
+  function normalizePublicationClassificationAccessibility() {
+    document.querySelectorAll("[data-publication-classification]").forEach((row) => {
+      const label = row.querySelector("strong")?.textContent?.trim() || "публикации";
+      const stateControl = row.querySelector("[data-publication-classification-state]");
+      const sourceControl = row.querySelector("[data-publication-classification-source]");
+      stateControl?.setAttribute("aria-label", `Статус классификации «${label}»`);
+      sourceControl?.setAttribute("aria-label", `Источник классификации «${label}»`);
+    });
+  }
+
+  function normalizeEntityImportDropZoneAccessibility() {
+    const input = document.querySelector("#entityImportFile");
+    const zone = input?.closest('[data-entity-import-drop-installed="true"]');
+    if (!input || !zone) return;
+
+    // Сам file input уже имеет явный label. Внешняя область остаётся drag/click
+    // affordance, но не объявляется второй вложенной кнопкой.
+    zone.removeAttribute("role");
+    zone.removeAttribute("tabindex");
+    zone.removeAttribute("aria-label");
+  }
+
+  function normalizeLateInteractionContract() {
+    normalizePublicationClassificationAccessibility();
+    normalizeEntityImportDropZoneAccessibility();
+  }
+
   function refresh(view) {
     normalizeDesktopNavigation();
     normalizeMobileNavigation();
     syncOverflowCurrent(view);
+    normalizeLateInteractionContract();
   }
 
   const observer = new MutationObserver(() => refresh());
