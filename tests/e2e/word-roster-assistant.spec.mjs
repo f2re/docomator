@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures/test.mjs";
 
 import { installОформляторApiMock } from "./fixtures/docomator-api.mjs";
+import { installVisualLayoutApiMock } from "./fixtures/visual-layout-api.mjs";
 import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const DOCX = {
@@ -15,6 +16,7 @@ test("повторяемую строку Word можно сохранить, п
   const scenario = await installОформляторApiMock(page, {
     studentRosterTemplate: true
   });
+  await installVisualLayoutApiMock(page);
   const app = new ОформляторPage(page);
   await app.open();
   await app.openView("templates");

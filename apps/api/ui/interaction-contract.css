@@ -190,8 +190,39 @@ summary,
 }
 
 @media (max-width: 900px) {
+  /*
+   * На tablet/mobile и при WCAG text zoom кнопка обязана расти по высоте,
+   * а не удерживать строку целиком и расширять страницу. 44px остаётся
+   * нижней границей интерактивной зоны из общего контракта выше.
+   */
+  .primary-button,
+  .secondary-button {
+    max-width: 100%;
+    flex-shrink: 1;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+
   .workspace-layout {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .workspace-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .summary-actions {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .summary-actions > * {
+    min-width: 44px;
+    max-width: 100%;
+    flex: 1 1 12rem;
   }
 
   .storage-maintenance-panel .panel-heading {
@@ -337,4 +368,16 @@ summary,
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
+  .mobile-nav,
+  .mobile-nav button,
+  .mobile-nav button > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .mobile-nav button > span,
+  .mobile-nav button > small {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
 }
