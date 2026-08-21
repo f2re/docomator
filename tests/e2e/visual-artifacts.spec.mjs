@@ -1,10 +1,10 @@
-import { expect, test } from "./fixtures/test.mjs";
-
-import { ОформляторPage } from "./pages/docomator-page.mjs";
 import {
   CANONICAL_UI_VIEWS,
-  installUiRegressionScenario
-} from "./ui-regression-inventory.mjs";
+  expect,
+  installUiRegressionScenario,
+  test
+} from "./fixtures/test.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const compareWithApprovedBaseline =
   process.env.DOCOMATOR_VISUAL_COMPARE === "1";

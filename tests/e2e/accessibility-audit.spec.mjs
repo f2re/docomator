@@ -1,11 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 
-import { expect, test } from "./fixtures/test.mjs";
-import { ОформляторPage } from "./pages/docomator-page.mjs";
 import {
   CANONICAL_UI_VIEWS,
-  installUiRegressionScenario
-} from "./ui-regression-inventory.mjs";
+  expect,
+  installUiRegressionScenario,
+  test
+} from "./fixtures/test.mjs";
+import { ОформляторPage } from "./pages/docomator-page.mjs";
 
 const WCAG_TAGS = [
   "wcag2a",
@@ -14,7 +15,7 @@ const WCAG_TAGS = [
   "wcag21aa",
   "wcag22aa"
 ];
-const EVIDENCE_CONTRACT_VERSION = 2;
+const EVIDENCE_CONTRACT_VERSION = 3;
 
 const projectThemes = new Map([
   ["chromium-320", "light"],
