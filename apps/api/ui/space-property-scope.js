@@ -162,9 +162,6 @@ function enhanceEntityImportDropZone() {
   if (!input || !zone || zone.dataset.entityImportDropInstalled === "true") return;
   zone.dataset.entityImportDropInstalled = "true";
   zone.classList.add("bulk-import-drop-zone");
-  zone.tabIndex = 0;
-  zone.setAttribute("role", "button");
-  zone.setAttribute("aria-label", "Перетащите Excel или CSV либо выберите файл");
   zone.insertAdjacentHTML(
     "afterbegin",
     `<div class="bulk-import-drop-copy" aria-hidden="true"><span class="bulk-import-drop-icon">⇩</span><span><strong>Перетащите Excel или CSV сюда</strong><small>или нажмите, чтобы выбрать файл</small></span></div><div class="bulk-import-drop-selected" data-entity-import-selected hidden></div>`
@@ -175,11 +172,6 @@ function enhanceEntityImportDropZone() {
     input.click();
   };
   zone.addEventListener("click", openPicker);
-  zone.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    input.click();
-  });
   for (const eventName of ["dragenter", "dragover"]) {
     zone.addEventListener(eventName, (event) => {
       event.preventDefault();

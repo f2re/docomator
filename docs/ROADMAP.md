@@ -1,129 +1,59 @@
 # План развития продукта «Оформлятор»
 
-Актуально на **2026-08-18**.
+Актуально на **2026-08-21**.
 
-Текущий машинный статус выпуска задаётся `RELEASE_IDENTITY.json`: **`0.5.1 / candidate / pilot`**. Версия описывает состав и совместимость продукта, а `candidate/pilot` — степень готовности этого состава. Кодовый baseline кандидата проходит репозиторные проверки, но выпуск **не является stable** до фактической Debian/Astra/Office/recovery/P5-приёмки. Точный порядок оставшихся работ: [NEXT_ITERATIONS.md](NEXT_ITERATIONS.md).
+Текущий машинный статус выпуска задаётся `RELEASE_IDENTITY.json`: **`0.5.3 / candidate / pilot`**. Версия описывает состав продукта, а `candidate/pilot` — степень его эксплуатационной готовности. Кодовый контур не считается `stable`, пока не получены фактические Debian/Astra/Office/recovery/P5 evidence.
 
 Нормативные источники: [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [FINALIZATION.md](FINALIZATION.md), [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md), [VERSIONING.md](VERSIONING.md).
-
-## Обозначения
-
-- ✅ — реализовано и покрыто репозиторными проверками;
-- 🟡 — кодовый контур реализован, но требуется внешняя/целевая приёмка либо заявленная функциональная граница остаётся ограниченной;
-- ⬜ — сознательно отложено до стабилизации основного пути;
-- ➖ — исключено действующей архитектурой.
 
 ## Состояние этапов
 
 | Этап | Состояние | Факт |
 |---|---:|---|
-| M0 Автономная поставка | 🟡 | bundle/install/update/rollback/backup tooling реализованы; нет фактических актов Debian/Astra и recovery drill |
-| M1 Данные, пространства и аудит | ✅ | SQLite, typed properties, files, queue/events/audit, жёсткая space isolation, migration `0030` |
-| M2 Безопасный приём DOCX/XLSX | ✅ | ZIP/XML ограничения, quarantine, Document IR, устойчивые координаты |
-| M3 Шаблоны и активация | ✅ DOCX visual v1 / 🟡 Office-приёмка | DOCX/XLSX bindings, test render, reverse read, preview, immutable releases; DOCX размечается в безопасной документоподобной проекции, XLSX пока использует проверенный cell-view |
-| M4 Ручной выпуск | ✅ код / 🟡 приёмка | one-per-member/aggregate, partial success, retry failed only, ZIP, recovery после lease |
-| M5 Доставка | ✅ код / 🟡 target | network share и SMTP реализованы; реальный target network/SMTP акт ещё отсутствует |
-| M6 Расписания | ✅ | one-shot/daily/monthly, timezone, persisted execution, SMTP/network delivery |
-| M7 Результаты и операции | ✅ | общий список, состояния, скачивание, удаление, operation center, storage maintenance |
-| M8 Общий password gate | ✅ | один общий пароль, scrypt, HttpOnly session, logout; пользователей/ролей/ACL нет |
-| M9 Структурные шаблоны | 🟡 | один ограниченный repeat-row/range DOCX/XLSX поддержан; произвольные вложенные структуры и image-binding не заявлены |
-| M10 Импорт и экспорт | ✅ код / 🟡 target | guided CSV/XLSX import, typed errors, CSV/XLSX export; нагрузка 10/100/1000 ждёт внешней приёмки |
-| M11 Локальный LLM-помощник | ⬜ | только после стабилизации детерминированного пути; LLM не является обязательным runtime |
-| R1 Stable `0.5.1` | 🟡 | кандидат должен пройти новый release-bound внешний контур; stable заблокирован evidence |
+| M0 Автономная поставка | 🟡 | bundle/install/update/rollback/backup tooling реализованы; фактические Debian/Astra/recovery акты отсутствуют |
+| M1 Данные и пространства | ✅ | SQLite, typed properties, жёсткая space isolation, migration `0030`, отсутствие claim-on-read |
+| M2 Безопасный приём DOCX/XLSX | ✅ | ZIP/XML ограничения, quarantine, Document IR и устойчивые координаты |
+| M3 Шаблоны | ✅ код / 🟡 Office | DOCX/XLSX bindings, visual DOCX v1, reverse-read, preview, immutable releases; реальный Office-корпус не принят |
+| M4 Ручной выпуск | ✅ код / 🟡 target | one-per-member/aggregate, partial success, retry failed only и recovery по persisted queue |
+| M5 Доставка | ✅ код / 🟡 target | network share и SMTP реализованы; target network/SMTP evidence отсутствует |
+| M6 Расписания | ✅ | persisted one-shot/daily/monthly rules с timezone и идемпотентностью |
+| M7 Результаты и операции | ✅ | результаты, скачивание, удаление, operation center, storage maintenance |
+| M8 Общий password gate | ✅ | один общий пароль, scrypt, HttpOnly session, logout/backoff; IAM/roles/ACL отсутствуют по архитектуре |
+| M9 Структурные шаблоны | 🟡 | ограниченный repeat-row/range DOCX/XLSX поддержан; произвольные вложенные структуры/image binding не заявлены |
+| M10 Импорт/экспорт | ✅ код / 🟡 нагрузка | guided CSV/XLSX import, structured errors, preview/repair, CSV/XLSX export; 10/100/1000 ждёт внешней приёмки |
+| R1 Stable `0.5.3` | 🟡 | заблокирован целевыми evidence, а не отсутствием ещё одной крупной функции |
 
-## Что уже считается закрытым
+## Подтверждённый продуктовый контур
 
-### Пространства и данные
-
-- сущность принадлежит ровно одному пространству;
-- группы, пользовательские поля, значения, import memory, публикации, шаблоны и связанные данные используют один space context;
-- cross-space references отклоняются backend/SQLite независимо от UI;
-- чтение и preview не меняют ownership;
-- migration `0030_normalize_legacy_shared_properties.sql` физически разделяет исторические shared property definitions на per-space clones;
-- старые immutable template/import keys разрешаются только через space-local aliases;
-- transitional claim-on-write удалён;
-- CI запрещает новые duplicate numeric prefixes миграций.
-
-### CSV/XLSX import/export
-
-- выбор файла и drag-and-drop;
-- единая сопровождаемая схема: файл → колонки → сопоставление → preview → исправление → импорт → результат;
-- чтение выбранного CSV/XLSX и подготовка колонок запускаются автоматически; явное подтверждение остаётся только у mutation импорта;
-- typed row errors из domain/storage: `code`, строка, поле/колонка, исходное значение, severity и repair metadata;
-- ошибка подсвечивает место и сохраняет введённые настройки;
-- поддержаны сотрудники и произвольные типы объектов;
-- повторный импорт использует устойчивый внешний ключ и не создаёт ожидаемых дублей;
-- экспорт CSV/XLSX формируется сервером только из выбранного пространства;
-- пользовательский экспорт не раскрывает UUID/машинные ключи и нейтрализует spreadsheet formula injection.
-
-### Документы
-
-- детерминированный DOCX/XLSX renderer остаётся единственным production renderer;
-- LLM не получает право исполнять shell/SQL/код и не изменяет OOXML напрямую;
-- scalar fields, форматтеры и ограниченные repeat-row bindings проверяются reverse-read;
-- DOCX visual binding v1 отображает основной текст, header/footer, сноски, обычные таблицы и признаки bold/italic из проверенного Document IR;
-- прямое выделение текста в браузере преобразуется только в существующие `elementId + UTF-16 offsets`; DOM/HTML не становится binding-координатой и не сериализуется обратно в DOCX;
-- XLSX сохраняет прежний проверенный cell-view до отдельного расширения визуального IR;
-- активированные releases неизменяемы;
-- generation поддерживает персональный и сводный режимы, partial success и retry failed only;
-- worker использует persisted queue/leases/idempotency, а не память процесса.
-
-### UI/UX
-
-- пользовательское имя продукта — «Оформлятор»; технический namespace `docomator` сохранён для совместимости;
-- канонический единый UI без параллельных поколений экранов;
-- бренд-система «Документный рабочий стол» сведена к одному visual token source; старые конкурирующие палитры, blur/gradient-декор и скрытая hero-иллюстрация удалены;
-- русская пользовательская терминология;
-- безопасные read-only этапы не требуют формального подтверждения: проверка выбранного шаблона, чтение импортируемой таблицы и построение структуры запускаются автоматически, а mutation остаются явными;
-- desktop-навигация оставляет на первом уровне семь регулярных задач, а редкие предметные разделы открываются через «Управление» и не раздувают основной список;
-- recovery-кнопки автоматически запускаемых этапов визуально вторичны, а справочный перечень технических проверок шаблона раскрывается только по запросу;
-- в DOCX основной выбор поля выполняется по документоподобной поверхности, а раскрываемый список остаётся доступным резервным способом для клавиатуры и сложной верстки;
-- интерфейс не выдаёт браузерную проекцию за точный Word layout и направляет к тестовой копии/PDF для проверки переносов и сложных Office-конструкций;
-- повторная проверка данных перед выпуском не имеет скрытого side effect и не запускает формирование без отдельного действия оператора;
-- 320/768/1440 px, keyboard focus, reduced motion, dark/light и 200% zoom входят в автоматические браузерные проверки;
-- password gate проходит реальный сценарий `401 → login → workspace → logout → 401`;
-- новая установка показывает одноразовый «Первый запуск»: общий пароль создаётся в браузере, concurrent bootstrap не может его заменить, headless fallback поставляется в offline bundle;
-- logout доступен и на узком экране через «Настройки»;
-- operation center и формы восстанавливают понятное состояние после перезагрузки.
-
-### Offline и release tooling
-
-- generic offline archive собирается и повторно проверяется в CI;
-- install/update/rollback/backup/restore и target-acceptance tooling присутствуют;
-- release identity имеет один машинный источник и CI проверяет version/status/channel во всех производных местах;
-- SemVer bump выполняется штатной командой; product-changing PR без изменения версии блокируется CI;
-- текущий статус намеренно `candidate/pilot`;
-- stable release evidence работает fail-closed.
+- пространство является жёсткой границей сущностей, групп, пользовательских полей/значений, шаблонов, импортной памяти, публикаций и связанных данных;
+- чтение и preview не меняют ownership; межпространственные ссылки отклоняются backend/SQLite;
+- CSV/XLSX import проходит файл → колонки → сопоставление → preview → исправление → импорт → результат и сохраняет состояние после ошибки;
+- ошибки импорта имеют машинный контракт с `code`, строкой, колонкой/полем, исходным значением, severity и repair metadata;
+- DOCX/XLSX production rendering остаётся детерминированным; LLM не исполняет shell/SQL/код и не изменяет OOXML напрямую;
+- DOCX visual binding v1 использует проверенный Document IR и серверно валидируемые координаты, а не HTML round-trip;
+- worker использует persisted queue, leases и idempotency; restart не должен создавать второй результат;
+- runtime работает без Internet и без LLM;
+- текущий UI использует один локальный visual token source и русскую пользовательскую терминологию;
+- `0.5.3` дополнительно устраняет горизонтальный reflow входа/первого запуска и пробного заполнения, а также вложенную интерактивную семантику generic-import drop zone.
 
 ## Что блокирует stable
 
-Ни один из следующих пунктов не заменяется CI на Ubuntu runner:
+Эти пункты не заменяются репозиторным CI:
 
-1. чистая offline-установка и полный target act на Debian;
-2. отдельная нативная сборка и target act Astra Linux Special Edition 1.7;
+1. чистая offline-установка и полный target act на Debian x86-64;
+2. отдельный target act на Astra Linux Special Edition 1.7;
 3. настоящий LibreOffice на обоих target без `SKIPPED`;
-4. минимум 20 реальных DOCX и 20 реальных XLSX с проверкой LibreOffice и Microsoft Office, включая visual-binding корпус DOCX;
-5. импорт и выпуск на 10/100/1000 объектах;
+4. ≥20 реальных DOCX и ≥20 реальных XLSX с LibreOffice и Microsoft Office;
+5. импорт и выпуск на 10/100/1000 объектах без смещения, дублей и потери результатов;
 6. restart/retry worker без второго результата;
-7. заполнение диска, повреждённые объекты и повреждённая backup;
-8. восстановление backup на отдельной чистой машине с совпадением SHA-256;
-9. update/rollback без потери данных и без сброса password/security configuration;
-10. два новых пользователя, ручная accessibility/P5-приёмка, включая визуальную разметку DOCX без знания OOXML;
-11. включённая защита `main` и обязательные CI checks;
-12. пустой `openBlockers` и успешный `release:evidence` для одного точного candidate commit.
+7. disk-full/corrupt object/corrupt backup и восстановление на отдельном чистом стенде;
+8. update/rollback без потери данных и без сброса password/security configuration;
+9. два новых пользователя и ручная P5/accessibility-приёмка: keyboard, screen reader, 200% zoom, 320/768/1440, light/dark;
+10. branch protection/ruleset для `main` с запретом force-push/delete и обязательными checks;
+11. пустой `openBlockers` и успешный `release:evidence` для одного точного candidate commit/version/status/channel.
 
-Evidence `0.1.0`, `0.2.x`, `0.3.x`, `0.4.0` и `0.5.0` остаются историческими и не закрывают эти критерии для `0.5.1`.
-
-Подробный протокол: [FINALIZATION.md](FINALIZATION.md) и [UX_ACCEPTANCE_PROTOCOL.md](UX_ACCEPTANCE_PROTOCOL.md).
+Evidence выпусков до `0.5.3` остаются историческими и не закрывают эти критерии для текущего кандидата.
 
 ## После stable
 
-До завершения перечисленных release blockers крупные новые функции не приоритетны. После стабильного `0.5.1` допускаются отдельными ADR/итерациями:
-
-- визуальная сетка XLSX с размерами строк/столбцов, объединениями и стилями на основе расширенного безопасного IR;
-- безопасное отображение DOCX DrawingML/изображений и отдельный типизированный `docx.image` binding только после renderer contract и fixtures;
-- более сложные повторяемые и вложенные области DOCX/XLSX;
-- изображения, штрихкоды и вычисляемые значения в пределах детерминированного renderer;
-- расширенный поиск и групповые действия в результатах;
-- более гибкие календарные правила и предметные события;
-- локальный LLM-помощник для анализа/сопоставления, остающийся необязательным и без произвольных side effects.
+До закрытия release blockers крупные новые функции не приоритетны. После stable отдельными ADR/итерациями допускаются: расширенный XLSX visual grid, безопасный DrawingML/image binding, более сложные повторяемые области, расширенный поиск/групповые действия и опциональный локальный LLM-помощник без произвольных side effects.

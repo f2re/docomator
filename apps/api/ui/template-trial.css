@@ -2,6 +2,16 @@
   margin-top: 1.25rem;
 }
 
+.template-trial-panel,
+.trial-card,
+.trial-content,
+.trial-form,
+.trial-result,
+.trial-history {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .trial-card,
 .trial-content,
 .trial-form,
@@ -17,10 +27,24 @@
   display: flex;
   align-items: flex-start;
   gap: 0.8rem;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 4px);
   padding: 1rem;
   background: var(--surface-2);
+}
+
+.trial-guidance > *,
+.trial-empty > *,
+.trial-loading > *,
+.trial-success > *,
+.trial-form-grid > *,
+.trial-actions > *,
+.trial-history-item > *,
+.trial-history-actions > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .trial-guidance p,
@@ -30,6 +54,24 @@
 .trial-empty small {
   margin: 0;
   color: var(--muted);
+}
+
+.trial-guidance p,
+.trial-empty p,
+.trial-loading p,
+.trial-success p,
+.trial-empty small,
+.trial-empty strong,
+.trial-loading strong,
+.trial-success strong,
+.trial-history-actions a,
+.trial-result code {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.trial-result code {
+  white-space: normal;
 }
 
 .trial-empty strong,
@@ -66,6 +108,7 @@
   display: grid;
   gap: 0.35rem;
   align-content: start;
+  min-width: 0;
 }
 
 .trial-form-grid label > span:first-child {
@@ -76,7 +119,10 @@
 .trial-form-grid input,
 .trial-form-grid select,
 .trial-form-grid textarea {
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 2.75rem;
   border: 1px solid var(--border);
   border-radius: 0.75rem;
@@ -157,7 +203,11 @@
 }
 
 .trial-downloads a {
+  min-width: 0;
+  max-width: 100%;
   text-decoration: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .trial-success details {
@@ -239,7 +289,7 @@
 
 @media (max-width: 900px) {
   .trial-form-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -253,6 +303,8 @@
   .trial-actions .primary-button,
   .trial-downloads a {
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     text-align: center;
   }
 }
