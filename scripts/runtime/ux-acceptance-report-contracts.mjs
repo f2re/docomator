@@ -278,7 +278,7 @@ function validatePlaywrightReport(report, expectedBinding) {
         execution.status !== expectedRequiredStatus(project, title)
       ) {
         throw new UxAutomationReportError(
-          `Playwright-отчёт не содержит обязательное состояние «${project} / ${title}».`
+          `Playwright-отчёт не содержит обязательное состояние «${project} / ${title}». Фиксированный legacy inventory из 81 выполнений больше не используется contract v3.`
         );
       }
     }
