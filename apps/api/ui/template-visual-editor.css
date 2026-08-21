@@ -1,6 +1,7 @@
 .template-visual-editor {
   display: grid;
   gap: 1rem;
+  min-width: 0;
 }
 
 .template-visual-accuracy-note {
@@ -14,8 +15,17 @@
   background: var(--surface-2);
 }
 
-.template-visual-accuracy-note span {
+.template-visual-accuracy-note span,
+.template-visual-warning p {
   color: var(--muted);
+}
+
+.template-visual-warning div {
+  min-width: 0;
+}
+
+.template-visual-warning p {
+  margin: 0.2rem 0 0;
 }
 
 .template-visual-workspace {
@@ -28,6 +38,7 @@
 
 .template-visual-canvas {
   min-width: 0;
+  max-width: 100%;
   overflow: auto;
   padding: 1rem;
   border: 1px solid var(--border);
@@ -36,10 +47,16 @@
 }
 
 .template-visual-page {
-  width: min(100%, 52rem);
-  min-height: 44rem;
+  --template-page-width: 595pt;
+  --template-page-top: 56pt;
+  --template-page-right: 56pt;
+  --template-page-bottom: 56pt;
+  --template-page-left: 56pt;
+  box-sizing: border-box;
+  width: min(100%, var(--template-page-width));
+  min-height: min(70rem, calc(var(--template-page-width) * 1.414));
   margin: 0 auto;
-  padding: clamp(1.1rem, 4vw, 3rem) clamp(1rem, 5vw, 3.6rem);
+  padding: var(--template-page-top) var(--template-page-right) var(--template-page-bottom) var(--template-page-left);
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 4px);
   background: var(--surface);
@@ -90,19 +107,22 @@
 
 .template-visual-target.structure-element {
   position: relative;
-  display: block;
   width: 100%;
   min-height: 44px;
   margin: 0;
-  padding: 0.55rem 0.6rem;
+  padding: 0.48rem 0.55rem;
   border: 1px solid transparent;
   border-radius: calc(var(--radius) - 7px);
   background: transparent;
-  color: var(--text);
+  color: inherit;
   cursor: text;
-  text-align: left;
+  text-align: inherit;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.template-visual-paragraph.structure-element {
+  display: block;
 }
 
 .template-visual-target.structure-element + .template-visual-target.structure-element {
@@ -111,7 +131,7 @@
 
 .template-visual-target.structure-element:hover {
   border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent-soft) 28%, transparent);
 }
 
 .template-visual-target.structure-element:focus-visible {
@@ -122,7 +142,7 @@
 
 .template-visual-target.structure-element.is-selected {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent-soft) 38%, transparent);
 }
 
 .template-visual-location {
@@ -153,12 +173,27 @@
   font-style: italic;
 }
 
-.template-visual-run.is-bold {
-  font-weight: 700;
+.template-visual-media {
+  display: inline-block;
+  max-width: min(100%, 32rem);
+  height: auto !important;
+  margin: 0.3rem 0.45rem 0.3rem 0;
+  object-fit: contain;
+  vertical-align: middle;
 }
 
-.template-visual-run.is-italic {
-  font-style: italic;
+.template-visual-media-placeholder {
+  display: inline-flex;
+  min-height: 44px;
+  max-width: 100%;
+  align-items: center;
+  margin: 0.35rem 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 0.55rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.78rem;
 }
 
 .template-visual-table-wrap {
@@ -174,6 +209,7 @@
   min-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+  color: inherit;
 }
 
 .template-visual-table .structure-table-row {
@@ -201,24 +237,7 @@
   min-width: 0;
   padding: 0.25rem;
   border: 1px solid var(--border);
-  vertical-align: top;
   overflow-wrap: anywhere;
-}
-
-.template-visual-table tr:first-child td {
-  border-top: 0;
-}
-
-.template-visual-table tr:last-child td {
-  border-bottom: 0;
-}
-
-.template-visual-table td:first-child {
-  border-left: 0;
-}
-
-.template-visual-table td:last-child {
-  border-right: 0;
 }
 
 .template-visual-target.is-table-paragraph,
@@ -231,6 +250,7 @@
   position: sticky;
   top: 0.75rem;
   display: block;
+  min-width: 0;
   max-height: calc(100vh - 2rem);
   overflow: auto;
   margin: 0;
@@ -243,7 +263,7 @@
 }
 
 .template-visual-notes {
-  width: min(100%, 52rem);
+  width: min(100%, var(--template-page-width, 595pt));
   margin: 0.9rem auto 0;
   padding: 0.8rem;
   border: 1px solid var(--border);
@@ -320,6 +340,175 @@
   outline-offset: 2px;
 }
 
+/* XLSX / Calc-like grid */
+.template-xlsx-canvas {
+  display: grid;
+  gap: 0.75rem;
+  background: var(--surface);
+}
+
+.template-xlsx-tabs {
+  display: flex;
+  gap: 0.35rem;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.15rem 0 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.template-xlsx-tab {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem 0.55rem 0 0;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.template-xlsx-tab.is-active {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.template-xlsx-sheet {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.template-xlsx-sheet[hidden] {
+  display: none;
+}
+
+.template-xlsx-grid-wrap {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.template-xlsx-grid {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: var(--text);
+}
+
+.template-xlsx-row-header-col {
+  width: 3.3rem;
+}
+
+.template-xlsx-grid th,
+.template-xlsx-grid td {
+  box-sizing: border-box;
+  min-width: 48px;
+  min-height: 28px;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.template-xlsx-grid thead th,
+.template-xlsx-row-number,
+.template-xlsx-corner {
+  position: sticky;
+  z-index: 2;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.template-xlsx-grid thead th {
+  top: 0;
+}
+
+.template-xlsx-row-number,
+.template-xlsx-corner {
+  left: 0;
+}
+
+.template-xlsx-corner {
+  z-index: 3;
+}
+
+.template-xlsx-cell.structure-element {
+  position: relative;
+  display: table-cell;
+  width: auto;
+  height: auto;
+  min-height: 44px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+}
+
+.template-xlsx-cell.structure-element:hover {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.template-xlsx-cell.structure-element.is-selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.template-xlsx-value {
+  white-space: inherit;
+}
+
+.template-xlsx-formula {
+  float: right;
+  min-width: 1.3rem;
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.25rem;
+  border-radius: 0.35rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  text-align: center;
+}
+
+.template-xlsx-media {
+  display: block;
+  max-width: 12rem;
+  max-height: 8rem;
+  margin: 0.4rem 0 0;
+}
+
+.template-xlsx-header-footer {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  min-height: 2.4rem;
+  align-items: center;
+  padding: 0.45rem 0.65rem;
+  border: 1px dashed var(--border-strong);
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 0.78rem;
+}
+
+.template-xlsx-header-footer span:nth-child(2) {
+  text-align: center;
+}
+
+.template-xlsx-header-footer span:nth-child(3) {
+  text-align: right;
+}
+
+.template-xlsx-header-footer.is-footer {
+  margin-top: 0.25rem;
+}
+
 .template-visual-editor.is-row-editor-open .template-visual-canvas,
 .template-visual-editor.is-row-editor-open .template-visual-accuracy-note,
 .template-visual-editor.is-row-editor-open .template-visual-fallback {
@@ -337,7 +526,7 @@
 
 @media (max-width: 980px) {
   .template-visual-workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .template-visual-inspector.structure-selection {
@@ -348,26 +537,36 @@
 
 @media (max-width: 720px) {
   .template-visual-accuracy-note {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .template-visual-canvas {
-    padding: 0.55rem;
+    padding: 0.5rem;
   }
 
   .template-visual-page {
+    --template-page-top: 1rem !important;
+    --template-page-right: 0.65rem !important;
+    --template-page-bottom: 1rem !important;
+    --template-page-left: 0.65rem !important;
     min-height: 34rem;
-    padding: 1rem 0.65rem;
   }
 
-  .template-visual-table-wrap {
-    overflow-x: auto;
+  .template-xlsx-header-footer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .template-xlsx-header-footer span,
+  .template-xlsx-header-footer span:nth-child(2),
+  .template-xlsx-header-footer span:nth-child(3) {
+    text-align: left;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .template-visual-target,
-  .template-visual-list-item {
+  .template-visual-list-item,
+  .template-xlsx-tab {
     scroll-behavior: auto;
     transition: none;
   }

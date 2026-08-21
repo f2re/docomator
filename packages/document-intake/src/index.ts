@@ -33,3 +33,20 @@ export type {
   XlsxCellElement,
   XlsxCellValueKind
 } from "./structure.js";
+
+export { analyzeOoxmlVisualLayout } from "./visual-layout-projection.js";
+export type {
+  AnalyzeVisualOoxmlInput,
+  DocumentVisualLayoutReport,
+  VisualBorderSide,
+  VisualCellStyle,
+  VisualDocxLayout,
+  VisualDocxParagraph,
+  VisualDocxTable,
+  VisualEmbeddedImage,
+  VisualParagraphStyle,
+  VisualTextStyle,
+  VisualXlsxCellStyle,
+  VisualXlsxLayout,
+  VisualXlsxSheet
+} from "./visual-layout.js";
