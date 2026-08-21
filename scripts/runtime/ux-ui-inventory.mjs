@@ -23,7 +23,7 @@ export const CANONICAL_UI_STATES = Object.freeze([
     label: "Добавление сотрудника",
     view: "employees",
     selector: "#employeeDialog",
-    expectedText: "Сотрудник",
+    expectedText: "Новый сотрудник",
     runner: "critical-state",
     checks: Object.freeze(["overflow", "touch", "axe", "zoom", "keyboard"])
   }),
@@ -32,7 +32,7 @@ export const CANONICAL_UI_STATES = Object.freeze([
     label: "Импорт сотрудников",
     view: "employees",
     selector: "#bulkDataImportPanel",
-    expectedText: "Импортировать список",
+    expectedText: "Импортировать людей и заполненные поля",
     runner: "critical-state",
     checks: Object.freeze(["overflow", "touch", "axe", "zoom", "keyboard"])
   }),
