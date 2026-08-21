@@ -360,3 +360,22 @@ function renderVisualDocxStructure(report, _layout, operationId) {
 function renderVisualXlsxStructure(report, _layout, operationId) {
   return renderStructureElementList(report, operationId);
 }
+
+function enforceVisualAccuracyCopy(root) {
+  const title = root?.querySelector(".template-visual-accuracy-note strong");
+  if (!title) return;
+  const canonical = "Верстка не подменяет Word. Привязка остаётся детерминированной.";
+  if (title.textContent !== canonical) title.textContent = canonical;
+}
+
+const visualStructureRoot = document.querySelector("#documentStructureResult");
+if (visualStructureRoot) {
+  const visualAccuracyObserver = new MutationObserver(() => {
+    enforceVisualAccuracyCopy(visualStructureRoot);
+  });
+  visualAccuracyObserver.observe(visualStructureRoot, {
+    childList: true,
+    subtree: true
+  });
+  enforceVisualAccuracyCopy(visualStructureRoot);
+}

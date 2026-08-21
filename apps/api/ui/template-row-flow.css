@@ -359,3 +359,35 @@
     display: none;
   }
 }
+
+/* Visual Template Studio: контейнеры не расширяют страницу на 320 px/200% zoom. */
+.template-visual-editor,
+.template-visual-workspace,
+.template-visual-canvas,
+.template-visual-table-wrap,
+.template-visual-inspector,
+.template-visual-fallback,
+.template-visual-notes,
+.template-xlsx-canvas,
+.template-xlsx-sheet,
+.template-xlsx-grid-wrap {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.template-visual-editor,
+.template-visual-workspace,
+.template-visual-canvas,
+.template-visual-table-wrap,
+.template-xlsx-canvas,
+.template-xlsx-grid-wrap {
+  width: 100%;
+}
+
+.template-visual-workspace > *,
+.template-visual-region,
+.template-visual-region-content {
+  min-width: 0;
+  max-width: 100%;
+}
