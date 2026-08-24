@@ -170,9 +170,7 @@ if ((INSTALL_OS_PACKAGES == 1)); then
   require_command cut
   require_command dpkg
   DPKG_AUDIT="$(dpkg --audit)"
-  [[ -z "$DPKG_AUDIT" ]] || {
-    die "Состояние пакетной базы требует исправления до установки Оформлятор"
-  }
+  [[ -z "$DPKG_AUDIT" ]] || die "Состояние пакетной базы требует исправления до установки Оформлятор"
   APT_CACHE="$(mktemp -d "/tmp/docomator-apt.XXXXXX")"
   trap 'rm -rf "${APT_CACHE:-}"' EXIT
   cp "${BUNDLE_OS_DEBS[@]}" "$APT_CACHE/"
@@ -185,15 +183,10 @@ if ((INSTALL_OS_PACKAGES == 1)); then
   info "Предварительно проверяем замкнутость и безопасный план пакетов ОС"
   (
     cd "$APT_CACHE"
-    LC_ALL=C apt-get --simulate --no-remove install -- "${local_debs[@]}" \
-      > package-plan.txt
+    LC_ALL=C apt-get --simulate --no-remove install -- "${local_debs[@]}" > package-plan.txt
     cat package-plan.txt
-    cut -f2 "$BUNDLE_ROOT/payload/os-packages/packages.tsv" \
-      | tail -n +2 \
-      | LC_ALL=C sort -u > included-packages.txt
-    sed -n -E 's/^Inst ([^ ]+).*/\1/p' package-plan.txt \
-      | sed -E 's/:[a-z0-9-]+$//' \
-      | LC_ALL=C sort -u > planned-packages.txt
+    cut -f2 "$BUNDLE_ROOT/payload/os-packages/packages.tsv" | tail -n +2 | LC_ALL=C sort -u > included-packages.txt
+    sed -n -E 's/^Inst ([^ ]+).*/\1/p' package-plan.txt | sed -E 's/:[a-z0-9-]+$//' | LC_ALL=C sort -u > planned-packages.txt
     comm -23 planned-packages.txt included-packages.txt > missing-packages.txt
     [[ ! -s missing-packages.txt ]] || {
       cat missing-packages.txt >&2
@@ -203,8 +196,7 @@ if ((INSTALL_OS_PACKAGES == 1)); then
   info "Устанавливаем пакеты ОС из комплекта: ${#local_debs[@]}"
   (
     cd "$APT_CACHE"
-    DEBIAN_FRONTEND=noninteractive \
-      apt-get --no-download --no-remove install --yes -- "${local_debs[@]}"
+    DEBIAN_FRONTEND=noninteractive apt-get --no-download --no-remove install --yes -- "${local_debs[@]}"
   )
 fi
 
@@ -212,25 +204,14 @@ if [[ "$PREVIEW_ENABLED" == "true" && ! -x "$LIBREOFFICE_BIN" ]]; then
   die "После установки пакетов LibreOffice недоступен: $LIBREOFFICE_BIN"
 fi
 
-if ! getent group "$DOCOMATOR_GROUP" >/dev/null 2>&1; then
-  groupadd --system "$DOCOMATOR_GROUP"
-fi
-
+if ! getent group "$DOCOMATOR_GROUP" >/dev/null 2>&1; then groupadd --system "$DOCOMATOR_GROUP"; fi
 if ! id "$DOCOMATOR_USER" >/dev/null 2>&1; then
   NOLOGIN_SHELL="/usr/sbin/nologin"
   [[ -x "$NOLOGIN_SHELL" ]] || NOLOGIN_SHELL="/bin/false"
-  useradd --system --gid "$DOCOMATOR_GROUP" --home-dir "$DATA_DIR" \
-    --shell "$NOLOGIN_SHELL" "$DOCOMATOR_USER"
+  useradd --system --gid "$DOCOMATOR_GROUP" --home-dir "$DATA_DIR" --shell "$NOLOGIN_SHELL" "$DOCOMATOR_USER"
 fi
 
-mkdir -p \
-  "$RELEASES_DIR" \
-  "$DATA_DIR/objects" \
-  "$DATA_DIR/models" \
-  "$DATA_DIR/previews" \
-  "$DATA_DIR/backups" \
-  "$DATA_DIR/tmp" \
-  "$DATA_DIR/logs"
+mkdir -p "$RELEASES_DIR" "$DATA_DIR/objects" "$DATA_DIR/models" "$DATA_DIR/previews" "$DATA_DIR/backups" "$DATA_DIR/tmp" "$DATA_DIR/logs"
 chown -R "$DOCOMATOR_USER:$DOCOMATOR_GROUP" "$DATA_DIR"
 chmod 0750 "$DATA_DIR" "$DATA_DIR"/{objects,models,previews,backups,tmp,logs}
 
@@ -259,30 +240,22 @@ if ((${#bundled_models[@]} > 0)); then
     mv -f "$temporary" "$destination"
   done
   replace_env_value "$CONFIG_FILE" DOCOMATOR_LLM_MODEL "$DATA_DIR/models/$(basename "${bundled_models[0]}")"
-  if ((NEW_CONFIG == 1)); then
-    replace_env_value "$CONFIG_FILE" DOCOMATOR_LLM_ENABLED true
-  fi
+  if ((NEW_CONFIG == 1)); then replace_env_value "$CONFIG_FILE" DOCOMATOR_LLM_ENABLED true; fi
 fi
 
 OLD_TARGET=""
-if [[ -L "$CURRENT_LINK" ]]; then
-  OLD_TARGET="$(readlink -f "$CURRENT_LINK")"
-fi
+if [[ -L "$CURRENT_LINK" ]]; then OLD_TARGET="$(readlink -f "$CURRENT_LINK")"; fi
 
 BACKUP_DIR=""
 DATABASE_EXISTED=0
 if [[ -n "$OLD_TARGET" ]]; then
-  if ((INSTALL_SYSTEMD == 1)); then
-    stop_docomator_services
-  fi
+  if ((INSTALL_SYSTEMD == 1)); then stop_docomator_services; fi
   BACKUP_DIR="$DATA_DIR/backups/pre-update-$(date -u +'%Y%m%dT%H%M%SZ')-$VERSION-$$"
   mkdir -p "$BACKUP_DIR"
   cp -a "$CONFIG_FILE" "$BACKUP_DIR/docomator.env"
   if [[ -f "$DATABASE_PATH" ]]; then
     DATABASE_EXISTED=1
-    for suffix in '' '-wal' '-shm'; do
-      [[ -f "$DATABASE_PATH$suffix" ]] && cp -a "$DATABASE_PATH$suffix" "$BACKUP_DIR/"
-    done
+    for suffix in '' '-wal' '-shm'; do [[ -f "$DATABASE_PATH$suffix" ]] && cp -a "$DATABASE_PATH$suffix" "$BACKUP_DIR/"; done
   fi
   chown -R "$DOCOMATOR_USER:$DOCOMATOR_GROUP" "$BACKUP_DIR"
   info "Резервная копия перед обновлением создана: $BACKUP_DIR"
@@ -290,38 +263,28 @@ fi
 
 rollback() {
   warn "Возвращаем прежнее состояние после ошибки установки или обновления"
-  if ((INSTALL_SYSTEMD == 1)); then
-    stop_docomator_services
-  fi
-
+  if ((INSTALL_SYSTEMD == 1)); then stop_docomator_services; fi
   if [[ -n "$OLD_TARGET" ]]; then
     ln -sfn "$OLD_TARGET" "$INSTALL_ROOT/.current.rollback.$$"
     mv -Tf "$INSTALL_ROOT/.current.rollback.$$" "$CURRENT_LINK"
   else
     rm -f "$CURRENT_LINK"
   fi
-
   if [[ -n "$BACKUP_DIR" ]]; then
     rm -f "$DATABASE_PATH" "$DATABASE_PATH-wal" "$DATABASE_PATH-shm"
     if ((DATABASE_EXISTED == 1)); then
-      for source in "$BACKUP_DIR"/docomator.db*; do
-        [[ -e "$source" ]] || continue
-        cp -a "$source" "$DATA_DIR/"
-      done
+      for source in "$BACKUP_DIR"/docomator.db*; do [[ -e "$source" ]] || continue; cp -a "$source" "$DATA_DIR/"; done
     fi
     cp -a "$BACKUP_DIR/docomator.env" "$CONFIG_FILE"
   elif ((DATABASE_EXISTED == 0)); then
     rm -f "$DATABASE_PATH" "$DATABASE_PATH-wal" "$DATABASE_PATH-shm"
   fi
-
   if [[ -n "$OLD_TARGET" && $NO_START -eq 0 && $INSTALL_SYSTEMD -eq 1 ]] && command -v systemctl >/dev/null 2>&1; then
     systemctl daemon-reload
     systemctl start docomator-llm.service 2>/dev/null || true
     systemctl start docomator-api.service docomator-worker.service 2>/dev/null || true
     BACKUP_ENABLED="$(read_env_value "$CONFIG_FILE" DOCOMATOR_BACKUP_ENABLED)"
-    if [[ -z "$BACKUP_ENABLED" || "${BACKUP_ENABLED,,}" == "true" || "$BACKUP_ENABLED" == "1" ]]; then
-      systemctl start docomator-backup.timer 2>/dev/null || true
-    fi
+    if [[ -z "$BACKUP_ENABLED" || "${BACKUP_ENABLED,,}" == "true" || "$BACKUP_ENABLED" == "1" ]]; then systemctl start docomator-backup.timer 2>/dev/null || true; fi
   fi
 }
 
@@ -333,14 +296,14 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
   cp -a "$BUNDLE_ROOT/payload/runtime" "$TEMP_RELEASE/"
   cp -a "$BUNDLE_ROOT/payload/deploy" "$TEMP_RELEASE/"
   cp "$BUNDLE_ROOT/release.json" "$TEMP_RELEASE/"
-  if [[ -x "$BUNDLE_ROOT/first-run.sh" ]]; then
-    cp "$BUNDLE_ROOT/first-run.sh" "$TEMP_RELEASE/first-run.sh"
-    chmod 0755 "$TEMP_RELEASE/first-run.sh"
-  fi
-  if [[ -x "$BUNDLE_ROOT/set-password.sh" && -f "$BUNDLE_ROOT/lib.sh" ]]; then
-    cp "$BUNDLE_ROOT/set-password.sh" "$TEMP_RELEASE/set-password.sh"
+  for helper in first-run.sh set-access-code.sh reset-access-code.sh set-password.sh reset-password.sh; do
+    if [[ -x "$BUNDLE_ROOT/$helper" ]]; then
+      cp "$BUNDLE_ROOT/$helper" "$TEMP_RELEASE/$helper"
+      chmod 0755 "$TEMP_RELEASE/$helper"
+    fi
+  done
+  if [[ -f "$BUNDLE_ROOT/lib.sh" ]]; then
     cp "$BUNDLE_ROOT/lib.sh" "$TEMP_RELEASE/lib.sh"
-    chmod 0755 "$TEMP_RELEASE/set-password.sh"
     chmod 0644 "$TEMP_RELEASE/lib.sh"
   fi
   if [[ -f "$BUNDLE_ROOT/healthcheck.mjs" ]]; then
@@ -351,10 +314,8 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
   chmod -R go-w "$TEMP_RELEASE"
   mv "$TEMP_RELEASE" "$RELEASE_DIR"
 else
-  [[ -f "$RELEASE_DIR/release.json" ]] || \
-    die "Существующий каталог версии неполон: $RELEASE_DIR"
-  cmp -s "$BUNDLE_ROOT/release.json" "$RELEASE_DIR/release.json" || \
-    die "Версия $VERSION уже установлена с другими сведениями. Подготовьте новый номер версии."
+  [[ -f "$RELEASE_DIR/release.json" ]] || die "Существующий каталог версии неполон: $RELEASE_DIR"
+  cmp -s "$BUNDLE_ROOT/release.json" "$RELEASE_DIR/release.json" || die "Версия $VERSION уже установлена с другими сведениями. Подготовьте новый номер версии."
   info "Такой же каталог версии уже существует: $RELEASE_DIR"
 fi
 
@@ -365,12 +326,10 @@ if [[ -z "$SESSION_SECRET" ]]; then
   replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET "$SESSION_SECRET"
   chmod 0640 "$CONFIG_FILE"
   chown root:"$DOCOMATOR_GROUP" "$CONFIG_FILE"
-  info "Создан локальный секрет сеансов; общий пароль задаётся при первом открытии интерфейса"
+  info "Создан локальный секрет сеансов; 4-значный код доступа задаётся при первом открытии интерфейса"
 fi
 
-if ! DOCOMATOR_DATA_DIR="$DATA_DIR" \
-  "$RELEASE_DIR/runtime/node/bin/node" \
-  "$RELEASE_DIR/app/scripts/runtime/migrate.mjs"; then
+if ! DOCOMATOR_DATA_DIR="$DATA_DIR" "$RELEASE_DIR/runtime/node/bin/node" "$RELEASE_DIR/app/scripts/runtime/migrate.mjs"; then
   rollback
   die "Не удалось применить изменения базы данных"
 fi
@@ -383,30 +342,17 @@ mv -Tf "$INSTALL_ROOT/.current.new.$$" "$CURRENT_LINK"
 if ((INSTALL_SYSTEMD == 1)); then
   require_command systemctl
   for unit in docomator-api docomator-worker docomator-llm docomator-backup; do
-    render_template \
-      "$RELEASE_DIR/deploy/systemd/${unit}.service.in" \
-      "/etc/systemd/system/${unit}.service" \
-      "$INSTALL_ROOT" "$DATA_DIR" "$CONFIG_DIR" \
-      "$DOCOMATOR_USER" "$DOCOMATOR_GROUP"
+    render_template "$RELEASE_DIR/deploy/systemd/${unit}.service.in" "/etc/systemd/system/${unit}.service" "$INSTALL_ROOT" "$DATA_DIR" "$CONFIG_DIR" "$DOCOMATOR_USER" "$DOCOMATOR_GROUP"
   done
-  render_template \
-    "$RELEASE_DIR/deploy/systemd/docomator-backup.timer.in" \
-    "/etc/systemd/system/docomator-backup.timer" \
-    "$INSTALL_ROOT" "$DATA_DIR" "$CONFIG_DIR" \
-    "$DOCOMATOR_USER" "$DOCOMATOR_GROUP"
+  render_template "$RELEASE_DIR/deploy/systemd/docomator-backup.timer.in" "/etc/systemd/system/docomator-backup.timer" "$INSTALL_ROOT" "$DATA_DIR" "$CONFIG_DIR" "$DOCOMATOR_USER" "$DOCOMATOR_GROUP"
   systemctl daemon-reload
 else
   info "Пропускаем установку служб systemd и управление ими"
 fi
 
 if ((NO_START == 0)); then
-  command -v systemctl >/dev/null 2>&1 || {
-    rollback
-    die "Требуется systemd; для установки без запуска используйте --no-start"
-  }
-
+  command -v systemctl >/dev/null 2>&1 || { rollback; die "Требуется systemd; для установки без запуска используйте --no-start"; }
   systemctl enable docomator-api.service docomator-worker.service
-
   LLM_ENABLED="$(read_env_value "$CONFIG_FILE" DOCOMATOR_LLM_ENABLED)"
   LLM_MODEL="$(read_env_value "$CONFIG_FILE" DOCOMATOR_LLM_MODEL)"
   if [[ "$LLM_ENABLED" == "true" && -x "$CURRENT_LINK/runtime/llama/llama-server" && -f "$LLM_MODEL" ]]; then
@@ -414,35 +360,24 @@ if ((NO_START == 0)); then
   else
     systemctl disable --now docomator-llm.service 2>/dev/null || true
   fi
-
   BACKUP_ENABLED="$(read_env_value "$CONFIG_FILE" DOCOMATOR_BACKUP_ENABLED)"
   if [[ -z "$BACKUP_ENABLED" || "${BACKUP_ENABLED,,}" == "true" || "$BACKUP_ENABLED" == "1" ]]; then
     systemctl enable --now docomator-backup.timer
   else
     systemctl disable --now docomator-backup.timer 2>/dev/null || true
   fi
-
-  if ! systemctl restart docomator-api.service docomator-worker.service; then
-    rollback
-    die "Не удалось запустить службы Оформлятор"
-  fi
-
+  if ! systemctl restart docomator-api.service docomator-worker.service; then rollback; die "Не удалось запустить службы Оформлятор"; fi
   HOST="$(read_env_value "$CONFIG_FILE" DOCOMATOR_HOST)"
   PORT="$(read_env_value "$CONFIG_FILE" DOCOMATOR_PORT)"
   [[ -n "$HOST" ]] || HOST="127.0.0.1"
   [[ "$HOST" == "0.0.0.0" || "$HOST" == "::" ]] && HOST="127.0.0.1"
   [[ -n "$PORT" ]] || PORT="8080"
   HEALTH_URL="http://${HOST}:${PORT}/readyz"
-
   HEALTHY=0
   for _ in $(seq 1 30); do
-    if "$CURRENT_LINK/runtime/node/bin/node" "$BUNDLE_ROOT/healthcheck.mjs" "$HEALTH_URL" 3000 >/dev/null 2>&1; then
-      HEALTHY=1
-      break
-    fi
+    if "$CURRENT_LINK/runtime/node/bin/node" "$BUNDLE_ROOT/healthcheck.mjs" "$HEALTH_URL" 3000 >/dev/null 2>&1; then HEALTHY=1; break; fi
     sleep 1
   done
-
   if ((HEALTHY == 0)); then
     systemctl status docomator-api.service --no-pager >&2 || true
     rollback
@@ -455,6 +390,4 @@ info "Текущая версия: $(readlink -f "$CURRENT_LINK")"
 info "Файл настроек: $CONFIG_FILE"
 info "Постоянные данные: $DATA_DIR"
 
-if [[ -x "$CURRENT_LINK/first-run.sh" ]]; then
-  "$CURRENT_LINK/first-run.sh" --config "$CONFIG_FILE"
-fi
+if [[ -x "$CURRENT_LINK/first-run.sh" ]]; then "$CURRENT_LINK/first-run.sh" --config "$CONFIG_FILE"; fi

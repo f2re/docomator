@@ -5,18 +5,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="/etc/docomator/docomator.env"
 EXPLICIT_URL=""
 RUN_CHECK=0
+RESET_CODE=0
 
 usage() {
   cat <<'USAGE'
 Использование: first-run.sh [параметры]
 
-Показывает памятку первого запуска Оформлятор и при необходимости проверяет
-локальные компоненты. Помощник работает автономно и не изменяет данные.
+Показывает памятку первого запуска Оформлятора и при необходимости проверяет
+локальные компоненты. Обычный режим работает автономно и не изменяет данные.
 
 Параметры:
   --config ФАЙЛ   файл настроек
   --url АДРЕС     явный адрес веб-интерфейса
   --check         проверить готовность компонентов
+  --reset-code    задать новый 4-значный код доступа без старого кода
   -h, --help      показать эту справку
 USAGE
 }
@@ -26,10 +28,20 @@ while (($# > 0)); do
     --config) CONFIG_FILE="$2"; shift 2 ;;
     --url) EXPLICIT_URL="$2"; shift 2 ;;
     --check) RUN_CHECK=1; shift ;;
+    --reset-code) RESET_CODE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'Неизвестный параметр: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
+
+if ((RESET_CODE == 1)); then
+  RESET_HELPER="$SCRIPT_DIR/reset-access-code.sh"
+  [[ -x "$RESET_HELPER" ]] || {
+    printf 'Не найден штатный помощник сброса кода: %s\n' "$RESET_HELPER" >&2
+    exit 1
+  }
+  exec "$RESET_HELPER" --config "$CONFIG_FILE"
+fi
 
 read_value() {
   local key="$1"
@@ -48,9 +60,9 @@ else
   UI_URL="http://${HOST}:${PORT}"
 fi
 
-printf '🔒 При первом открытии Оформлятор предложит создать общий пароль в браузере.\n'
-printf '   Если браузер недоступен, используйте локальный помощник:\n'
-printf '   sudo bash /opt/docomator/current/set-password.sh\n\n'
+printf '🔒 При первом открытии Оформлятор предложит задать 4-значный код доступа.\n'
+printf '   Имя пользователя не требуется. Если код забыт:\n'
+printf '   sudo /opt/docomator/current/first-run.sh --reset-code\n\n'
 
 if ((RUN_CHECK == 1)); then
   NODE=""
@@ -154,7 +166,7 @@ cat <<EOF
   $UI_URL/
 
 Быстрый старт:
-  1. При первом открытии задайте общий пароль.
+  1. При первом открытии задайте 4-значный код доступа.
   2. Импортируйте сотрудников из CSV/XLSX или вставьте таблицу из Excel.
   3. Проверьте найденные поля; ошибки показываются у конкретной строки и значения.
   4. Загрузите DOCX/XLSX-шаблон, отметьте места подстановки и выполните пробную проверку.
@@ -164,7 +176,10 @@ cat <<EOF
   $EXAMPLES_DIR
 
 Если нужна диагностика компонентов:
-  sudo bash /opt/docomator/current/first-run.sh --check
+  sudo /opt/docomator/current/first-run.sh --check
+
+Если код доступа забыт:
+  sudo /opt/docomator/current/first-run.sh --reset-code
 
 Если установка завершилась без ошибки выше, дополнительных действий с правами каталогов не требуется.
 EOF

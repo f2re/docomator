@@ -27,8 +27,8 @@ Do not silently weaken a MUST requirement. Update requirements and add an ADR wh
 - SMTP and network destinations are allowlisted.
 - Network share writes must verify mount + sentinel and use temp-file/atomic-rename semantics.
 - Keep the modular monolith. Do not introduce a broker, cache server, microservice, or vector database without measured need and an ADR.
-- ADR-0009 adds one shared application password. Оформлятор still has no user accounts, roles, personal cabinets or section-level ACL: every successfully authenticated client works with the same shared data. Do not turn the password gate into IAM without a superseding ADR.
-- Spaces are hard data partitions, not authorization scopes. Authentication must never weaken or replace `spaceId` validation and database isolation.
+- ADR-0011 supersedes ADR-0009 for the current workspace gate: one shared 4-digit access code, no username/account/login model, no roles, personal cabinets or section-level ACL. Every client with an unlocked session works with the same shared data.
+- Spaces are hard data partitions, not authorization scopes. The access-code gate must never weaken or replace `spaceId` validation and database isolation.
 
 ## Repository structure
 
@@ -69,9 +69,9 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Avoid `any`; use `unknown` plus validation.
 - Validate all boundary data before it enters the domain.
 - Do not perform side effects at module import time except executable entrypoints.
-- Handle SIGTERM/SIGINT and bounded shutdown in long-running processes.
+- Handle SIGTERM/SIGINT and bounded graceful shutdown in long-running processes.
 - Use UTC ISO timestamps internally; store timezone separately where schedules require it.
-- Never log passwords, password hashes, session secrets, raw authorization headers, session cookies or restricted values.
+- Never log access codes, credential hashes, session secrets, raw authorization headers, session cookies or restricted values.
 
 ## SQLite and queue rules
 
@@ -80,6 +80,7 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Claims use leases; retries are explicit; duplicate suppression uses unique constraints.
 - Migrations are additive by default and checksum-protected.
 - Add a new migration instead of editing an applied one.
+- Historical names in already applied migrations are not a reason to expose legacy terminology in current domain/API/UI code; hide them behind a compatibility adapter.
 
 ## Document-engine rules
 
@@ -97,8 +98,8 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - State copy explains the current step, why it is happening, what comes next, and whether data is preserved.
 - Preserve form values after server errors and expose correlation IDs.
 - Keep runtime UI offline: no CDN, remote fonts, analytics, or external assets.
-- Expired authentication must lead to the login screen without losing the user's understanding of what happened; after successful login the user returns to a safe local path.
-
+- An expired/closed workspace session must lead to `/access` without losing the user's understanding of what happened; after the correct 4-digit code the user returns to a safe local path.
+- Do not use username/password controls, HTTP Basic Auth or `WWW-Authenticate` for the built-in workspace gate.
 - User-facing interface, API messages, installation help, notifications, roles, and states are Russian by default.
 - Do not expose raw English library/database errors or unexplained machine values to ordinary users.
 - Run `npm run check:language` for every user-facing change.
@@ -111,7 +112,8 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Verify SHA-256 before system changes.
 - Install into versioned immutable directories and switch an atomic symlink.
 - Back up database/config before migration and roll back on failed readiness.
-- A new installation must remain locked until a shared password is explicitly configured on the target host; updates must preserve the password hash and session secret unless the operator changes them.
+- A new installation must remain locked until a 4-digit access code is explicitly configured on the target host; updates preserve credential state and session secret unless the operator changes the code.
+- `set-access-code.sh` and `reset-access-code.sh` are canonical recovery tools. Legacy password-named scripts may exist only as thin compatibility wrappers without independent security logic.
 - Product versioning follows `docs/VERSIONING.md`: use `npm run version:bump -- patch` for backward-compatible fixes and `-- minor` for new compatible capabilities. Do not keep an old product version merely because release maturity is still `candidate`.
 - `version` describes the product capability/compatibility set; `status` and `channel` describe release maturity. A `candidate/pilot` release may and must receive a new SemVer when product behavior changes.
 - Product-changing PRs must update `RELEASE_IDENTITY.json.version`; CI rejects a runtime/product change that keeps the previous version. A pure `candidate/pilot → stable/production` maturity transition may retain the same version when product behavior is unchanged.
@@ -129,7 +131,6 @@ A change is done when:
 - `npm run check` passes;
 - migration/rollback notes are present when applicable;
 - roadmap status is updated when a milestone changes.
-
 
 ## GitHub write workflow
 

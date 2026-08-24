@@ -1,178 +1,98 @@
 # Автономная поставка, установка и обновление
 
-## 1. Модель поставки
+## 1. Принцип
 
-Автономный комплект выпуска создаётся на подключённом **эталонном сервере** и переносится в закрытый контур как один `.tar.gz`.
+Offline bundle собирается на подключённой reference VM и переносится в закрытый контур как проверенный `.tar.gz`. Target-side `verify/install/update/rollback` не используют сеть.
 
-Reference host должен совпадать с целевой сервер по:
-
-- архитектуре CPU;
-- версии/совместимости `glibc`;
-- редакции Debian/Astra Linux для `.deb`-пакетов;
-- ожидаемым CPU instructions для `llama-server`.
-
-> [!IMPORTANT]
-> Не собирайте `llama-server` с инструкциями CPU, отсутствующими на целевой сервер. Для разнородного парка используйте консервативный build либо отдельные bundles.
+Reference VM должна соответствовать target по CPU architecture, совместимой glibc и конкретному Debian/Astra release для `.deb` inventory. Нативные binaries нельзя собирать с CPU instructions, отсутствующими на target.
 
 ## 2. Состав bundle
 
-```text
-docomator-<version>-linux-<arch>/
-├── VERSION
-├── RELEASE_NOTES.md
-├── SUPPORT_MATRIX.md
-├── release.json
-├── manifest.sha256
-├── manifest.symlinks
-├── install.sh
-├── update.sh
-├── verify-bundle.sh
-├── smoke-test.sh
-├── целевой сервер-release-gate.sh
-├── ux-acceptance-gate.sh
-├── ux-acceptance-gate.mjs
-├── lib.sh
-├── healthcheck.mjs
-├── http-check.mjs
-├── verify-release.mjs
-├── verify-target-profile.mjs
-└── payload/
-    ├── app/
-    │   ├── apps/*/dist
-    │   ├── packages/*/dist
-    │   ├── node_modules
-    │   ├── migrations
-    │   ├── README.md
-    │   ├── docs/
-    │   ├── scripts/runtime
-    │   ├── scripts/ci/{release-gate,release-gate-crash-worker,libreoffice-release-gate}.mjs
-    │   └── examples/
-    │       ├── README.md
-    │       ├── manifest.sha256
-    │       ├── data
-    │       ├── templates
-    │       └── expected
-    ├── runtime/
-    │   ├── node/
-    │   └── llama/llama-server
-    ├── models/*.gguf
-    ├── acceptance/ux/              # только в --with-ux-acceptance
-    │   ├── tests/e2e
-    │   └── node_modules            # только пять закреплённых QA-пакетов
-    ├── deploy/systemd/
-    ├── config/docomator.env.example
-    └── os-packages/
-        ├── manifest.sha256
-        ├── packages.tsv
-        ├── requested-packages.txt
-        ├── source-os.env
-        └── *.deb
-```
-
-`RELEASE_NOTES.md` содержит тот же честный перечень реализованного объёма и незакрытых ограничений, который опубликован в репозитории; соседний `SUPPORT_MATRIX.md` оставляет кандидатные платформы в состоянии `не проверено` до фактических актов. Verifier требует оба файла и их точные контрольные суммы, поэтому локальная ссылка из примечаний на матрицу остаётся рабочей и не может незаметно указывать на отсутствующее свидетельство. `manifest.sha256` покрывает все обычные файлы, кроме самого корневого manifest, включая вложенные manifests и manifest символических ссылок. `manifest.symlinks` фиксирует точный относительный целевой сервер каждой разрешённой ссылки; ссылка наружу, добавленный файл или объект неподдерживаемого типа блокируют проверку. Для каждого `.deb` verifier дополнительно сверяет checksum, имя, версию и архитектуру через `dpkg-deb`; `release.json` связывает preview-профиль, пределы преобразования, SHA package inventory и опциональный профиль UX-приёмки. Перед package-manager preflight installer требует точного совпадения `ID`, `VERSION_ID` и Debian-архитектуры target с `source-os.env`.
-
-`payload/acceptance` отделён от production-приложения: `install.sh` копирует только `payload/app`, `payload/runtime` и `payload/deploy`, поэтому Playwright/axe не становятся runtime-зависимостями `/opt/docomator`. QA-набор остаётся в проверенном распакованном bundle и запускается только явной командой оператора.
-
-## Помощник первого запуска
-
-В автономный комплект входит `first-run.sh`. После успешной установки он показывает адрес веб-интерфейса и русскоязычный порядок первоначальной настройки:
+Корень содержит:
 
 ```text
-пространство → тип объектов → данные или импорт → проверка шаблона
-→ поля → пробное заполнение → сохранение шаблона
-→ необязательная визуальная проверка PDF → выпуск документов
+VERSION
+release.json
+RELEASE_NOTES.md
+SUPPORT_MATRIX.md
+manifest.sha256
+manifest.symlinks
+verify-bundle.sh
+install.sh
+update.sh
+backup.sh
+restore.sh
+first-run.sh
+set-access-code.sh
+reset-access-code.sh
+set-password.sh          # compatibility wrapper only
+reset-password.sh        # compatibility wrapper only
+smoke-test.sh
+target-release-gate.sh
+target-acceptance.sh
+ux-acceptance-gate.sh
+ux-acceptance-gate.mjs
+healthcheck.mjs
+http-check.mjs
+lib.sh
+payload/
 ```
 
-Помощник также показывает путь `/opt/docomator/current/app/examples` с вымышленными данными, безопасными шаблонами и заполненными вариантами. Он не обращается в Интернет и не изменяет бизнес-данные. Повторный запуск:
+`payload/app` содержит production workspaces/dist, migrations, runtime scripts, docs, examples и production `node_modules`. `payload/runtime` содержит Node.js и опциональный `llama-server`; `payload/models` — опциональную GGUF model; `payload/deploy` — systemd templates; `payload/config` — новый `docomator.env.example`; `payload/os-packages` — замкнутый target-specific `.deb` set. QA Playwright/axe размещается отдельно в `payload/acceptance/ux` и не устанавливается как production dependency.
+
+`manifest.sha256` покрывает обычные файлы, `manifest.symlinks` — разрешённые относительные symlinks. Added/missing file, unsupported object, absolute/out-of-root symlink или checksum mismatch блокирует установку.
+
+## 3. Access-code contract bundle
+
+Новая конфигурация содержит:
+
+```text
+DOCOMATOR_ACCESS_CODE_HASH=
+DOCOMATOR_SESSION_SECRET=
+DOCOMATOR_SESSION_TTL_SECONDS=28800
+```
+
+Install создаёт случайный session secret, но не придумывает код. Рабочая область остаётся закрытой до первого browser setup из четырёх цифр.
+
+Canonical helpers:
 
 ```bash
-sudo /opt/docomator/current/first-run.sh \
-  --config /etc/docomator/docomator.env \
-  --check
+sudo /opt/docomator/current/set-access-code.sh
+sudo /opt/docomator/current/reset-access-code.sh
+sudo /opt/docomator/current/first-run.sh --reset-code
 ```
 
-## 2.1. Проверка модуля приёма документов
+`set-password.sh`/`reset-password.sh` поставляются только как compatibility wrappers для ранее написанных operator scripts. Новая автоматизация их не использует.
 
-Автономный комплект содержит рабочую область `packages/document-intake`, веб-модуль проверки и все его зависимости. После установки локальная проверка подтверждает доступность экрана «Шаблоны» и файла `/ui/document-intake.js` без обращения к внешним ресурсам.
+## 4. OS package set
 
-## 3. Подготовка OS packages
-
-Выполняется на чистой подключённой VM с той же редакцией ОС:
+На чистой connected VM той же ОС:
 
 ```bash
 sudo scripts/offline/collect-os-packages.sh --apt-update
 ```
 
-Список задаётся в [`config/os-packages.txt`](../config/os-packages.txt). Полный кандидатный профиль включает Chromium для P5; для Astra допустим другой пакет и путь, но их нужно явно передать сборщику bundle. Сборщик разрешает зависимости с пустым состоянием `dpkg`, поэтому в каталог загружается полное обязательное транзитивное замыкание независимо от уже установленных пакетов эталонной машины. `--no-install-recommends` исключает только необязательные рекомендации. Создаются `manifest.sha256`, `packages.tsv`, отсортированный `requested-packages.txt` и `source-os.env` с семейством ОС, точным выпуском, архитектурой, признаком `DEPENDENCY_CLOSURE=full` и контрольной суммой исходного списка. Неполный или смешанный набор отклоняется.
+Создаются `manifest.sha256`, `packages.tsv`, `requested-packages.txt`, `source-os.env` и `.deb`. Набор обязан иметь `DEPENDENCY_CLOSURE=full`, точные `OS_ID`, `VERSION_ID`, Debian architecture и checksum исходного package list.
 
-Свой список:
+Debian и Astra package sets не взаимозаменяемы. Update OS packages не входит в транзакцию application update и выполняется отдельно по утверждённой системной процедуре со snapshot/rollback ОС.
 
-```bash
-sudo scripts/offline/collect-os-packages.sh \
-  --package-list /path/to/packages.txt \
-  --output /srv/docomator-os-packages \
-  --apt-update
-```
+## 5. Сборка application bundle
 
-> [!IMPORTANT]
-> Репозитории, приоритеты пакетов и закреплённые версии эталонной Debian/Astra Linux должны совпадать с целевым сервером. Полное замыкание устраняет зависимость от установленных пакетов эталонной машины, но не делает пакеты одного выпуска совместимыми с другим выпуском ОС.
-
-## 4. Подготовка application bundle
-
-### Полный bundle с LLM
+Полный Debian example:
 
 ```bash
 scripts/offline/prepare-bundle.sh \
+  --target-profile debian \
   --llama-server /srv/build/llama.cpp/llama-server \
-  --target-profile debian \
-  --model /srv/models/qwen-or-phi-q4.gguf \
-  --with-preview \
-  --with-ux-acceptance \
-  --os-packages-dir offline-bundles/os-packages
-```
-
-Script:
-
-1. загружает официальный Node.js, указанный в `.node-version`, либо использует переданный runtime;
-2. проверяет checksum Node archive;
-3. выполняет `npm ci`, `npm run check` и отдельную обязательную проверку примеров даже при `--skip-tests`;
-4. собирает production workspaces;
-5. выполняет `npm ci --omit=dev` в payload;
-6. добавляет точный проверенный список учебных примеров, `llama-server`, модель, целевые gate-скрипты, проверенный набор `.deb` и, для UX-профиля, отдельный точный Playwright/axe-набор;
-7. создаёт release metadata с preview/UX-профилями, версиями Chromium/Playwright/axe и SHA package inventory, общий SHA-256 manifest и manifest символических ссылок;
-8. проверяет точный профиль ОС, полноту зависимостей, документацию и интерфейс произвольных объектов;
-9. создаёт `.tar.gz`, проверяет его SHA-256, безопасно распаковывает во временный каталог и повторно запускает внутренний verifier.
-
-### Bundle с заранее распакованным Node.js
-
-```bash
-scripts/offline/prepare-bundle.sh \
-  --node-runtime-dir /srv/runtime/node-v24.18.0-linux-x64 \
-  --target-profile debian \
-  --llama-server /srv/runtime/llama-server \
   --model /srv/models/model.gguf \
   --with-preview \
   --with-ux-acceptance \
   --os-packages-dir /srv/docomator-os-packages
 ```
 
-### Bundle с локальным Node archive
+Astra собирается на native Astra reference VM с явным Chromium package/path при отличии от Debian defaults.
 
-```bash
-scripts/offline/prepare-bundle.sh \
-  --node-archive /srv/cache/node-v24.18.0-linux-x64.tar.xz \
-  --target-profile debian \
-  --node-sha256 '<expected-sha256>' \
-  --llama-server /srv/runtime/llama-server \
-  --model /srv/models/model.gguf \
-  --with-preview \
-  --with-ux-acceptance \
-  --os-packages-dir /srv/docomator-os-packages
-```
-
-### Явно без LLM
-
-Для теста детерминированного ядра:
+Deterministic core без LLM/preview/UX acceptance допускается только явно:
 
 ```bash
 scripts/offline/prepare-bundle.sh \
@@ -181,372 +101,83 @@ scripts/offline/prepare-bundle.sh \
   --without-ux-acceptance
 ```
 
-Сценарий не создаёт молча неполный комплект: требуется либо пара `--llama-server`/`--model`, либо `--without-llm`, ровно один из профилей `--with-preview`/`--without-preview` и ровно один из `--with-ux-acceptance`/`--without-ux-acceptance`. Preview-профиль требует `--os-packages-dir` и наличие `libreoffice-core`, `libreoffice-writer`, `libreoffice-calc`. UX-профиль требует чистый зафиксированный Git checkout, проверенный `.deb`-набор и единственный указанный Chromium package; по умолчанию это `chromium` и `/usr/bin/chromium`, для Astra задаются `--ux-chromium-package` и `--ux-chromium-bin`. Профиль без preview записывает `DOCOMATOR_PREVIEW_ENABLED=false` в новый шаблон и предназначен только для явно согласованного развёртывания без PDF-предпросмотра. Bundle без UX-профиля пригоден для технических проверок, но не может создать обязательные P5 Playwright/axe-свидетельства.
+Builder выполняет `npm ci`, полный `npm run check` (если не указан диагностический `--skip-tests`), проверку examples, production install dependencies, release metadata/manifest, затем повторно проверяет готовый bundle.
 
-## 4.1. Единый прогон целевой приёмки
+## 6. Перенос и preflight
 
-```bash
-install -d -m 0700 "$HOME/docomator-target-acts"
-"$BUNDLE_ROOT/target-acceptance.sh" \
-  --config /etc/docomator/docomator.env \
-  --base-url http://127.0.0.1:8080/ \
-  --output "$HOME/docomator-target-acts/target-01"
-```
+Переносите archive + independently trusted SHA-256/release manifest. Соседний `.sha256` без доверенного канала не является trust anchor.
 
-Для обязательных интеграций добавьте `--require-network --require-smtp`. Команда fail-closed выполняет проверку bundle, root smoke, core/LibreOffice gate, установленный `pilot-check.sh --run-backup` и offline Playwright/axe, затем создаёт связанный `target-acceptance.json`, отдельные журналы и checksum manifest всех свидетельств.
+До `sudo` распакуйте archive обычным пользователем в новый directory и выполните `verify-bundle.sh`. После переноса в root-owned location повторно сверяйте те же bytes/checksum. Bundle path/object ownership/mode не должен позволять подмену другим пользователем.
 
-## 5. Перенос
-
-Рекомендуется переносить:
-
-```text
-bundle tar.gz
-отдельный SHA-256 tar.gz
-подписанный release manifest организации
-акт антивирусной/контрольной проверки
-```
-
-`prepare-bundle.sh` создаёт файл `<archive>.sha256`, но соседний checksum сам по себе не является источником доверия. До любой команды `sudo` оператор обязан получить ожидаемый SHA-256 из проверенного подписанного release manifest организации по независимому каналу. Несовпадение останавливает установку.
-
-До привилегированной распаковки выполните preflight обычным пользователем в новом временном каталоге. GNU tar не получает root-права, а внутренний verifier проверяет точный inventory, типы объектов, checksum и цели ссылок. Только затем те же байты копируются в новый root-owned каталог, их зафиксированный SHA-256 проверяется повторно и распаковывается защищённая копия. Вся процедура находится в одном fail-fast subshell: ошибка любого шага делает последующие привилегированные команды недостижимыми. Уникальный каталог нельзя переиспользовать между попытками.
+## 7. Чистая установка
 
 ```bash
-(
-  set -Eeuo pipefail
-  BUNDLE_NAME='docomator-<version>-linux-<arch>'
-  [[ "$BUNDLE_NAME" =~ ^docomator-[A-Za-z0-9._-]+-linux-(x64|arm64)$ ]] || exit 2
-  ARCHIVE="${BUNDLE_NAME}.tar.gz"
-  EXPECTED_SHA256='<SHA-256 из проверенного подписанного release manifest>'
-  [[ "$EXPECTED_SHA256" =~ ^[a-f0-9]{64}$ ]] || exit 2
-  PREFLIGHT_DIR="$(mktemp -d)"
-  cleanup() { rm -rf "$PREFLIGHT_DIR"; }
-  trap cleanup EXIT
-
-  printf '%s  %s\n' "$EXPECTED_SHA256" "$ARCHIVE" \
-    | sha256sum --check --strict -
-  tar --no-same-owner --no-same-permissions -xzf "$ARCHIVE" \
-    -C "$PREFLIGHT_DIR"
-  "$PREFLIGHT_DIR/$BUNDLE_NAME/verify-bundle.sh" \
-    "$PREFLIGHT_DIR/$BUNDLE_NAME"
-
-  STAGE="$(sudo mktemp -d /var/tmp/docomator-install.XXXXXX)"
-  sudo install -o root -g root -m 0600 \
-    "$ARCHIVE" "$STAGE/bundle.tar.gz"
-  printf '%s  %s\n' "$EXPECTED_SHA256" "$STAGE/bundle.tar.gz" \
-    | sudo sha256sum --check --strict -
-  sudo tar --no-same-owner --no-same-permissions \
-    -xzf "$STAGE/bundle.tar.gz" -C "$STAGE"
-  BUNDLE_ROOT="$(sudo realpath "$STAGE/$BUNDLE_NAME")"
-  [[ "$BUNDLE_ROOT" == "$STAGE/$BUNDLE_NAME" ]] || exit 2
-  sudo find "$BUNDLE_ROOT" ! -type l -exec chmod go-w {} +
-  sudo chmod 0755 "$STAGE" "$BUNDLE_ROOT"
-  sudo "$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
-  printf 'Проверенный каталог комплекта: %s\n' "$BUNDLE_ROOT"
-)
+sudo ./install.sh --install-os-packages
 ```
 
-Installer повторно проверяет владельца и режим каждого объекта, всю цепочку родительских каталогов и внутренние manifests.
+Установка:
 
-## 6. Новая установка
+1. проверяет bundle/OS profile;
+2. при необходимости устанавливает только bundled `.deb` без network download;
+3. создаёт service user/group и persistent directories;
+4. создаёт `/etc/docomator/docomator.env` из canonical template;
+5. устанавливает immutable `/opt/docomator/releases/<version>`;
+6. создаёт session secret;
+7. применяет migrations;
+8. атомарно переключает `/opt/docomator/current`;
+9. устанавливает/запускает systemd units;
+10. проверяет `/readyz`;
+11. запускает `first-run.sh`.
 
-```bash
-set -Eeuo pipefail
-BUNDLE_ROOT='<проверенный каталог из успешного сообщения подготовки>'
-sudo "$BUNDLE_ROOT/install.sh" --install-os-packages
-```
-
-Без установки `.deb` можно продолжить, только если настроенный LibreOffice уже доступен. При включённом preview и отсутствующем executable installer останавливается до установки приложения и предлагает `--install-os-packages`:
-
-```bash
-sudo "$BUNDLE_ROOT/install.sh"
-```
-
-Установить unit-файлы и выполнить миграции, но не запускать services:
-
-```bash
-sudo "$BUNDLE_ROOT/install.sh" --no-start
-```
-
-Для проверочного chroot/container-сценария без установки unit-файлов:
-
-```bash
-sudo "$BUNDLE_ROOT/install.sh" --no-systemd
-```
-
-`--no-systemd` предназначен для smoke-теста и нестандартной интеграции с внешним service manager. В штатной Debian/Astra Linux установке используется systemd.
-
-`--install-os-packages` разрешён только при первой установке, когда прежнего application release ещё нет. Сначала `apt-get --simulate --no-remove` проверяет план: каждый устанавливаемый пакет должен присутствовать в подписанном inventory. Реальная команда использует `--no-download --no-remove`, поэтому не обращается к repository и не удаляет системные пакеты. Если package closure неполон, установка приложения не начинается.
-
-Системный package manager не является частью SQLite/application rollback. Поэтому первый прогон выполняется на чистой VM со snapshot до установки. Если maintainer script `.deb` аварийно завершится уже после начала package phase, VM возвращается к этому snapshot; повторный запуск поверх незавершённого состояния блокируется через `dpkg --audit`. Для действующей установки package phase через Оформлятор запрещена полностью.
-
-Custom paths:
-
-```bash
-sudo "$BUNDLE_ROOT/install.sh" \
-  --install-root /opt/docomator \
-  --data-dir /srv/docomator \
-  --config-dir /etc/docomator
-```
-
-## 7. Результат установки
-
-```text
-/opt/docomator/releases/<version>/  immutable release
-/opt/docomator/current             atomic symlink
-/etc/docomator/docomator.env       local config and secrets
-/var/lib/docomator/docomator.db    SQLite database
-/var/lib/docomator/models/         GGUF models
-/var/lib/docomator/objects/        generated and source objects
-/var/lib/docomator/backups/        pre-update backups
-/etc/systemd/system/docomator-*.service
-```
-
-Для новой конфигурации installer:
-
-- генерирует session secret;
-- выставляет data directory;
-- включает LLM, если bundle содержит binary и model;
-- не перезаписывает существующие SMTP secrets.
+Первый browser visit открывает `/access` и предлагает четыре цифры. Username/password не нужны.
 
 ## 8. Обновление
 
-Для нового архива обязательны та же проверка SHA-256 из подписанного manifest, непривилегированный preflight и повторная проверка root-owned копии. Не используйте каталог предыдущей установки:
+`update.sh` использует тот же verified bundle и существующую конфигурацию. Перед миграцией создаётся pre-update backup DB/config. Новый release устанавливается в отдельный immutable directory; `current` переключается атомарно только внутри транзакционного install flow.
+
+При failed migration/start/readiness rollback возвращает прежний symlink и backup DB/config. Existing data, object store, code credential и session secret не должны теряться.
+
+Fresh config больше не содержит legacy password key. При upgrade runtime может прочитать старый key для перехода; первый canonical code reset записывает `DOCOMATOR_ACCESS_CODE_HASH` и синхронизирует старый key только если он уже существовал для rollback.
+
+## 9. Первый запуск и диагностика
 
 ```bash
-(
-  set -Eeuo pipefail
-  UPDATE_BUNDLE_NAME='docomator-NEW-linux-x64'
-  [[ "$UPDATE_BUNDLE_NAME" =~ ^docomator-[A-Za-z0-9._-]+-linux-(x64|arm64)$ ]] || exit 2
-  UPDATE_ARCHIVE="${UPDATE_BUNDLE_NAME}.tar.gz"
-  UPDATE_SHA256='<SHA-256 из проверенного подписанного release manifest>'
-  [[ "$UPDATE_SHA256" =~ ^[a-f0-9]{64}$ ]] || exit 2
-  UPDATE_PREFLIGHT="$(mktemp -d)"
-  cleanup() { rm -rf "$UPDATE_PREFLIGHT"; }
-  trap cleanup EXIT
-
-  printf '%s  %s\n' "$UPDATE_SHA256" "$UPDATE_ARCHIVE" \
-    | sha256sum --check --strict -
-  tar --no-same-owner --no-same-permissions -xzf "$UPDATE_ARCHIVE" \
-    -C "$UPDATE_PREFLIGHT"
-  "$UPDATE_PREFLIGHT/$UPDATE_BUNDLE_NAME/verify-bundle.sh" \
-    "$UPDATE_PREFLIGHT/$UPDATE_BUNDLE_NAME"
-
-  UPDATE_STAGE="$(sudo mktemp -d /var/tmp/docomator-update.XXXXXX)"
-  sudo install -o root -g root -m 0600 \
-    "$UPDATE_ARCHIVE" "$UPDATE_STAGE/bundle.tar.gz"
-  printf '%s  %s\n' "$UPDATE_SHA256" "$UPDATE_STAGE/bundle.tar.gz" \
-    | sudo sha256sum --check --strict -
-  sudo tar --no-same-owner --no-same-permissions \
-    -xzf "$UPDATE_STAGE/bundle.tar.gz" -C "$UPDATE_STAGE"
-  UPDATE_BUNDLE_ROOT="$(sudo realpath "$UPDATE_STAGE/$UPDATE_BUNDLE_NAME")"
-  [[ "$UPDATE_BUNDLE_ROOT" == "$UPDATE_STAGE/$UPDATE_BUNDLE_NAME" ]] || exit 2
-  sudo find "$UPDATE_BUNDLE_ROOT" ! -type l -exec chmod go-w {} +
-  sudo "$UPDATE_BUNDLE_ROOT/update.sh"
-)
+sudo /opt/docomator/current/first-run.sh --check
 ```
 
-Update:
+Помощник показывает URL, code recovery, readiness, LibreOffice, backup timer, network delivery и SMTP status. Он не требует Internet.
 
-1. получает exclusive `flock`;
-2. проверяет bundle checksums;
-3. останавливает services;
-4. копирует БД и конфигурацию в `backups/pre-update-*`;
-5. устанавливает новую immutable release;
-6. применяет checksum-protected migrations;
-7. атомарно переключает `/opt/docomator/current`;
-8. запускает systemd services;
-9. ожидает `/readyz`;
-10. откатывает symlink, БД и config при ошибке.
+## 10. Target acceptance
 
-### 8.1. Обновление без повреждения базы
-
-Перед переносом новой версии выполните дополнительную операторскую копию и проверку:
+Код передаётся только через ordinary file текущего пользователя с mode `0600`:
 
 ```bash
-sudo -u docomator env DOCOMATOR_DATA_DIR=/var/lib/docomator \
-  /opt/docomator/current/runtime/node/bin/node \
-  /opt/docomator/current/app/scripts/runtime/backup.mjs
+install -m 0600 /dev/null "$HOME/.docomator-acceptance-code"
+printf '%s\n' '0427' > "$HOME/.docomator-acceptance-code"
 
-sudo -u docomator env DOCOMATOR_DATA_DIR=/var/lib/docomator \
-  /opt/docomator/current/runtime/node/bin/node \
-  /opt/docomator/current/app/scripts/runtime/database-admin.mjs check
+"$BUNDLE_ROOT/target-acceptance.sh" \
+  --config /etc/docomator/docomator.env \
+  --base-url http://127.0.0.1:8080/ \
+  --access-code-file "$HOME/.docomator-acceptance-code" \
+  --output "$HOME/docomator-target-acts/target-01"
 ```
 
-После этого применяйте только распакованный и проверенный новый комплект командой `update.sh`. Не копируйте новую базу поверх `/var/lib/docomator/docomator.db`, не запускайте миграции вручную из другого исходного дерева и не используйте `--install-os-packages` для действующей установки.
+Команда fail-closed выполняет verify bundle, root smoke, target release gate, control backup, pilot check и offline Playwright/axe. Код и путь к code file не попадают в acts.
 
-`update.sh` вызывает `install.sh --upgrade`. Перед миграцией службы останавливаются, а конфигурация и согласованный набор `docomator.db`, `docomator.db-wal`, `docomator.db-shm` копируются в `backups/pre-update-*`. Новая версия устанавливается в отдельный неизменяемый каталог. Ссылка `current` переключается только после успешной миграции; при ошибке запуска или `/readyz` сценарий возвращает прежнюю ссылку, БД и конфигурацию.
-
-После успешного обновления:
-
-```bash
-systemctl --no-pager --full status docomator-api.service docomator-worker.service
-curl --fail --silent --show-error http://127.0.0.1:8080/readyz
-
-sudo -u docomator env DOCOMATOR_DATA_DIR=/var/lib/docomator \
-  /opt/docomator/current/runtime/node/bin/node \
-  /opt/docomator/current/app/scripts/runtime/database-admin.mjs check
-```
-
-Затем выполните `target-acceptance.sh` из того же проверенного комплекта и сохраните акт. Каталог прежней версии и копию `pre-update-*` не удаляйте до завершения приёмки. Пакеты ОС для Debian или 🟥 Astra Linux обновляются отдельно по утверждённой процедуре со снимком виртуальной машины; приложение намеренно не пытается включить их в SQLite-откат.
-
-> [!NOTE]
-> Object storage не копируется перед каждым update, поскольку outputs immutable и обычно велики. Он должен входить в регулярную backup policy.
-
-Пакеты ОС не входят в транзакцию приложения и не обновляются через `update.sh`. Если согласованный выпуск LibreOffice меняется, оператор сначала создаёт snapshot/backup ОС и применяет новый замкнутый `.deb`-набор отдельной утверждённой процедурой, проверяет converter, и лишь затем запускает `update.sh` без `--install-os-packages`. Installer отказывает в совмещении этих операций, чтобы application rollback не оставлял старый код с неоткаченными системными пакетами.
-
-## 9. Конфигурация LLM
-
-Основные параметры:
-
-```ini
-DOCOMATOR_LLM_ENABLED=true
-DOCOMATOR_LLM_MODEL=/var/lib/docomator/models/model.gguf
-DOCOMATOR_LLM_HOST=127.0.0.1
-DOCOMATOR_LLM_PORT=8081
-DOCOMATOR_LLM_CONTEXT=4096
-DOCOMATOR_LLM_THREADS=8
-```
-
-После изменения:
-
-```bash
-sudo systemctl restart docomator-llm docomator-api docomator-worker
-```
-
-## 9.1. Предварительный просмотр LibreOffice
-
-Параметры:
-
-```ini
-DOCOMATOR_PREVIEW_ENABLED=true
-DOCOMATOR_LIBREOFFICE_BIN=/usr/bin/libreoffice
-DOCOMATOR_PREVIEW_TIMEOUT_MS=120000
-DOCOMATOR_PREVIEW_MAX_BYTES=134217728
-```
-
-Автономный набор пакетов должен включать `libreoffice-core`, `libreoffice-writer` и `libreoffice-calc` для той же редакции ОС. `first-run.sh --check` сообщает, доступен ли настроенный исполняемый файл.
-
-Фоновый обработчик создаёт отдельный временный профиль и очищает его после преобразования. PDF проверяется до сохранения. Отсутствующий LibreOffice либо ошибка преобразования не повреждают пробную копию и дают пользователю явный повтор.
-
-## 10. Сетевые папки
-
-Приложение не хранит SMB/NFS passwords и не выполняет mount. Ресурс монтируется ОС через `.mount/.automount`, `/etc/fstab` или утверждённый механизм Astra Linux.
-
-Рекомендуемая структура:
+Для строгого Astra target добавляются:
 
 ```text
-/mnt/docomator-reports/
-├── .docomator-sentinel   # содержит согласованный root ID
-└── generated/
+--require-network --require-smtp
 ```
 
-Будущий delivery adapter перед каждой записью проверит:
+После прогона временный code file удаляется оператором.
 
-- mount присутствует в `/proc/self/mountinfo`;
-- sentinel содержит ожидаемый ID;
-- canonical target находится внутри allowlisted root;
-- temporary file создаётся на том же filesystem;
-- final rename atomic.
+## 11. Backup/restore
 
-## 11. SMTP
+Backup manifest/checksums проверяются до replacement данных. Restore выполняется только из verified copy и должен сохранять SQLite/object store/config. Credential state и session secret входят в recovery requirements, но секреты не публикуются в evidence.
 
-SMTP relay и credentials добавляются только на target:
+Отдельный recovery act обязателен до stable: restore на другой clean machine, сверка counts/IDs/object SHA-256, reboot и продолжение API/worker.
 
-```ini
-DOCOMATOR_SMTP_ENABLED=true
-DOCOMATOR_SMTP_HOST=mail.internal.example
-DOCOMATOR_SMTP_PORT=25
-DOCOMATOR_SMTP_SECURE=false
-```
+## 12. Stable gate
 
-Файл `/etc/docomator/docomator.env` должен иметь режим `0640`, owner `root`, group `docomator`.
-
-## 12. Проверка
-
-На чистом target сначала установите пакетные prerequisites штатным `install.sh --install-os-packages` либо убедитесь, что согласованный LibreOffice уже доступен. Затем выполните полный network-free smoke test непосредственно из извлечённого bundle:
-
-```bash
-sudo "$BUNDLE_ROOT/smoke-test.sh" "$BUNDLE_ROOT"
-```
-
-Тест выполняет установку и обновление во временные каталоги, запускает встроенную службу API, проверяет `/readyz` встроенным Node.js без внешнего `curl`, схему БД, интерфейс предварительного просмотра/активации, доступность настроенного LibreOffice, символическую ссылку, неизменяемые учебные примеры и резервную копию перед обновлением. Он не изменяет systemd.
-
-Core gate и обязательное реальное преобразование DOCX/XLSX для preview-профиля также запускаются только файлами из bundle, без `npm ci` и registry:
-
-```bash
-"$BUNDLE_ROOT/target-release-gate.sh" \
-  --config /etc/docomator/docomator.env
-```
-
-Целевые сочетания ОС, glibc, Node.js и LibreOffice фиксируются в [матрице совместимости](SUPPORT_MATRIX.md). Пустая строка или статус `не проверено` не считаются заявлением о поддержке.
-
-Для bundle с `--with-ux-acceptance` полный браузерный gate запускается на самом сервере обычным пользователем. Родительский каталог результатов должен принадлежать этому пользователю, иметь режим `0700`, а имя каталога одного прогона — ещё не существовать:
-
-```bash
-install -d -m 0700 "$HOME/docomator-p5"
-"$BUNDLE_ROOT/ux-acceptance-gate.sh" \
-  --base-url http://127.0.0.1:8080/ \
-  --output "$HOME/docomator-p5/automation-01"
-```
-
-Gate сначала проверяет root-owned bundle и точное совпадение target ОС/версии/архитектуры с package profile. Затем через `dpkg-query` он подтверждает владельца пути и точную установленную версию Chromium, а через локальный `/api/v1/system/release` — совпадение запущенного production-релиза с байтами `release.json` комплекта. Он не принимает внешний origin, фильтр тестов или существующий выходной каталог. Результат содержит `playwright-report.json`, `axe-report.json`, диагностику и `run-metadata.json` с commit, SHA-256 внутреннего manifest, SHA-256 release metadata и фактической версией браузера. Эти четыре значения переносятся в незавершённый ручной акт до команды `collect-automation`; сборщик отклоняет любое несовпадение. Падение gate оставляет диагностику, но не считается свидетельством P5.
-
-Проверка штатной установки:
-
-```bash
-sudo systemctl status docomator-api docomator-worker docomator-llm
-curl http://127.0.0.1:8080/healthz
-curl http://127.0.0.1:8080/readyz
-journalctl -u docomator-api -u docomator-worker -u docomator-llm --since today
-```
-
-Проверка migration history:
-
-```bash
-sqlite3 /var/lib/docomator/docomator.db \
-  'select name, checksum, applied_at from schema_migrations order by name;'
-```
-
-## 13. Ручной rollback
-
-Installer делает rollback автоматически при failed health-check. Для ручного восстановления:
-
-1. остановить services;
-2. переключить `current` на прежнюю release-directory;
-3. восстановить БД и config из `pre-update-*`;
-4. выполнить `systemctl daemon-reload`;
-5. запустить services и проверить `/readyz`.
-
-Не запускайте старый код на новой несовместимой схеме без восстановления database backup.
-
-
-## 9. Проверка актуальности перед переносом
-
-Для каждого изменения `main` CI собирает профиль `generic` без LLM, LibreOffice и браузерного набора. Это подтверждает, что исходники, production-зависимости, документация, интерфейс и внутренние manifests действительно образуют устанавливаемый архив. Полные профили Debian и Astra Linux собираются только на эталонной машине соответствующего выпуска:
-
-```bash
-npm run bundle:offline:debian -- \
-  --llama-server /srv/runtime/llama-server \
-  --model /srv/models/model.gguf
-
-npm run bundle:offline:astra -- \
-  --llama-server /srv/runtime/llama-server \
-  --model /srv/models/model.gguf \
-  --ux-chromium-package chromium-gost \
-  --ux-chromium-bin /usr/bin/chromium-gost
-```
-
-Параметры Chromium для Astra являются примером и должны соответствовать фактическому пакету эталонной машины. После установки обязательна команда `target-acceptance.sh`; без её акта строка платформы в матрице остаётся «не проверено».
-
-
-## Первый запуск и общий пароль
-
-После новой установки не нужно искать или вручную редактировать хэш пароля. `install.sh` сам создаёт локальный session secret. Откройте адрес Оформлятора: пока общий пароль отсутствует, вместо формы входа появится **«Первый запуск»**. Введите новый пароль дважды; после атомарного сохранения откроется рабочий интерфейс, а мастер больше не будет доступен.
-
-Если браузер на первом запуске недоступен, запасной локальный путь:
-
-```bash
-sudo bash /opt/docomator/current/set-password.sh
-```
-
-Скрипт не хранит пароль открытым текстом: он формирует scrypt-хэш, синхронизирует его с SQLite/конфигурацией и ротирует session secret, завершая старые сессии. До задания пароля новая установка должна оставаться внутри доверенного firewall/reverse-proxy контура.
+Generic CI/bundle не доказывает target support. Для stable exact release требуются Debian target act, Astra 1.7 target act, real LibreOffice, ≥20 DOCX + ≥20 XLSX Office corpus, load 10/100/1000, restart/failure/recovery, P5/accessibility и `release:evidence` с пустым `openBlockers`.

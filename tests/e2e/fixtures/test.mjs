@@ -3,22 +3,23 @@ import { readFile } from "node:fs/promises";
 import { expect, test as base } from "@playwright/test";
 
 const test = base.extend({
-  accessPasswordSession: [
+  accessCodeSession: [
     async ({ baseURL, page }, use) => {
-      const passwordFile = process.env.DOCOMATOR_E2E_ACCESS_PASSWORD_FILE;
-      if (passwordFile) {
-        const password = (await readFile(passwordFile, "utf8")).replace(/\r?\n$/u, "");
+      const accessCodeFile = process.env.DOCOMATOR_E2E_ACCESS_CODE_FILE;
+      if (accessCodeFile) {
+        const code = (await readFile(accessCodeFile, "utf8")).replace(/\r?\n$/u, "");
+        expect(code, "файл UX-приёмки должен содержать ровно 4 цифры").toMatch(/^[0-9]{4}$/u);
         const origin = new URL(baseURL || "http://127.0.0.1:18080").origin;
-        const response = await page.request.post(`${origin}/api/v1/auth/login`, {
+        const response = await page.request.post(`${origin}/api/v1/access/unlock`, {
           headers: {
             accept: "application/json",
             origin
           },
-          data: { password }
+          data: { code }
         });
         expect(
           response.status(),
-          "offline UX-приёмка не смогла войти по общему паролю Оформлятор"
+          "offline UX-приёмка не смогла открыть рабочую область по коду доступа"
         ).toBe(200);
       }
       await use();

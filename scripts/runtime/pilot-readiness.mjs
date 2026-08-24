@@ -8,12 +8,13 @@ import { promisify } from "node:util";
 
 import { verifyBackup } from "./backup-lib.mjs";
 import { evaluateControlBackup } from "./pilot-backup-evidence.mjs";
-import { createSharedPasswordSession } from "./pilot-release-identity.mjs";
+import { createAccessCodeSession } from "./pilot-release-identity.mjs";
 
 const execFileAsync = promisify(execFile);
+const ACCESS_CODE_PATTERN = /^[0-9]{4}$/u;
 
 function usage() {
-  process.stdout.write(`Использование: pilot-readiness.mjs [параметры]\n\nПараметры:\n  --config ФАЙЛ       файл настроек Оформлятор\n  --url АДРЕС         явный адрес API\n  --output КАТАЛОГ    каталог отчётов\n  --password-file ФАЙЛ файл 0600 с общим паролем только для текущего прогона\n  --run-backup        создать резервную копию перед проверкой\n  --require-network   считать сетевую папку обязательной\n  --require-smtp      считать SMTP обязательным\n  --json-only         вывести только JSON-результат\n  -h, --help          показать справку\n\nКоды завершения:\n  0  пилотный контур готов\n  1  есть предупреждения, основной контур не заблокирован\n  2  обнаружена блокирующая ошибка\n`);
+  process.stdout.write(`Использование: pilot-readiness.mjs [параметры]\n\nПараметры:\n  --config ФАЙЛ            файл настроек Оформлятор\n  --url АДРЕС              явный адрес API\n  --output КАТАЛОГ         каталог отчётов\n  --access-code-file ФАЙЛ  файл 0600 с 4-значным кодом только для текущего прогона\n  --run-backup             создать резервную копию перед проверкой\n  --require-network        считать сетевую папку обязательной\n  --require-smtp           считать SMTP обязательным\n  --json-only              вывести только JSON-результат\n  -h, --help               показать справку\n\nКоды завершения:\n  0  пилотный контур готов\n  1  есть предупреждения, основной контур не заблокирован\n  2  обнаружена блокирующая ошибка\n`);
 }
 
 function parseArguments(argv) {
@@ -21,7 +22,7 @@ function parseArguments(argv) {
     configFile: "/etc/docomator/docomator.env",
     url: null,
     outputDirectory: null,
-    passwordFile: null,
+    accessCodeFile: null,
     runBackup: false,
     requireNetwork: false,
     requireSmtp: false,
@@ -36,68 +37,44 @@ function parseArguments(argv) {
       return value;
     };
     switch (argument) {
-      case "--config":
-        options.configFile = next();
-        break;
-      case "--url":
-        options.url = next();
-        break;
-      case "--output":
-        options.outputDirectory = next();
-        break;
-      case "--password-file":
-        options.passwordFile = next();
-        break;
-      case "--run-backup":
-        options.runBackup = true;
-        break;
-      case "--require-network":
-        options.requireNetwork = true;
-        break;
-      case "--require-smtp":
-        options.requireSmtp = true;
-        break;
-      case "--json-only":
-        options.jsonOnly = true;
-        break;
+      case "--config": options.configFile = next(); break;
+      case "--url": options.url = next(); break;
+      case "--output": options.outputDirectory = next(); break;
+      case "--access-code-file": options.accessCodeFile = next(); break;
+      case "--run-backup": options.runBackup = true; break;
+      case "--require-network": options.requireNetwork = true; break;
+      case "--require-smtp": options.requireSmtp = true; break;
+      case "--json-only": options.jsonOnly = true; break;
       case "-h":
-      case "--help":
-        usage();
-        process.exit(0);
-      default:
-        throw new Error(`Неизвестный параметр: ${argument}`);
+      case "--help": usage(); process.exit(0); break;
+      default: throw new Error(`Неизвестный параметр: ${argument}`);
     }
   }
   return options;
 }
 
-async function readPasswordFile(candidate) {
+async function readAccessCodeFile(candidate) {
   if (candidate === null) return null;
   const filePath = path.resolve(candidate);
   const information = await fs.lstat(filePath);
   if (!information.isFile() || information.isSymbolicLink()) {
-    throw new Error("Файл пароля должен быть обычным файлом без символических ссылок.");
+    throw new Error("Файл кода доступа должен быть обычным файлом без символических ссылок.");
   }
   if ((information.mode & 0o077) !== 0) {
-    throw new Error("Файл пароля должен быть доступен только владельцу (режим 0600 или строже). ");
+    throw new Error("Файл кода доступа должен быть доступен только владельцу (режим 0600 или строже). ");
   }
-  if (information.size < 1 || information.size > 4096) {
-    throw new Error("Файл пароля имеет недопустимый размер.");
+  if (information.size < 4 || information.size > 8) {
+    throw new Error("Файл кода доступа имеет недопустимый размер.");
   }
-  const password = (await fs.readFile(filePath, "utf8")).replace(/\r?\n$/u, "");
-  if (password.length < 1 || password.length > 512) {
-    throw new Error("Пароль в файле имеет недопустимую длину.");
+  const code = (await fs.readFile(filePath, "utf8")).replace(/\r?\n$/u, "");
+  if (!ACCESS_CODE_PATTERN.test(code)) {
+    throw new Error("Файл должен содержать ровно 4 цифры кода доступа.");
   }
-  return password;
+  return code;
 }
 
 async function exists(target) {
-  try {
-    await fs.access(target);
-    return true;
-  } catch {
-    return false;
-  }
+  try { await fs.access(target); return true; } catch { return false; }
 }
 
 function parseEnv(text) {
@@ -109,13 +86,7 @@ function parseEnv(text) {
     if (separator < 1) continue;
     const key = line.slice(0, separator).trim();
     let value = line.slice(separator + 1).trim();
-    if (
-      value.length >= 2 &&
-      ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'")))
-    ) {
-      value = value.slice(1, -1);
-    }
+    if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))) value = value.slice(1, -1);
     values[key] = value;
   }
   return values;
@@ -131,28 +102,13 @@ function booleanValue(value, fallback) {
 
 async function runCommand(command, args, timeout = 10_000) {
   try {
-    const result = await execFileAsync(command, args, {
-      timeout,
-      maxBuffer: 1024 * 1024,
-      encoding: "utf8"
-    });
-    return {
-      ok: true,
-      stdout: result.stdout.trim(),
-      stderr: result.stderr.trim(),
-      error: null
-    };
+    const result = await execFileAsync(command, args, { timeout, maxBuffer: 1024 * 1024, encoding: "utf8" });
+    return { ok: true, stdout: result.stdout.trim(), stderr: result.stderr.trim(), error: null };
   } catch (error) {
     return {
       ok: false,
-      stdout:
-        error && typeof error === "object" && typeof error.stdout === "string"
-          ? error.stdout.trim()
-          : "",
-      stderr:
-        error && typeof error === "object" && typeof error.stderr === "string"
-          ? error.stderr.trim()
-          : "",
+      stdout: error && typeof error === "object" && typeof error.stdout === "string" ? error.stdout.trim() : "",
+      stderr: error && typeof error === "object" && typeof error.stderr === "string" ? error.stderr.trim() : "",
       error: error instanceof Error ? error.message : String(error)
     };
   }
@@ -161,46 +117,24 @@ async function runCommand(command, args, timeout = 10_000) {
 async function fetchReadiness(url, cookie) {
   try {
     const response = await fetch(`${url.replace(/\/$/u, "")}/api/v1/operations/readiness`, {
-      headers: {
-        accept: "application/json",
-        ...(cookie === null ? {} : { cookie })
-      },
+      headers: { accept: "application/json", ...(cookie === null ? {} : { cookie }) },
       signal: AbortSignal.timeout(15_000)
     });
     const body = await response.json();
-    if (!response.ok || body?.data === undefined) {
-      throw new Error(body?.error?.message ?? `HTTP ${response.status}`);
-    }
+    if (!response.ok || body?.data === undefined) throw new Error(body?.error?.message ?? `HTTP ${response.status}`);
     return { ok: true, report: body.data, error: null };
   } catch (error) {
-    return {
-      ok: false,
-      report: null,
-      error: error instanceof Error ? error.message : String(error)
-    };
+    return { ok: false, report: null, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
 function check(input) {
-  return {
-    id: input.id,
-    title: input.title,
-    state: input.state,
-    required: Boolean(input.required),
-    summary: input.summary,
-    detail: input.detail ?? null,
-    remediation: input.remediation ?? null,
-    data: input.data ?? {}
-  };
+  return { id: input.id, title: input.title, state: input.state, required: Boolean(input.required), summary: input.summary, detail: input.detail ?? null, remediation: input.remediation ?? null, data: input.data ?? {} };
 }
 
 async function systemInformation(config) {
   let osRelease = {};
-  try {
-    osRelease = parseEnv(await fs.readFile("/etc/os-release", "utf8"));
-  } catch {
-    osRelease = {};
-  }
+  try { osRelease = parseEnv(await fs.readFile("/etc/os-release", "utf8")); } catch { osRelease = {}; }
   const [uname, libc, node, libreOffice] = await Promise.all([
     runCommand("uname", ["-a"]),
     runCommand("ldd", ["--version"]),
@@ -208,28 +142,19 @@ async function systemInformation(config) {
     runCommand(config.DOCOMATOR_LIBREOFFICE_BIN || "/usr/bin/libreoffice", ["--version"])
   ]);
   return {
-    os: {
-      id: osRelease.ID ?? null,
-      name: osRelease.PRETTY_NAME ?? osRelease.NAME ?? null,
-      versionId: osRelease.VERSION_ID ?? null,
-      version: osRelease.VERSION ?? null
-    },
+    os: { id: osRelease.ID ?? null, name: osRelease.PRETTY_NAME ?? osRelease.NAME ?? null, versionId: osRelease.VERSION_ID ?? null, version: osRelease.VERSION ?? null },
     architecture: process.arch,
     platform: process.platform,
     kernel: uname.stdout || uname.error,
     libc: (libc.stdout || libc.stderr || libc.error || "").split(/\r?\n/u)[0] || null,
     node: node.stdout,
-    libreOffice: libreOffice.ok
-      ? (libreOffice.stdout || libreOffice.stderr).split(/\r?\n/u)[0] || null
-      : null
+    libreOffice: libreOffice.ok ? (libreOffice.stdout || libreOffice.stderr).split(/\r?\n/u)[0] || null : null
   };
 }
 
-async function systemdChecks(config, options) {
+async function systemdChecks(config) {
   const systemctl = await runCommand("systemctl", ["--version"]);
-  if (!systemctl.ok) {
-    return [check({ id: "systemd", title: "Системные службы", state: "error", required: true, summary: "systemd недоступен", detail: systemctl.error, remediation: "Пилотная установка должна выполняться на системе с systemd." })];
-  }
+  if (!systemctl.ok) return [check({ id: "systemd", title: "Системные службы", state: "error", required: true, summary: "systemd недоступен", detail: systemctl.error, remediation: "Пилотная установка должна выполняться на системе с systemd." })];
   const [api, worker, timerEnabled, timerActive, timerLine] = await Promise.all([
     runCommand("systemctl", ["is-active", "docomator-api.service"]),
     runCommand("systemctl", ["is-active", "docomator-worker.service"]),
@@ -248,16 +173,12 @@ async function systemdChecks(config, options) {
 async function latestVerifiedBackup(dataDirectory) {
   const root = path.join(dataDirectory, "backups");
   let entries;
-  try { entries = await fs.readdir(root, { withFileTypes: true }); }
-  catch (error) { return { ok: false, backup: null, error: error instanceof Error ? error.message : String(error) }; }
+  try { entries = await fs.readdir(root, { withFileTypes: true }); } catch (error) { return { ok: false, backup: null, error: error instanceof Error ? error.message : String(error) }; }
   const candidates = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || !entry.name.startsWith("backup-")) continue;
     const directory = path.join(root, entry.name);
-    try {
-      const manifest = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8"));
-      if (typeof manifest.createdAt === "string") candidates.push({ directory, createdAt: manifest.createdAt });
-    } catch {}
+    try { const manifest = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8")); if (typeof manifest.createdAt === "string") candidates.push({ directory, createdAt: manifest.createdAt }); } catch {}
   }
   candidates.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   for (const candidate of candidates) {
@@ -332,13 +253,13 @@ const url = options.url || `http://${localHost}:${config.DOCOMATOR_PORT || "8080
 const outputDirectory = path.resolve(options.outputDirectory || path.join(dataDirectory, "pilot-reports"));
 const generatedAt = new Date().toISOString();
 const operationId = generatedAt.replace(/[-:]/gu, "").replace(/\.\d{3}Z$/u, "Z");
-const password = await readPasswordFile(options.passwordFile);
-const cookie = password === null ? null : await createSharedPasswordSession(url, password);
+const accessCode = await readAccessCodeFile(options.accessCodeFile);
+const cookie = accessCode === null ? null : await createAccessCodeSession(url, accessCode);
 
 const readiness = await fetchReadiness(url, cookie);
 const checks = [
-  check({ id: "readiness_endpoint", title: "Диагностический API", state: readiness.ok ? "ok" : "error", required: true, summary: readiness.ok ? "Диагностический отчёт API получен" : "Диагностический API недоступен", detail: readiness.ok ? url : readiness.error, remediation: "Проверьте общий пароль, docomator-api.service, адрес и порт в конфигурации." }),
-  ...(await systemdChecks(config, options)),
+  check({ id: "readiness_endpoint", title: "Диагностический API", state: readiness.ok ? "ok" : "error", required: true, summary: readiness.ok ? "Диагностический отчёт API получен" : "Диагностический API недоступен", detail: readiness.ok ? url : readiness.error, remediation: "Проверьте код доступа, docomator-api.service, адрес и порт в конфигурации." }),
+  ...(await systemdChecks(config)),
   ...importServerChecks(readiness.report, options),
   ...(await backupChecks(config, options, dataDirectory))
 ];
@@ -353,7 +274,7 @@ const report = {
   url,
   configFile,
   dataDirectory,
-  options: { runBackup: options.runBackup, requireNetwork: options.requireNetwork, requireSmtp: options.requireSmtp, passwordProvided: password !== null },
+  options: { runBackup: options.runBackup, requireNetwork: options.requireNetwork, requireSmtp: options.requireSmtp, accessCodeProvided: accessCode !== null },
   environment: await systemInformation(config),
   summary,
   checks

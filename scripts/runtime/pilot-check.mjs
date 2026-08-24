@@ -12,13 +12,14 @@ import {
 } from "./pilot-release-identity.mjs";
 
 const MAXIMUM_COLLECTOR_OUTPUT_BYTES = 1024 * 1024;
+const ACCESS_CODE_PATTERN = /^[0-9]{4}$/u;
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const collectorPath = path.join(scriptDirectory, "pilot-readiness.mjs");
 const OPTIONS_WITH_VALUE = new Set([
   "--config",
   "--url",
   "--output",
-  "--password-file"
+  "--access-code-file"
 ]);
 
 function parseEnv(text) {
@@ -67,24 +68,24 @@ function optionValue(argumentsList, name, fallback = null) {
   return value;
 }
 
-async function readPasswordFile(candidate) {
+async function readAccessCodeFile(candidate) {
   if (candidate === null) return null;
   const filePath = path.resolve(candidate);
   const information = await fs.lstat(filePath);
   if (!information.isFile() || information.isSymbolicLink()) {
-    throw new Error("Файл пароля должен быть обычным файлом без символических ссылок.");
+    throw new Error("Файл кода доступа должен быть обычным файлом без символических ссылок.");
   }
   if ((information.mode & 0o077) !== 0) {
-    throw new Error("Файл пароля должен быть доступен только владельцу (режим 0600 или строже). ");
+    throw new Error("Файл кода доступа должен быть доступен только владельцу (режим 0600 или строже). ");
   }
-  if (information.size < 1 || information.size > 4096) {
-    throw new Error("Файл пароля имеет недопустимый размер.");
+  if (information.size < 4 || information.size > 8) {
+    throw new Error("Файл кода доступа имеет недопустимый размер.");
   }
-  const password = (await fs.readFile(filePath, "utf8")).replace(/\r?\n$/u, "");
-  if (password.length < 1 || password.length > 512) {
-    throw new Error("Пароль в файле имеет недопустимую длину.");
+  const code = (await fs.readFile(filePath, "utf8")).replace(/\r?\n$/u, "");
+  if (!ACCESS_CODE_PATTERN.test(code)) {
+    throw new Error("Файл должен содержать ровно 4 цифры кода доступа.");
   }
-  return password;
+  return code;
 }
 
 function collectorArguments(argumentsList, stagingDirectory, jsonOnly) {
@@ -247,8 +248,8 @@ if (helpRequested) {
   }
 } else try {
   const outputDirectory = await finalOutputDirectory(originalArguments);
-  const password = await readPasswordFile(
-    optionValue(originalArguments, "--password-file")
+  const accessCode = await readAccessCodeFile(
+    optionValue(originalArguments, "--access-code-file")
   );
   await fs.mkdir(outputDirectory, { recursive: true, mode: 0o750 });
   stagingDirectory = await fs.mkdtemp(path.join(outputDirectory, ".pilot-staging-"));
@@ -272,16 +273,8 @@ if (helpRequested) {
     );
   }
 
-  const stagingJsonPath = reportPath(
-    stagingDirectory,
-    collectorResult?.jsonReport,
-    "json"
-  );
-  const stagingMarkdownPath = reportPath(
-    stagingDirectory,
-    collectorResult?.markdownReport,
-    "md"
-  );
+  const stagingJsonPath = reportPath(stagingDirectory, collectorResult?.jsonReport, "json");
+  const stagingMarkdownPath = reportPath(stagingDirectory, collectorResult?.markdownReport, "md");
   const report = JSON.parse(await fs.readFile(stagingJsonPath, "utf8"));
 
   let identity = null;
@@ -290,7 +283,7 @@ if (helpRequested) {
     identity = await fetchInstalledReleaseIdentity(
       report.url,
       report.version ?? null,
-      password
+      accessCode
     );
   } catch (error) {
     identityError = error instanceof Error ? error.message : String(error);
@@ -300,16 +293,11 @@ if (helpRequested) {
   const jsonContent = `${JSON.stringify(boundReport, null, 2)}\n`;
   const markdownContent = pilotMarkdownReport(boundReport);
 
-  // Даже оставшийся после сбоя staging-каталог не должен содержать успешный
-  // акт без привязки к установленному релизу.
   await atomicWrite(stagingJsonPath, jsonContent);
   await atomicWrite(stagingMarkdownPath, markdownContent);
 
   const jsonReportPath = path.join(outputDirectory, path.basename(stagingJsonPath));
-  const markdownReportPath = path.join(
-    outputDirectory,
-    path.basename(stagingMarkdownPath)
-  );
+  const markdownReportPath = path.join(outputDirectory, path.basename(stagingMarkdownPath));
   await atomicWrite(jsonReportPath, jsonContent);
   await atomicWrite(markdownReportPath, markdownContent);
 

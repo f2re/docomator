@@ -3,11 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
-const runtimeRoots = [
-  "apps/api/src",
-  "apps/api/ui",
-  "packages/storage/src"
-];
+const runtimeRoots = ["apps/api/src", "apps/api/ui", "packages/storage/src"];
 const runtimeExtensions = new Set([".html", ".js", ".ts"]);
 const forbidden = [
   ["access-members", "маршруты управления доступом к разделам"],
@@ -26,11 +22,12 @@ const forbiddenUiCopy = [
   [/доступ\p{L}*\s+пользовател\p{L}*\s+пространств/iu, "доступ пользователей пространства"],
   [/организац\p{L}*\s+данных,\s*доступ\s+и\s+диагностик/iu, "настройки доступа"]
 ];
-const requiredPasswordGateTokens = [
-  "DOCOMATOR_ACCESS_PASSWORD_HASH",
+const requiredAccessCodeTokens = [
+  "DOCOMATOR_ACCESS_CODE_HASH",
   "DOCOMATOR_SESSION_SECRET",
   "HttpOnly",
-  "SameSite=Strict"
+  "SameSite=Strict",
+  "^[0-9]{4}$"
 ];
 
 function runtimeFiles(relativeDirectory) {
@@ -63,27 +60,32 @@ for (const relativePath of files) {
   }
 }
 
-const passwordGatePath = path.join(repositoryRoot, "apps/api/src/password-gate.ts");
-if (!fs.existsSync(passwordGatePath)) {
-  failures.push("apps/api/src/password-gate.ts: отсутствует общий password gate из ADR-0009");
+const gatePath = path.join(repositoryRoot, "apps/api/src/access-code-gate.ts");
+if (!fs.existsSync(gatePath)) {
+  failures.push("apps/api/src/access-code-gate.ts: отсутствует общий 4-значный code gate из ADR-0011");
 } else {
-  const passwordGate = fs.readFileSync(passwordGatePath, "utf8");
-  for (const token of requiredPasswordGateTokens) {
-    if (!passwordGate.includes(token)) {
-      failures.push(`apps/api/src/password-gate.ts: отсутствует обязательный инвариант password gate (${token})`);
+  const gate = fs.readFileSync(gatePath, "utf8");
+  for (const token of requiredAccessCodeTokens) {
+    if (!gate.includes(token)) {
+      failures.push(`apps/api/src/access-code-gate.ts: отсутствует обязательный инвариант code gate (${token})`);
+    }
+  }
+  for (const forbiddenToken of ["WWW-Authenticate", 'name="username"', 'type="password"']) {
+    if (gate.includes(forbiddenToken)) {
+      failures.push(`apps/api/src/access-code-gate.ts: запрещён остаток login/password модели (${forbiddenToken})`);
     }
   }
 }
 
 if (failures.length > 0) {
   process.stderr.write(
-    "Исполнимая модель доступа противоречит ADR-0006/ADR-0009:\n" +
+    "Исполнимая модель доступа противоречит ADR-0006/ADR-0011:\n" +
       failures.map((failure) => `- ${failure}`).join("\n") +
-      "\nРазрешён один общий password gate; пользователи, роли и ACL требуют отдельного архитектурного решения.\n"
+      "\nРазрешён один общий 4-значный код; пользователи, логины, роли и ACL требуют отдельного архитектурного решения.\n"
   );
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    "Общий password gate присутствует; исполнимая модель пользователей, ролей и ACL отсутствует.\n"
+    "Общий 4-значный code gate присутствует; исполнимая модель пользователей, логинов, ролей и ACL отсутствует.\n"
   );
 }

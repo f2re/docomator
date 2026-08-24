@@ -20,12 +20,13 @@ const execFileAsync = promisify(execFile);
 const bundleRoot = path.dirname(fileURLToPath(import.meta.url));
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const commitPattern = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
+const accessCodePattern = /^[0-9]{4}$/u;
 
 class UxGateError extends Error {}
 
 function usage() {
   process.stdout.write(
-    "Использование: ./ux-acceptance-gate.sh --output КАТАЛОГ [--base-url URL] [--password-file ФАЙЛ]\n"
+    "Использование: ./ux-acceptance-gate.sh --output КАТАЛОГ [--base-url URL] [--access-code-file ФАЙЛ]\n"
   );
 }
 
@@ -37,7 +38,7 @@ function parseArguments(values) {
   const options = {
     baseURL: "http://127.0.0.1:18080",
     outputDirectory: null,
-    passwordFile: null
+    accessCodeFile: null
   };
   for (let index = 0; index < values.length; index += 1) {
     const argument = values[index];
@@ -52,8 +53,8 @@ function parseArguments(values) {
     } else if (argument === "--output" && value !== undefined) {
       options.outputDirectory = value;
       index += 1;
-    } else if (argument === "--password-file" && value !== undefined) {
-      options.passwordFile = value;
+    } else if (argument === "--access-code-file" && value !== undefined) {
+      options.accessCodeFile = value;
       index += 1;
     } else {
       fail(`Неизвестный или неполный параметр: ${argument ?? ""}`);
@@ -70,7 +71,7 @@ function localBaseURL(value) {
   try {
     parsed = new URL(value);
   } catch {
-    fail("Адрес Оформлятор должен быть корректным локальным HTTP URL.");
+    fail("Адрес Оформлятора должен быть корректным локальным HTTP URL.");
   }
   if (
     parsed.protocol !== "http:" ||
@@ -136,17 +137,17 @@ async function trustedNewOutput(value) {
   return requested;
 }
 
-async function securePasswordFile(candidate) {
+async function secureAccessCodeFile(candidate) {
   if (candidate === null) return null;
   const requested = path.resolve(candidate);
   let canonical;
   try {
     canonical = await realpath(requested);
   } catch {
-    fail("Файл общего пароля не найден.");
+    fail("Файл кода доступа не найден.");
   }
   if (canonical !== requested) {
-    fail("Путь файла пароля не должен содержать символические ссылки.");
+    fail("Путь файла кода доступа не должен содержать символические ссылки.");
   }
   const information = await lstat(canonical);
   const uid = typeof process.getuid === "function" ? process.getuid() : null;
@@ -155,18 +156,18 @@ async function securePasswordFile(candidate) {
     information.isSymbolicLink() ||
     (uid !== null && information.uid !== uid) ||
     (information.mode & 0o077) !== 0 ||
-    information.size < 1 ||
-    information.size > 4096
+    information.size < 4 ||
+    information.size > 8
   ) {
     fail(
-      "Файл пароля должен быть обычным файлом текущего пользователя, режим 0600 или строже, размером до 4 КБ."
+      "Файл кода доступа должен быть обычным файлом текущего пользователя, режим 0600 или строже, с четырьмя цифрами."
     );
   }
-  const password = (await readFile(canonical, "utf8")).replace(/\r?\n$/u, "");
-  if (password.length < 1 || password.length > 512) {
-    fail("Пароль в файле имеет недопустимую длину.");
+  const code = (await readFile(canonical, "utf8")).replace(/\r?\n$/u, "");
+  if (!accessCodePattern.test(code)) {
+    fail("Файл должен содержать ровно 4 цифры кода доступа.");
   }
-  return { path: canonical, password };
+  return { path: canonical, code };
 }
 
 function runPlaywright(nodePath, cliPath, configPath, workingDirectory, environment) {
@@ -260,29 +261,29 @@ function sessionCookie(response) {
   return cookie;
 }
 
-async function requestReleaseIdentity(baseURL, password) {
+async function requestReleaseIdentity(baseURL, accessCode) {
   let cookie = null;
-  if (password !== null) {
-    const loginEndpoint = new URL("/api/v1/auth/login", baseURL);
-    let login;
+  if (accessCode !== null) {
+    const unlockEndpoint = new URL("/api/v1/access/unlock", baseURL);
+    let unlock;
     try {
-      login = await fetch(loginEndpoint, {
+      unlock = await fetch(unlockEndpoint, {
         method: "POST",
         headers: {
           accept: "application/json",
           "content-type": "application/json",
-          origin: loginEndpoint.origin
+          origin: unlockEndpoint.origin
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ code: accessCode }),
         signal: AbortSignal.timeout(10_000)
       });
     } catch {
-      fail("Не удалось обратиться к локальному API входа Оформлятор.");
+      fail("Не удалось обратиться к локальному API кода доступа Оформлятора.");
     }
-    if (!login.ok) {
-      fail(`Локальный API входа Оформлятор вернул HTTP ${login.status}.`);
+    if (!unlock.ok) {
+      fail(`Локальный API кода доступа Оформлятора вернул HTTP ${unlock.status}.`);
     }
-    cookie = sessionCookie(login);
+    cookie = sessionCookie(unlock);
   }
 
   const endpoint = new URL("/api/v1/system/release", baseURL);
@@ -305,7 +306,7 @@ async function requestReleaseIdentity(baseURL, password) {
   if (!response.ok) {
     fail(
       response.status === 401
-        ? "Для UX-приёмки требуется общий пароль приложения «Оформлятор»; укажите --password-file."
+        ? "Для UX-приёмки требуется 4-значный код доступа; укажите --access-code-file."
         : `API идентичности релиза вернул HTTP ${response.status}.`
     );
   }
@@ -324,7 +325,7 @@ try {
   }
   const options = parseArguments(process.argv.slice(2));
   const baseURL = localBaseURL(options.baseURL);
-  const passwordFile = await securePasswordFile(options.passwordFile);
+  const accessCodeFile = await secureAccessCodeFile(options.accessCodeFile);
 
   let release;
   let releaseSource;
@@ -411,7 +412,7 @@ try {
 
   const servedRelease = await requestReleaseIdentity(
     baseURL,
-    passwordFile?.password ?? null
+    accessCodeFile?.code ?? null
   );
   if (
     servedRelease?.name !== "docomator" ||
@@ -441,7 +442,7 @@ try {
     chromiumPath,
     browserVersion,
     baseURL,
-    passwordProvided: passwordFile !== null,
+    accessCodeProvided: accessCodeFile !== null,
     generatedAt
   };
   await writeFile(
@@ -478,9 +479,9 @@ try {
     DOCOMATOR_E2E_RELEASE_METADATA_SHA256: releaseMetadataSha256,
     DOCOMATOR_E2E_CHROMIUM_BIN: chromiumPath,
     DOCOMATOR_E2E_COMMIT_SHA: commitSha,
-    ...(passwordFile === null
+    ...(accessCodeFile === null
       ? {}
-      : { DOCOMATOR_E2E_ACCESS_PASSWORD_FILE: passwordFile.path })
+      : { DOCOMATOR_E2E_ACCESS_CODE_FILE: accessCodeFile.path })
   });
   if (code !== 0) {
     fail(`Playwright/axe завершился с кодом ${code}; диагностика сохранена.`);

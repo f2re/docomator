@@ -24,7 +24,7 @@ function registerUiAsset(
   });
 }
 
-export function registerDataExportUiRoute(
+export function registerSupplementalUiRoutes(
   app: FastifyInstance,
   uiDirectory: string = defaultUiDirectory
 ): void {
@@ -32,13 +32,6 @@ export function registerDataExportUiRoute(
     app,
     "/ui/data-export.js",
     "data-export.js",
-    "text/javascript; charset=utf-8",
-    uiDirectory
-  );
-  registerUiAsset(
-    app,
-    "/ui/auth-session.js",
-    "auth-session.js",
     "text/javascript; charset=utf-8",
     uiDirectory
   );

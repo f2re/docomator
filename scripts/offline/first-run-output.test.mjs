@@ -8,16 +8,20 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const script = path.join(root, "scripts/offline/first-run.sh");
 
-test("first-run показывает только действия пользователя, а не release backlog", () => {
+test("first-run показывает 4-значный код и только действия пользователя", () => {
   const output = execFileSync("bash", [script, "--url", "http://127.0.0.1:8080"], {
     cwd: root,
     encoding: "utf8"
   });
 
   assert.match(output, /Оформлятор установлен/u);
+  assert.match(output, /4-значный код доступа/u);
+  assert.match(output, /Имя пользователя не требуется/u);
+  assert.match(output, /first-run\.sh --reset-code/u);
   assert.match(output, /Быстрый старт/u);
   assert.match(output, /Импортируйте сотрудников из CSV\/XLSX/u);
   assert.match(output, /дополнительных действий с правами каталогов не требуется/u);
+  assert.doesNotMatch(output, /общий пароль/u);
   assert.doesNotMatch(output, /Что уже работает/u);
   assert.doesNotMatch(output, /Эксплуатационная приёмка/u);
   assert.doesNotMatch(output, /реальные Office-шаблоны/u);

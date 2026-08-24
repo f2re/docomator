@@ -51,10 +51,6 @@
           }
         }
       );
-      if (response.status === 401) {
-        location.assign(`/login?next=${encodeURIComponent(location.pathname + location.hash)}`);
-        return;
-      }
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body?.error?.message || `Сервер вернул код ${response.status}.`);
