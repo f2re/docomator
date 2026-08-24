@@ -151,7 +151,7 @@ npm run check
 
 ## 📦 Полные offline bundles Debian/Astra
 
-Generic GitHub Release не подменяет target-specific поставку. Полный bundle собирается на reference VM той же ОС/архитектуры/glibc и включает проверенный package closure.
+Debian и Astra Linux собираются как разные target-профили. Generic GitHub Release не подменяет target-specific поставку. Полный bundle собирается на reference VM той же ОС/архитектуры/glibc и включает проверенный package closure.
 
 ### 🟦 Debian
 
