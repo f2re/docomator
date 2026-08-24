@@ -1,49 +1,77 @@
 # 🧩 Оформлятор
 
-Автономный корпоративный сервис формирования DOCX/XLSX по шаблонам и типизированным данным. Runtime работает без обязательного доступа в Интернет. Сохраняемая рабочая область и предметные API закрываются **одним общим 4-значным кодом доступа**.
+[![CI](https://github.com/f2re/docomator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/f2re/docomator/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/f2re/docomator?display_name=tag&sort=semver)](https://github.com/f2re/docomator/releases/latest)
+[![Release status](https://img.shields.io/badge/release-candidate%20%2F%20pilot-orange)](RELEASE_IDENTITY.json)
+[![Offline first](https://img.shields.io/badge/runtime-offline--first-informational)](docs/OFFLINE_DEPLOYMENT.md)
 
-> [!NOTE]
-> Пользовательское название продукта — **«Оформлятор»**. Технические идентификаторы `docomator`, `@docomator/*`, `DOCOMATOR_*`, systemd-службы, пути и имена автономных архивов сохранены для совместимости; см. [BRANDING](docs/BRANDING.md).
+**Автономный сервис формирования DOCX/XLSX по шаблонам и типизированным данным.** После установки рабочий runtime не требует Internet и не требует LLM. Рабочая область закрывается одним общим четырёхзначным кодом доступа.
 
 > [!IMPORTANT]
-> Код доступа — не система пользователей и ролей и не самостоятельная security boundary. Имени пользователя/логина нет. После открытия сессии все допущенные клиенты имеют одинаковые возможности. Пространства остаются жёсткими границами данных, но не ACL. Firewall, reverse proxy и HTTPS обязательны для рабочего контура.
+> Текущий канал — **candidate / pilot**. Это готовая для скачивания проверенная CI-сборка, но не заявление о завершённой production-приёмке Debian/Astra/Office/recovery. Точный статус всегда задаёт [`RELEASE_IDENTITY.json`](RELEASE_IDENTITY.json).
 
-Текущий кодовый контур поддерживает импорт/экспорт данных, DOCX/XLSX-шаблоны, ручной и календарный выпуск, результаты, SMTP/сетевую доставку, резервирование и восстановление. Stable нельзя объявлять до фактической Debian/Astra/Office/recovery/UX-приёмки; см. [FINALIZATION](docs/FINALIZATION.md) и [SUPPORT_MATRIX](docs/SUPPORT_MATRIX.md).
+## 📦 Скачать готовую сборку
 
-## 📦 Скачать готовый выпуск
+### [⬇️ Скачать последний выпуск](https://github.com/f2re/docomator/releases/latest)
 
-Проверенные сборки публикуются в [GitHub Releases](https://github.com/f2re/docomator/releases) только после успешного полного CI exact commit ветки `main`.
+В GitHub Release публикуются ровно пять проверяемых файлов:
 
-- `candidate / pilot` публикуется как **Pre-release** с tag `vX.Y.Z-candidate`;
-- `stable / production` публикуется отдельно как `vX.Y.Z` только после release-evidence и целевой приёмки;
-- для ручной поставки скачивайте `docomator-<version>-linux-<arch>.tar.gz` вместе с `.sha256`;
-- для F2RE Project Control скачивайте `docomator-<version>-project-control.f2re.zip` вместе с `.sha256`;
-- `SHA256SUMS.txt` содержит контрольные суммы обоих основных assets.
+| Файл | Для чего |
+|---|---|
+| `docomator-<version>-linux-<arch>.tar.gz` | готовый автономный application bundle для ручной установки/обновления |
+| `docomator-<version>-linux-<arch>.tar.gz.sha256` | SHA-256 native bundle |
+| `docomator-<version>-project-control.f2re.zip` | готовый пакет обновления для F2RE Project Control |
+| `docomator-<version>-project-control.f2re.zip.sha256` | SHA-256 Project Control package |
+| `SHA256SUMS.txt` | общий список контрольных сумм |
 
-GitHub-hosted CI публикует generic core bundle без target-specific `.deb` closure, LibreOffice preview и LLM. Он является проверенным application/update bundle, но не заменяет отдельную Debian/Astra target acceptance. Подробно: [GITHUB_RELEASES](docs/GITHUB_RELEASES.md) и [OFFLINE_DEPLOYMENT](docs/OFFLINE_DEPLOYMENT.md).
+Проверка и установка:
 
-## Основной путь
+```bash
+sha256sum -c docomator-*.tar.gz.sha256
+tar -xzf docomator-*.tar.gz
+cd docomator-*-linux-*
+sudo ./install.sh
+```
 
-1. открыть рабочую область четырьмя цифрами;
-2. выбрать пространство;
-3. импортировать сотрудников или произвольные объекты из CSV/XLSX либо добавить вручную;
-4. при необходимости выгрузить текущие данные в CSV/XLSX;
-5. загрузить и проверить DOCX/XLSX;
-6. связать изменяемые места с полями и выполнить пробное заполнение;
-7. активировать проверенную версию шаблона;
-8. выбрать всех, группу или отдельные объекты;
-9. проверить обязательные данные;
-10. сформировать персональные или сводные документы;
-11. скачать DOCX/XLSX/ZIP либо доставить через SMTP/сетевую папку;
-12. при ошибке исправить только проблемные данные и повторить неуспешные единицы.
+GitHub-hosted release — **generic core bundle** с Node.js и приложением, без LLM, LibreOffice preview и target-specific `.deb` closure. Полные Debian/Astra bundles собираются на соответствующей reference VM и имеют отдельный target acceptance. См. [`docs/GITHUB_RELEASES.md`](docs/GITHUB_RELEASES.md) и [`docs/OFFLINE_DEPLOYMENT.md`](docs/OFFLINE_DEPLOYMENT.md).
+
+## Что умеет Оформлятор
+
+- жёстко изолированные пространства данных;
+- сотрудники и произвольные типизированные сущности;
+- импорт CSV/XLSX: файл → сопоставление → preview → исправление → импорт;
+- экспорт CSV/XLSX без технических UUID и с защитой от spreadsheet formula injection;
+- безопасный приём DOCX/XLSX и проверка OOXML;
+- Visual Template Studio с read-only представлением документа;
+- детерминированные bindings и renderer DOCX/XLSX без обязательного ИИ;
+- персональные и сводные документы, группы и снимки аудитории;
+- persisted worker, retry/idempotency и восстановление после restart;
+- SMTP и доставка в разрешённую CIFS/NFS-папку;
+- резервные копии, restore, offline update и rollback;
+- необязательный локальный `llama.cpp/llama-server` как ограниченный помощник.
+
+## Основной пользовательский путь
+
+```text
+код доступа
+→ пространство
+→ данные / CSV / XLSX
+→ шаблон DOCX/XLSX
+→ визуальное сопоставление полей
+→ пробное заполнение
+→ активация шаблона
+→ группа / выбор объектов
+→ формирование
+→ DOCX / XLSX / ZIP / доставка
+```
+
+При ошибке введённые данные не должны пропадать. Сообщение отвечает на три вопроса: что произошло, сохранены ли данные и что делать дальше.
 
 ## 🔐 Код доступа
 
-Действующий [ADR-0011](docs/adr/0011-shared-access-code-gate.md) вводит один общий код из ровно четырёх цифр без username/account/roles/ACL. ADR-0009 с password terminology остаётся только историческим решением.
+Оформлятор использует один общий код из **ровно четырёх цифр**. Пользователей, логинов, ролей и ACL внутри приложения нет — это соответствует действующему [`ADR-0011`](docs/adr/0011-shared-access-code-gate.md).
 
-На новой установке `install.sh` создаёт session secret, а при первом открытии `/access` оператор задаёт четыре цифры прямо в браузере. Имя пользователя и подтверждение пароля отсутствуют.
-
-Код не хранится открытым текстом. Сохраняется только scrypt-хэш. Сессия использует подписанную `HttpOnly`, `SameSite=Strict` cookie с ограниченным TTL; при HTTPS добавляется `Secure`. Неверные попытки получают локальный backoff. Встроенный сервер не использует HTTP Basic Auth и не выдаёт `WWW-Authenticate`.
+На новой установке первый переход на `/access` предлагает задать код. Код хранится только как scrypt-хэш; сессия — подписанная `HttpOnly`, `SameSite=Strict` cookie. При HTTPS используется `Secure`.
 
 Смена кода:
 
@@ -51,7 +79,7 @@ GitHub-hosted CI публикует generic core bundle без target-specific `
 sudo /opt/docomator/current/set-access-code.sh
 ```
 
-Если код забыт:
+Сброс забытого кода без удаления рабочих данных:
 
 ```bash
 sudo /opt/docomator/current/reset-access-code.sh
@@ -59,51 +87,41 @@ sudo /opt/docomator/current/reset-access-code.sh
 sudo /opt/docomator/current/first-run.sh --reset-code
 ```
 
-Старый код не требуется. Документы и предметные данные не меняются; session secret ротируется, поэтому ранее открытые браузерные сессии закрываются.
-
-Начиная с `0.6.3` канонический env-key — `DOCOMATOR_ACCESS_CODE_HASH`. Legacy `DOCOMATOR_ACCESS_PASSWORD_HASH` понимается runtime только как ограниченная upgrade/rollback compatibility. Новая конфигурация его не создаёт. Старые password-named shell helpers остаются только тонкими переходниками и не содержат собственной политики доступа.
-
-См. [ACCESS_CODE](docs/ACCESS_CODE.md).
+Код доступа — дополнительный барьер внутри trusted workspace, а не самостоятельная security boundary. Для удалённого доступа нужны firewall/reverse proxy/HTTPS.
 
 ## 🧱 Пространства
 
-Пространство изолирует сущности, группы, пользовательские поля/значения, импорт, шаблоны, публикации и связанные операции. Типы объектов могут быть общей системной схемой, но конкретный объект и пользовательское поле принадлежат одному пространству. Access-code gate не заменяет и не ослабляет эту границу данных.
+Пространство — жёсткая граница пользовательских данных. Не смешиваются сущности, группы, пользовательские поля и значения, import memory, шаблоны, публикации, задания, результаты и связанные операции. GET/list/read не присваивают ownership; cross-space links отклоняются backend и БД.
 
-См. [ENTITY_MODEL_AND_IMPORT](docs/ENTITY_MODEL_AND_IMPORT.md) и [ADR-0008](docs/adr/0008-space-data-isolation.md).
+Подробнее: [`ENTITY_MODEL_AND_IMPORT`](docs/ENTITY_MODEL_AND_IMPORT.md), [`SPACES_AND_AUDIENCES`](docs/SPACES_AND_AUDIENCES.md), [`ADR-0008`](docs/adr/0008-space-data-isolation.md).
 
 ## 📥 Импорт CSV/XLSX
 
-Оба пользовательских импорта используют сопровождаемый сценарий:
+Оба формата используют один сопровождаемый flow:
 
 ```text
-файл → колонки → сопоставление → preview → исправление → импорт → результат
+файл / drag&drop / paste
+→ колонки
+→ сопоставление
+→ preview
+→ исправление
+→ импорт
+→ результат
 ```
 
-Есть drag&drop, корректные координаты пустых XLSX-ячеек, физические номера строк, переносы внутри ячейки, повторный импорт, нормализация ФИО и структурированные ошибки `code/row/column/propertyKey/rawValue/suggestedAction`. Ошибка подсвечивает проблемное сопоставление и не сбрасывает остальные настройки.
+Ошибки формируются машинно читаемо (`code`, физическая строка, колонка/поле, исходное значение, severity, repair action) и только затем переводятся в пользовательский текст. Пустые ячейки XLSX не сдвигают колонки, перенос внутри ячейки остаётся частью значения, повторный импорт не должен создавать дубли.
 
-## 📤 Экспорт CSV/XLSX
+## 🛡️ Документы и шаблоны
 
-В разделах сотрудников и произвольных объектов доступны **«Экспорт CSV»** и **«Экспорт XLSX»**. Экспорт строится сервером только из явно выбранных пространства и типа объектов, не раскрывает UUID/machine keys и neutralize значения, которые Excel/Calc могли бы интерпретировать как формулы.
+DOCX/XLSX считаются недоверенным ZIP/XML-входом. До сохранения проверяются пути, размеры, expanded bytes, XML declarations, relationships, macros/ActiveX/OLE и внешние связи.
 
-## 🛡️ Документы
+Visual Template Studio показывает безопасную read-only проекцию Office. DOM/HTML не является источником итогового DOCX/XLSX. Binding остаётся серверно проверяемой координатой документа.
 
-До сохранения DOCX/XLSX проверяются ZIP/OOXML, размеры, пути, фактический распакованный объём, опасные XML-конструкции, макросы, ActiveX, OLE, подписи и внешние связи. Renderer изменяет только разрешённые привязки и повторно считывает значения после формирования.
+Renderer изменяет только разрешённые bindings, сохраняет нетронутые части OOXML в пределах заявленной поддержки и выполняет reverse-read результата. Неподдерживаемая конструкция должна приводить к понятному отказу, а не к молчаливому повреждению документа.
 
-Поддерживаются выбранный текст DOCX, ячейки XLSX, несколько полей, безопасные форматтеры, повторяемые строки/диапазоны, персональный и сводный выпуск, частичный успех, повтор только ошибок и необязательный PDF-предпросмотр через локальный LibreOffice.
+## 🚀 Запуск из исходников
 
-Visual Template Studio показывает безопасную read-only проекцию Office, но DOM/HTML не становится источником DOCX/XLSX. Точная поддержка Office-конструкций ограничена фактически проверенной матрицей.
-
-## 📥 Результаты, доставка и резервирование
-
-Готовые ручные и автоматические документы остаются в разделе «Результаты» до явного удаления. Скачивание не удаляет файл. Worker продолжает сохраняемую операцию после restart без второго результата.
-
-Доставка поддерживает локальный SMTP с TLS/allowlist и разрешённую CIFS/NFS-папку с проверкой mount/sentinel, временным файлом, `fsync` и atomic rename. Ошибка доставки не уничтожает уже готовый документ.
-
-Ежедневный systemd timer создаёт проверяемые резервные копии. Restore проверяет manifest/SHA-256 до замены рабочих данных.
-
-## 🚀 Локальный запуск из исходников
-
-Требуются Node.js не ниже `24.18.0` и npm 11+:
+Требуются версии из репозитория (`.node-version`, lockfile):
 
 ```bash
 npm ci
@@ -123,8 +141,6 @@ Worker во втором терминале:
 DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run start:worker
 ```
 
-Если `DOCOMATOR_ACCESS_CODE_HASH` и `DOCOMATOR_SESSION_SECRET` вообще не объявлены, source/test режим запускается без gate. Installed profile объявляет эти ключи и остаётся fail-closed до первого задания кода.
-
 Проверка:
 
 ```bash
@@ -133,13 +149,11 @@ curl --fail http://127.0.0.1:8080/readyz
 npm run check
 ```
 
-CI дополнительно запускает Chromium user flows, real-stack smoke и сборку/повторную проверку offline archive.
+## 📦 Полные offline bundles Debian/Astra
 
-## 📦 Автономная поставка
+Generic GitHub Release не подменяет target-specific поставку. Полный bundle собирается на reference VM той же ОС/архитектуры/glibc и включает проверенный package closure.
 
-Debian и Astra Linux собираются как разные target-профили на соответствующих reference VM. Набор `.deb` одной ОС нельзя использовать для другой.
-
-### 🟦 Debian
+Debian:
 
 ```bash
 npm run bundle:offline:debian -- \
@@ -148,7 +162,7 @@ npm run bundle:offline:debian -- \
   --model /srv/models/model.gguf
 ```
 
-### 🟥 Astra Linux
+Astra Linux:
 
 ```bash
 npm run bundle:offline:astra -- \
@@ -159,52 +173,63 @@ npm run bundle:offline:astra -- \
   --ux-chromium-bin "$ASTRA_CHROMIUM_BIN"
 ```
 
-После установки откройте интерфейс и задайте код либо запустите помощник:
+После установки:
 
 ```bash
 sudo /opt/docomator/current/first-run.sh --check
 ```
 
-## Целевая приёмка
+## Release discipline
 
-Код acceptance передаётся только через локальный обычный файл текущего пользователя с режимом `0600`; код и путь к файлу не включаются в акты.
+Единственный источник идентичности — [`RELEASE_IDENTITY.json`](RELEASE_IDENTITY.json):
 
-```bash
-install -m 0600 /dev/null "$HOME/.docomator-acceptance-code"
-printf '%s\n' '0427' > "$HOME/.docomator-acceptance-code"
-
-"$BUNDLE_ROOT/target-acceptance.sh" \
-  --config /etc/docomator/docomator.env \
-  --base-url http://127.0.0.1:8080/ \
-  --access-code-file "$HOME/.docomator-acceptance-code" \
-  --output "$HOME/docomator-target-acts/debian-01"
+```json
+{
+  "version": "0.6.5",
+  "status": "candidate",
+  "channel": "pilot"
+}
 ```
 
-Для строгого Astra-контура добавляются `--require-network --require-smtp`. После прогона временный code file удаляется.
+Правила:
 
-## Финальный release evidence
+- bugfix без новой возможности → `PATCH`;
+- новая обратно совместимая возможность → `MINOR`;
+- candidate получает immutable tag `vX.Y.Z-candidate`;
+- stable/production получает отдельный immutable tag `vX.Y.Z`;
+- **GitHub Release candidate публикуется обычным видимым Release**, а зрелость явно записана в tag/title/body и machine identity; это сделано, чтобы сборка была очевидно доступна на главной странице репозитория;
+- наличие Release не переводит продукт в stable;
+- assets никогда не перезаписываются под существующим tag;
+- release publisher берёт только exact artifact успешного push-CI `main`, сверяет SHA-256 и source commit;
+- отдельный read-only verifier скачивает уже опубликованный Release и побайтно проверяет оба bundle.
 
-После target acts Debian/Astra, UX-акта, Office corpus, restore-акта и пустого списка блокеров:
+Подробнее: [`VERSIONING`](docs/VERSIONING.md), [`GITHUB_RELEASES`](docs/GITHUB_RELEASES.md), [`RELEASE_NOTES`](docs/RELEASE_NOTES.md).
 
-```bash
-npm run release:evidence -- \
-  /srv/docomator-release-evidence \
-  --expected-commit '<ПОЛНЫЙ_GIT_SHA>' \
-  --expected-version '0.6.5'
-```
+## До stable/production
 
-Только успешный `release:evidence` разрешает отдельный переход candidate/pilot → stable/production. Зелёный CI или generic bundle целевую Debian/Astra/Office/recovery-приёмку не заменяет.
-
-## Что ещё требует внешних свидетельств
+Для stable требуются доказательства exact release binding:
 
 - clean offline install/reboot на Debian;
-- отдельный native Astra Linux 1.7 target act;
+- native Astra Linux 1.7 target act;
 - настоящий LibreOffice без `SKIPPED`;
-- ≥20 DOCX + ≥20 XLSX с Microsoft Office/LibreOffice compatibility;
+- минимум 20 DOCX + 20 XLSX из реального Office corpus;
 - import/generation 10/100/1000;
-- restart/failure/retry scenarios;
+- restart/failure/retry без дублей;
 - backup/restore на отдельной чистой машине;
-- два новых пользователя без устной инструкции;
-- финальный release evidence без открытых блокеров.
+- update/rollback без потери данных;
+- два новых пользователя, accessibility/P5;
+- защищённый `main` с required checks;
+- пустой `blockers.json` и успешный `release:evidence`.
 
-См. [SECURITY](SECURITY.md), [ARCHITECTURE](docs/ARCHITECTURE.md), [FINALIZATION](docs/FINALIZATION.md), [SUPPORT_MATRIX](docs/SUPPORT_MATRIX.md) и [ROADMAP](docs/ROADMAP.md).
+## Документация
+
+- [`REQUIREMENTS`](docs/REQUIREMENTS.md) — нормативные требования;
+- [`ARCHITECTURE`](docs/ARCHITECTURE.md) — архитектура;
+- [`OFFLINE_DEPLOYMENT`](docs/OFFLINE_DEPLOYMENT.md) — установка, update, rollback;
+- [`SUPPORT_MATRIX`](docs/SUPPORT_MATRIX.md) — доказанная совместимость;
+- [`SECURITY`](SECURITY.md) — модель доверия и ограничения;
+- [`ROADMAP`](docs/ROADMAP.md) — что осталось до stable;
+- [`CONTRIBUTING`](CONTRIBUTING.md) — разработка и проверки.
+
+> [!NOTE]
+> Пользовательское название продукта — **«Оформлятор»**. Технические идентификаторы `docomator`, `@docomator/*`, `DOCOMATOR_*`, systemd unit names и имена offline archives сохранены для совместимости.

@@ -9,8 +9,8 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
 const SHA = /^[a-f0-9]{40}$/u;
-const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const HASH = /^[a-f0-9]{64}$/u;
+const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const CHECKSUM_LINE = /^([a-f0-9]{64})\s+\*?([^\r\n]+)$/u;
 const INSPECT_PROJECT_PY = String.raw`import hashlib,json,sys,zipfile
 archive=sys.argv[1]
@@ -19,15 +19,12 @@ with zipfile.ZipFile(archive, "r") as z:
     payload=manifest.get("payload", {}).get("path")
     if not isinstance(payload, str):
         raise SystemExit("payload.path is missing")
-    h=hashlib.sha256()
-    size=0
+    h=hashlib.sha256(); size=0
     with z.open(payload, "r") as source:
         while True:
             chunk=source.read(1024*1024)
-            if not chunk:
-                break
-            h.update(chunk)
-            size += len(chunk)
+            if not chunk: break
+            h.update(chunk); size += len(chunk)
 print(json.dumps({"manifest":manifest,"payloadSha256":h.hexdigest(),"payloadSize":size}, separators=(",",":")))`;
 
 function fail(message) {
@@ -54,7 +51,7 @@ export function parseReleaseIdentity(source) {
 
 export function releaseDescriptor(identity) {
   return identity.status === "candidate"
-    ? { tag: `v${identity.version}-candidate`, prerelease: true }
+    ? { tag: `v${identity.version}-candidate`, prerelease: false }
     : { tag: `v${identity.version}`, prerelease: false };
 }
 
@@ -71,8 +68,10 @@ export function validateReleaseMetadata(metadata, identity) {
   if (metadata?.isDraft !== false) {
     fail(`GitHub Release ${descriptor.tag} не опубликован: isDraft должен быть false.`);
   }
-  if (metadata?.isPrerelease !== descriptor.prerelease) {
-    fail(`GitHub Release ${descriptor.tag} имеет неверный prerelease-флаг.`);
+  if (metadata?.isPrerelease !== false) {
+    fail(
+      `GitHub Release ${descriptor.tag} скрыт как GitHub Pre-release; кандидат должен быть обычным видимым Release с maturity в tag/title.`
+    );
   }
   if (typeof metadata?.targetCommitish !== "string" || !SHA.test(metadata.targetCommitish)) {
     fail(`GitHub Release ${descriptor.tag} должен быть привязан к точному 40-символьному commit SHA.`);
@@ -147,8 +146,13 @@ export function parseChecksumDocument(source, expectedNames) {
     values.set(name, hash);
   }
   const expected = new Set(expectedNames);
-  if (values.size !== expected.size || [...values.keys()].some((name) => !expected.has(name))) {
-    fail(`SHA-256 документ содержит неверный набор файлов: ${[...values.keys()].sort().join(", ") || "нет"}.`);
+  if (
+    values.size !== expected.size ||
+    [...values.keys()].some((name) => !expected.has(name))
+  ) {
+    fail(
+      `SHA-256 документ содержит неверный набор файлов: ${[...values.keys()].sort().join(", ") || "нет"}.`
+    );
   }
   return values;
 }
@@ -205,11 +209,12 @@ async function assertRegularFile(filePath, expectedSize) {
   if (stat.size !== expectedSize) {
     fail(`Размер ${path.basename(filePath)} не совпадает с GitHub Release metadata.`);
   }
-  return stat;
 }
 
 async function verifySingleChecksum(assetPath, checksumPath) {
-  const expected = parseChecksumDocument(await fs.readFile(checksumPath, "utf8"), [path.basename(assetPath)]);
+  const expected = parseChecksumDocument(await fs.readFile(checksumPath, "utf8"), [
+    path.basename(assetPath)
+  ]);
   const actual = await sha256(assetPath);
   if (actual !== expected.get(path.basename(assetPath))) {
     fail(`SHA-256 не совпадает для ${path.basename(assetPath)}.`);
@@ -218,12 +223,13 @@ async function verifySingleChecksum(assetPath, checksumPath) {
 }
 
 async function inspectProjectPackage(projectPath, commandRunner, cwd, environment) {
-  const result = await commandRunner(
-    "python3",
-    ["-c", INSPECT_PROJECT_PY, projectPath],
-    { cwd, env: environment }
+  const source = assertCommand(
+    await commandRunner("python3", ["-c", INSPECT_PROJECT_PY, projectPath], {
+      cwd,
+      env: environment
+    }),
+    "Не удалось проверить Project Control package"
   );
-  const source = assertCommand(result, "Не удалось проверить Project Control package");
   try {
     return JSON.parse(source);
   } catch {
@@ -235,10 +241,13 @@ export async function verifyPublishedRelease({
   cwd = process.cwd(),
   environment = process.env,
   commandRunner = defaultCommandRunner,
-  makeTempDirectory = async () => fs.mkdtemp(path.join(os.tmpdir(), "docomator-release-verify-"))
+  makeTempDirectory = async () =>
+    fs.mkdtemp(path.join(os.tmpdir(), "docomator-release-verify-"))
 } = {}) {
   const repository = environment.GITHUB_REPOSITORY ?? "";
-  if (!REPOSITORY.test(repository)) fail("GITHUB_REPOSITORY должен иметь вид owner/repository.");
+  if (!REPOSITORY.test(repository)) {
+    fail("GITHUB_REPOSITORY должен иметь вид owner/repository.");
+  }
   if (!environment.GH_TOKEN) fail("GH_TOKEN обязателен для проверки GitHub Release.");
 
   const identity = parseReleaseIdentity(
@@ -294,21 +303,32 @@ export async function verifyPublishedRelease({
     }
 
     const nativePath = path.join(directory, release.nativeName);
-    const nativeChecksumPath = path.join(directory, release.nativeChecksumName);
     const projectPath = path.join(directory, release.projectName);
-    const projectChecksumPath = path.join(directory, release.projectChecksumName);
-    const nativeHash = await verifySingleChecksum(nativePath, nativeChecksumPath);
-    const projectHash = await verifySingleChecksum(projectPath, projectChecksumPath);
-
+    const nativeHash = await verifySingleChecksum(
+      nativePath,
+      path.join(directory, release.nativeChecksumName)
+    );
+    const projectHash = await verifySingleChecksum(
+      projectPath,
+      path.join(directory, release.projectChecksumName)
+    );
     const sums = parseChecksumDocument(
       await fs.readFile(path.join(directory, "SHA256SUMS.txt"), "utf8"),
       [release.nativeName, release.projectName]
     );
-    if (sums.get(release.nativeName) !== nativeHash || sums.get(release.projectName) !== projectHash) {
+    if (
+      sums.get(release.nativeName) !== nativeHash ||
+      sums.get(release.projectName) !== projectHash
+    ) {
       fail("SHA256SUMS.txt не совпадает с фактическими release assets.");
     }
 
-    const inspected = await inspectProjectPackage(projectPath, commandRunner, cwd, environment);
+    const inspected = await inspectProjectPackage(
+      projectPath,
+      commandRunner,
+      cwd,
+      environment
+    );
     const manifest = inspected?.manifest;
     if (
       manifest?.schema !== "f2re-managed-service/v1" ||
@@ -328,7 +348,9 @@ export async function verifyPublishedRelease({
       inspected?.payloadSha256 !== nativeHash ||
       inspected?.payloadSize !== release.sizes.get(release.nativeName)
     ) {
-      fail("Native payload внутри Project Control package не совпадает с опубликованным native asset.");
+      fail(
+        "Native payload внутри Project Control package не совпадает с опубликованным native asset."
+      );
     }
     if (!HASH.test(nativeHash) || !HASH.test(projectHash)) {
       fail("Release assets имеют некорректный SHA-256.");

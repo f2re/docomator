@@ -4,11 +4,6 @@ on:
   workflow_run:
     workflows: ["Publish verified release"]
     types: [completed]
-  pull_request:
-    paths:
-      - ".github/workflows/release-verify.yml"
-      - "scripts/ci/verify-github-release.mjs"
-      - "scripts/ci/verify-github-release.test.mjs"
 
 permissions:
   contents: read
@@ -16,19 +11,16 @@ permissions:
 jobs:
   verify:
     if: >-
-      github.event_name == 'pull_request' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.head_branch == github.event.repository.default_branch
-      )
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == github.event.repository.default_branch
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
-      - name: Checkout verifier
+      - name: Checkout exact release publisher commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 1
 
       - name: Download and verify published assets

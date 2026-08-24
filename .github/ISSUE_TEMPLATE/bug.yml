@@ -1,11 +1,41 @@
 name: Ошибка
-description: Сообщить о воспроизводимом дефекте
+description: Сообщить о воспроизводимом дефекте Оформлятора
+title: "bug: "
 labels: []
 body:
-  - type: textarea
-    id: observed
+  - type: markdown
     attributes:
-      label: Наблюдаемое поведение
+      value: |
+        Не публикуйте реальные документы, коды доступа, персональные данные, SMTP-реквизиты или резервные копии.
+  - type: input
+    id: version
+    attributes:
+      label: Версия и commit
+      description: Укажите версию из интерфейса/RELEASE_IDENTITY и commit, если известен.
+      placeholder: "0.6.5 / candidate / pilot / abcdef..."
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Среда
+      options:
+        - GitHub generic bundle
+        - Debian target
+        - Astra Linux target
+        - Запуск из исходников
+        - Другое
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как воспроизвести
+      description: Минимальная последовательность действий без чувствительных данных.
+      placeholder: |
+        1. Открыть ...
+        2. Выбрать ...
+        3. Получить ...
     validations:
       required: true
   - type: textarea
@@ -15,23 +45,14 @@ body:
     validations:
       required: true
   - type: textarea
-    id: reproduce
+    id: actual
     attributes:
-      label: Шаги воспроизведения
+      label: Что произошло
+      description: Укажите текст ошибки и correlation ID, если он показан. Секреты удалите.
     validations:
       required: true
-  - type: input
-    id: version
-    attributes:
-      label: Версия/release и commit
-      placeholder: 0.1.0 candidate / полный Git SHA
   - type: textarea
-    id: environment
+    id: evidence
     attributes:
-      label: Среда
-      description: ОС, архитектура, Node.js, LibreOffice, модель GGUF и релевантная конфигурация без секретов.
-  - type: textarea
-    id: logs
-    attributes:
-      label: Логи и correlation ID
-      description: Не прикладывайте пароли, токены и restricted-данные.
+      label: Дополнительные сведения
+      description: Обезличенные логи, скриншоты, тип DOCX/XLSX, условия restart/update/rollback.

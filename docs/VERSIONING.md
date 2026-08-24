@@ -9,14 +9,12 @@
 Поля имеют разные смыслы:
 
 - `version` — состав и совместимость продукта;
-- `status` — зрелость этого состава: `candidate` или `stable`;
+- `status` — зрелость состава: `candidate` или `stable`;
 - `channel` — эксплуатационный канал: `pilot` или `production`.
 
-Поэтому `0.2.0 / candidate / pilot` является нормальным состоянием. Нельзя удерживать старую версию только потому, что продукт ещё не стал stable, и нельзя объявлять stable только потому, что номер версии вырос.
+`VERSION`, package metadata, внутренние `@docomator/*` зависимости, lockfile, runtime default, пример env и текущие release-документы являются производными и проверяются CI.
 
-`VERSION`, root/workspace `package.json`, внутренние `@docomator/*` зависимости, `package-lock.json`, runtime default, пример env и текущие выпускные документы являются производными от `RELEASE_IDENTITY.json` и проверяются CI.
-
-## Правила SemVer
+## SemVer
 
 ### PATCH
 
@@ -24,31 +22,30 @@
 
 - исправление дефекта;
 - regression fix renderer/import/UI/API;
-- исправление производительности или надёжности без нового сценария;
-- уточнение recovery/error handling без изменения продуктового смысла.
+- исправление производительности или надёжности;
+- уточнение recovery/error handling без нового продуктового сценария.
 
-Пример: `0.2.0 → 0.2.1`.
+Пример: `0.6.5 → 0.6.6`.
 
 ### MINOR
 
 Увеличивать `MINOR`, когда появляется новая обратно совместимая возможность или заметно расширяется существующая:
 
-- новый пользовательский сценарий или раздел;
-- новая поддерживаемая возможность импорта/экспорта;
+- новый раздел или пользовательский сценарий;
+- новая возможность импорта/экспорта;
 - новый тип шаблонной конструкции;
-- новая операция API/domain;
-- новое поведение offline/update/recovery, доступное оператору;
-- существенное расширение существующего флоу.
+- новая domain/API операция;
+- новое операторское поведение offline/update/recovery.
 
-Пример: `0.2.3 → 0.3.0`.
+Пример: `0.6.6 → 0.7.0`.
 
-До `1.0.0` несовместимое изменение также как минимум требует нового `MINOR`, отдельного описания совместимости и, когда затронуты архитектура, безопасность или данные, соответствующего ADR/миграции. Нельзя скрывать несовместимое изменение в `PATCH`.
+До `1.0.0` несовместимое изменение также как минимум требует нового `MINOR`, явного описания совместимости и ADR/миграции, если затронуты архитектура, безопасность или данные.
 
 ### MAJOR
 
 После `1.0.0` увеличивать `MAJOR` для намеренно несовместимых изменений публичного API, форматов данных, поддерживаемого пользовательского поведения или эксплуатационного контракта.
 
-До `1.0.0` переход `0.x → 1.0.0` означает, что продуктовый и эксплуатационный контракт признан достаточно стабильным для первой основной линии. Сам по себе номер не заменяет release evidence.
+Переход `0.x → 1.0.0` означает признание продуктового и эксплуатационного контракта достаточно стабильным; сам номер не заменяет release evidence.
 
 ## Когда версия не меняется
 
@@ -57,15 +54,15 @@ Bump не обязателен для изменения, которое не м
 - только тесты;
 - только документация без изменения заявленного продукта;
 - комментарии и инженерная гигиена;
-- CI/release-automation без изменения поставляемого runtime/offline-контракта;
-- обновление release evidence или target act без изменения кода;
-- смена `candidate/pilot → stable/production` после успешной приёмки, если состав продукта не изменился.
+- CI/release automation без изменения runtime/offline-контракта;
+- обновление release evidence/target act;
+- чистая смена `candidate/pilot → stable/production` после успешной приёмки, если продуктовый состав не менялся.
 
 Если вместе с документацией изменён runtime/API/UI/storage/offline-код, CI рассматривает это как product change и требует bump.
 
 ## Как менять версию
 
-Не редактировать производные файлы вручную. Использовать:
+Не редактировать производные файлы вручную:
 
 ```bash
 npm run version:bump -- patch
@@ -73,61 +70,73 @@ npm run version:bump -- minor
 npm run version:bump -- major
 ```
 
-Для заранее согласованного номера допускается:
+Для заранее согласованного номера:
 
 ```bash
-npm run version:bump -- 0.4.0
+npm run version:bump -- 0.7.0
 ```
 
-Команда синхронно обновляет:
+Команда синхронно обновляет machine identity и производные version markers. `status` и `channel` команда не меняет. После bump обязателен полный `npm run check`.
 
-- `RELEASE_IDENTITY.json.version`;
-- `VERSION`;
-- root/workspace package metadata;
-- версии внутренних `@docomator/*` зависимостей;
-- `package-lock.json` без изменения версий сторонних зависимостей;
-- `DOCOMATOR_VERSION` в примере конфигурации;
-- runtime default;
-- текущие release/security/support/finalization документы.
+## CI gates
 
-`status` и `channel` команда не меняет.
+`npm run check:release-version` проверяет синхронность номера, статуса и канала.
 
-После bump обязателен полный `npm run check`.
+`npm run check:version-policy` сравнивает product-changing paths с base-parent. Поставляемое изменение без нового SemVer блокируется.
 
-## CI-gates
-
-`npm run check:release-version` проверяет синхронность текущего номера, статуса и канала во всех машинно значимых местах.
-
-`npm run check:version-policy` на pull request сравнивает изменения с base-parent. Если изменён поставляемый код в `apps/`, `packages/`, `migrations/`, `scripts/runtime/`, `scripts/offline/` или `config/`, но `RELEASE_IDENTITY.json.version` не изменился, PR блокируется.
-
-Это консервативное правило: при сомнении лучше выполнить `PATCH`, чем слить пользовательски заметное изменение под старым номером.
+При сомнении безопаснее сделать `PATCH`, чем слить пользовательски заметное изменение под старым номером.
 
 ## GitHub tags и Releases
 
-GitHub не вводит отдельную продуктовую версию. Tag является производной от `RELEASE_IDENTITY.json`:
+GitHub не вводит второй номер версии. Tag является производным от `RELEASE_IDENTITY.json`:
 
-- `candidate / pilot` → `vX.Y.Z-candidate`, GitHub **Pre-release**;
-- `stable / production` → `vX.Y.Z`, обычный GitHub Release.
+| Machine identity | Tag | GitHub presentation |
+|---|---|---|
+| `candidate / pilot` | `vX.Y.Z-candidate` | обычный **видимый Release**, maturity явно указана в tag/title/body |
+| `stable / production` | `vX.Y.Z` | обычный Release |
 
-Раздельные refs нужны потому, что действующая политика разрешает чистый переход зрелости `candidate/pilot → stable/production` без изменения product SemVer. Кандидатный tag при этом не перемещается, а stable получает новый канонический `vX.Y.Z` на exact stable commit.
+Candidate намеренно **не использует GitHub `prerelease` flag**. GitHub скрывает prerelease из обычного блока Releases на главной странице репозитория, из-за чего готовая сборка выглядит как отсутствующая. Зрелость продукта при этом не теряется: её авторитетно задают `status/channel`, tag `-candidate`, заголовок и предупреждение в release body.
 
-Tag и release immutable для своей пары `version + maturity`: повторный CI не перезаписывает опубликованные assets и не двигает ref. Product change обязан получить новый SemVer до публикации следующего candidate.
+Следовательно, ссылка `/releases/latest` может вести на candidate. Это означает только «последняя опубликованная сборка», а **не stable/production**.
 
-GitHub Release создаётся только после успешного `CI` события `push` на default branch и только из artifact этого exact workflow run. Candidate/stable state берётся из `RELEASE_IDENTITY.json`; ручное переименование GitHub release не является сменой статуса продукта.
+Candidate tag и stable tag разделены потому, что успешный maturity transition может сохранить тот же product SemVer. Старый candidate ref при этом не перемещается.
 
-Подробный контракт assets, checksum и generic/target границ: `docs/GITHUB_RELEASES.md`.
+## Immutability и восстановление публикации
 
-## Исторические документы
+Tag и assets immutable для своей пары `version + maturity`.
 
-Старые release-evidence, issue, акты и документы сохраняют номер версии, к которой они относились. Их нельзя массово переписывать на текущую версию.
+Повторный успешный CI:
 
-Для текущих нормативных выпускных документов используется явный маркер:
+- не двигает существующий tag;
+- не заменяет assets под существующим Release;
+- может исправить только presentation metadata (`prerelease=false`, `latest`, exact target commit), если байты уже опубликованы.
+
+Если существует tag, но GitHub Release отсутствует, publisher вправе восстановить Release **только fail-closed**:
+
+1. tag разрешается в exact commit;
+2. historical `RELEASE_IDENTITY.json` и `VERSION` этого commit совпадают с текущей identity;
+3. для tag commit найден успешный `CI` события `push` default branch;
+4. существует exact Actions artifact `docomator-project-control-<commit>`;
+5. artifact, manifest, native payload и SHA-256 проходят повторную проверку;
+6. Release создаётся поверх существующего tag через `--verify-tag`; tag не перемещается.
+
+Если historical artifact уже удалён/истёк или checksum не совпадает, автоматическое «восстановление» запрещено. Требуется новый SemVer release, а не подмена старого tag новыми байтами.
+
+## Release pipeline
+
+Публикация выполняется только после успешного полного `CI` события `push` default branch:
 
 ```text
-Текущая версия: `X.Y.Z`.
+main commit
+→ repository/unit/release gates
+→ Chromium + real-stack
+→ assemble + verify offline archive
+→ Project Control package
+→ Publish verified release
+→ Verify published release
 ```
 
-CI сверяет именно этот маркер. Благодаря этому историческое упоминание `0.1.0` не конфликтует с текущей `0.2.0`.
+Publisher повторно проверяет exact workflow SHA, checksum и `f2re-service.json`. Независимый verifier имеет только read permission, скачивает уже опубликованные assets и сверяет их размеры/SHA-256, включая идентичность native `.tar.gz` и payload внутри `.f2re.zip`.
 
 ## Release binding
 
@@ -138,4 +147,6 @@ CI сверяет именно этот маркер. Благодаря это�
 - Git commit;
 - SHA-256 release metadata/bundle.
 
-После изменения версии старый evidence остаётся исторически валидным для старой версии, но не закрывает stable-gate новой версии. Для текущего candidate требуется новый release-bound acceptance exact версии/commit.
+После изменения версии старый evidence остаётся исторически валидным, но не закрывает stable gate новой версии.
+
+Подробно: `docs/GITHUB_RELEASES.md`.
