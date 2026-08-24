@@ -1,7 +1,12 @@
 import path from "node:path";
 
 import { loadApiConfig } from "@docomator/config";
-import { ContentAddressedObjectStore, SqliteStore } from "@docomator/storage";
+import {
+  ContentAddressedObjectStore,
+  DataExtractionRegistry,
+  DocumentQuarantineRegistry,
+  SqliteStore
+} from "@docomator/storage";
 
 import {
   createSqliteAccessCodeCredentialStore,
@@ -10,6 +15,7 @@ import {
 } from "./access-code-gate.js";
 import { buildApp } from "./app.js";
 import { registerDataExportRoutes } from "./data-export-routes.js";
+import { registerDataExtractionRoutes } from "./data-extraction-routes.js";
 import { registerProductRoutes } from "./product-routes.js";
 import { registerSupplementalUiRoutes } from "./supplemental-ui-routes.js";
 
@@ -25,6 +31,12 @@ installAccessCodeGate(
 registerDataExportRoutes(app, store);
 registerSupplementalUiRoutes(app);
 registerProductRoutes(app, store, objectStore);
+registerDataExtractionRoutes(
+  app,
+  new DocumentQuarantineRegistry(store, objectStore),
+  objectStore,
+  new DataExtractionRegistry(store)
+);
 
 let closing = false;
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
