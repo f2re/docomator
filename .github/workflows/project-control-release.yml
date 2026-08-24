@@ -1,0 +1,119 @@
+name: Project Control release
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: project-control-release-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact verified commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Build Project Control update package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          NODE_RUNTIME_ROOT="$(dirname "$(dirname "$(command -v node)")")"
+          scripts/project-control/build-bundle.sh \
+            --target-profile generic \
+            --node-runtime-dir "$NODE_RUNTIME_ROOT" \
+            --without-llm \
+            --without-preview \
+            --without-ux-acceptance \
+            --skip-tests \
+            --force
+
+      - name: Verify Project Control contract and native payload
+        env:
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          PACKAGE="offline-bundles/docomator-${VERSION}-project-control.f2re.zip"
+          NATIVE="$(find offline-bundles -maxdepth 1 -type f -name "docomator-${VERSION}-linux-*.tar.gz" -print -quit)"
+          [[ -f "$PACKAGE" && -f "$PACKAGE.sha256" && -f "$NATIVE" ]]
+          (cd offline-bundles && sha256sum -c --strict "$(basename "$PACKAGE.sha256")")
+          python3 - "$PACKAGE" "$NATIVE" "$VERSION" "$SOURCE_SHA" <<'PY'
+          import hashlib, json, sys, tarfile, zipfile
+          from pathlib import Path
+
+          package, native = map(Path, sys.argv[1:3])
+          version, source_sha = sys.argv[3:5]
+
+          def sha256(path):
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          with zipfile.ZipFile(package) as archive:
+              manifest = json.loads(archive.read("f2re-service.json"))
+              payload = manifest["payload"]["path"]
+              assert set(archive.namelist()) == {"f2re-service.json", payload}
+              assert manifest["schema"] == "f2re-managed-service/v1"
+              assert manifest["controllerApi"] == 1
+              assert manifest["projectId"] == "docomator"
+              assert manifest["adapter"] == "docomator-v1"
+              assert manifest["nativeBundleFormat"] == "docomator-offline-v2"
+              assert manifest["version"] == version
+              assert manifest["sourceCommit"] == source_sha
+              digest = hashlib.sha256()
+              size = 0
+              with archive.open(payload) as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      size += len(chunk)
+                      digest.update(chunk)
+              assert digest.hexdigest() == manifest["payload"]["sha256"] == sha256(native)
+              assert size == manifest["payload"]["size"] == native.stat().st_size
+
+          with tarfile.open(native, "r:gz") as archive:
+              names = {member.name.rstrip("/") for member in archive if member.name}
+          roots = {name.split("/", 1)[0] for name in names}
+          assert len(roots) == 1
+          root = next(iter(roots))
+          for required in ("VERSION", "verify-bundle.sh", "update.sh", "install.sh"):
+              assert f"{root}/{required}" in names, required
+          PY
+
+      - name: Publish Project Control update
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: docomator-project-control-${{ github.event.workflow_run.head_sha }}
+          path: |
+            offline-bundles/*-project-control.f2re.zip
+            offline-bundles/*-project-control.f2re.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
