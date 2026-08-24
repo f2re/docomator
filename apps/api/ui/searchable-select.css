@@ -39,9 +39,8 @@
 
 .searchable-select-trigger > span:first-child {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .searchable-select-panel {
@@ -49,10 +48,13 @@
   z-index: 40;
   top: calc(100% + 0.4rem);
   right: 0;
-  left: 0;
+  left: auto;
   display: grid;
+  width: min(32rem, calc(100vw - 2rem));
+  min-width: 100%;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.45rem;
-  max-height: min(26rem, 65vh);
+  max-height: min(30rem, 72vh);
   padding: 0.55rem;
   overflow: hidden;
   background: var(--surface);
@@ -83,9 +85,14 @@
 
 .searchable-select-list {
   display: grid;
+  min-height: 0;
+  max-height: min(23rem, 58vh);
   gap: 0.16rem;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
 }
 
 .searchable-select-group {
@@ -119,7 +126,8 @@
 .searchable-select-option:hover,
 .searchable-select-option:focus-visible {
   background: var(--surface-2);
-  outline: none;
+  outline: 2px solid var(--accent-soft);
+  outline-offset: -2px;
 }
 
 .searchable-select-option.is-selected {
@@ -205,6 +213,12 @@
     right: 0.75rem;
     bottom: 0.75rem;
     left: 0.75rem;
+    width: auto;
+    min-width: 0;
     max-height: min(34rem, 78vh);
+  }
+
+  .searchable-select-list {
+    max-height: min(26rem, 62vh);
   }
 }
