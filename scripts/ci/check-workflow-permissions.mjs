@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const APPROVED_WRITE_WORKFLOW = "delete-merged-work-branch.yml";
+const APPROVED_BRANCH_DELETE_WORKFLOW = "delete-merged-work-branch.yml";
+const APPROVED_RELEASE_WORKFLOW = "release.yml";
 const APPROVED_CHECKOUT_ACTION = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262";
 const WRITE_PERMISSION_LINE = /^\s*([a-z][a-z0-9-]*):\s*write\s*$/gimu;
 const INLINE_WRITE_PERMISSION = /\b([a-z][a-z0-9-]*)\s*:\s*write(?!-all)\b/gimu;
@@ -24,7 +25,7 @@ const FORBIDDEN_TRIGGERS = [
   "repository_dispatch"
 ];
 
-const APPROVED_REQUIRED_PATTERNS = [
+const BRANCH_DELETE_REQUIRED_PATTERNS = [
   /^\s*pull_request:\s*$/mu,
   /^\s*types:\s*\[closed\]\s*$/mu,
   /^\s*contents:\s*write\s*$/mu,
@@ -40,7 +41,7 @@ const APPROVED_REQUIRED_PATTERNS = [
 ];
 
 for (const prefix of ELIGIBLE_BRANCH_PREFIXES) {
-  APPROVED_REQUIRED_PATTERNS.push(
+  BRANCH_DELETE_REQUIRED_PATTERNS.push(
     new RegExp(
       `startsWith\\(github\\.event\\.pull_request\\.head\\.ref,\\s*['"]${prefix.replace("/", "\\/")}['"]\\)`,
       "u"
@@ -48,7 +49,22 @@ for (const prefix of ELIGIBLE_BRANCH_PREFIXES) {
   );
 }
 
-const APPROVED_RUN_LINES = new Set([
+const RELEASE_REQUIRED_PATTERNS = [
+  /^\s*workflow_run:\s*$/mu,
+  /^\s*workflows:\s*\["CI"\]\s*$/mu,
+  /^\s*types:\s*\[completed\]\s*$/mu,
+  /^\s*actions:\s*read\s*$/mu,
+  /^\s*contents:\s*write\s*$/mu,
+  /github\.event\.workflow_run\.conclusion\s*==\s*['"]success['"]/u,
+  /github\.event\.workflow_run\.event\s*==\s*['"]push['"]/u,
+  /github\.event\.workflow_run\.head_branch\s*==\s*github\.event\.repository\.default_branch/u,
+  /^\s*ref:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}\s*$/mu,
+  /^\s*GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}\s*$/mu,
+  /^\s*DOCOMATOR_SOURCE_SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}\s*$/mu,
+  /^\s*DOCOMATOR_WORKFLOW_RUN_ID:\s*\$\{\{\s*github\.event\.workflow_run\.id\s*\}\}\s*$/mu
+];
+
+const BRANCH_DELETE_RUN_LINES = new Set([
   "set -Eeuo pipefail",
   '[[ -n "$HEAD_BRANCH" ]]',
   '[[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]',
@@ -58,12 +74,18 @@ const APPROVED_RUN_LINES = new Set([
   "*)",
   'echo "Branch $HEAD_BRANCH is not eligible for automatic deletion." >&2',
   "exit 1",
+  ";;",
   "esac",
   'if git ls-remote --exit-code --heads origin "refs/heads/$HEAD_BRANCH" >/dev/null 2>&1; then',
   'git push origin --delete "$HEAD_BRANCH"',
   "else",
   'echo "Branch $HEAD_BRANCH is already absent."',
   "fi"
+]);
+
+const RELEASE_RUN_LINES = new Set([
+  "set -Eeuo pipefail",
+  "node scripts/ci/publish-github-release.mjs"
 ]);
 
 function stripInlineComment(line) {
@@ -164,7 +186,25 @@ function runBlockLines(source) {
   return commands;
 }
 
-function inspectApprovedWriteWorkflow(source, permissions) {
+function inspectRunLines(commands, approved, label) {
+  const findings = [];
+  if (commands.length === 0) {
+    findings.push(`${label} не содержит проверяемого run-блока`);
+  }
+  for (const command of commands) {
+    if (!approved.has(command)) {
+      findings.push(`${label} содержит неразрешённую команду: ${command}`);
+    }
+  }
+  for (const requiredCommand of approved) {
+    if (!commands.includes(requiredCommand)) {
+      findings.push(`${label} не содержит обязательную команду: ${requiredCommand}`);
+    }
+  }
+  return findings;
+}
+
+function inspectBranchDeleteWorkflow(source, permissions) {
   const findings = [];
   if (permissions.length !== 1 || permissions[0] !== "contents") {
     findings.push(
@@ -172,7 +212,7 @@ function inspectApprovedWriteWorkflow(source, permissions) {
     );
   }
 
-  for (const requiredPattern of APPROVED_REQUIRED_PATTERNS) {
+  for (const requiredPattern of BRANCH_DELETE_REQUIRED_PATTERNS) {
     if (!requiredPattern.test(source)) {
       findings.push("workflow удаления ветки утратил обязательное защитное условие");
       break;
@@ -193,25 +233,44 @@ function inspectApprovedWriteWorkflow(source, permissions) {
     );
   }
 
-  const commands = runBlockLines(source);
-  if (commands.length === 0) {
-    findings.push("workflow удаления ветки не содержит проверяемого run-блока");
+  findings.push(
+    ...inspectRunLines(runBlockLines(source), BRANCH_DELETE_RUN_LINES, "workflow удаления ветки")
+  );
+  return findings;
+}
+
+function inspectReleaseWorkflow(source, permissions) {
+  const findings = [];
+  if (permissions.length !== 1 || permissions[0] !== "contents") {
+    findings.push(
+      `release workflow может иметь единственное write-право contents: write; найдено: ${permissions.join(", ") || "нет"}`
+    );
   }
-  for (const command of commands) {
-    if (!APPROVED_RUN_LINES.has(command)) {
-      findings.push(
-        `workflow удаления ветки содержит неразрешённую команду: ${command}`
-      );
-    }
-  }
-  for (const requiredCommand of APPROVED_RUN_LINES) {
-    if (!commands.includes(requiredCommand)) {
-      findings.push(
-        `workflow удаления ветки не содержит обязательную команду: ${requiredCommand}`
-      );
+
+  for (const requiredPattern of RELEASE_REQUIRED_PATTERNS) {
+    if (!requiredPattern.test(source)) {
+      findings.push("release workflow утратил обязательное защитное условие");
+      break;
     }
   }
 
+  const uses = workflowUses(source);
+  if (uses.length !== 1 || uses[0] !== APPROVED_CHECKOUT_ACTION) {
+    findings.push(
+      `release workflow может использовать только ${APPROVED_CHECKOUT_ACTION}; найдено: ${uses.join(", ") || "нет"}`
+    );
+  }
+
+  const shells = workflowShells(source);
+  if (shells.length !== 1 || shells[0] !== "bash") {
+    findings.push(
+      `release workflow должен иметь ровно один shell bash; найдено: ${shells.join(", ") || "нет"}`
+    );
+  }
+
+  findings.push(
+    ...inspectRunLines(runBlockLines(source), RELEASE_RUN_LINES, "release workflow")
+  );
   return findings;
 }
 
@@ -235,14 +294,19 @@ export function inspectWorkflow(fileName, source) {
   const permissions = writePermissions(effective);
   if (permissions.length === 0 && !writeAll) return [...new Set(findings)];
 
-  if (fileName !== APPROVED_WRITE_WORKFLOW) {
-    if (permissions.length > 0) {
-      findings.push(`неразрешённые права записи: ${permissions.join(", ")}`);
-    }
+  if (fileName === APPROVED_BRANCH_DELETE_WORKFLOW) {
+    findings.push(...inspectBranchDeleteWorkflow(effective, permissions));
     return [...new Set(findings)];
   }
 
-  findings.push(...inspectApprovedWriteWorkflow(effective, permissions));
+  if (fileName === APPROVED_RELEASE_WORKFLOW) {
+    findings.push(...inspectReleaseWorkflow(effective, permissions));
+    return [...new Set(findings)];
+  }
+
+  if (permissions.length > 0) {
+    findings.push(`неразрешённые права записи: ${permissions.join(", ")}`);
+  }
   return [...new Set(findings)];
 }
 
