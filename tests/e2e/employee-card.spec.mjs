@@ -25,4 +25,5 @@ test("пользователь добавляет сотрудника и пон
   );
   expect(state.properties).toHaveLength(1);
   expect(state.properties[0].label).toBe("Должность");
+  expect(state.properties[0].validation?.uiGroup).toBe("common");
 });
