@@ -97,7 +97,7 @@ test("общий код закрывает рабочие API без HTTP Basic 
   assert.match(accessPage.body, /name="code"/u);
   assert.match(accessPage.body, /data-access-digit="1"/u);
   assert.match(accessPage.body, /data-access-backspace/u);
-  assert.match(accessPage.body, /Введено/u);
+  assert.match(accessPage.body, /Введите 4 цифры/u);
   assert.doesNotMatch(accessPage.body, /name="username"/u);
   assert.doesNotMatch(accessPage.body, /type="password"/u);
   assert.doesNotMatch(accessPage.body, />Пароль</u);
