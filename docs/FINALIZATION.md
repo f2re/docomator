@@ -69,7 +69,7 @@ chmod 600 /tmp/docomator-code
 
 ## 5. Recovery и отказоустойчивость
 
-На отдельной чистой машине восстановите backup из target act. В `recovery/restore-act.json` зафиксируйте source act, backup manifest SHA-256, exact release binding и сверку counts/IDs/SHA-256.
+На отдельном чистом стенде восстановите backup из target act. В `recovery/restore-act.json` зафиксируйте source act, backup manifest SHA-256, exact release binding и сверку counts/IDs/SHA-256.
 
 После restore должны сохраниться пространства, сущности, поля/значения, группы, templates, jobs/results/deliveries, object store и credential/session configuration. API/worker обязаны работать после reboot.
 
