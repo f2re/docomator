@@ -153,7 +153,7 @@ npm run check
 
 Generic GitHub Release не подменяет target-specific поставку. Полный bundle собирается на reference VM той же ОС/архитектуры/glibc и включает проверенный package closure.
 
-Debian:
+### 🟦 Debian
 
 ```bash
 npm run bundle:offline:debian -- \
@@ -162,7 +162,7 @@ npm run bundle:offline:debian -- \
   --model /srv/models/model.gguf
 ```
 
-Astra Linux:
+### 🟥 Astra Linux
 
 ```bash
 npm run bundle:offline:astra -- \
