@@ -10,6 +10,18 @@
 
 Текущий кодовый контур поддерживает импорт/экспорт данных, DOCX/XLSX-шаблоны, ручной и календарный выпуск, результаты, SMTP/сетевую доставку, резервирование и восстановление. Stable нельзя объявлять до фактической Debian/Astra/Office/recovery/UX-приёмки; см. [FINALIZATION](docs/FINALIZATION.md) и [SUPPORT_MATRIX](docs/SUPPORT_MATRIX.md).
 
+## 📦 Скачать готовый выпуск
+
+Проверенные сборки публикуются в [GitHub Releases](https://github.com/f2re/docomator/releases) только после успешного полного CI exact commit ветки `main`.
+
+- `candidate / pilot` публикуется как **Pre-release** с tag `vX.Y.Z-candidate`;
+- `stable / production` публикуется отдельно как `vX.Y.Z` только после release-evidence и целевой приёмки;
+- для ручной поставки скачивайте `docomator-<version>-linux-<arch>.tar.gz` вместе с `.sha256`;
+- для F2RE Project Control скачивайте `docomator-<version>-project-control.f2re.zip` вместе с `.sha256`;
+- `SHA256SUMS.txt` содержит контрольные суммы обоих основных assets.
+
+GitHub-hosted CI публикует generic core bundle без target-specific `.deb` closure, LibreOffice preview и LLM. Он является проверенным application/update bundle, но не заменяет отдельную Debian/Astra target acceptance. Подробно: [GITHUB_RELEASES](docs/GITHUB_RELEASES.md) и [OFFLINE_DEPLOYMENT](docs/OFFLINE_DEPLOYMENT.md).
+
 ## Основной путь
 
 1. открыть рабочую область четырьмя цифрами;
@@ -178,7 +190,7 @@ printf '%s\n' '0427' > "$HOME/.docomator-acceptance-code"
 npm run release:evidence -- \
   /srv/docomator-release-evidence \
   --expected-commit '<ПОЛНЫЙ_GIT_SHA>' \
-  --expected-version '0.6.3'
+  --expected-version '0.6.5'
 ```
 
 Только успешный `release:evidence` разрешает отдельный переход candidate/pilot → stable/production. Зелёный CI или generic bundle целевую Debian/Astra/Office/recovery-приёмку не заменяет.
