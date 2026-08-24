@@ -1,9 +1,9 @@
 name: One-shot preview update compatibility
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/preserve-llm-runtime-064
+      - main
 
 permissions:
   contents: write
