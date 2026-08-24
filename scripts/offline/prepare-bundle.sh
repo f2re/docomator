@@ -417,6 +417,7 @@ info "Устанавливаем только рабочие зависимос�
 )
 
 cp "$SCRIPT_DIR/lib.sh" \
+  "$SCRIPT_DIR/preserve-llm-runtime.sh" \
   "$SCRIPT_DIR/verify-bundle.sh" \
   "$SCRIPT_DIR/install.sh" \
   "$SCRIPT_DIR/update.sh" \

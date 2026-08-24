@@ -331,6 +331,12 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
   mkdir -p "$TEMP_RELEASE"
   cp -a "$BUNDLE_ROOT/payload/app" "$TEMP_RELEASE/"
   cp -a "$BUNDLE_ROOT/payload/runtime" "$TEMP_RELEASE/"
+  PRESERVED_LLM_RUNTIME="$(
+    "$BUNDLE_ROOT/preserve-llm-runtime.sh" "$OLD_TARGET" "$TEMP_RELEASE" "$RELEASES_DIR"
+  )"
+  if [[ "$PRESERVED_LLM_RUNTIME" == "preserved" ]]; then
+    info "Сохраняем установленный llama runtime из предыдущего выпуска"
+  fi
   cp -a "$BUNDLE_ROOT/payload/deploy" "$TEMP_RELEASE/"
   cp "$BUNDLE_ROOT/release.json" "$TEMP_RELEASE/"
   if [[ -x "$BUNDLE_ROOT/first-run.sh" ]]; then
