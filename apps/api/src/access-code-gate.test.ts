@@ -52,7 +52,7 @@ test("новый env-ключ канонический, legacy-ключ чита
   );
 });
 
-test("общий код закрывает рабочие API без HTTP Basic Auth", async () => {
+test("общий код закрывает рабочие API без HTTP Basic Auth и старого окна", async () => {
   const app = Fastify({ logger: false });
   app.get("/api/v1/private", async () => ({ data: "secret" }));
   app.get("/private-page", async (_request, reply) =>
@@ -76,14 +76,31 @@ test("общий код закрывает рабочие API без HTTP Basic 
   assert.equal(deniedPage.statusCode, 302);
   assert.match(String(deniedPage.headers.location), /^\/access\?next=/u);
 
+  const legacyPage = await app.inject({
+    method: "GET",
+    url: "/login?next=%2Fprivate-page"
+  });
+  assert.equal(legacyPage.statusCode, 302);
+  assert.equal(legacyPage.headers.location, "/access?next=%2Fprivate-page");
+
+  const legacyLoop = await app.inject({
+    method: "GET",
+    url: "/login?next=%2Flogin"
+  });
+  assert.equal(legacyLoop.statusCode, 302);
+  assert.equal(legacyLoop.headers.location, "/access?next=%2F");
+
   const accessPage = await app.inject({ method: "GET", url: "/access" });
   assert.equal(accessPage.statusCode, 200);
-  assert.match(accessPage.body, /Код доступа/u);
+  assert.match(accessPage.body, /Введите код доступа/u);
   assert.match(accessPage.body, /inputmode="numeric"/u);
   assert.match(accessPage.body, /name="code"/u);
+  assert.match(accessPage.body, /data-access-digit="1"/u);
+  assert.match(accessPage.body, /data-access-backspace/u);
+  assert.match(accessPage.body, /Введено/u);
   assert.doesNotMatch(accessPage.body, /name="username"/u);
   assert.doesNotMatch(accessPage.body, /type="password"/u);
-  assert.doesNotMatch(accessPage.body, /Пароль/u);
+  assert.doesNotMatch(accessPage.body, />Пароль</u);
   assert.match(accessPage.body, /reset-access-code\.sh/u);
 
   const invalid = await app.inject({
@@ -93,6 +110,7 @@ test("общий код закрывает рабочие API без HTTP Basic 
   });
   assert.equal(invalid.statusCode, 401);
   assert.equal(invalid.json().error.code, "invalid_access_code");
+  assert.match(invalid.json().error.message, /Данные не изменены/u);
 
   const unlocked = await app.inject({
     method: "POST",
@@ -115,6 +133,14 @@ test("общий код закрывает рабочие API без HTTP Basic 
   });
   assert.equal(allowed.statusCode, 200);
   assert.equal(allowed.json().data, "secret");
+
+  const redundantAccess = await app.inject({
+    method: "GET",
+    url: "/access?next=%2Fprivate-page",
+    headers: { cookie }
+  });
+  assert.equal(redundantAccess.statusCode, 302);
+  assert.equal(redundantAccess.headers.location, "/private-page");
 
   const status = await app.inject({
     method: "GET",
@@ -163,6 +189,7 @@ test("gate отклоняет cross-origin mutation и ограничивает 
   });
   assert.equal(blocked.statusCode, 429);
   assert.ok(Number(blocked.headers["retry-after"]) >= 1);
+  assert.match(blocked.json().error.message, /Данные не изменены/u);
 
   const unlock = await app.inject({
     method: "POST",
@@ -206,7 +233,9 @@ test("первый запуск один раз задаёт четыре циф
   const page = await app.inject({ method: "GET", url: "/access" });
   assert.equal(page.statusCode, 200);
   assert.match(page.body, /Первый запуск/u);
-  assert.match(page.body, /Сохранить код/u);
+  assert.match(page.body, /Придумайте код доступа/u);
+  assert.match(page.body, /Сохранить и открыть/u);
+  assert.match(page.body, /Цифровая клавиатура/u);
   assert.doesNotMatch(page.body, /confirmation/u);
 
   const setup = await app.inject({
@@ -229,6 +258,7 @@ test("первый запуск один раз задаёт четыре циф
   });
   assert.equal(second.statusCode, 409);
   assert.equal(second.json().error.code, "access_code_already_configured");
+  assert.match(second.json().error.message, /Ничего не изменено/u);
   await app.close();
 
   const restartedConfig = loadAccessCodeGateConfig({
