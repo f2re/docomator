@@ -1,45 +1,37 @@
-name: Функция или технический инкремент
-description: Зафиксировать требование, границы и критерии приёмки
-title: "[Feature]: "
+name: Улучшение
+description: Предложить пользовательскую возможность или улучшение workflow
+title: "feat: "
 labels: []
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Проблема и контекст
-      description: Какую пользовательскую или эксплуатационную задачу решаем?
-    validations:
-      required: true
-  - type: input
-    id: requirements
-    attributes:
-      label: Requirement IDs
-      description: Например, FR-TPL-004, SEC-002, OFF-005.
-      placeholder: FR-...
+      label: Какую пользовательскую проблему нужно решить
+      description: Опишите задачу пользователя, а не выбранную технологию.
     validations:
       required: true
   - type: textarea
-    id: scope
+    id: flow
     attributes:
-      label: Объём и границы
-      description: Что входит и что явно не входит в изменение?
+      label: Желаемый сценарий
+      placeholder: "файл → preview → исправление → результат"
     validations:
       required: true
   - type: textarea
     id: acceptance
     attributes:
-      label: Критерии приёмки
-      description: Наблюдаемые и проверяемые результаты.
+      label: Критерий готовности
+      description: Что пользователь должен суметь сделать без знания внутреннего устройства системы.
     validations:
       required: true
   - type: checkboxes
-    id: impacts
+    id: constraints
     attributes:
-      label: Области воздействия
+      label: Ограничения проекта
       options:
-        - label: Модель данных или миграции
-        - label: DOCX/XLSX совместимость
-        - label: LLM/агенты
-        - label: Автоматизация или внешние side effects
-        - label: Offline bundle/install/update
-        - label: Безопасность или чувствительные данные
+        - label: Сценарий должен работать без обязательного Internet.
+          required: true
+        - label: LLM не должен становиться обязательным для детерминированной операции.
+          required: true
+        - label: Изоляция пространств не должна ослабляться.
+          required: true

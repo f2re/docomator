@@ -28,7 +28,7 @@ function metadata(overrides = {}) {
     url: `https://github.com/f2re/docomator/releases/tag/v${version}-candidate`,
     tagName: `v${version}-candidate`,
     isDraft: false,
-    isPrerelease: true,
+    isPrerelease: false,
     targetCommitish: sourceCommit,
     assets: [
       { name: nativeName, size: 12 },
@@ -41,14 +41,16 @@ function metadata(overrides = {}) {
   };
 }
 
-test("release identity сохраняет product SemVer отдельно от зрелости", () => {
+test("release identity отделяет product SemVer от maturity, но candidate остаётся видимым release", () => {
   assert.deepEqual(
-    parseReleaseIdentity('{"version":"0.6.5","status":"candidate","channel":"pilot"}'),
+    parseReleaseIdentity(
+      '{"version":"0.6.5","status":"candidate","channel":"pilot"}'
+    ),
     identity
   );
   assert.deepEqual(releaseDescriptor(identity), {
     tag: "v0.6.5-candidate",
-    prerelease: true
+    prerelease: false
   });
   assert.deepEqual(
     releaseDescriptor({ version: "1.2.3", status: "stable", channel: "production" }),
@@ -56,7 +58,7 @@ test("release identity сохраняет product SemVer отдельно от �
   );
 });
 
-test("принимает только опубликованный exact candidate с пятью ожидаемыми assets", () => {
+test("принимает опубликованный exact candidate с пятью ожидаемыми assets", () => {
   const result = validateReleaseMetadata(metadata(), identity);
   assert.equal(result.tag, "v0.6.5-candidate");
   assert.equal(result.sourceCommit, sourceCommit);
@@ -65,10 +67,14 @@ test("принимает только опубликованный exact candida
   assert.equal(result.sizes.size, 5);
 });
 
-test("draft release не считается готовым к скачиванию", () => {
+test("draft и GitHub prerelease не считаются готовыми к очевидному скачиванию", () => {
   assert.throws(
     () => validateReleaseMetadata(metadata({ isDraft: true }), identity),
     /не опубликован/u
+  );
+  assert.throws(
+    () => validateReleaseMetadata(metadata({ isPrerelease: true }), identity),
+    /скрыт как GitHub Pre-release/u
   );
 });
 
@@ -79,7 +85,6 @@ test("лишний или отсутствующий release asset блокир�
     () => validateReleaseMetadata(withExtra, identity),
     /неверный набор assets/u
   );
-
   const missing = metadata();
   missing.assets = missing.assets.filter((asset) => asset.name !== "SHA256SUMS.txt");
   assert.throws(
@@ -104,7 +109,9 @@ test("SHA-256 документ обязан перечислять ровно о
 });
 
 test("end-to-end verifier скачивает release и сверяет оба bundle по байтам и manifest", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-release-verifier-test-"));
+  const root = await fs.mkdtemp(
+    path.join(os.tmpdir(), "docomator-release-verifier-test-")
+  );
   await fs.writeFile(
     path.join(root, "RELEASE_IDENTITY.json"),
     `${JSON.stringify(identity, null, 2)}\n`
@@ -165,7 +172,11 @@ test("end-to-end verifier скачивает release и сверяет оба bu
         stderr: ""
       };
     }
-    return { code: 99, stdout: "", stderr: `unexpected ${command} ${args.join(" ")}` };
+    return {
+      code: 99,
+      stdout: "",
+      stderr: `unexpected ${command} ${args.join(" ")}`
+    };
   };
 
   const result = await verifyPublishedRelease({
@@ -182,6 +193,10 @@ test("end-to-end verifier скачивает release и сверяет оба bu
   assert.equal(result.nativeHash, nativeHash);
   assert.equal(result.projectHash, projectHash);
   assert.equal(result.assets.length, 5);
-  assert.ok(calls.some((call) => call[0] === "gh" && call[1] === "release" && call[2] === "download"));
+  assert.ok(
+    calls.some(
+      (call) => call[0] === "gh" && call[1] === "release" && call[2] === "download"
+    )
+  );
   await fs.rm(root, { recursive: true, force: true });
 });
