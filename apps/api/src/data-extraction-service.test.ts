@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { DocumentStructureReport } from "@docomator/document-intake";
+import { toJsonValue } from "@docomator/storage";
 
 import {
   applyExtractionCorrections,
@@ -148,11 +149,11 @@ test("CSV includes source document and repeats scalar values for table rows", ()
   });
   const extracted = extractDataFromStructure(sample, definition);
   const csv = dataExtractionCsv({
-    templateSnapshot: definition,
+    templateSnapshot: toJsonValue(definition),
     items: [
       {
         sourceName: "Документ 1.docx",
-        result: extracted.result,
+        result: toJsonValue(extracted.result),
         corrections: {}
       }
     ]

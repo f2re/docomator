@@ -14,6 +14,7 @@ import {
   loadAccessCodeGateConfig
 } from "./access-code-gate.js";
 import { buildApp } from "./app.js";
+import { installDataExtractionHttpErrorMapping } from "./data-extraction-http-errors.js";
 import { registerDataExportRoutes } from "./data-export-routes.js";
 import { registerDataExtractionRoutes } from "./data-extraction-routes.js";
 import { registerProductRoutes } from "./product-routes.js";
@@ -22,6 +23,7 @@ import { registerSupplementalUiRoutes } from "./supplemental-ui-routes.js";
 const config = loadApiConfig();
 const store = new SqliteStore({ databasePath: path.join(config.dataDir, "docomator.db") });
 const objectStore = new ContentAddressedObjectStore(path.join(config.dataDir, "objects"));
+installDataExtractionHttpErrorMapping();
 const app = buildApp(config, { store, objectStore });
 installAccessCodeGate(
   app,
