@@ -31,6 +31,63 @@
     return selected?.textContent?.trim() || select.dataset.searchablePlaceholder || "Выберите значение";
   }
 
+  function visibleButtons(instance) {
+    return [...instance.list.querySelectorAll("button:not([hidden]):not(:disabled)")];
+  }
+
+  function focusOption(instance, index) {
+    const visible = visibleButtons(instance);
+    if (!visible.length) return false;
+    const normalizedIndex = Math.max(0, Math.min(index, visible.length - 1));
+    const button = visible[normalizedIndex];
+    button.focus();
+    button.scrollIntoView({ block: "nearest" });
+    return true;
+  }
+
+  function moveOption(instance, delta, fallbackIndex = 0) {
+    const visible = visibleButtons(instance);
+    if (!visible.length) return false;
+    const current = visible.indexOf(document.activeElement);
+    const start = current < 0 ? fallbackIndex : current;
+    const next = Math.max(0, Math.min(start + delta, visible.length - 1));
+    return focusOption(instance, next);
+  }
+
+  function handleOptionNavigation(instance, event, { fromSearch = false } = {}) {
+    const visible = visibleButtons(instance);
+    if (!visible.length) return false;
+    const current = visible.indexOf(document.activeElement);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      return moveOption(instance, 1, fromSearch ? -1 : 0);
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (fromSearch) return focusOption(instance, visible.length - 1);
+      return moveOption(instance, -1, visible.length - 1);
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      return focusOption(instance, 0);
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      return focusOption(instance, visible.length - 1);
+    }
+    if (event.key === "PageDown") {
+      event.preventDefault();
+      const start = current < 0 ? 0 : current;
+      return focusOption(instance, Math.min(start + 8, visible.length - 1));
+    }
+    if (event.key === "PageUp") {
+      event.preventDefault();
+      const start = current < 0 ? visible.length - 1 : current;
+      return focusOption(instance, Math.max(start - 8, 0));
+    }
+    return false;
+  }
+
   function createInstance(select) {
     const id = `searchable-select-${++sequence}`;
     const root = document.createElement("div");
@@ -61,6 +118,7 @@
     list.className = "searchable-select-list";
     list.setAttribute("role", "listbox");
     list.setAttribute("aria-label", select.getAttribute("aria-label") || "Варианты выбора");
+    list.tabIndex = -1;
 
     const empty = document.createElement("p");
     empty.className = "searchable-select-empty";
@@ -75,7 +133,7 @@
     const instance = { select, root, trigger, panel, search, list, empty, records: [] };
     instances.set(select, instance);
 
-    function open() {
+    function open({ focusSearch = true } = {}) {
       if (select.disabled) return;
       document.querySelectorAll("[data-searchable-select-root].is-open").forEach((candidate) => {
         if (candidate !== root) {
@@ -89,7 +147,7 @@
       trigger.setAttribute("aria-expanded", "true");
       search.value = "";
       filter(instance);
-      requestAnimationFrame(() => search.focus());
+      if (focusSearch) requestAnimationFrame(() => search.focus());
     }
 
     function close({ focus = false } = {}) {
@@ -103,21 +161,29 @@
       if (panel.hidden) open();
       else close();
     });
+    trigger.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !panel.hidden) {
+        event.preventDefault();
+        close({ focus: true });
+        return;
+      }
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      if (panel.hidden) open({ focusSearch: false });
+      requestAnimationFrame(() => {
+        const visible = visibleButtons(instance);
+        focusOption(instance, event.key === "ArrowDown" ? 0 : visible.length - 1);
+      });
+    });
     search.addEventListener("input", () => filter(instance));
     search.addEventListener("keydown", (event) => {
-      const visible = [...list.querySelectorAll("button:not([hidden]):not(:disabled)")];
+      const visible = visibleButtons(instance);
       if (event.key === "Escape") {
         event.preventDefault();
         close({ focus: true });
         return;
       }
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        const current = visible.indexOf(document.activeElement);
-        const direction = event.key === "ArrowDown" ? 1 : -1;
-        const next = current < 0 ? (direction > 0 ? 0 : visible.length - 1) : (current + direction + visible.length) % visible.length;
-        visible[next]?.focus();
-      }
+      if (handleOptionNavigation(instance, event, { fromSearch: true })) return;
       if (event.key === "Enter" && visible.length === 1) {
         event.preventDefault();
         visible[0].click();
@@ -127,7 +193,9 @@
       if (event.key === "Escape") {
         event.preventDefault();
         close({ focus: true });
+        return;
       }
+      handleOptionNavigation(instance, event);
     });
     document.addEventListener("pointerdown", (event) => {
       if (!panel.hidden && !root.contains(event.target)) close();
@@ -160,7 +228,9 @@
     const instance = instances.get(select) || createInstance(select);
     if (!instance) return;
     instance.trigger.disabled = select.disabled;
-    instance.trigger.querySelector("[data-searchable-select-value]").textContent = selectedLabel(select);
+    const label = selectedLabel(select);
+    instance.trigger.querySelector("[data-searchable-select-value]").textContent = label;
+    instance.trigger.title = label;
     instance.list.innerHTML = "";
     instance.records = [];
     let lastGroup = null;
