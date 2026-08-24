@@ -94,7 +94,7 @@
           globalThis.docomatorFieldGroups.allowed(
             definition,
             selectedGroup,
-            { includeUnassigned: true }
+            { includeUnassigned: true, includeAll: true }
           )
       );
     const options = [
@@ -108,9 +108,16 @@
       const grouped = globalThis.docomatorFieldGroups.grouped(
         applicable,
         selectedGroup,
-        { includeUnassigned: true }
+        { includeUnassigned: true, includeAll: true }
       );
-      const order = [...new Set(["common", selectedGroup, "unassigned"])];
+      const order = [
+        ...new Set([
+          selectedGroup,
+          "common",
+          ...globalThis.docomatorFieldGroups.definitions.map((item) => item.key),
+          "unassigned"
+        ])
+      ];
       options.push(
         ...order
           .filter((group) => grouped.get(group)?.length)
@@ -227,7 +234,7 @@
       field.innerHTML = `
         <span>Какие объекты заполняют этот шаблон?</span>
         <select id="documentEntityType" data-searchable-select data-searchable-placeholder="Выберите тип" data-searchable-search-placeholder="Найти тип">${genericTemplateSelectOptions(genericTemplateEntityTypeKey)}</select>
-        <small>Показываются только поля выбранного типа. Аудитории, статьи и люди не смешиваются.</small>`;
+        <small>Показываются поля выбранного типа. Пространство остаётся границей данных.</small>`;
       const groupField = form
         .querySelector("#documentFieldGroup")
         ?.closest("label");
@@ -256,6 +263,11 @@
       ?.closest("label");
     if (groupField) {
       groupField.hidden = !genericTemplateIsPerson();
+      const hint = groupField.querySelector("small");
+      if (hint && genericTemplateIsPerson()) {
+        hint.textContent =
+          "Раздел поднимает подходящие поля выше списка. Остальные поля текущего пространства остаются доступны.";
+      }
       if (!genericTemplateIsPerson()) {
         form.querySelector("#documentFieldGroup").value = "common";
       }
@@ -283,7 +295,7 @@
       ?.querySelector("small");
     if (selectorHint) {
       selectorHint.textContent = genericTemplateIsPerson()
-        ? "Для ФИО доступны полная запись, фамилия, инициалы и собственный безопасный шаблон."
+        ? "Доступны все поля сотрудников текущего пространства. Для ФИО можно выбрать формат записи."
         : `Доступны системное название и поля типа «${genericTemplateType()?.label || genericTemplateEntityTypeKey}».`;
     }
     renderStructureFormatterFields();
@@ -307,6 +319,11 @@
   document.addEventListener("docomator:space-changed", () => {
     genericTemplateEntityTypeKey = "person";
     genericTemplatePublishType();
+    void loadStructurePropertyDefinitions()
+      .then(() => refreshStructurePropertySelector())
+      .catch((error) => {
+        console.error("Не удалось обновить поля шаблона после смены пространства.", error);
+      });
   });
   genericTemplatePublishType();
   genericTemplateAdaptStaticText();
