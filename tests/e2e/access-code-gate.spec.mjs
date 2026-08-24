@@ -73,7 +73,7 @@ async function stop(child) {
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-test("4-значный код закрывает и открывает рабочую область без логина", async ({ page }) => {
+test("4-значный PIN закрывает и открывает рабочую область без старого окна", async ({ page }) => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-access-code-e2e-"));
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
@@ -111,24 +111,39 @@ test("4-значный код закрывает и открывает рабо�
     expect(locked.status()).toBe(401);
     expect(locked.headers()["www-authenticate"]).toBeUndefined();
 
-    await page.goto(`${origin}/`);
-    await expect(page).toHaveURL(new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/access\\?next=`));
-    await expect(page.getByRole("heading", { name: "Код доступа" })).toBeVisible();
+    // Старые закладки больше не приводят на прежний login/password экран.
+    await page.goto(`${origin}/login?next=%2F`);
+    await expect(page).toHaveURL(`${origin}/access?next=%2F`);
+    await expect(page.getByRole("heading", { name: "Введите код доступа" })).toBeVisible();
     await expect(page.locator("#accessCode")).toBeFocused();
     await expect(page.locator('input[name="username"]')).toHaveCount(0);
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    await expect(page.locator('[data-access-digit="1"]')).toBeVisible();
+    await expect(page.locator("[data-access-backspace]")).toBeVisible();
 
-    await page.locator("#accessCode").fill("9999");
+    for (let index = 0; index < 4; index += 1) {
+      await page.locator('[data-access-digit="9"]').click();
+    }
+    await expect(page.locator("#codeProgress")).toHaveText("Введено 4 из 4");
     await page.getByRole("button", { name: "Открыть Оформлятор" }).click();
-    await expect(page.locator("#accessError")).toContainText("Неверный код доступа");
+    await expect(page.locator("#accessError")).toContainText("Код не подошёл");
+    await expect(page.locator("#accessError")).toContainText("Данные не изменены");
+    await expect(page.locator("#accessCode")).toHaveValue("");
 
-    await page.locator("#accessCode").fill(accessCode);
+    for (const digit of accessCode) {
+      await page.locator(`[data-access-digit="${digit}"]`).click();
+    }
     await page.getByRole("button", { name: "Открыть Оформлятор" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
     await expect(page.locator("#main-content")).toBeVisible();
 
     const unlocked = await page.request.get(`${origin}/api/v1/spaces`);
     expect(unlocked.status()).toBe(200);
+
+    // Открытая сессия не должна снова показывать PIN-экран.
+    await page.goto(`${origin}/access?next=%2F`);
+    await expect(page).toHaveURL(`${origin}/#overview`);
+    await expect(page.getByRole("heading", { name: "Введите код доступа" })).toHaveCount(0);
 
     const settingsNavigation = page.locator('[data-view-target="settings"]:visible').first();
     await settingsNavigation.click();
@@ -148,7 +163,7 @@ test("4-значный код закрывает и открывает рабо�
   }
 });
 
-test("первый запуск задаёт один 4-значный код прямо в браузере", async ({ page }) => {
+test("первый запуск задаёт PIN в браузере и остаётся удобным на 320 px", async ({ page }) => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-first-access-code-e2e-"));
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
@@ -178,12 +193,23 @@ test("первый запуск задаёт один 4-значный код п
   api.stderr.on("data", (chunk) => output.push(chunk.toString("utf8")));
   try {
     await waitUntilReady(origin, api);
+    await page.setViewportSize({ width: 320, height: 720 });
     await page.goto(`${origin}/`);
     await expect(page.getByText("Первый запуск", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Придумайте код доступа" })).toBeVisible();
     await expect(page.locator("#accessCode")).toBeFocused();
     await expect(page.locator("#confirmation")).toHaveCount(0);
-    await page.locator("#accessCode").fill("2468");
-    await page.getByRole("button", { name: "Сохранить код" }).click();
+    await expect(page.getByRole("button", { name: "Сохранить и открыть" })).toBeDisabled();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+    ).toBe(true);
+
+    for (const digit of "2468") {
+      await page.locator(`[data-access-digit="${digit}"]`).click();
+    }
+    await expect(page.locator("#codeProgress")).toHaveText("Введено 4 из 4");
+    await expect(page.getByRole("button", { name: "Сохранить и открыть" })).toBeEnabled();
+    await page.getByRole("button", { name: "Сохранить и открыть" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);
     const status = await page.request.get(`${origin}/api/v1/access/status`);
     expect(status.status()).toBe(200);
@@ -191,7 +217,8 @@ test("первый запуск задаёт один 4-значный код п
 
     await page.context().clearCookies();
     await page.goto(`${origin}/`);
-    await expect(page.getByRole("heading", { name: "Код доступа" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Введите код доступа" })).toBeVisible();
+    // Физическая клавиатура/вставка остаются полноценной альтернативой экранной клавиатуре.
     await page.locator("#accessCode").fill("2468");
     await page.getByRole("button", { name: "Открыть Оформлятор" }).click();
     await expect(page).toHaveURL(`${origin}/#overview`);

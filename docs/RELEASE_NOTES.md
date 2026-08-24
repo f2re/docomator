@@ -1,12 +1,23 @@
-# Оформлятор 0.6.3
+# Оформлятор 0.6.4
 
-Текущая версия: `0.6.3`.
+Текущая версия: `0.6.4`.
 
 Статус выпуска: `candidate`
 
 Канал выпуска: `pilot`
 
 Статус: **кандидат на стабильный выпуск**. Номер версии описывает состав продукта и не означает завершение эксплуатационной приёмки. Единственный машинный источник версии, статуса и канала — `RELEASE_IDENTITY.json`.
+
+## 2026-08-24 — завершённый PIN-flow первого запуска (`0.6.4`)
+
+- Экран `/access` переработан в спокойный человеко-ориентированный PIN-flow: четыре цифры, экранная цифровая клавиатура, обычная клавиатура/вставка, крупные интерактивные зоны и явный прогресс `N из 4`.
+- Первый запуск показывает отдельное состояние «Придумайте код доступа» и одну основную кнопку «Сохранить и открыть»; повторный ввод, имя пользователя и пароль не требуются.
+- Старый адрес `/login` больше не является отдельным экраном: он служит только безопасным переходником на `/access`, а защита от `next=/login` и `next=/access` исключает циклический возврат к legacy-пути.
+- При уже открытой session прямой переход на `/access` сразу возвращает пользователя в рабочую область и не заставляет повторно вводить код.
+- Ошибки ввода и первичной настройки сообщают, что произошло, сохранены ли данные и что делать дальше. Неверный код очищается для следующей попытки; backoff показывает оставшееся время.
+- `first-run.sh` теперь прямо объясняет первый запуск: задать любые удобные четыре цифры один раз; логин, имя пользователя и пароль не нужны; восстановление кода не удаляет рабочие данные.
+- Regression coverage закрепляет legacy `/login` redirect, отсутствие username/password controls, экранную и физическую клавиатуру, первый запуск, повторный вход и отсутствие horizontal overflow на ширине 320 px.
+- Release metadata и lockfile синхронизированы для `0.6.4`; версии и контрольные суммы сторонних npm-зависимостей не менялись.
 
 ## 2026-08-24 — единый 4-значный код доступа (`0.6.3`)
 
@@ -38,10 +49,10 @@
 
 ## Ранее реализованный базовый контур
 
-Линия `0.1.x—0.6.2` сформировала жёсткую изоляцию пространств, typed properties, guided CSV/XLSX import/export, безопасный DOCX/XLSX intake, deterministic renderer, scalar/repeat bindings, immutable template releases, worker leases/idempotency, SMTP/network delivery, schedules, public stateless `/gost`, backup/update/rollback, offline release tooling и Project Control wrapper. Исторический общий password gate заменён в `0.6.3` ADR-0011.
+Линия `0.1.x—0.6.2` сформировала жёсткую изоляцию пространств, typed properties, guided CSV/XLSX import/export, безопасный DOCX/XLSX intake, deterministic renderer, scalar/repeat bindings, immutable template releases, worker leases/idempotency, SMTP/network delivery, schedules, public stateless `/gost`, backup/update/rollback, offline release tooling и Project Control wrapper. Исторический общий password gate заменён в `0.6.3` ADR-0011; `0.6.4` завершает пользовательский PIN-flow без изменения security boundary.
 
 ## Что ещё блокирует `stable`
 
-До `status=stable/channel=production` обязательны фактические доказательства exact `0.6.3`: чистая offline-установка Debian и Astra Linux 1.7; реальный LibreOffice; ≥20 DOCX + ≥20 XLSX; import/generation 10/100/1000; restart/retry без дублей; backup/restore; update/rollback без потери данных; ручная P5/accessibility-приёмка, включая первый запуск/recovery 4-значного кода; пустой список блокеров и успешный release-evidence.
+До `status=stable/channel=production` обязательны фактические доказательства exact `0.6.4`: чистая offline-установка Debian и Astra Linux 1.7; реальный LibreOffice; ≥20 DOCX + ≥20 XLSX; import/generation 10/100/1000; restart/retry без дублей; backup/restore; update/rollback без потери данных; ручная P5/accessibility-приёмка, включая первый запуск/recovery 4-значного кода; пустой список блокеров и успешный release-evidence.
 
 Точный протокол: `docs/FINALIZATION.md`, `docs/SUPPORT_MATRIX.md`, `docs/UX_ACCEPTANCE_PROTOCOL.md`.

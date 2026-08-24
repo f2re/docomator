@@ -6,7 +6,7 @@
 
 Статус: **кандидатные строки зафиксированы; целевые акты ещё не получены**
 
-Текущая версия: `0.6.3`.
+Текущая версия: `0.6.4`.
 
 Дата: **2026-08-21**
 
@@ -29,7 +29,8 @@
 - подтверждение `DEPENDENCY_CLOSURE=full`, Chromium/LibreOffice inventory;
 - физически отсутствующий Internet route во время target install;
 - успешные `verify-bundle.sh`, root `smoke-test.sh`, `target-release-gate.sh` без неожиданного `SKIPPED`;
-- первый запуск с одним 4-значным кодом без имени пользователя/password form;
+- первый запуск с одним 4-значным кодом без имени пользователя/password form, включая экранную и обычную клавиатуру и отсутствие horizontal overflow на 320 px;
+- исторический `/login` только перенаправляет на `/access` и не показывает legacy login/password UI;
 - `/api/v1/access/unlock` и рабочая session cookie, `401` без `WWW-Authenticate` для закрытой рабочей области;
 - локальный recovery `reset-access-code.sh` и `first-run.sh --reset-code` без потери данных;
 - CSV/XLSX import, DOCX/XLSX generation, LibreOffice preview и reverse-read;
@@ -47,7 +48,7 @@ Visual Template Studio показывает безопасную read-only пр�
 
 ## Исторические свидетельства
 
-Акты `0.1.x—0.6.2` остаются историческими и **не закрывают** acceptance `0.6.3`. Изменение access-code contract и refactoring runtime требуют нового evidence exact `0.6.3`.
+Акты `0.1.x—0.6.3` остаются историческими и **не закрывают** acceptance `0.6.4`. Изменение поставляемого PIN-flow требует нового evidence exact `0.6.4`, даже при неизменной security boundary ADR-0011.
 
 ## Финальная фиксация
 
