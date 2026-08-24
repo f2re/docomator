@@ -1,6 +1,6 @@
 # Версионирование Оформлятора
 
-Актуально на **2026-08-11**.
+Актуально на **2026-08-24**.
 
 ## Источник истины
 
@@ -57,6 +57,7 @@ Bump не обязателен для изменения, которое не м
 - только тесты;
 - только документация без изменения заявленного продукта;
 - комментарии и инженерная гигиена;
+- CI/release-automation без изменения поставляемого runtime/offline-контракта;
 - обновление release evidence или target act без изменения кода;
 - смена `candidate/pilot → stable/production` после успешной приёмки, если состав продукта не изменился.
 
@@ -101,6 +102,21 @@ npm run version:bump -- 0.4.0
 
 Это консервативное правило: при сомнении лучше выполнить `PATCH`, чем слить пользовательски заметное изменение под старым номером.
 
+## GitHub tags и Releases
+
+GitHub не вводит отдельную продуктовую версию. Tag является производной от `RELEASE_IDENTITY.json`:
+
+- `candidate / pilot` → `vX.Y.Z-candidate`, GitHub **Pre-release**;
+- `stable / production` → `vX.Y.Z`, обычный GitHub Release.
+
+Раздельные refs нужны потому, что действующая политика разрешает чистый переход зрелости `candidate/pilot → stable/production` без изменения product SemVer. Кандидатный tag при этом не перемещается, а stable получает новый канонический `vX.Y.Z` на exact stable commit.
+
+Tag и release immutable для своей пары `version + maturity`: повторный CI не перезаписывает опубликованные assets и не двигает ref. Product change обязан получить новый SemVer до публикации следующего candidate.
+
+GitHub Release создаётся только после успешного `CI` события `push` на default branch и только из artifact этого exact workflow run. Candidate/stable state берётся из `RELEASE_IDENTITY.json`; ручное переименование GitHub release не является сменой статуса продукта.
+
+Подробный контракт assets, checksum и generic/target границ: `docs/GITHUB_RELEASES.md`.
+
 ## Исторические документы
 
 Старые release-evidence, issue, акты и документы сохраняют номер версии, к которой они относились. Их нельзя массово переписывать на текущую версию.
@@ -122,4 +138,4 @@ CI сверяет именно этот маркер. Благодаря это�
 - Git commit;
 - SHA-256 release metadata/bundle.
 
-После изменения версии старый evidence остаётся исторически валидным для старой версии, но не закрывает stable-gate новой версии. Для `0.2.0` требуется новый release-bound acceptance.
+После изменения версии старый evidence остаётся исторически валидным для старой версии, но не закрывает stable-gate новой версии. Для текущего candidate требуется новый release-bound acceptance exact версии/commit.
