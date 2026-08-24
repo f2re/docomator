@@ -1,6 +1,6 @@
 {
   "name": "@docomator/api",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,11 +8,11 @@
     "test": "node --test dist/*.test.js"
   },
   "dependencies": {
-    "@docomator/config": "0.6.3",
-    "@docomator/contracts": "0.6.3",
-    "@docomator/document-intake": "0.6.3",
-    "@docomator/storage": "0.6.3",
-    "@docomator/template-compiler": "0.6.3",
+    "@docomator/config": "0.6.4",
+    "@docomator/contracts": "0.6.4",
+    "@docomator/document-intake": "0.6.4",
+    "@docomator/storage": "0.6.4",
+    "@docomator/template-compiler": "0.6.4",
     "fastify": "5.10.0"
   }
 }
