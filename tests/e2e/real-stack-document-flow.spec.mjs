@@ -3,6 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { analyzeOoxmlBuffer } from "@docomator/document-intake";
+
 import { expect, test } from "./fixtures/test.mjs";
 import { ОформляторPage } from "./pages/docomator-page.mjs";
 
@@ -35,6 +37,109 @@ async function expectWorkerReady(page) {
     .toBe("ok");
 }
 
+async function currentSpaceId(page) {
+  return page.evaluate(() =>
+    String(
+      globalThis.docomatorCurrentSpaceId ||
+        localStorage.getItem("docomator.space") ||
+        ""
+    )
+  );
+}
+
+async function createSingleMemberGroup(page, displayName, groupName) {
+  const spaceId = await currentSpaceId(page);
+  expect(spaceId).not.toBe("");
+
+  const employeeResponse = await page.request.get(
+    `/api/v1/spaces/${encodeURIComponent(spaceId)}/employees?limit=1000`,
+    { headers: { accept: "application/json" } }
+  );
+  expect(employeeResponse.status()).toBe(200);
+  const employees = (await employeeResponse.json())?.data || [];
+  const employee = employees.find((item) => item.displayName === displayName);
+  expect(employee, "сохранённый сотрудник должен читаться из SQLite через API").toBeTruthy();
+  const entityId = employee.entityId || employee.id;
+  expect(entityId).toBeTruthy();
+
+  const groupResponse = await page.request.post(
+    `/api/v1/spaces/${encodeURIComponent(spaceId)}/groups`,
+    {
+      headers: { accept: "application/json", "content-type": "application/json" },
+      data: {
+        name: groupName,
+        description: "E2E: пользовательское поле → группа → шаблон → документ"
+      }
+    }
+  );
+  expect(groupResponse.status()).toBe(201);
+  const group = (await groupResponse.json())?.data;
+  expect(group?.id).toBeTruthy();
+
+  const membersResponse = await page.request.put(
+    `/api/v1/spaces/${encodeURIComponent(spaceId)}/groups/${encodeURIComponent(group.id)}/members`,
+    {
+      headers: { accept: "application/json", "content-type": "application/json" },
+      data: { entityIds: [entityId] }
+    }
+  );
+  expect(membersResponse.status()).toBe(200);
+  return { spaceId, groupId: group.id };
+}
+
+async function assertSecondSpaceIsolation(
+  page,
+  sourceSpaceId,
+  propertyKey,
+  displayName,
+  groupName,
+  suffix
+) {
+  const createResponse = await page.request.post("/api/v1/spaces", {
+    headers: { accept: "application/json", "content-type": "application/json" },
+    data: {
+      name: `Изолированное пространство ${suffix}`,
+      description: "E2E negative boundary"
+    }
+  });
+  expect(createResponse.status()).toBe(201);
+  const secondSpaceId = (await createResponse.json())?.data?.id;
+  expect(secondSpaceId).toBeTruthy();
+  expect(secondSpaceId).not.toBe(sourceSpaceId);
+
+  const sourcePropertiesResponse = await page.request.get(
+    `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(sourceSpaceId)}&limit=500`,
+    { headers: { accept: "application/json" } }
+  );
+  expect(sourcePropertiesResponse.status()).toBe(200);
+  const sourceProperties = (await sourcePropertiesResponse.json())?.data || [];
+  expect(sourceProperties.some((item) => item.key === propertyKey)).toBe(true);
+
+  const foreignPropertiesResponse = await page.request.get(
+    `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(secondSpaceId)}&limit=500`,
+    { headers: { accept: "application/json" } }
+  );
+  expect(foreignPropertiesResponse.status()).toBe(200);
+  const foreignProperties = (await foreignPropertiesResponse.json())?.data || [];
+  expect(foreignProperties.some((item) => item.key === propertyKey)).toBe(false);
+
+  const foreignEmployeesResponse = await page.request.get(
+    `/api/v1/spaces/${encodeURIComponent(secondSpaceId)}/employees?limit=1000`,
+    { headers: { accept: "application/json" } }
+  );
+  expect(foreignEmployeesResponse.status()).toBe(200);
+  const foreignEmployees = (await foreignEmployeesResponse.json())?.data || [];
+  expect(foreignEmployees.some((item) => item.displayName === displayName)).toBe(false);
+
+  const foreignGroupsResponse = await page.request.get(
+    `/api/v1/spaces/${encodeURIComponent(secondSpaceId)}/groups?limit=1000`,
+    { headers: { accept: "application/json" } }
+  );
+  expect(foreignGroupsResponse.status()).toBe(200);
+  const foreignGroups = (await foreignGroupsResponse.json())?.data || [];
+  expect(foreignGroups.some((item) => item.name === groupName)).toBe(false);
+}
+
 async function uploadAndSaveSource(page) {
   await page.locator("#documentIntakeFile").setInputFiles(personalCardFixture);
   await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
@@ -56,32 +161,38 @@ async function uploadAndSaveSource(page) {
   );
 }
 
-async function bindDisplayNameField(page) {
+async function bindCustomEmployeeField(page, fieldLabel) {
   await page.locator("#documentStructureButton").click();
+  const placeholder = "ФИО сотрудника";
   const fullNameParagraph = page
     .locator(".structure-element")
-    .filter({ hasText: "ФИО сотрудника" })
+    .filter({ hasText: placeholder })
     .first();
   await expect(fullNameParagraph).toBeVisible({ timeout: 20_000 });
   await fullNameParagraph.click();
 
   const textRange = page.locator("#documentFieldTextRange");
   await expect(textRange).toBeVisible();
-  await textRange.evaluate((control) => {
-    const placeholder = "ФИО сотрудника";
-    const start = control.value.indexOf(placeholder);
+  await textRange.evaluate((control, selectedText) => {
+    const start = control.value.indexOf(selectedText);
     if (start < 0) {
-      throw new Error(`В абзаце не найден плейсхолдер «${placeholder}».`);
+      throw new Error(`В абзаце не найден плейсхолдер «${selectedText}».`);
     }
     control.focus();
-    control.setSelectionRange(start, start + placeholder.length);
+    control.setSelectionRange(start, start + selectedText.length);
     control.dispatchEvent(new Event("select", { bubbles: true }));
-  });
+  }, placeholder);
 
-  await page
-    .locator("#documentFieldProperty")
-    .selectOption("__system_display_name__", { force: true });
-  await page.locator("#documentFieldTextPresentation").selectOption("full");
+  const option = page
+    .locator("#documentFieldProperty option")
+    .filter({ hasText: fieldLabel })
+    .first();
+  await expect(option).toHaveCount(1);
+  const propertyKey = await option.getAttribute("value");
+  expect(propertyKey).toBeTruthy();
+  await page.locator("#documentFieldProperty").selectOption(propertyKey, {
+    force: true
+  });
   const required = page.locator("#documentFieldRequired");
   if (!(await required.isChecked())) await required.check();
   await expect(page.locator("#documentFieldSave")).toBeEnabled();
@@ -92,10 +203,11 @@ async function bindDisplayNameField(page) {
   );
   await page.locator("#documentFieldsContinue").click();
   await expect(page.locator("#templateTrialForm")).toBeVisible({ timeout: 20_000 });
+  return propertyKey;
 }
 
-async function verifyAndActivateTemplate(page, displayName) {
-  await page.locator("#templateTrialValue").fill(displayName);
+async function verifyAndActivateTemplate(page, trialValue) {
+  await page.locator("#templateTrialValue").fill(trialValue);
   await page.locator("#templateTrialSubmit").click();
   await expect(page.locator("#templateTrialResult")).toContainText(
     "Проверенная версия 1 готова",
@@ -112,12 +224,22 @@ async function verifyAndActivateTemplate(page, displayName) {
   await expect(page.locator("#activeTemplateCatalog")).toContainText("Активен");
 }
 
-async function generateAndDownload(page) {
+async function generateAndDownloadByGroup(page, groupName, expectedValue) {
   const app = new ОформляторPage(page);
   await app.openView("generation");
   await expect(page.locator("#generationTemplate option")).toHaveCount(1, {
     timeout: 20_000
   });
+  await page.locator("#generationSourceKind").selectOption("group");
+  await expect(page.locator("#generationGroup")).toBeVisible({ timeout: 20_000 });
+  const groupOption = page
+    .locator("#generationGroup option")
+    .filter({ hasText: groupName })
+    .first();
+  await expect(groupOption).toHaveCount(1);
+  const groupId = await groupOption.getAttribute("value");
+  expect(groupId).toBeTruthy();
+  await page.locator("#generationGroup").selectOption(groupId);
   await expect(page.locator("#generationEstimate")).toContainText(
     "1 сотрудников → 1 DOCX",
     { timeout: 20_000 }
@@ -140,8 +262,18 @@ async function generateAndDownload(page) {
   expect(download.suggestedFilename()).toMatch(/\.docx$/iu);
   const downloadedPath = await download.path();
   expect(downloadedPath, "Playwright должен сохранить сформированный DOCX").not.toBeNull();
-  const info = await fs.stat(downloadedPath);
-  expect(info.size, "Сформированный DOCX не должен быть пустым").toBeGreaterThan(0);
+  const buffer = await fs.readFile(downloadedPath);
+  expect(buffer.length, "Сформированный DOCX не должен быть пустым").toBeGreaterThan(0);
+
+  const structure = await analyzeOoxmlBuffer({
+    buffer,
+    fileName: download.suggestedFilename()
+  });
+  const renderedText = structure.elements
+    .map((element) => (element.kind === "cell" ? element.value : element.text))
+    .join("\n");
+  expect(renderedText).toContain(expectedValue);
+  expect(renderedText).not.toContain("ФИО сотрудника");
 }
 
 async function verifyEmployeeInSecondContext(page, displayName, fieldLabel, fieldValue) {
@@ -181,7 +313,7 @@ async function verifyEmployeeInSecondContext(page, displayName, fieldLabel, fiel
   ).toBeVisible();
 }
 
-test("настоящий UI → API → SQLite → worker формирует и сохраняет DOCX", async ({
+test("пространство → пользовательское поле → группа → шаблон → настоящий DOCX", async ({
   baseURL,
   browser,
   page
@@ -190,7 +322,7 @@ test("настоящий UI → API → SQLite → worker формирует и 
     !realStackEnabled,
     "Сценарий запускается только отдельной командой с настоящими API, SQLite и worker."
   );
-  test.setTimeout(150_000);
+  test.setTimeout(180_000);
 
   await fs.access(personalCardFixture);
   const app = new ОформляторPage(page);
@@ -199,8 +331,9 @@ test("настоящий UI → API → SQLite → worker формирует и 
 
   const suffix = randomUUID().slice(0, 8);
   const displayName = `Иванов Иван ${suffix}`;
-  const fieldLabel = `Должность ${suffix}`;
-  const fieldValue = "Инженер";
+  const fieldLabel = `Вероисповедание ${suffix}`;
+  const fieldValue = `Тестовое значение ${suffix}`;
+  const groupName = `Группа шаблона ${suffix}`;
 
   await app.addEmployeeWithField({
     displayName,
@@ -212,11 +345,21 @@ test("настоящий UI → API → SQLite → worker формирует и 
     { timeout: 20_000 }
   );
 
+  const { spaceId } = await createSingleMemberGroup(page, displayName, groupName);
+
   await app.openView("templates");
   await uploadAndSaveSource(page);
-  await bindDisplayNameField(page);
-  await verifyAndActivateTemplate(page, displayName);
-  await generateAndDownload(page);
+  const propertyKey = await bindCustomEmployeeField(page, fieldLabel);
+  await assertSecondSpaceIsolation(
+    page,
+    spaceId,
+    propertyKey,
+    displayName,
+    groupName,
+    suffix
+  );
+  await verifyAndActivateTemplate(page, fieldValue);
+  await generateAndDownloadByGroup(page, groupName, fieldValue);
 
   const secondContext = await browser.newContext({
     baseURL,
