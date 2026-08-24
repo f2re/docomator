@@ -110,6 +110,77 @@ test("DOCX показывается как документ и прямое вы
   });
 });
 
+test("шаблонизатор не скрывает поля пространства по роли, а список выбирается без поиска", async ({
+  page
+}) => {
+  const customProperties = [
+    {
+      key: "employee.faith",
+      label: "Вероисповедание",
+      valueType: "string",
+      sensitivity: "personal",
+      appliesTo: ["person"],
+      aliases: [],
+      validation: { uiGroup: "unassigned" }
+    },
+    {
+      key: "employee.age",
+      label: "Возраст",
+      valueType: "integer",
+      sensitivity: "personal",
+      appliesTo: ["person"],
+      aliases: [],
+      validation: { uiGroup: "common" }
+    },
+    {
+      key: "teacher.department",
+      label: "Кафедра преподавателя",
+      valueType: "string",
+      sensitivity: "personal",
+      appliesTo: ["person"],
+      aliases: [],
+      validation: { uiGroup: "teacher" }
+    },
+    {
+      key: "student.group",
+      label: "Учебная группа студента",
+      valueType: "string",
+      sensitivity: "personal",
+      appliesTo: ["person"],
+      aliases: [],
+      validation: { uiGroup: "student" }
+    }
+  ];
+  await openVisualTemplate(page, { properties: customProperties });
+
+  await page.locator(".template-visual-target").first().click();
+  await expect(page.locator("#documentStructureSelection")).toBeVisible();
+  await page.locator("#documentFieldGroup").selectOption("student");
+
+  const values = await page.locator("#documentFieldProperty option").evaluateAll((options) =>
+    options.map((option) => option.value)
+  );
+  expect(values).toContain("employee.faith");
+  expect(values).toContain("employee.age");
+  expect(values).toContain("teacher.department");
+  expect(values).toContain("student.group");
+
+  const customSelect = page
+    .locator("#documentFieldProperty")
+    .locator("xpath=following-sibling::*[1]");
+  const trigger = customSelect.locator(".searchable-select-trigger");
+  await trigger.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(customSelect).toHaveClass(/is-open/u);
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowUp");
+  await expect(customSelect.locator(".searchable-select-option:focus")).toContainText(
+    "Вероисповедание"
+  );
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#documentFieldProperty")).toHaveValue("employee.faith");
+});
+
 test("DOCX-таблица остаётся таблицей в визуальной разметке и помещается на узком экране", async ({
   page
 }) => {
