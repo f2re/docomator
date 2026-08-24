@@ -77,7 +77,7 @@ chmod 600 /tmp/docomator-code
 
 ## 6. Реальный Office corpus
 
-`office/compatibility.json` должен содержать ≥20 уникальных DOCX и ≥20 уникальных XLSX с provenance, creator/version и SHA-256.
+`office/compatibility.json` должен содержать не менее 20 уникальных DOCX и 20 уникальных XLSX с provenance, creator/version и SHA-256.
 
 Проверяются поддерживаемые стили, таблицы/merge, колонтитулы, изображения, formulas/OMML, repeat blocks, unknown parts, reverse-read и открытие результатов в согласованных LibreOffice + Microsoft Office. Неподдерживаемая конструкция должна давать понятное ограничение/отказ, а не повреждённый документ.
 
