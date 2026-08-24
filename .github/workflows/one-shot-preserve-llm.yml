@@ -98,8 +98,8 @@ jobs:
           from pathlib import Path
           p=Path('scripts/offline/install.sh'); s=p.read_text(); m='  cp -a "$BUNDLE_ROOT/payload/runtime" "$TEMP_RELEASE/"\n'; assert s.count(m)==1
           s=s.replace(m,m+'  PRESERVED_LLM_RUNTIME="$(\n    "$BUNDLE_ROOT/preserve-llm-runtime.sh" "$OLD_TARGET" "$TEMP_RELEASE" "$RELEASES_DIR"\n  )"\n  if [[ "$PRESERVED_LLM_RUNTIME" == "preserved" ]]; then\n    info "Сохраняем установленный llama runtime из предыдущего выпуска"\n  fi\n'); p.write_text(s)
-          p=Path('scripts/offline/prepare-bundle.sh'); s=p.read_text(); m='cp "$SCRIPT_DIR/lib.sh" \\\n  "$SCRIPT_DIR/verify-bundle.sh" \\\n'; assert s.count(m)==1
-          p.write_text(s.replace(m,'cp "$SCRIPT_DIR/lib.sh" \\\n  "$SCRIPT_DIR/preserve-llm-runtime.sh" \\\n  "$SCRIPT_DIR/verify-bundle.sh" \\\n'))
+          p=Path('scripts/offline/prepare-bundle.sh'); s=p.read_text(); m='cp "$SCRIPT_DIR/lib.sh" "$SCRIPT_DIR/verify-bundle.sh"'; assert s.count(m)==1
+          p.write_text(s.replace(m,'cp "$SCRIPT_DIR/lib.sh" "$SCRIPT_DIR/preserve-llm-runtime.sh" "$SCRIPT_DIR/verify-bundle.sh"',1))
           PY
           npm run version:bump -- patch
           python3 - <<'PY'
