@@ -307,7 +307,7 @@ info "Устанавливаем только рабочие зависимос�
   PATH="$BUNDLE_DIR/payload/runtime/node/bin:$PATH" "$BUNDLE_DIR/payload/runtime/node/bin/npm" ci --omit=dev --ignore-scripts --no-audit --no-fund
 )
 
-cp "$SCRIPT_DIR/lib.sh" "$SCRIPT_DIR/verify-bundle.sh" "$SCRIPT_DIR/install.sh" "$SCRIPT_DIR/update.sh" "$SCRIPT_DIR/backup.sh" "$SCRIPT_DIR/restore.sh" "$SCRIPT_DIR/first-run.sh" "$SCRIPT_DIR/set-access-code.sh" "$SCRIPT_DIR/reset-access-code.sh" "$SCRIPT_DIR/set-password.sh" "$SCRIPT_DIR/reset-password.sh" "$SCRIPT_DIR/healthcheck.mjs" "$SCRIPT_DIR/http-check.mjs" "$SCRIPT_DIR/smoke-test.sh" "$SCRIPT_DIR/target-release-gate.sh" "$SCRIPT_DIR/target-acceptance.sh" "$SCRIPT_DIR/ux-acceptance-gate.sh" "$SCRIPT_DIR/ux-acceptance-gate.mjs" "$SCRIPT_DIR/verify-release.mjs" "$SCRIPT_DIR/verify-target-profile.mjs" "$BUNDLE_DIR/"
+cp "$SCRIPT_DIR/lib.sh" "$SCRIPT_DIR/preserve-llm-runtime.sh" "$SCRIPT_DIR/verify-bundle.sh" "$SCRIPT_DIR/install.sh" "$SCRIPT_DIR/update.sh" "$SCRIPT_DIR/backup.sh" "$SCRIPT_DIR/restore.sh" "$SCRIPT_DIR/first-run.sh" "$SCRIPT_DIR/set-access-code.sh" "$SCRIPT_DIR/reset-access-code.sh" "$SCRIPT_DIR/set-password.sh" "$SCRIPT_DIR/reset-password.sh" "$SCRIPT_DIR/healthcheck.mjs" "$SCRIPT_DIR/http-check.mjs" "$SCRIPT_DIR/smoke-test.sh" "$SCRIPT_DIR/target-release-gate.sh" "$SCRIPT_DIR/target-acceptance.sh" "$SCRIPT_DIR/ux-acceptance-gate.sh" "$SCRIPT_DIR/ux-acceptance-gate.mjs" "$SCRIPT_DIR/verify-release.mjs" "$SCRIPT_DIR/verify-target-profile.mjs" "$BUNDLE_DIR/"
 cp "$ROOT_DIR/docs/RELEASE_NOTES.md" "$BUNDLE_DIR/RELEASE_NOTES.md"
 cp "$ROOT_DIR/docs/SUPPORT_MATRIX.md" "$BUNDLE_DIR/SUPPORT_MATRIX.md"
 chmod 0755 "$BUNDLE_DIR"/*.sh "$BUNDLE_DIR"/*.mjs

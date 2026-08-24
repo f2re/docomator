@@ -1,0 +1,91 @@
+name: One-shot preview update compatibility
+
+on:
+  push:
+    branches:
+      - fix/preserve-llm-runtime-064
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/preserve-llm-runtime-064
+          fetch-depth: 2
+      - name: Preserve installed preview capability on app-only update
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/offline/install.sh')
+          text = path.read_text(encoding='utf-8')
+          old = '''[[ "$PREVIEW_ENABLED" == "true" || "$PREVIEW_ENABLED" == "false" ]] || \\
+  die "DOCOMATOR_PREVIEW_ENABLED должен быть true или false"
+[[ "$PREVIEW_ENABLED" == "$BUNDLE_PREVIEW_ENABLED" ]] || \\
+  die "Preview-профиль существующей конфигурации не совпадает с автономным комплектом. Сначала согласуйте DOCOMATOR_PREVIEW_ENABLED с выбранным профилем."
+[[ "$LIBREOFFICE_BIN" == /* ]] || \\
+  die "DOCOMATOR_LIBREOFFICE_BIN должен быть абсолютным путём"
+'''
+          new = '''[[ "$PREVIEW_ENABLED" == "true" || "$PREVIEW_ENABLED" == "false" ]] || \\
+  die "DOCOMATOR_PREVIEW_ENABLED должен быть true или false"
+[[ "$LIBREOFFICE_BIN" == /* ]] || \\
+  die "DOCOMATOR_LIBREOFFICE_BIN должен быть абсолютным путём"
+if [[ "$PREVIEW_ENABLED" != "$BUNDLE_PREVIEW_ENABLED" ]]; then
+  if ((UPGRADE == 1)) && [[ "$PREVIEW_ENABLED" == "true" && "$BUNDLE_PREVIEW_ENABLED" == "false" ]]; then
+    [[ -x "$LIBREOFFICE_BIN" ]] || \\
+      die "Preview включён в существующей установке, но LibreOffice недоступен: $LIBREOFFICE_BIN. App-only обновление остановлено без изменения текущего выпуска."
+    info "App-only обновление сохраняет установленный preview-профиль и не изменяет системные пакеты"
+  else
+    die "Preview-профиль существующей конфигурации не совпадает с автономным комплектом. Для fresh install или смены профиля используйте соответствующий full bundle."
+  fi
+fi
+'''
+          assert text.count(old) == 1, 'preview policy block changed'
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          notes = Path('docs/RELEASE_NOTES.md')
+          text = notes.read_text(encoding='utf-8')
+          marker = '- Добавлены functional regression tests; verify/backup/migration/atomic switch/rollback не ослабляются.\n'
+          addition = '- App-only Project Control bundle без LibreOffice сохраняет `DOCOMATOR_PREVIEW_ENABLED=true` при обновлении только если сохранённый абсолютный `DOCOMATOR_LIBREOFFICE_BIN` реально исполняем; fresh install и смена preview-профиля остаются строгими.\n'
+          assert marker in text
+          notes.write_text(text.replace(marker, marker + addition, 1), encoding='utf-8')
+          PY
+
+          cat > scripts/offline/project-control-update-profile.test.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import { readFile } from "node:fs/promises";
+          import path from "node:path";
+          import test from "node:test";
+          import { fileURLToPath } from "node:url";
+
+          const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+          test("app-only update preserves an already working preview profile without changing OS packages", async () => {
+            const installer = await readFile(path.join(root, "scripts/offline/install.sh"), "utf8");
+            assert.match(installer, /PREVIEW_ENABLED" != "\$BUNDLE_PREVIEW_ENABLED/);
+            assert.match(installer, /UPGRADE == 1/);
+            assert.match(installer, /PREVIEW_ENABLED" == "true" && "\$BUNDLE_PREVIEW_ENABLED" == "false/);
+            assert.match(installer, /-x "\$LIBREOFFICE_BIN"/);
+            assert.match(installer, /App-only обновление сохраняет установленный preview-профиль/);
+            assert.match(installer, /fresh install или смены профиля/);
+          });
+          EOF
+
+      - name: Commit compatibility fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/offline/install.sh scripts/offline/project-control-update-profile.test.mjs docs/RELEASE_NOTES.md
+          git commit -m "fix(update): preserve preview on app-only Project Control update"
+          git push origin HEAD:fix/preserve-llm-runtime-064

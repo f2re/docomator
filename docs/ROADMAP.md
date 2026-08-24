@@ -1,6 +1,6 @@
 # Roadmap завершения Оформлятора
 
-Текущая версия: `0.6.3`.
+Текущая версия: `0.6.4`.
 
 Статус: `candidate / pilot`.
 
@@ -8,13 +8,13 @@
 
 Кодовая часть основного пользовательского сценария завершена: пространства и данные, CSV/XLSX import с preview/repair, библиотека шаблонов, deterministic DOCX/XLSX bindings и renderer, Visual Template Studio, публикации/доставка, persisted worker/schedules, backup/update/rollback, offline tooling, Project Control wrapper и публичный stateless `/gost`.
 
-В `0.6.3` устранён отдельный password/login-контур и остаточная двойная терминология. Рабочая область использует единый 4-значный код доступа без username/account/roles. UI/API/offline recovery/acceptance используют один access-code contract; старые password-named artifacts допустимы только как immutable migration history или тонкие compatibility wrappers для upgrade/rollback.
+В `0.6.4` устранён отдельный password/login-контур и остаточная двойная терминология. Рабочая область использует единый 4-значный код доступа без username/account/roles. UI/API/offline recovery/acceptance используют один access-code contract; старые password-named artifacts допустимы только как immutable migration history или тонкие compatibility wrappers для upgrade/rollback.
 
 ## Что осталось до stable
 
 Оставшаяся работа — release acceptance одного точного candidate commit, а не расширение продуктовой модели:
 
-1. полный зелёный repository/Chromium/real-stack/offline CI exact `0.6.3`;
+1. полный зелёный repository/Chromium/real-stack/offline CI exact `0.6.4`;
 2. чистая offline-установка и target act Debian x86-64;
 3. чистая offline-установка и target act Astra Linux 1.7 x86-64;
 4. первый запуск, lock/reset/reboot/update/rollback/restore 4-значного кода без username/password browser challenge;
