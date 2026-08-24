@@ -51,6 +51,22 @@ Release publisher:
 
 Повторный успешный CI той же `version + maturity` не изменяет существующий release и не перемещает tag. Любое поставляемое изменение продукта обязано сначала получить SemVer bump по `docs/VERSIONING.md`.
 
+## Независимая проверка опубликованного выпуска
+
+После успешного workflow публикации запускается отдельный read-only workflow `Verify published release`. Он не доверяет факту появления tag и повторно проверяет уже опубликованный объект GitHub Release с точки зрения пользователя, который будет его скачивать:
+
+1. release существует и больше не является draft;
+2. `candidate` действительно помечен как Pre-release, а `stable` — как обычный Release;
+3. `targetCommitish` — точный 40-символьный commit SHA;
+4. присутствуют ровно пять ожидаемых assets без лишних или пропущенных файлов;
+5. каждый asset реально скачивается и его размер совпадает с GitHub metadata;
+6. оба `.sha256` совпадают с фактическими байтами;
+7. `SHA256SUMS.txt` перечисляет ровно native и Project Control bundle и совпадает с их фактическими SHA-256;
+8. `f2re-service.json` внутри `.f2re.zip` совпадает с version/target commit;
+9. native payload внутри `.f2re.zip` побайтно соответствует отдельно опубликованному native `.tar.gz` по SHA-256 и размеру.
+
+Проверяющий workflow имеет только `contents: read`. Таким образом, он не может «исправить» плохой release и скрыть дефект: несовпадение приводит к красной проверке, а опубликованные assets остаются доказуемо неизменёнными.
+
 ## Как скачивать
 
 Откройте раздел **Releases** репозитория и выберите нужный выпуск.
@@ -77,3 +93,5 @@ contents: write
 ```
 
 `contents: write` нужен только для создания tag/release. Workflow не запускается из `pull_request_target`, `issue_comment` или `repository_dispatch`, не checkout-ит PR-код и не выполняет shell из пользовательского ввода. Разрешённая структура release workflow закреплена в `scripts/ci/check-workflow-permissions.mjs` и regression tests.
+
+Независимый verifier использует только `contents: read`, скачивает публично опубликованные release assets и не имеет write-разрешений.
