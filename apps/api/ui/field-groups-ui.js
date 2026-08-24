@@ -28,8 +28,13 @@
     return definitions.find((item) => item.key === value)?.label || "Не распределено";
   }
 
-  function allowed(definition, selectedGroup, { includeUnassigned = true } = {}) {
+  function allowed(
+    definition,
+    selectedGroup,
+    { includeUnassigned = true, includeAll = false } = {}
+  ) {
     const actual = key(definition);
+    if (includeAll) return actual !== "unassigned" || includeUnassigned;
     if (actual === "unassigned") return includeUnassigned;
     if (selectedGroup === "common") return actual === "common";
     if (selectedGroup === "teacher" || selectedGroup === "student") {
