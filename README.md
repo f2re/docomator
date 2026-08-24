@@ -125,7 +125,7 @@ CI дополнительно запускает Chromium user flows, real-stack
 
 ## 📦 Автономная поставка
 
-Debian и Astra Linux собираются как разные target profiles на соответствующих reference VM. Набор `.deb` одной ОС нельзя использовать для другой.
+Debian и Astra Linux собираются как разные target-профили на соответствующих reference VM. Набор `.deb` одной ОС нельзя использовать для другой.
 
 ### 🟦 Debian
 
