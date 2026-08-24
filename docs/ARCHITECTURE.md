@@ -1,396 +1,202 @@
 # Архитектура продукта «Оформлятор»
 
-## Произвольные типизированные объекты
-
-`space` является границей данных и процессов, но не ограничивает предметную область сотрудниками. `entity_type` задаёт класс объекта, `entity` — конкретную запись, `property_definition.applies_to_json` — допустимые параметры типа, а `entity_property_values` — версионируемые значения. `space_entity_ownership` закрепляет объект за одним пространством.
-
-Сервер поддерживает следующие инварианты:
-
-- сопоставление поля импорта выполняется внутри выбранного типа;
-- одинаковая подпись у разных типов не объединяет определения;
-- группа и снимок выпуска содержат объекты одного типа;
-- шаблон и мастер выпуска фильтруют поля, группы и записи по выбранному `entityTypeKey`;
-- кадровый интерфейс является специализированным представлением типа `person`, а не отдельной моделью хранения.
-
-Подробная операторская модель приведена в [ENTITY_MODEL_AND_IMPORT.md](ENTITY_MODEL_AND_IMPORT.md).
-
-
 Статус: **baseline architecture**
-Связанные требования: [REQUIREMENTS.md](REQUIREMENTS.md)
+
+Связанные документы: [REQUIREMENTS.md](REQUIREMENTS.md), [SECURITY.md](../SECURITY.md), [ADR-0008](adr/0008-space-data-isolation.md), [ADR-0010](adr/0010-public-stateless-document-formatting.md), [ADR-0011](adr/0011-shared-access-code-gate.md).
 
 ## 1. Архитектурный стиль
 
-Оформлятор строится как модульный монолит с тремя runtime-процессами:
+Оформлятор — модульный монолит. Runtime состоит из процессов:
 
-1. `docomator-api` — HTTP API, CRUD, формы, Template Studio и чтение состояния;
-2. `docomator-worker` — очередь, scheduler, events, LLM agents, render, preview и delivery;
-3. `docomator-llm` — отдельный `llama-server`, доступный только через localhost.
+1. `docomator-api` — HTTP API, локальный UI, read/write application services;
+2. `docomator-worker` — persisted queue, scheduler, render, preview, delivery и recovery;
+3. `docomator-llm` — необязательный `llama-server` только на localhost.
 
-Файлы хранятся в content-addressed storage, транзакционные метаданные — в SQLite. Тяжёлые операции выполняются worker-ом вне HTTP request lifecycle.
-
-### 1.1. Граница доверия
-
-Согласно [ADR-0006](adr/0006-shared-trusted-workspace-without-iam.md) и заменяющему его часть о входе [ADR-0009](adr/0009-shared-password-gate.md), приложение работает внутри доверенного корпоративного периметра и использует один общий пароль приложения «Оформлятор» как дополнительный барьер перед UI и предметными API. Учётных записей, персональных кабинетов, ролей и ACL в приложении нет: все успешно вошедшие клиенты имеют одинаковые возможности работы с общими разделами, шаблонами, расписаниями и результатами. Организационный раздел — жёсткая граница целостности связанных данных, но не граница пользовательских прав.
-
-Password gate расположен на HTTP-границе и не переносится в доменную модель. Пароль хранится только как параметризованный scrypt-хэш, отдельный случайный session secret хранится в защищённой конфигурации целевой машины. Успешный вход создаёт подписанную `HttpOnly`, `SameSite=Strict` cookie с ограниченным TTL; при HTTPS она помечается `Secure`. `/healthz` и `/readyz` остаются доступными техническим проверкам без пользовательской сессии. Неверные попытки получают локальный backoff. Смена пароля ротирует session secret и завершает ранее выданные сессии.
-
-Общий пароль не подтверждает личность конкретного сотрудника и не заменяет firewall, reverse proxy, HTTPS и системные права каталогов. `x-actor-id` и сохранённые `actor_id`/`created_by` остаются непроверенными метками происхождения для аудита и не участвуют в policy decision. Историческая таблица `space_actor_memberships` сохраняется только из-за неизменяемости применённой миграции; runtime её не использует.
+Метаданные хранятся в SQLite WAL, файлы — в content-addressed object store. LibreOffice, LLM, SMTP и network-share operations не выполняются внутри HTTP request transaction.
 
 ```mermaid
 flowchart LR
-    Browser --> Gate[Shared password gate]
-    Gate --> API
-    API --> SQLite[(SQLite WAL)]
-    API --> Objects[(Object storage)]
-    Worker --> SQLite
+    Browser --> Gate[4-digit access-code gate]
+    Gate --> API[Fastify API / UI]
+    API --> DB[(SQLite WAL)]
+    API --> Objects[(Content-addressed storage)]
+    Worker --> DB
     Worker --> Objects
-    Worker --> Llama[llama-server]
+    Worker --> Llama[llama-server optional]
     Worker --> Office[LibreOffice]
     Worker --> SMTP[SMTP relay]
-    Worker --> Share[Mounted share]
+    Worker --> Share[Mounted CIFS/NFS]
 ```
 
-## 2. Доменные модули
+## 2. Граница доверия и код доступа
 
-| Модуль | Ответственность | Не должен делать |
-|---|---|---|
-| Organizational Context | общие разделы, группы, снимки аудитории, целостность межраздельных ссылок | принимать решения о пользовательском доступе |
-| Knowledge Registry | entity types, entities, properties, typed values, provenance | интерпретировать document layout |
-| Template Studio | intake, Document IR, field candidates, manual mapping | выполнять production delivery |
-| Template Compiler | stable DOCX/XLSX bindings и manifest | генерировать business values |
-| Agent Runtime | schema-constrained llama-server calls | иметь side effects во внешних системах |
-| Workflow Orchestrator | state machine и dependency graph | редактировать OOXML напрямую |
-| Automation Engine | rules, targets, filters, idempotency | хранить timer только в памяти |
-| Persistent Scheduler | next run calculation и missed-run policy | создавать duplicate run |
-| Render Engine | deterministic DOCX/XLSX patching | выполнять model-generated code |
-| Validation & Preview | structural checks, reverse read, PDF preview | считать preview источником истины |
-| Delivery Service | archive, SMTP, network share | менять уже утверждённый output |
-| Audit | append-only trace и correlation | хранить секреты и raw restricted prompts |
+Действующий ADR-0011 заменяет password/login-семантику ADR-0009:
 
-## 3. Слои
+- один общий код из ровно четырёх цифр;
+- username/account/role/ACL отсутствуют;
+- `/access` — единственный встроенный экран открытия рабочей области;
+- `/api/v1/access/setup|unlock|lock|status` — текущий HTTP contract gate;
+- code хранится только как salted scrypt hash;
+- session — signed `HttpOnly`, `SameSite=Strict`, при HTTPS `Secure` cookie;
+- same-origin mutation и local backoff обязательны;
+- встроенный server не использует HTTP Basic Auth и не отдаёт `WWW-Authenticate`.
+
+Code gate — дополнительный барьер внутри trusted workspace, а не самостоятельная security boundary. Firewall/reverse proxy/HTTPS/bind address/system permissions остаются обязательными. `x-actor-id` — непроверенная audit label, а не identity.
+
+Применённая migration `0031_shared_access_password.sql` immutable. Исторические table/column names изолированы внутри access credential adapter. Legacy env/script names допускаются только в compatibility layer update/rollback и не проникают в текущий domain/API/UI.
+
+`/healthz` и `/readyz` публичны для технических checks. Stateless `/gost` следует ADR-0010 и не получает persisted space context.
+
+## 3. Пространства — граница данных
+
+`space` — жёсткая граница пользовательских данных, но не authorization scope. Любой клиент с открытой workspace session может работать с доступными пространствами, однако backend обязан предотвращать смешивание данных независимо от UI.
+
+Не пересекаются:
+
+- entities и employee projections;
+- groups и memberships;
+- user property definitions/values/history;
+- import runs/mapping memory;
+- templates, drafts, immutable versions и bindings;
+- publications и связанные данные;
+- generation jobs/results/deliveries/schedules;
+- space-scoped operation/readiness data.
+
+Все mutations получают `spaceId` явно. GET/list/read не меняют ownership. Claim-on-read запрещён. Cross-space link отклоняется до sensitive read, render, LLM или delivery. Database constraints/triggers и application checks дополняют друг друга.
+
+## 4. Универсальная типизированная модель
+
+- `entity_type` — тип объекта;
+- `entity` — конкретная запись;
+- `space_entity_ownership` — принадлежность одному space;
+- `property_definition` — типизированное определение свойства space;
+- `entity_property_values` — versioned typed value + provenance;
+- `template_field` — потребность конкретного template;
+- formatter — declarative versioned display contract;
+- binding — validated DOCX/XLSX coordinate.
+
+Кадровый UI — specialised view типа `person`, а не отдельная storage model. Пользовательский field не становится global shared property. Reads не создают и не присваивают property definition.
+
+## 5. Слои и зависимости
 
 ```text
-HTTP/UI adapters
+HTTP / UI adapters
         ↓
 Application services / orchestrators
         ↓
-Domain model and policies
+Domain model / policies
         ↓
-Ports: repositories, LLM, renderer, preview, delivery
+Ports: repositories, renderer, preview, LLM, delivery
         ↓
 Adapters: SQLite, OOXML, llama-server, LibreOffice, SMTP, filesystem
 ```
 
-Правила зависимостей:
+Правила:
 
-- domain не импортирует Fastify, SQLite, OOXML или SMTP libraries;
-- application layer координирует ports и state transitions;
-- adapters не принимают policy decisions;
-- side effects происходят после явного state transition и записанного idempotency key;
-- каждый внешний вызов имеет correlation ID.
+- domain не импортирует Fastify/SQLite/OOXML/SMTP libraries;
+- HTTP handler валидирует boundary input и вызывает application service;
+- adapters не принимают product policy decisions;
+- side effect начинается только после persisted state transition;
+- external side effect имеет correlation ID + idempotency key;
+- long-running operations не удерживают DB transaction.
 
+## 6. UI architecture
 
-### 3.1. Interface architecture
+UI — локальный HTTP adapter, а не второй domain layer.
 
-UI является локальным HTTP-адаптером модульного монолита и не принимает доменных решений. Он:
+- `/ui/app.js` начинается с `access-session.js`, который централизованно обрабатывает `401` и controls закрытия session;
+- business modules не monkey-patch global fetch для access logic;
+- `brand-tokens.css` — единый source visual tokens;
+- primary navigation содержит пользовательские задачи, diagnostics/admin — вторичный слой;
+- runtime state приходит из backend, а не из фиктивных timers/progress;
+- ошибки отвечают: что произошло, сохранены ли данные, что делать дальше;
+- forms сохраняют введённое после server error;
+- 320 px, 200% zoom, keyboard/focus, dark/light, reduced motion и ≥44px targets — обязательный contract;
+- внешние CDN/fonts/analytics/runtime network dependencies запрещены.
 
-- отображает backend state, а не выводит его из таймеров или предположений;
-- использует единый визуальный token source `apps/api/ui/brand-tokens.css`; нормативные значения закреплены в `docs/BRANDING.md`;
-- для каждого действия показывает текущий этап, причину ожидания, следующий шаг и recovery action;
-- хранит черновое значение формы до подтверждения backend-а;
-- передаёт/показывает correlation ID;
-- не использует CDN, внешние шрифты, аналитику и удалённые feature flags;
-- сохраняет keyboard/mobile/accessibility behavior как часть API-контракта функции.
+Read-only projections (`operations`, data export, help) не создают новую queue/storage truth.
 
-Сводный центр операций реализован как read-only проекция существующих доменных регистров через `GET /api/v1/spaces/:spaceId/operations`. Он не создаёт общую таблицу задач и вторую очередь: `template_release_previews`, `document_generation_jobs`, `document_deliveries` и `document_email_deliveries` остаются каноническими источниками, а `worker_jobs` только уточняет состояние и число попыток после ограничения записи выбранным пространством. Сырые payload очереди, сообщения библиотек, адреса получателей и внутренние пути в проекцию не входят.
+## 7. CSV/XLSX import
 
-Пользовательский экспорт также является read-only HTTP-проекцией. `GET /api/v1/spaces/:spaceId/data-export.csv|xlsx` получает тип объектов явно, выбирает только сущности и определения свойств текущего пространства и использует последние версии значений. В экспорт не попадают UUID и технические ключи; заголовки формируются из пользовательских названий. CSV и XLSX нейтрализуют строки, которые электронная таблица могла бы интерпретировать как формулы. XLSX строится детерминированно как минимальный OOXML-пакет с текстовыми ячейками, фиксированным порядком строк/колонок и без вычисляемых формул.
-
-Полный нормативный контракт: [UX_UI_SPECIFICATION.md](UX_UI_SPECIFICATION.md).
-
-### 3.2. Язык пользовательского слоя
-
-Домен и хранилище могут использовать стабильные машинные значения (`aggregate`, `active`), но HTTP-адаптер и веб-интерфейс обязаны преобразовать их в русские названия до показа пользователю.
-
-Правила границы:
-
-- сервер не возвращает пользователю необработанные сообщения SQLite и внутренних библиотек;
-- машинный код ошибки остаётся стабильным, а поле `message` содержит понятный русский текст;
-- состояния, типы значений и режимы результата отображаются через единый словарь;
-- стабильный технический ключ назначает application service под уникальным ограничением хранилища; UI не вычисляет идентичность из изменяемой подписи;
-- технический ключ показывается только для чтения в явно раскрытом административном или диагностическом контексте и сопровождается объяснением;
-- проверка пользовательской терминологии выполняется в составе `npm run check`.
-
-## 4. Универсальная модель данных
-
-### 4.1. Сущность, свойство, поле и привязка
-
-```mermaid
-flowchart LR
-    E[Entity] --> P[Property value]
-    P --> F[Template field]
-    F --> T[Formatter / transform]
-    T --> B[Document binding]
-```
-
-- **Entity** — человек, организация, статья, проект или пользовательский тип.
-- **Property definition** — типизированное переиспользуемое определение.
-- **Property value** — значение с provenance и периодом действия.
-- **Template field** — потребность конкретного документа.
-- **Formatter** — ограниченный версионированный контракт отображения без пользовательского кода.
-- **Binding** — техническая координата в DOCX/XLSX.
-
-EAV без типов не используется. `value_json` остаётся каноническим сериализованным представлением, а migration `0002_persistence_kernel.sql` добавляет индексируемые typed projection columns. Repository layer обязан валидировать значение через codec registry до записи.
-
-Форматтер хранится вместе с полем и копируется в каждую неизменяемую проверенную строку и кандидат на выпуск. Реестр разрешает только заранее реализованные варианты и ограниченные параметры; произвольные выражения, локали, код и пути не исполняются. Новые поля используют явные русские форматы числа, даты, даты-времени с IANA timezone и логического значения. Миграционный `legacy`-вариант замораживает отображение ранее созданных полей и активных выпусков.
-
-Ограниченные структурные привязки `docx.repeat-row` и `xlsx.repeat-row` имеют фиксированный источник `audience.members`. DOCX-строка компилируется во внешний `w:sdt` с меткой `airepeat:<hash>`, а XLSX-строка или непрерывный диапазон — в точный defined name `_DOCOMATOR_REPEAT_<hash>`. Nullable repeat-контракт замораживается вместе с многополевой версией и кандидатом. Манифест версии 4 публикует `compatibilityLevel: structured` и один элемент `repeats` для DOCX и legacy-XLSX; новый XLSX с `_AI_META` публикует тот же repeat-контракт в версии 5. Обычные кандидаты получают `safe-scalar` и пустой массив повторов без изменения исторических манифестов.
-
-## 5. Document intake и компиляция
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant API
-    participant W as Worker
-    participant L as LLM
-    participant C as Compiler
-
-    U->>API: upload DOCX/XLSX + optional examples
-    API->>W: ANALYZE_TEMPLATE job
-    W->>W: security checks + Document IR
-    W->>W: deterministic candidate detection
-    W->>L: bounded Field Detector input
-    L-->>W: candidate IDs, offsets, types
-    W-->>U: candidates in Template Studio
-    U->>API: confirm/edit mappings
-    API->>W: COMPILE_TEMPLATE job
-    W->>C: write content controls / defined names
-    C-->>W: compiled template
-    W->>W: test render + structural validation + preview
-    W-->>U: test result
-    U->>API: activate immutable version
-```
-
-LLM не получает бинарный файл. Она получает компактный Document IR и возвращает только существующие IDs/offsets. Backend проверяет координаты до изменения OOXML.
-
-### 5.1. Шлюз первичной проверки
-
-`@docomator/document-intake` является детерминированным шлюзом до хранилища шаблонов. Он принимает буфер только от локального API, проверяет защитные ограничения и возвращает отчёт без побочных действий.
+Канонический flow:
 
 ```text
-двоичный DOCX/XLSX
-        ↓
-имя, расширение и сигнатура ZIP
-        ↓
-центральный каталог и ограничения частей
-        ↓
-обязательные части + опасные возможности
-        ↓
-принято / принято с замечаниями / отклонено
+file/paste → columns → mapping → preview → repair → import → result
 ```
 
-Принятый на этом шаге файл ещё не является шаблоном. Сохранение в карантин, построение Document IR и активация выполняются отдельными явными переходами будущего процесса.
+CSV и XLSX сходятся в одном application contract `headers + rows + mappings + sourceSha256`. XLSX cells сохраняют coordinates; blank cell не сдвигает columns. Error создаётся machine-readable в domain/storage: `code`, scope, physical row, column/property, raw value, severity, repair action/params. UI не восстанавливает semantic regexp-ами из русского message.
 
-## 6. Рендер DOCX
+Plan/preview не пишет user data. Execute поддерживает partial invalid rows по явной policy, repeat import/idempotent update и negative two-space tests.
 
-Основная binding-конструкция — `w:sdt` с tag `aifield:<uuid>`.
+## 8. Document intake и Visual Template Studio
 
-Renderer:
+DOCX/XLSX считаются untrusted ZIP/XML.
 
-1. проверяет manifest, тип значения и версионированный форматтер;
-2. находит binding во всех разрешённых Word parts;
-3. заменяет только `w:sdtContent`;
-4. сохраняет окружающие styles/runs согласно render profile;
-5. повторно открывает ZIP и XML;
-6. проверяет наличие обязательных bindings и отсутствие markers;
-7. выполняет reverse-read ожидаемых значений.
+Intake:
 
-Для одной повторяющейся строки DOCX используется отдельный structural mode. Renderer берёт участников в неизменяемом порядке снимка, клонирует только проверенную строку, применяет скалярные форматтеры, назначает уникальные детерминированные `w:id` и повторно считывает каждое поле каждой строки. В P3 разрешены 1—1000 участников и 1—100 полей одной строки; вложенные таблицы/повторы, `w:vMerge`, строка-заголовок, сложные OOXML-объекты и document-unique ID отклоняются. Если `repeatContract` отсутствует, сводный режим использует прежнюю стандартизированную таблицу. Макросы, signatures и unsupported objects не должны молча пересобираться.
+1. validate extension/MIME/ZIP shape;
+2. enforce compressed/uncompressed limits и actual streamed expanded bytes;
+3. reject traversal, duplicate entries, unsupported XML declarations, `DOCTYPE`/`ENTITY`, macros/ActiveX/unsafe relationships by policy;
+4. calculate SHA-256 и build deterministic Document IR;
+5. save immutable source только после explicit user action.
 
-## 7. Рендер XLSX
+Visual Template Studio derives bounded read-only projection from immutable source. Он может показывать стили, таблицы, колонтитулы и raster images, но DOM/HTML/CSS никогда не сериализуется обратно в Office. Selection остаётся server-validated coordinate (`elementId + UTF-16 offsets`, cell/range address).
 
-Safe patch — режим по умолчанию:
+LLM получает только bounded Document IR/candidate IDs и не может создавать произвольные paths, OOXML, SQL или commands.
 
-- binding через defined name;
-- изменение существующей cell value;
-- сохранение остальных OOXML parts;
-- служебные записи на листе `_AI_META` со статусом `veryHidden`.
+## 9. Template compiler и renderer
 
-Structural mode реализован для одной строки или непрерывного диапазона одной строки с источником `audience.members`. Координаты выводятся backend только из сохранённого Document IR; браузер передаёт стабильные идентификаторы крайних ячеек. Режим принимает 1—1000 участников и 1—100 полей, сохраняет свойства строки, стили ячеек и допустимые горизонтальные объединения, сдвигает нижние строки и объединения, обновляет `dimension`, удаляет устаревший `calcChain`, включает полный перерасчёт и выполняет обратное чтение всей матрицы.
-
-Формулы считаются недоверенными. Разрешены только локальная арифметика, A1-ссылки/диапазоны и функции `ABS`, `AVERAGE`, `COUNT`, `MAX`, `MIN`, `ROUND`, `SUM`; при клонировании изменяется только относительная строка. Относительная ссылка обязана оставаться внутри клонируемого диапазона, а абсолютная не может указывать на сдвигаемую нижнюю строку. Общие/массивные формулы, ссылки на листы и книги, формулы вне повторяемой строки, таблицы Excel, фильтры, условное форматирование, проверки данных, рисунки, гиперссылки, OLE, controls и объединения через границу завершаются русскоязычным отказом. Значение поля никогда не записывается поверх формулы.
-
-Safe patch обязан сохранять остальные OOXML parts побайтно. Structural render повторно открывает пакет, сверяет defined names, формулы, объединения, границы и значения.
-
-Новая XLSX-компиляция создаёт фиксированную часть `xl/worksheets/_ai_meta.xml`, связь книги и `veryHidden`-лист `_AI_META`. В нём хранится канонический отсортированный реестр скалярных и repeat-привязок: вид записи, идентификатор, часть и цель. Компилятор помечает скалярные technical binding контрактом `metadataVersion: 1`, проверяет точный набор записей, OPC relationship/content type и побайтно каноническое содержимое после повторного открытия. Renderer выполняет ту же проверку до и после изменения пользовательского листа; пользовательские листы при создании скалярной привязки не переписываются. Совпадение имени `_AI_META`, частичный служебный контракт и смешение новых/старых скалярных binding завершаются отказом.
-
-Активный XLSX-выпуск с этим контрактом получает неизменяемый manifest версии 5 и секцию `xlsxMetadata`. Ранее созданные binding без `metadataVersion` остаются legacy-контрактом: renderer не требует от них отсутствовавшего листа, а их manifest остаётся версии 4. Изменение схемы SQLite не требуется.
-
-## 8. LLM agent runtime
-
-Агент — конфигурация, а не отдельный сервис:
-
-```json
-{
-  "name": "field-detector",
-  "version": 1,
-  "inputSchema": "...",
-  "outputSchema": "...",
-  "temperature": 0,
-  "maxTokens": 800,
-  "timeoutMs": 60000,
-  "retryCount": 1
-}
-```
-
-Порядок вызова:
+DOCX scalar binding использует разрешённый content-control patching; XLSX scalar binding — validated cell/range/defined-name contracts. Structured repeat blocks явные и versioned.
 
 ```text
-prepare minimal context
-→ call llama-server with JSON schema
-→ validate JSON
-→ validate semantic references
-→ one repair attempt if needed
-→ deterministic fallback or review task
+immutable template version
+→ resolve typed values
+→ validate required/dependencies
+→ deterministic patch allowed bindings only
+→ structural validation
+→ reverse-read expected values
+→ immutable result SHA-256
+→ optional LibreOffice preview
+→ delivery
 ```
 
-Агентам не выдаются credentials, shell, SQL или filesystem tools.
+Renderer сохраняет untouched OOXML parts/styles/tables/headers/footers/formulas в пределах заявленной поддержки. Unsupported construction должна давать limitation/refusal, а не silent corruption. Каждый renderer defect получает minimal fixture + regression test.
 
-## 9. Document workflow
+## 10. Queue, scheduler и recovery
 
-```mermaid
-stateDiagram-v2
-    [*] --> NEW
-    NEW --> TEMPLATE_SELECTED
-    TEMPLATE_SELECTED --> RESOLVING_DATA
-    RESOLVING_DATA --> WAITING_USER
-    RESOLVING_DATA --> GENERATING_CONTENT
-    WAITING_USER --> RESOLVING_DATA
-    GENERATING_CONTENT --> READY_FOR_REVIEW
-    RESOLVING_DATA --> READY_FOR_REVIEW
-    READY_FOR_REVIEW --> APPROVED
-    APPROVED --> RENDERING
-    RENDERING --> VALIDATING
-    VALIDATING --> COMPLETE
-    COMPLETE --> DELIVERING
-    DELIVERING --> DELIVERED
-    DELIVERING --> PARTIALLY_DELIVERED
-    state ERROR
-    state CANCELLED
-```
+`worker_jobs` и domain job tables persisted в SQLite. Claim использует short transaction + lease owner/until. Restart возвращает expired lease в queue; idempotency предотвращает второй result.
 
-Только orchestrator изменяет state. Adapter возвращает результат, но не решает следующий переход.
+Retries явные: attempts/nextAttemptAt/lastError. External delivery failure не удаляет generated result. Manual retry обрабатывает только failed units там, где domain contract поддерживает partial success.
 
-## 10. Automation engine
+Schedules persisted в application storage с timezone/missed-run policy; systemd timer используется для service-level backup, а не user automation.
 
-### 10.1. Правило
+## 11. Delivery
 
-Правило содержит:
+SMTP: local configured relay, TLS policy, allowlisted recipient domains, bounded attachments и deterministic idempotency/message identity.
 
-- trigger: schedule/event/inbox/due-date;
-- filter DSL;
-- target mode и query/grouping;
-- template version policy;
-- mappings и defaults;
-- missing-data policy;
-- review policy;
-- delivery definitions;
-- retry/retention policy.
+Network share: OS-mounted CIFS/NFS, mount + sentinel verification, server-generated safe relative path, temp file on target FS → fsync → atomic rename; fallback write в пустой local mountpoint запрещён.
 
-### 10.2. Schedule
+## 12. Backup, update и rollback
 
-`next_run_at` хранится в UTC. Расчёт выполняется с IANA timezone и versioned business calendar. При restart применяется `skip`, `run_once` или bounded `catch_up`.
+Offline bundle содержит release metadata + SHA manifests, Node runtime, app/workspaces, migrations, optional target-specific OS packages/LibreOffice/LLM, UI и canonical access recovery helpers.
 
-### 10.3. Events и outbox
+Target install/update network-free:
 
-Business mutation и `domain_events` записываются в одной SQLite transaction. Consumer создаёт `automation_run` с unique idempotency key. Внешний API обязан передавать Idempotency-Key.
+1. verify ownership/mode и bundle manifest;
+2. verify target OS/profile/package closure;
+3. backup DB/config before upgrade;
+4. install immutable release directory;
+5. run migrations;
+6. atomically switch `current` symlink;
+7. restart services + readiness;
+8. rollback symlink/DB/config on failure.
 
-### 10.4. Idempotency
+Fresh install создаёт session secret, но не operator code. Update сохраняет credential/session config. `set-access-code.sh`/`reset-access-code.sh` — canonical; password-named scripts — compatibility wrappers only.
 
-Пример ключа:
+Project Control использует тот же native offline bundle/update contract через внешний wrapper и не создаёт второй механизм миграций/rollback.
 
-```text
-sha256(rule_id | rule_version | trigger_key | target_key | template_version)
-```
+## 13. Release discipline
 
-Delivery имеет отдельный key, чтобы повторить один канал без повторного render.
+`RELEASE_IDENTITY.json` — machine source `version/status/channel`. Product-changing PR bumps SemVer и синхронизирует package metadata/runtime defaults/release docs. Candidate/pilot не является stable.
 
-## 11. Persistent queue
-
-`worker_jobs` использует состояния `pending`, `running`, `retry`, `completed`, `dead_letter`.
-
-Claim algorithm:
-
-1. короткая `BEGIN IMMEDIATE` transaction;
-2. выбрать due job по priority;
-3. установить `locked_by`, `locked_at`, `lease_expires_at`, `state=running`;
-4. commit;
-5. выполнить работу без transaction;
-6. зафиксировать результат либо retry.
-
-Worker periodically reclaims expired leases. Завершение и retry требуют действующего lease текущего worker. LLM concurrency по умолчанию — 1. Подробный контракт: [PERSISTENCE_KERNEL.md](PERSISTENCE_KERNEL.md).
-
-## 12. Delivery
-
-### 12.1. Внутренний архив
-
-Output помещается в content-addressed storage до внешней доставки. Delivery работает с immutable file ID и не перегенерирует документ.
-
-### 12.2. SMTP
-
-- локальный SMTP relay;
-- deterministic Message-ID;
-- allowlisted recipients/domains;
-- состояния `accepted_by_smtp`, `rejected`, `unknown`, `failed`;
-- controlled retry для `unknown`.
-
-### 12.3. Network folder
-
-- share монтируется ОС;
-- root выбирается из allowlist;
-- проверяются mountinfo и sentinel;
-- имя/path проходит canonicalization и containment check;
-- запись: temp in target dir → fsync → rename;
-- collision policy фиксируется в delivery result.
-
-## 13. Storage и транзакции
-
-SQLite работает в WAL mode с `foreign_keys=ON`, `busy_timeout` и короткими transactions. Большие файлы не хранятся BLOB-ами. Release и object storage используют SHA-256.
-
-Migrations:
-
-- нумеруются;
-- выполняются транзакционно;
-- checksum сохраняется в `schema_migrations`;
-- применённый файл нельзя менять.
-
-## 14. Offline deployment
-
-```text
-/opt/docomator/releases/<version>/
-/opt/docomator/current -> releases/<version>
-/etc/docomator/docomator.env
-/var/lib/docomator/docomator.db
-/var/lib/docomator/objects/
-/var/lib/docomator/models/
-```
-
-Update устанавливает новую immutable release-directory, создаёт backup, применяет migrations, переключает symlink и выполняет readiness check. Ошибка возвращает symlink и database copy. Новая установка объявляет password gate в конфигурации и остаётся закрытой, пока оператор локально не задаст общий пароль через `scripts/offline/set-password.sh`. Обновление сохраняет существующий password hash и session secret; их меняет только явная операторская процедура.
-
-## 15. Security boundaries
-
-- Browser проходит общий password gate перед доступом к рабочим UI/API, но приложение не идентифицирует пользователя персонально и не имеет ролей/ACL.
-- Password hash, session secret и cookies не журналируются; session cookie `HttpOnly`, `SameSite=Strict`, а при HTTPS также `Secure`.
-- Изменяющий браузерный запрос с несовпадающим `Origin` отклоняется.
-- Browser не обращается к llama-server, SMTP или network shares напрямую.
-- LLM не имеет credentials и side-effect tools.
-- LibreOffice работает как недоверенный converter в отдельном процессе.
-- Загружаемый документ и его инструкции — недоверенные данные.
-- Config/secrets не входят в release directories.
-- Production releases read-only; writable только data directory.
-- Пространственная изоляция проверяется независимо от password gate и остаётся обязательным DB/API-инвариантом.
-
-## 16. Эволюция
-
-Переход к PostgreSQL, отдельному queue broker или нескольким workers допускается после измеренного ограничения SQLite/односерверного deployment. Domain и application ports должны позволить замену adapters без изменения template manifests и требований к idempotency.
+Перед stable exact release binding проходит full repository CI, Chromium/real-stack/offline archive, clean Debian/Astra target acts, real Office corpus, load 10/100/1000, restart/failure/backup/restore/update/rollback и P5/accessibility с пустыми blockers.

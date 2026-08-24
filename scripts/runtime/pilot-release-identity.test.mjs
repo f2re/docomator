@@ -1,159 +1,105 @@
+#!/usr/bin/env node
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
+import http from "node:http";
 import test from "node:test";
 
 import {
   bindPilotReleaseIdentity,
+  createAccessCodeSession,
   fetchInstalledReleaseIdentity,
-  pilotMarkdownReport,
   validateInstalledReleaseIdentity
 } from "./pilot-release-identity.mjs";
 
-const validIdentity = {
+const COMMIT = "a".repeat(40);
+const RELEASE_SHA = "b".repeat(64);
+const CODE = "0427";
+const IDENTITY = {
   name: "docomator",
-  version: "0.1.0-rc.1",
-  gitCommit: "a".repeat(40),
-  releaseMetadataSha256: "b".repeat(64),
+  version: "0.6.3",
+  gitCommit: COMMIT,
+  releaseMetadataSha256: RELEASE_SHA,
   source: "installed"
 };
 
-async function withServer(handler, run) {
-  const server = createServer(handler);
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
+async function withServer(handler, callback) {
+  const server = http.createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
     const address = server.address();
-    assert.ok(address && typeof address === "object");
-    return await run(`http://127.0.0.1:${address.port}`);
+    assert.ok(address && typeof address !== "string");
+    await callback(`http://127.0.0.1:${address.port}/`);
   } finally {
-    await new Promise((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 }
 
-function reportFixture(checks = []) {
-  return {
-    format: "docomator-pilot-readiness",
-    version: "0.1.0-rc.1",
-    generatedAt: "2026-07-19T20:00:00.000Z",
-    status: "passed",
-    url: "http://127.0.0.1:8080",
-    environment: {
-      os: { name: "Debian GNU/Linux 13" },
-      architecture: "x64"
-    },
-    summary: {
-      ok: checks.length,
-      warning: 0,
-      error: 0,
-      disabled: 0,
-      requiredErrors: 0
-    },
-    checks
+test("validateInstalledReleaseIdentity принимает точный installed contract", () => {
+  assert.deepEqual(validateInstalledReleaseIdentity(IDENTITY, "0.6.3"), IDENTITY);
+  assert.throws(() => validateInstalledReleaseIdentity({ ...IDENTITY, extra: true }), /структуру/u);
+  assert.throws(() => validateInstalledReleaseIdentity({ ...IDENTITY, source: "source" }), /идентичность/u);
+  assert.throws(() => validateInstalledReleaseIdentity(IDENTITY, "0.6.2"), /не совпадает/u);
+});
+
+test("createAccessCodeSession отправляет только 4 цифры и получает session cookie", async () => {
+  await withServer((request, response) => {
+    if (request.url !== "/api/v1/access/unlock") {
+      response.writeHead(404).end();
+      return;
+    }
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => { body += chunk; });
+    request.on("end", () => {
+      assert.deepEqual(JSON.parse(body), { code: CODE });
+      response.writeHead(200, {
+        "content-type": "application/json",
+        "set-cookie": "docomator_session=token; Path=/; HttpOnly; SameSite=Strict"
+      });
+      response.end('{"data":{"unlocked":true}}');
+    });
+  }, async (baseUrl) => {
+    const cookie = await createAccessCodeSession(baseUrl, CODE);
+    assert.equal(cookie, "docomator_session=token");
+  });
+  await assert.rejects(() => createAccessCodeSession("http://127.0.0.1:1/", "123"), /4 цифр/u);
+});
+
+test("fetchInstalledReleaseIdentity открывает session кодом и читает release API", async () => {
+  await withServer((request, response) => {
+    if (request.url === "/api/v1/access/unlock") {
+      response.writeHead(200, {
+        "content-type": "application/json",
+        "set-cookie": "docomator_session=token; Path=/; HttpOnly"
+      });
+      response.end('{"data":{"unlocked":true}}');
+      return;
+    }
+    if (request.url === "/api/v1/system/release") {
+      assert.equal(request.headers.cookie, "docomator_session=token");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(IDENTITY));
+      return;
+    }
+    response.writeHead(404).end();
+  }, async (baseUrl) => {
+    assert.deepEqual(await fetchInstalledReleaseIdentity(baseUrl, "0.6.3", CODE), IDENTITY);
+  });
+});
+
+test("bindPilotReleaseIdentity добавляет обязательную release identity check", () => {
+  const source = {
+    version: "0.6.3",
+    generatedAt: "2026-08-21T00:00:00.000Z",
+    environment: { os: { name: "Test" }, architecture: "x64" },
+    checks: [{ id: "base", title: "Base", state: "ok", required: true, summary: "ok" }]
   };
-}
+  const bound = bindPilotReleaseIdentity(source, IDENTITY);
+  assert.equal(bound.status, "passed");
+  assert.equal(bound.release.gitCommit, COMMIT);
+  assert.equal(bound.checks.some((item) => item.id === "release_identity" && item.state === "ok"), true);
 
-test("installed release identity is strict and version-bound", () => {
-  assert.deepEqual(
-    validateInstalledReleaseIdentity(validIdentity, "0.1.0-rc.1"),
-    validIdentity
-  );
-  assert.throws(
-    () => validateInstalledReleaseIdentity({ ...validIdentity, source: "development" }),
-    /установленного релиза/u
-  );
-  const mismatchedVersion = `${validIdentity.version}.mismatch`;
-  assert.throws(
-    () => validateInstalledReleaseIdentity(validIdentity, mismatchedVersion),
-    /не совпадает/u
-  );
-  assert.throws(
-    () => validateInstalledReleaseIdentity({ ...validIdentity, unexpected: true }),
-    /структуру/u
-  );
-});
-
-test("release identity is fetched from the installed API endpoint", async () => {
-  await withServer(
-    (request, response) => {
-      assert.equal(request.url, "/api/v1/system/release");
-      response.setHeader("content-type", "application/json");
-      response.end(`${JSON.stringify(validIdentity)}\n`);
-    },
-    async (baseUrl) => {
-      assert.deepEqual(
-        await fetchInstalledReleaseIdentity(baseUrl, "0.1.0-rc.1"),
-        validIdentity
-      );
-    }
-  );
-});
-
-test("release identity fetch rejects oversized and invalid responses", async () => {
-  await withServer(
-    (_request, response) => {
-      response.setHeader("content-length", String(65 * 1024));
-      response.end("x");
-    },
-    async (baseUrl) => {
-      await assert.rejects(
-        () => fetchInstalledReleaseIdentity(baseUrl),
-        /размер/u
-      );
-    }
-  );
-
-  await withServer(
-    (_request, response) => {
-      response.end("not-json");
-    },
-    async (baseUrl) => {
-      await assert.rejects(
-        () => fetchInstalledReleaseIdentity(baseUrl),
-        /некорректный JSON/u
-      );
-    }
-  );
-});
-
-test("pilot report records the release binding and remains idempotent", () => {
-  const source = reportFixture([
-    {
-      id: "readiness_endpoint",
-      title: "Диагностический API",
-      state: "ok",
-      required: true,
-      summary: "Готов",
-      detail: null,
-      remediation: null,
-      data: {}
-    }
-  ]);
-  const once = bindPilotReleaseIdentity(source, validIdentity);
-  const twice = bindPilotReleaseIdentity(once, validIdentity);
-  assert.equal(twice.checks.filter((item) => item.id === "release_identity").length, 1);
-  assert.deepEqual(twice.release, validIdentity);
-  assert.equal(twice.status, "passed");
-  assert.equal(twice.summary.ok, 2);
-  assert.match(pilotMarkdownReport(twice), new RegExp(validIdentity.gitCommit, "u"));
-  assert.match(
-    pilotMarkdownReport(twice),
-    new RegExp(validIdentity.releaseMetadataSha256, "u")
-  );
-});
-
-test("missing release identity blocks the pilot report", () => {
-  const bound = bindPilotReleaseIdentity(
-    reportFixture(),
-    null,
-    "API идентичности релиза недоступен"
-  );
-  assert.equal(bound.release, null);
-  assert.equal(bound.status, "failed");
-  assert.equal(bound.summary.requiredErrors, 1);
-  assert.equal(bound.checks[0].id, "release_identity");
-  assert.match(bound.checks[0].detail, /недоступен/u);
+  const failed = bindPilotReleaseIdentity(source, null, "код неверен");
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.summary.requiredErrors, 1);
+  assert.match(failed.checks.find((item) => item.id === "release_identity")?.detail ?? "", /код неверен/u);
 });

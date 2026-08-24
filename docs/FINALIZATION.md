@@ -6,47 +6,90 @@
 
 Текущая версия: `0.6.3`.
 
-Этот документ описывает fail-closed этап между текущим кандидатом `0.6.3` и стабильным выпуском той же версии. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `status=candidate`, `channel=pilot`, разрешён только контролируемый пилот на обезличенных данных.
+Этот документ описывает fail-closed переход от текущего кандидата `0.6.3` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
 
-Stable допускается только после фактических доказательств двух целевых ОС, ручной пользовательской приёмки, восстановления и совместимости реальных Office-документов.
+## 1. Зафиксировать exact release binding
 
-## 1. Создать каркас доказательств
+Все доказательства обязаны относиться к одному `version / status / channel / full Git SHA / release.json SHA-256`. Evidence предыдущих версий не переносится автоматически.
 
-Из чистого checkout проверяемого commit:
+Создайте каркас:
 
 ```bash
 npm run release:evidence:init -- /srv/docomator-release-evidence
 ```
 
-Каркас содержит `targets/debian`, `targets/astra`, `ux/ux-acceptance.json`, `recovery/restore-act.json`, `office/compatibility.json` и `blockers.json`.
+## 2. Получить target acts Debian и Astra
 
-## 2. Получить целевые акты
+На отдельных чистых Debian и Astra Linux 1.7 используйте соответствующие полные offline bundles. Во время установки Internet route должен отсутствовать.
 
-На чистых Debian и Astra Linux выполните `target-acceptance.sh` из соответствующего полного offline bundle. Полный каталог результата копируется без изменения в `targets/debian` или `targets/astra`; внутри остаются release binding, manifest, pilot JSON/Markdown, Playwright/axe и журналы этапов. Astra-прогон обязан использовать `--require-network --require-smtp`.
+Target acceptance запускается обычным пользователем и получает код только из защищённого файла:
 
-В `0.6.3` target acceptance дополнительно проверяет публичный `/gost` без cookie, сохранение `401` для обычного space API, а также Visual Template Studio: DOCX/XLSX открываются из сохранённого исходника, rich-проекция не изменяет файл, выбор остаётся серверной координатой, а узкий экран не получает глобальный horizontal overflow.
+```bash
+printf '%s\n' '0427' > /tmp/docomator-code
+chmod 600 /tmp/docomator-code
+./target-acceptance.sh \
+  --output /srv/docomator-target-act \
+  --access-code-file /tmp/docomator-code
+```
 
-## 3. Завершить ручную P5-приёмку
+Для Astra дополнительно обязательны `--require-network --require-smtp`.
 
-Заполните `ux/ux-acceptance.json` по `UX_ACCEPTANCE_PROTOCOL.md`. Обязательны Linux-среда и release binding целевого прогона, клавиатура/фокус/экранный диктор/200% zoom, 320/768/1440 × light/dark, Playwright/axe, два новых пользователя, отдельный `/gost` и штатный мастер шаблона.
+Акт должен доказать: verify bundle; install/migrations; reboot/systemd; CSV/XLSX import; DOCX/XLSX generation; настоящий LibreOffice; worker restart; backup; update/rollback; `/gost`; access-code flow и recovery. `SKIPPED` в обязательном этапе не считается успехом.
 
-Для мастера `0.6.3` пользователь без знания OOXML должен найти поле в форматированном DOCX/XLSX, выбрать абзац/ячейку либо выделить текст, назначить параметр и понимать, что браузерная проекция не является пиксельно идентичным Word/Calc. Все свидетельства хранятся внутри `ux` и проверяются по SHA-256.
+## 3. Отдельно проверить код доступа
 
-## 4. Подтвердить восстановление
+На чистой установке без устной инструкции:
 
-На отдельном чистом стенде восстановите копию, созданную целевой приёмкой. В `recovery/restore-act.json` укажите точный release, commit, SHA-256 копии, источник Debian/Astra, ожидаемые/фактические количества пространств, объектов, групп, шаблонов, результатов и deliveries и сравнение контрольных сумм. После восстановления API/worker должны продолжить работу; update/rollback проверяются без потери данных.
+- `/access` показывает одно поле из четырёх цифр;
+- username/password controls отсутствуют;
+- первый код задаётся один раз и сразу открывает рабочую область;
+- после очистки cookie тот же код снова открывает область;
+- закрытый space API возвращает `401` без `WWW-Authenticate`;
+- после пяти ошибочных попыток действует backoff;
+- «Закрыть доступ» завершает локальную session cookie;
+- `reset-access-code.sh`/`first-run.sh --reset-code` задаёт новый код без старого, закрывает прежние сессии и не меняет данные;
+- update/rollback/restore сохраняют возможность открыть рабочую область.
 
-## 5. Проверить реальные Office-документы
+Нативный browser-dialog «имя пользователя / пароль» означает внешний reverse proxy challenge и является ошибкой целевого контура, если он не был отдельно утверждён инфраструктурой.
 
-`office/compatibility.json` должен содержать не менее 20 уникальных DOCX и 20 уникальных XLSX с происхождением, программой-создателем и SHA-256. Результаты открываются в согласованных LibreOffice и Microsoft Office без видимых технических маркеров, повреждения стилей, таблиц, формул или колонтитулов.
+## 4. Ручная P5/UX-приёмка
 
-Для `0.6.3` отдельно проверяются visual binding и rich-проекция: шрифты/размеры/начертания/цвета, абзацные отступы, таблицы и merge, заголовки/колонтитулы, поддерживаемые raster-изображения, формульные XLSX-ячейки как read-only и корректный fallback для неподдерживаемых DrawingML/SmartArt/OLE/MathType. Детерминированный renderer остаётся единственным механизмом формирования Office-файла.
+Заполните `ux/ux-acceptance.json` по `docs/UX_ACCEPTANCE_PROTOCOL.md`. Обязательны:
 
-## 6. Закрыть блокирующие дефекты
+- два новых пользователя без устной инструкции;
+- клавиатура/focus/screen reader;
+- 320/768/1440 и 200% zoom;
+- light/dark и reduced motion;
+- отсутствие horizontal overflow;
+- import error recovery без потери файла/mapping;
+- Visual Template Studio на реальном DOCX/XLSX;
+- выпуск документов и поиск результата;
+- access-code первый запуск/закрытие/recovery;
+- Playwright/axe artifacts того же release binding.
 
-`blockers.json` принимается только при пустом `openBlockers`. Потеря данных, нарушение space isolation, дубли, неправильный документ, неработающий update/rollback/restore, установка или основной путь остаются блокирующими.
+## 5. Recovery и отказоустойчивость
 
-## 7. Выполнить финальный gate кандидата
+На отдельной чистой машине восстановите backup из target act. В `recovery/restore-act.json` зафиксируйте source act, backup manifest SHA-256, exact release binding и сверку counts/IDs/SHA-256.
+
+После restore должны сохраниться пространства, сущности, поля/значения, группы, templates, jobs/results/deliveries, object store и credential/session configuration. API/worker обязаны работать после reboot.
+
+Проверьте disk-full, corrupt backup/object, worker restart, delivery failure, повтор операции, update failure/rollback. Потеря данных или дубликат результата — блокер.
+
+## 6. Реальный Office corpus
+
+`office/compatibility.json` должен содержать ≥20 уникальных DOCX и ≥20 уникальных XLSX с provenance, creator/version и SHA-256.
+
+Проверяются поддерживаемые стили, таблицы/merge, колонтитулы, изображения, formulas/OMML, repeat blocks, unknown parts, reverse-read и открытие результатов в согласованных LibreOffice + Microsoft Office. Неподдерживаемая конструкция должна давать понятное ограничение/отказ, а не повреждённый документ.
+
+## 7. Нагрузка и пространства
+
+CSV/XLSX import и document generation: 10/100/1000 объектов. Проверяются пустые ячейки, Excel dates, mixed types, дубли, повторный import, partial invalid files и retry only failed units.
+
+Два пространства с одинаковыми именами/ключами не читают, не изменяют, не удаляют и не связывают данные друг друга. Import A не влияет на B.
+
+## 8. Финальный gate кандидата
+
+`blockers.json` принимается только с пустым `openBlockers`. Затем:
 
 ```bash
 npm run release:evidence -- \
@@ -55,18 +98,18 @@ npm run release:evidence -- \
   --expected-version '0.6.3'
 ```
 
-Gate принимает только точный состав и связи доказательств. Evidence для `0.1.x—0.5.3` остаются историческими и не закрывают gate `0.6.3`.
+Gate = 0 обязателен.
 
-## 8. Выпустить stable
+## 9. Выпуск stable
 
-Только после успешного gate:
+Только после успешного candidate gate:
 
-1. отдельным PR изменить `RELEASE_IDENTITY.json` на `status=stable`, `channel=production`;
-2. не менять номер `0.6.3` только ради смены статуса;
-3. выполнить полный `npm run check` на stable commit;
-4. собрать отдельные Debian/Astra bundles из stable commit;
-5. повторно подтвердить target identity, update/rollback и восстановление;
-6. обновить `SUPPORT_MATRIX.md` только фактически подтверждёнными сочетаниями;
-7. создать подписанный tag и опубликовать проверенные архивы, SHA-256, release notes, SBOM и матрицу совместимости.
+1. отдельным PR изменить `RELEASE_IDENTITY.json` на `stable/production`;
+2. если capability set не изменился, оставить version `0.6.3`;
+3. выполнить полный CI stable commit;
+4. пересобрать Debian/Astra bundles именно из stable commit;
+5. повторно подтвердить target identity/update/rollback/recovery;
+6. обновить `SUPPORT_MATRIX.md` только фактически подтверждёнными строками;
+7. создать подписанный tag и опубликовать проверенные archives/SHA-256/SBOM/release notes.
 
-До выполнения этих пунктов никакой документ, issue, bundle или UI не должен называть текущий выпуск стабильным.
+До этого никакой UI/doc/issue/bundle не должен называть текущий выпуск стабильным.

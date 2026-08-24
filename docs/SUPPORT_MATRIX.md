@@ -10,44 +10,45 @@
 
 Дата: **2026-08-21**
 
-Эта матрица относится к `SYS-002—003`, `DOC-006—007`, `OFF-001—005`, `OFF-009—010`, `OFF-013`, `SEC-008`, `UX-015—022` и `NFR-011—012`. Состояние `проверено` разрешено только при наличии сохранённого акта конкретной машины. Автоматические проверки на машине разработчика и generic CI не заменяют целевой акт.
+Эта матрица относится к `SYS-002—003`, `DOC-006—007`, `OFF-001—005`, `OFF-009—014`, `SEC-008`, `UX-015—022` и `NFR-011—012`. Состояние `проверено` разрешено только при сохранённом акте конкретной машины, связанном с exact version/commit/release metadata SHA-256. CI разработчика не заменяет target act.
 
 ## Кандидатные платформы
 
 | Идентификатор | ОС и архитектура | Node.js | LibreOffice | Состояние | Что отсутствует |
 |---|---|---|---|---|---|
-| `debian-x86_64-pending` | Debian GNU/Linux, x86-64; точный выпуск и glibc записываются при сборке варианта | `24.18.0` из bundle | точная версия Writer/Calc из согласованного замкнутого набора `.deb` | не проверено | SHA bundle, выпуск ОС, glibc, версия LibreOffice, дата и SHA акта |
-| `astra-1.7-x86_64-pending` | Astra Linux Special Edition 1.7, x86-64; update и glibc записываются при сборке варианта | `24.18.0` из bundle | точная совместимая версия Writer/Calc для выбранного update | не проверено | update Astra, SHA bundle, glibc, версия LibreOffice, дата и SHA акта |
+| `debian-x86_64-pending` | Debian GNU/Linux, x86-64; точный release/glibc фиксируются в акте | `24.18.0` из bundle | точная версия Writer/Calc из замкнутого `.deb` набора | не проверено | SHA bundle, release ОС, glibc, LO, дата и SHA акта |
+| `astra-1.7-x86_64-pending` | Astra Linux Special Edition 1.7, x86-64; update/glibc фиксируются в акте | `24.18.0` из bundle | совместимая Writer/Calc для выбранного update | не проверено | update Astra, SHA bundle, glibc, LO, дата и SHA акта |
 
-Иные ОС, архитектуры и версии Office не считаются поддержанными без отдельной строки и отдельного акта. Microsoft Office не входит в серверный runtime; открытие результатов в нём относится к дополнительной проверке совместимости и пока имеет состояние `не проверено`.
+Иные ОС, архитектуры и версии Office не поддерживаются без отдельной строки и отдельного акта. Microsoft Office не входит в server runtime; открытие результатов в нём относится к Office compatibility acceptance.
 
-## Обязательное содержимое акта
+## Обязательное содержимое target act
 
-Для перевода строки в `проверено` фиксируются:
-
-- точное название/update ОС, `uname -m`, glibc;
-- SHA-256 автономного архива и Git commit из `release.json`;
-- встроенный Node.js, профиль `debian`/`astra`, `DEPENDENCY_CLOSURE=full`, preview/UX-профили и manifests;
-- точный Chromium и LibreOffice Writer/Calc;
-- физически отсутствующий сетевой маршрут во время установки;
+- точные ОС/update, `uname -m`, glibc;
+- SHA-256 автономного архива, Git commit и `release.json`;
+- встроенный Node.js и target profile `debian`/`astra`;
+- подтверждение `DEPENDENCY_CLOSURE=full`, Chromium/LibreOffice inventory;
+- физически отсутствующий Internet route во время target install;
 - успешные `verify-bundle.sh`, root `smoke-test.sh`, `target-release-gate.sh` без неожиданного `SKIPPED`;
-- импорт, генерация, LibreOffice preview, обратное чтение DOCX/XLSX;
-- публичный `/gost` без cookie при сохранении `401` для обычного space API;
-- `pilot-check.sh --run-backup`, update/rollback и отдельное восстановление;
-- полный `ux-acceptance-gate.sh` и ручная UX/P5-приёмка того же release binding.
+- первый запуск с одним 4-значным кодом без имени пользователя/password form;
+- `/api/v1/access/unlock` и рабочая session cookie, `401` без `WWW-Authenticate` для закрытой рабочей области;
+- локальный recovery `reset-access-code.sh` и `first-run.sh --reset-code` без потери данных;
+- CSV/XLSX import, DOCX/XLSX generation, LibreOffice preview и reverse-read;
+- `/gost` без session cookie при сохранении закрытого обычного space API;
+- restart API/worker, backup/restore, update/rollback с сохранением credential/session configuration;
+- полный `ux-acceptance-gate.sh` и ручная P5-приёмка того же release binding.
 
-Для `stable` дополнительно обязательны Office-корпус, восстановление и P5. До этого обе строки остаются `не проверено`, а `RELEASE_IDENTITY.json` — `status=candidate`, `channel=pilot`.
+## Office и Visual Template Studio
 
-Свидетельства `0.1.0`, `0.2.x`, `0.3.x`, `0.4.0`, `0.5.0`, `0.5.1`, `0.5.2` и `0.5.3` исторические и не закрывают матрицу `0.6.0`: акт должен совпадать с текущими version, status/channel, commit и SHA-256 release metadata.
+Каталог `examples/` содержит синтетические SHA-256-зафиксированные fixtures для детерминированных regression checks. Он не доказывает совместимость конкретных Microsoft Office/LibreOffice.
 
-## Учебные примеры и Office-корпус
+Visual Template Studio показывает безопасную read-only проекцию DOCX/XLSX. Она не является обещанием pixel-perfect pagination. Реальный corpus должен проверить как минимум стили, таблицы/merge, колонтитулы, формулы/OMML, изображения, повторяемые блоки, неизвестные OOXML parts и фактическое открытие результатов в согласованных Office-программах.
 
-Каталог `examples/` содержит SHA-256-зафиксированные синтетические CSV/DOCX/XLSX для детерминированной проверки импорта, intake, структуры, привязок, scalar/repeat, заполнения и reverse-read. Он входит в offline bundle, но не доказывает совместимость конкретного LibreOffice/Microsoft Office.
+Для `stable` требуется ≥20 уникальных DOCX + ≥20 уникальных XLSX с provenance/SHA-256, а также отдельный recovery act и ручная UX/P5-приёмка.
 
-В `0.6.0` браузерная Visual Template Studio дополнительно показывает форматирование DOCX/XLSX, таблицы/merge, колонтитулы и поддерживаемые raster-изображения. Это только интерактивная read-only проекция для выбора серверной координаты. Она не считается пиксельной совместимостью Word/Calc и не расширяет фактически подтверждённую поддержку Office-конструкций. Точная пагинация, плавающие DrawingML/SmartArt/OLE, MathType/OMML и сохранность неизвестных частей подтверждаются пробной копией, PDF и реальным Office-корпусом.
+## Исторические свидетельства
 
-Для DOCX formatter отдельно проверяются базовые параметры и сохранение таблиц, рисунков, формул/OMML, колонтитулов и неизвестных OOXML-частей. Наличие formatter или визуальной проекции в CI не означает нормативную сертификацию ГОСТ/ЕСКД.
+Акты `0.1.x—0.6.2` остаются историческими и **не закрывают** acceptance `0.6.3`. Изменение access-code contract и refactoring runtime требуют нового evidence exact `0.6.3`.
 
 ## Финальная фиксация
 
-После заполнения целевых строк обе папки target evidence вместе с P5, актом восстановления, Office-корпусом и пустым реестром блокеров должны пройти `scripts/ci/release-evidence-gate.mjs`. Само наличие файлов без совпавших SHA-256, версии и commit не переводит платформу в состояние `проверено`.
+После заполнения target rows каталоги Debian/Astra вместе с P5, recovery, Office corpus и `blockers.json` должны пройти `scripts/ci/release-evidence-gate.mjs`. Только после этого конкретная платформа может быть помечена `проверено`, а release status — отдельно переведён из candidate/pilot в stable/production.
