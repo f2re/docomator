@@ -1,12 +1,24 @@
-# Оформлятор 0.6.5
+# Оформлятор 0.7.0
 
-Текущая версия: `0.6.5`.
+Текущая версия: `0.7.0`.
 
 Статус выпуска: `candidate`
 
 Канал выпуска: `pilot`
 
 Статус: **кандидат на стабильный выпуск**. Номер версии описывает состав продукта и не означает завершение эксплуатационной приёмки. Единственный машинный источник версии, статуса и канала — `RELEASE_IDENTITY.json`.
+
+## 2026-08-25 — повторяемые таблицы сущностей и персональных документов (`0.7.0`)
+
+- Введены space-scoped типизированные коллекции сущностей: у сотрудника или студента может быть таблица переменной длины со своей схемой, порядком строк и вычисляемой нумерацией.
+- Сохранение коллекции атомарно: сначала проверяется весь набор, затем одна SQLite-транзакция заменяет строки; неверная дата, enum, обязательное поле или неизвестная колонка не повреждают предыдущие данные.
+- Карточка сотрудника получила раздел «Таблицы и списки» с добавлением, удалением, дублированием и перестановкой строк, вставкой из Excel/LibreOffice и CSV/XLSX import/export.
+- Шаблонизатор умеет назначить одну строку DOCX повторяемой по коллекции владельца, сопоставить ячейки с полями коллекции и использовать виртуальное значение `@row_number`.
+- Персональный DOCX может одновременно содержать обычные scalar-поля владельца вне строки и одну повторяемую collection-зону внутри таблицы. Активированная версия замораживает identity/version схемы коллекции.
+- Worker формирует отдельный документ на участника с фактическим числом строк его коллекции; пустая коллекция удаляет sample row и не оставляет фиктивные данные.
+- Добавлены отрицательные SQL/storage/API проверки двух пространств и real-stack сценарий с двумя студентами и разным числом строк, повторным разбором результата и проверкой сохранения порядка.
+- Первая версия collection-repeat намеренно ограничена одним уровнем вложенности и одной зоной на шаблон. Nested entity-collection repeat для XLSX в `0.7.0` не заявляется и остаётся продолжением #131/#128; существующий XLSX repeat по `audience.members` остаётся без изменения.
+- Версия поднята штатно до `0.7.0`. После успешного merge в `main` и зелёного post-merge CI автоматический release workflow публикует отдельный GitHub Release `v0.7.0-candidate` с проверенными assets; тот же контракт применяется к каждой следующей новой SemVer.
 
 ## 2026-08-24 — восстановлен сквозной шаблонный flow пространства (`0.6.5`)
 
@@ -57,10 +69,10 @@
 
 ## Ранее реализованный базовый контур
 
-Линия `0.1.x—0.6.2` сформировала жёсткую изоляцию пространств, typed properties, guided CSV/XLSX import/export, безопасный DOCX/XLSX intake, deterministic renderer, scalar/repeat bindings, immutable template releases, worker leases/idempotency, SMTP/network delivery, schedules, public stateless `/gost`, backup/update/rollback, offline release tooling и Project Control wrapper. Исторический общий password gate заменён в `0.6.3` ADR-0011; `0.6.4` завершает пользовательский PIN-flow без изменения security boundary.
+Линия `0.1.x—0.6.5` сформировала жёсткую изоляцию пространств, typed properties, guided CSV/XLSX import/export, безопасный DOCX/XLSX intake, deterministic renderer, scalar/repeat bindings, immutable template releases, worker leases/idempotency, SMTP/network delivery, schedules, public stateless `/gost`, backup/update/rollback, offline release tooling и Project Control wrapper. Исторический общий password gate заменён в `0.6.3` ADR-0011; `0.6.4` завершил пользовательский PIN-flow, а `0.6.5` восстановил полный space-scoped template flow.
 
 ## Что ещё блокирует `stable`
 
-До `status=stable/channel=production` обязательны фактические доказательства exact `0.6.5`: чистая offline-установка Debian и Astra Linux 1.7; реальный LibreOffice; ≥20 DOCX + ≥20 XLSX; import/generation 10/100/1000; restart/retry без дублей; backup/restore; update/rollback без потери данных; ручная P5/accessibility-приёмка, включая первый запуск/recovery 4-значного кода и полный сценарий `пространство → сотрудники/группа → шаблон → документ`; пустой список блокеров и успешный release-evidence.
+До `status=stable/channel=production` обязательны фактические доказательства exact `0.7.0`: чистая offline-установка Debian и Astra Linux 1.7; реальный LibreOffice; ≥20 DOCX + ≥20 XLSX; import/generation 10/100/1000; restart/retry без дублей; backup/restore; update/rollback без потери данных; ручная P5/accessibility-приёмка, включая первый запуск/recovery 4-значного кода, collection UI и полный сценарий `пространство → сотрудники/группа → шаблон → документ`; пустой список блокеров и успешный release-evidence.
 
 Точный протокол: `docs/FINALIZATION.md`, `docs/SUPPORT_MATRIX.md`, `docs/UX_ACCEPTANCE_PROTOCOL.md`.

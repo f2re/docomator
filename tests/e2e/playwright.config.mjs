@@ -12,7 +12,8 @@ const acceptanceRun = process.env.DOCOMATOR_E2E_ACCEPTANCE === "1";
 const realStackRun = process.env.DOCOMATOR_E2E_REAL_STACK === "1";
 const realStackTestMatch = [
   "**/real-stack-document-flow.spec.mjs",
-  "**/real-stack-import-flow.spec.mjs"
+  "**/real-stack-import-flow.spec.mjs",
+  "**/entity-collection-document-flow.spec.mjs"
 ];
 
 const baseURL =

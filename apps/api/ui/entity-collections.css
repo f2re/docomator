@@ -1,0 +1,252 @@
+.employee-collections {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border, #d8d8d2);
+}
+
+.employee-collections-header,
+.entity-collection-head,
+.entity-collection-actions,
+.entity-collection-status,
+.collection-schema-head,
+.collection-import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.employee-collections-header h3,
+.entity-collection-head h4 {
+  margin: 0;
+}
+
+.employee-collections-header p,
+.entity-collection-head p,
+.entity-collection-empty p,
+.collection-help {
+  margin: 4px 0 0;
+  color: var(--muted, #66645f);
+  font-size: .9rem;
+  line-height: 1.45;
+}
+
+.entity-collection-card,
+.collection-schema-builder,
+.collection-import-panel {
+  border: 1px solid var(--border, #d8d8d2);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  padding: 14px;
+  min-width: 0;
+}
+
+.entity-collection-card.is-dirty {
+  box-shadow: inset 3px 0 0 var(--accent, #147c8c);
+}
+
+.entity-collection-meta {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted, #66645f);
+  font-size: .82rem;
+}
+
+.collection-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  margin-top: 12px;
+  border: 1px solid var(--border, #d8d8d2);
+  border-radius: 10px;
+}
+
+.collection-table {
+  width: 100%;
+  min-width: 660px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.collection-table th,
+.collection-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border, #e4e3de);
+  vertical-align: top;
+  text-align: left;
+}
+
+.collection-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-subtle, #f6f5f1);
+  z-index: 1;
+  font-size: .82rem;
+  white-space: normal;
+}
+
+.collection-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.collection-row-number {
+  width: 3.5rem;
+  text-align: center !important;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #66645f);
+}
+
+.collection-row-actions {
+  width: 9.5rem;
+  white-space: nowrap;
+}
+
+.collection-row-actions button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
+  margin-right: 3px;
+}
+
+.collection-table input,
+.collection-table select,
+.collection-table textarea {
+  width: 100%;
+  min-width: 8rem;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.collection-table textarea {
+  min-height: 3.4rem;
+  resize: vertical;
+}
+
+.collection-table [aria-invalid="true"] {
+  outline: 2px solid var(--danger, #b42318);
+  outline-offset: 1px;
+}
+
+.entity-collection-actions {
+  margin-top: 12px;
+  justify-content: flex-start;
+}
+
+.entity-collection-actions .collection-save {
+  margin-left: auto;
+}
+
+.entity-collection-status {
+  margin-top: 10px;
+  justify-content: flex-start;
+  color: var(--muted, #66645f);
+  min-height: 1.4rem;
+}
+
+.entity-collection-status.is-error {
+  color: var(--danger, #b42318);
+}
+
+.entity-collection-status.is-success {
+  color: var(--success, #177245);
+}
+
+.collection-schema-builder,
+.collection-import-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.collection-schema-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.collection-schema-field {
+  display: grid;
+  grid-template-columns: minmax(12rem, 2fr) minmax(9rem, 1fr) auto auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.collection-schema-field .field {
+  margin: 0;
+}
+
+.collection-schema-field .collection-enum-values {
+  grid-column: 1 / -1;
+}
+
+.collection-import-map {
+  display: grid;
+  gap: 8px;
+}
+
+.collection-import-map-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) minmax(12rem, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.collection-import-preview {
+  max-height: 15rem;
+  overflow: auto;
+  border: 1px solid var(--border, #d8d8d2);
+  border-radius: 10px;
+}
+
+.collection-import-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .84rem;
+}
+
+.collection-import-preview th,
+.collection-import-preview td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #e4e3de);
+  text-align: left;
+}
+
+.collection-paste-area {
+  width: 100%;
+  min-height: 7rem;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.entity-collection-empty {
+  padding: 12px 0 4px;
+}
+
+@media (max-width: 760px) {
+  .collection-schema-field,
+  .collection-import-map-row {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-schema-field .collection-enum-values {
+    grid-column: 1;
+  }
+
+  .entity-collection-actions .collection-save {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .entity-collection-card,
+  .collection-schema-builder,
+  .collection-import-panel {
+    padding: 10px;
+  }
+}
+
+@media (forced-colors: active) {
+  .entity-collection-card.is-dirty {
+    border-width: 2px;
+  }
+}

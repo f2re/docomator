@@ -1,17 +1,24 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
+  compileEntityCollectionDocx,
   compileScalarFields,
+  renderEntityCollectionDocxTrial,
   renderScalarValues,
+  type CompiledScalarFieldResult,
+  type RenderedScalarFieldValue,
   type ScalarFieldBinding,
   type ScalarValueType
 } from "@docomator/template-compiler";
 import {
   ContentAddressedObjectStore,
+  ENTITY_COLLECTION_ROW_NUMBER_KEY,
+  EntityCollectionTemplateRepeatRegistry,
   MultiFieldTestVersionRegistry,
   MultiFieldTestVersionValidationError,
   TemplateDraftRegistry,
-  toJsonValue
+  toJsonValue,
+  type JsonValue
 } from "@docomator/storage";
 
 import {
@@ -92,11 +99,46 @@ function uniqueValues(values: readonly ValueInput[]): Map<string, string | numbe
   return result;
 }
 
+function requiredProvidedValue(
+  values: ReadonlyMap<string, string | number | boolean>,
+  fieldId: string
+): string | number | boolean {
+  const value = values.get(fieldId);
+  if (value === undefined) {
+    throw new MultiFieldTestVersionValidationError(
+      `Sample value was not found for field: ${fieldId}`
+    );
+  }
+  return value;
+}
+
+function repeatContract(
+  repeat:
+    | {
+        binding: { kind: "docx.repeat-row" | "xlsx.repeat-row" } & Record<string, unknown>;
+        technicalBinding: Record<string, unknown>;
+      }
+    | null
+): JsonValue | null {
+  return repeat === null
+    ? null
+    : toJsonValue({
+        version: 1,
+        kind:
+          repeat.binding.kind === "docx.repeat-row"
+            ? "docx.repeat-row-contract"
+            : "xlsx.repeat-row-contract",
+        binding: repeat.binding,
+        technicalBinding: repeat.technicalBinding
+      });
+}
+
 export function registerMultiFieldTestVersionRoutes(
   app: FastifyInstance,
   objectStore: ContentAddressedObjectStore,
   draftRegistry: TemplateDraftRegistry,
-  versionRegistry: MultiFieldTestVersionRegistry
+  versionRegistry: MultiFieldTestVersionRegistry,
+  entityCollectionRepeatRegistry?: EntityCollectionTemplateRepeatRegistry
 ): void {
   app.post<{ Params: DraftParams; Body: TrialAllBody }>(
     "/api/v1/spaces/:spaceId/template-drafts/:draftId/trial-all",
@@ -110,7 +152,7 @@ export function registerMultiFieldTestVersionRoutes(
           properties: {
             values: {
               type: "array",
-              minItems: 1,
+              minItems: 0,
               maxItems: 100,
               items: {
                 type: "object",
@@ -137,7 +179,26 @@ export function registerMultiFieldTestVersionRoutes(
         request.params.spaceId,
         request.params.draftId
       );
-      if (draft.fields.length < 2 && draft.repeatBinding === null) {
+      const entityRepeat =
+        entityCollectionRepeatRegistry?.getOptionalForDraft(
+          request.params.spaceId,
+          request.params.draftId
+        ) ?? null;
+      if (entityRepeat !== null && draft.repeatBinding !== null) {
+        throw new MultiFieldTestVersionValidationError(
+          "Черновик одновременно содержит два разных источника повторяемой строки. Создайте новый черновик и настройте только один источник."
+        );
+      }
+      if (draft.fields.length === 0) {
+        throw new MultiFieldTestVersionValidationError(
+          "Для проверки шаблона нужно сохранить хотя бы одно поле."
+        );
+      }
+      if (
+        draft.fields.length < 2 &&
+        draft.repeatBinding === null &&
+        entityRepeat === null
+      ) {
         throw new MultiFieldTestVersionValidationError(
           "Multi-field trial requires at least two saved fields"
         );
@@ -147,7 +208,15 @@ export function registerMultiFieldTestVersionRoutes(
           "Multi-field trial supports at most 100 saved fields"
         );
       }
+
       const provided = uniqueValues(request.body.values);
+      if (entityRepeat !== null) {
+        for (const field of draft.fields) {
+          if (field.key === ENTITY_COLLECTION_ROW_NUMBER_KEY) {
+            provided.set(field.id, entityRepeat.numbering.start);
+          }
+        }
+      }
       const missing = draft.fields.filter((field) => !provided.has(field.id));
       const extra = [...provided.keys()].filter(
         (fieldId) => !draft.fields.some((field) => field.id === fieldId)
@@ -162,76 +231,212 @@ export function registerMultiFieldTestVersionRoutes(
       }
 
       const source = await objectStore.getBuffer(draft.sourceSha256);
-      const compiled = await compileScalarFields({
-        source,
-        fileName: `${draft.title}.${draft.format}`,
-        expectedSourceSha256: draft.sourceSha256,
-        expectedStructureSha256: draft.structureSha256,
-        fields: draft.fields.map((field) => ({
-          id: field.id,
-          key: field.key,
-          label: field.label,
-          elementId: field.elementId,
-          binding: field.binding
-        })),
-        ...(draft.repeatBinding === null
-          ? {}
-          : { repeatBinding: draft.repeatBinding })
-      });
-      if (draft.repeatBinding !== null && compiled.repeat === null) {
-        throw new MultiFieldTestVersionValidationError(
-          "Compiled repeat row was not found"
+      let compiledOutput: Buffer;
+      let compiledFields: CompiledScalarFieldResult[];
+      let compiledModifiedParts: string[];
+      let compiledSourceSha256: string;
+      let compiledStructureSha256: string;
+      let compiledOutputSha256: string;
+      let compiledCheckedFields: number;
+      let savedRepeatContract: JsonValue | null;
+      let entityRepeatVerification: JsonValue | null = null;
+
+      if (entityRepeat === null) {
+        const compiled = await compileScalarFields({
+          source,
+          fileName: `${draft.title}.${draft.format}`,
+          expectedSourceSha256: draft.sourceSha256,
+          expectedStructureSha256: draft.structureSha256,
+          fields: draft.fields.map((field) => ({
+            id: field.id,
+            key: field.key,
+            label: field.label,
+            elementId: field.elementId,
+            binding: field.binding
+          })),
+          ...(draft.repeatBinding === null
+            ? {}
+            : { repeatBinding: draft.repeatBinding })
+        });
+        if (draft.repeatBinding !== null && compiled.repeat === null) {
+          throw new MultiFieldTestVersionValidationError(
+            "Compiled repeat row was not found"
+          );
+        }
+        compiledOutput = compiled.output;
+        compiledFields = compiled.fields;
+        compiledModifiedParts = compiled.modifiedParts;
+        compiledSourceSha256 = compiled.sourceSha256;
+        compiledStructureSha256 = compiled.structureSha256;
+        compiledOutputSha256 = compiled.outputSha256;
+        compiledCheckedFields = compiled.verification.checkedFields;
+        savedRepeatContract = repeatContract(
+          compiled.repeat as Parameters<typeof repeatContract>[0]
         );
-      }
-      const repeatContract =
-        compiled.repeat === null
-          ? null
-          : toJsonValue({
-              version: 1,
-              kind:
-                compiled.repeat.binding.kind === "docx.repeat-row"
-                  ? "docx.repeat-row-contract"
-                  : "xlsx.repeat-row-contract",
-              binding: compiled.repeat.binding,
-              technicalBinding: compiled.repeat.technicalBinding
-            });
-      const compiledByField = new Map(
-        compiled.fields.map((field) => [field.fieldId, field])
-      );
-      const rendered = await renderScalarValues({
-        compiled: compiled.output,
-        ...(compiled.repeat?.technicalBinding.kind ===
-        "xlsx.repeat-defined-name"
-          ? { repeatTechnicalBinding: compiled.repeat.technicalBinding }
-          : {}),
-        fields: draft.fields.map((field) => {
-          const compiledField = compiledByField.get(field.id);
-          if (compiledField === undefined) {
-            throw new MultiFieldTestVersionValidationError(
-              `Compiled field was not found: ${field.key}`
-            );
+      } else {
+        if (draft.format !== "docx") {
+          throw new MultiFieldTestVersionValidationError(
+            "Повторяемая таблица из карточки сотрудника в этой версии поддерживается только для DOCX."
+          );
+        }
+        const compiled = await compileEntityCollectionDocx({
+          source,
+          fileName: `${draft.title}.docx`,
+          expectedSourceSha256: draft.sourceSha256,
+          expectedStructureSha256: draft.structureSha256,
+          fields: draft.fields.map((field) => ({
+            id: field.id,
+            key: field.key,
+            label: field.label,
+            elementId: field.elementId,
+            binding: field.binding
+          })),
+          repeat: {
+            anchorElementId: entityRepeat.anchorElementId,
+            part: entityRepeat.part,
+            tableIndex: entityRepeat.tableIndex,
+            rowIndex: entityRepeat.rowIndex
           }
-          return {
-            fieldId: field.id,
-            fieldKey: field.key,
-            technicalBinding: compiledField.technicalBinding,
-            fieldBinding: field.binding as unknown as ScalarFieldBinding,
-            valueType: field.valueType as ScalarValueType,
-            value: provided.get(field.id),
-            formatter: field.formatter
-          };
-        })
-      });
+        });
+        compiledOutput = compiled.output;
+        compiledFields = compiled.fields;
+        compiledModifiedParts = compiled.modifiedParts;
+        compiledSourceSha256 = compiled.sourceSha256;
+        compiledStructureSha256 = compiled.structureSha256;
+        compiledOutputSha256 = compiled.outputSha256;
+        compiledCheckedFields = compiled.verification.checkedFields;
+        savedRepeatContract = repeatContract({
+          binding: compiled.repeat.binding as unknown as {
+            kind: "docx.repeat-row";
+          } & Record<string, unknown>,
+          technicalBinding: compiled.repeat.technicalBinding as unknown as Record<string, unknown>
+        });
+        entityRepeatVerification = toJsonValue({
+          sourceKind: "entity_collection",
+          collectionDefinitionId: entityRepeat.collectionDefinitionId,
+          collectionVersion: entityRepeat.collectionVersion,
+          rowFieldIds: compiled.rowFieldIds,
+          scalarFieldIds: compiled.scalarFieldIds,
+          numbering: entityRepeat.numbering,
+          emptyBehavior: entityRepeat.emptyBehavior
+        });
+      }
+
+      const compiledByField = new Map(
+        compiledFields.map((field) => [field.fieldId, field])
+      );
+      let renderedOutput: Buffer;
+      let renderedFields: RenderedScalarFieldValue[];
+      let renderedModifiedParts: string[];
+      let renderedOutputSha256: string;
+      let renderedCheckedFields: number;
+      let repeatCheckedValues = 0;
+
+      if (entityRepeat === null) {
+        const parsedRepeat = savedRepeatContract;
+        const repeatTechnicalBinding =
+          parsedRepeat !== null &&
+          typeof parsedRepeat === "object" &&
+          !Array.isArray(parsedRepeat) &&
+          typeof parsedRepeat.technicalBinding === "object" &&
+          parsedRepeat.technicalBinding !== null &&
+          !Array.isArray(parsedRepeat.technicalBinding) &&
+          parsedRepeat.technicalBinding.kind === "xlsx.repeat-defined-name"
+            ? parsedRepeat.technicalBinding
+            : null;
+        const rendered = await renderScalarValues({
+          compiled: compiledOutput,
+          ...(repeatTechnicalBinding === null
+            ? {}
+            : { repeatTechnicalBinding: repeatTechnicalBinding as never }),
+          fields: draft.fields.map((field) => {
+            const compiledField = compiledByField.get(field.id);
+            if (compiledField === undefined) {
+              throw new MultiFieldTestVersionValidationError(
+                `Compiled field was not found: ${field.key}`
+              );
+            }
+            return {
+              fieldId: field.id,
+              fieldKey: field.key,
+              technicalBinding: compiledField.technicalBinding,
+              fieldBinding: field.binding as unknown as ScalarFieldBinding,
+              valueType: field.valueType as ScalarValueType,
+              value: requiredProvidedValue(provided, field.id),
+              formatter: field.formatter
+            };
+          })
+        });
+        renderedOutput = rendered.output;
+        renderedFields = rendered.fields;
+        renderedModifiedParts = rendered.modifiedParts;
+        renderedOutputSha256 = rendered.outputSha256;
+        renderedCheckedFields = rendered.verification.checkedFields;
+      } else {
+        if (savedRepeatContract === null) {
+          throw new MultiFieldTestVersionValidationError(
+            "Repeat contract was not compiled for entity collection"
+          );
+        }
+        const compiledRepeat = await compileEntityCollectionDocx({
+          source,
+          fileName: `${draft.title}.docx`,
+          expectedSourceSha256: draft.sourceSha256,
+          expectedStructureSha256: draft.structureSha256,
+          fields: draft.fields.map((field) => ({
+            id: field.id,
+            key: field.key,
+            label: field.label,
+            elementId: field.elementId,
+            binding: field.binding
+          })),
+          repeat: {
+            anchorElementId: entityRepeat.anchorElementId,
+            part: entityRepeat.part,
+            tableIndex: entityRepeat.tableIndex,
+            rowIndex: entityRepeat.rowIndex
+          }
+        });
+        const rendered = await renderEntityCollectionDocxTrial({
+          compiled: compiledRepeat.output,
+          repeat: compiledRepeat.repeat,
+          fields: draft.fields.map((field) => {
+            const compiledField = compiledByField.get(field.id);
+            if (compiledField === undefined) {
+              throw new MultiFieldTestVersionValidationError(
+                `Compiled field was not found: ${field.key}`
+              );
+            }
+            return {
+              fieldId: field.id,
+              fieldKey: field.key,
+              required: field.required,
+              technicalBinding: compiledField.technicalBinding,
+              fieldBinding: field.binding as unknown as ScalarFieldBinding,
+              valueType: field.valueType as ScalarValueType,
+              value: requiredProvidedValue(provided, field.id),
+              formatter: field.formatter
+            };
+          })
+        });
+        renderedOutput = rendered.output;
+        renderedFields = rendered.fields;
+        renderedModifiedParts = rendered.modifiedParts;
+        renderedOutputSha256 = rendered.outputSha256;
+        renderedCheckedFields = rendered.verification.checkedFields;
+        repeatCheckedValues = rendered.verification.repeatCheckedValues;
+      }
+
       const renderedByField = new Map(
-        rendered.fields.map((field) => [field.fieldId, field])
+        renderedFields.map((field) => [field.fieldId, field])
       );
       const version = await versionRegistry.recordTestedVersion(
         {
           spaceId: draft.spaceId,
           draftId: draft.id,
           format: draft.format,
-          compiledBuffer: compiled.output,
-          trialBuffer: rendered.output,
+          compiledBuffer: compiledOutput,
+          trialBuffer: renderedOutput,
           fields: draft.fields.map((field) => {
             const compiledField = compiledByField.get(field.id);
             const renderedField = renderedByField.get(field.id);
@@ -249,7 +454,7 @@ export function registerMultiFieldTestVersionRoutes(
               binding: field.binding,
               formatter: field.formatter,
               technicalBinding: toJsonValue(compiledField.technicalBinding),
-              sampleValue: toJsonValue(provided.get(field.id)),
+              sampleValue: toJsonValue(requiredProvidedValue(provided, field.id)),
               renderedValue: renderedField.renderedValue,
               readBackValue: renderedField.readBackValue,
               verification: toJsonValue({
@@ -259,20 +464,26 @@ export function registerMultiFieldTestVersionRoutes(
               })
             };
           }),
-          ...(repeatContract === null ? {} : { repeatContract }),
+          ...(savedRepeatContract === null
+            ? {}
+            : { repeatContract: savedRepeatContract }),
           verification: toJsonValue({
-            compiledFields: compiled.verification.checkedFields,
-            readBackFields: rendered.verification.checkedFields,
-            sourceSha256: compiled.sourceSha256,
-            structureSha256: compiled.structureSha256,
-            compiledSha256: compiled.outputSha256,
-            trialSha256: rendered.outputSha256,
+            compiledFields: compiledCheckedFields,
+            readBackFields: renderedCheckedFields,
+            repeatCheckedValues,
+            sourceSha256: compiledSourceSha256,
+            structureSha256: compiledStructureSha256,
+            compiledSha256: compiledOutputSha256,
+            trialSha256: renderedOutputSha256,
             modifiedParts: [
               ...new Set([
-                ...compiled.modifiedParts,
-                ...rendered.modifiedParts
+                ...compiledModifiedParts,
+                ...renderedModifiedParts
               ])
-            ].sort()
+            ].sort(),
+            ...(entityRepeatVerification === null
+              ? {}
+              : { entityCollectionRepeat: entityRepeatVerification })
           })
         },
         mutationContextFromRequest(request)
@@ -285,7 +496,16 @@ export function registerMultiFieldTestVersionRoutes(
           fieldCount: version.fieldCount,
           allMatched: version.fields.every(
             (field) => field.renderedValue === field.readBackValue
-          )
+          ),
+          ...(entityRepeat === null
+            ? {}
+            : {
+                repeatSource: {
+                  kind: "entity_collection",
+                  collectionDefinitionId: entityRepeat.collectionDefinitionId,
+                  numbering: entityRepeat.numbering
+                }
+              })
         },
         downloads: {
           compiled: `/api/v1/spaces/${encodeURIComponent(version.spaceId)}/template-multi-test-versions/${encodeURIComponent(version.id)}/files/compiled`,

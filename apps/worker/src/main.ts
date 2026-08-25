@@ -9,6 +9,7 @@ import {
   DocumentPreflightRegistry,
   DocumentScheduleRegistry,
   EmailRecipientRegistry,
+  EntityCollectionTemplateRepeatRegistry,
   RuntimeStatusRegistry,
   ScheduleNetworkDeliveryRegistry,
   SpaceCompatibleDocumentGenerationRegistry,
@@ -37,6 +38,7 @@ const queue = new WorkerQueue(store);
 const runtimeStatus = new RuntimeStatusRegistry(store);
 const previewRegistry = new TemplatePreviewActivationRegistry(store, objectStore, { queue });
 const generationRegistry = new SpaceCompatibleDocumentGenerationRegistry(store, objectStore, { queue });
+const entityCollectionTemplateRepeatRegistry = new EntityCollectionTemplateRepeatRegistry(store);
 const formattingRegistry = new DocumentFormattingRegistry(store, queue);
 const emailDeliveryRegistry = new DocumentEmailDeliveryRegistry(store, { queue });
 const networkDeliveryRegistry = new DocumentDeliveryRegistry(store);
@@ -49,7 +51,7 @@ const handlers = new JobHandlerRegistry();
 
 handlers.register("system.noop", async () => undefined);
 handlers.register("template.preview", createTemplatePreviewHandler({ registry: previewRegistry, objectStore, config }));
-handlers.register("document.generate", createDocumentGenerationHandler({ registry: generationRegistry, objectStore, workerId: config.workerId }));
+handlers.register("document.generate", createDocumentGenerationHandler({ registry: generationRegistry, objectStore, entityCollectionTemplateRepeatRegistry, workerId: config.workerId }));
 handlers.register("document.format-standard", createDocumentFormattingHandler({ registry: formattingRegistry, objectStore }));
 handlers.register("document.email.send", createDocumentEmailHandler({ registry: emailDeliveryRegistry, objectStore, config, workerId: config.workerId }));
 

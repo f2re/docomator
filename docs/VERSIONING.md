@@ -1,6 +1,6 @@
 # Версионирование Оформлятора
 
-Актуально на **2026-08-24**.
+Актуально на **2026-08-25**.
 
 ## Источник истины
 
@@ -124,6 +124,8 @@ Tag и assets immutable для своей пары `version + maturity`.
 
 ## Release pipeline
 
+**Каждый новый SemVer, попавший в `main`, обязан получить отдельный GitHub Release.** Нельзя оставлять новый номер только в `VERSION`/tag, объединять несколько номеров в один Release или считать выпуск завершённым до проверки опубликованных assets. Это постоянное правило release discipline.
+
 Публикация выполняется только после успешного полного `CI` события `push` default branch:
 
 ```text
@@ -137,6 +139,8 @@ main commit
 ```
 
 Publisher повторно проверяет exact workflow SHA, checksum и `f2re-service.json`. Независимый verifier имеет только read permission, скачивает уже опубликованные assets и сверяет их размеры/SHA-256, включая идентичность native `.tar.gz` и payload внутри `.f2re.zip`.
+
+До merge feature-ветки Release не создаётся. После squash merge сначала обязан стать зелёным post-merge CI exact `main` SHA, затем release workflow публикует версию. О выполненном выпуске можно сообщать только после повторного чтения GitHub API и проверки tag, target commit и assets.
 
 ## Release binding
 

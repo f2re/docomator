@@ -40,6 +40,11 @@ import {
   EmailRecipientNotFoundError,
   EmailRecipientRegistry,
   EmailRecipientValidationError,
+  EntityCollectionConflictError,
+  EntityCollectionNotFoundError,
+  EntityCollectionRegistry,
+  EntityCollectionTemplateRepeatRegistry,
+  EntityCollectionValidationError,
   KnowledgeConflictError,
   KnowledgeNotFoundError,
   KnowledgeValidationError,
@@ -89,6 +94,8 @@ import { registerDocumentPreflightRoutes } from "./document-preflight-routes.js"
 import { registerDocumentScheduleRoutes } from "./document-schedule-routes.js";
 import { registerEmailRecipientRoutes } from "./email-recipient-routes.js";
 import { registerEmployeeRoutes } from "./employee-routes.js";
+import { registerEntityCollectionRoutes } from "./entity-collection-routes.js";
+import { registerEntityCollectionTemplateRoutes } from "./entity-collection-template-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
 import { registerMultiFieldTestVersionRoutes } from "./multi-field-test-version-routes.js";
 import { registerOperationCenterRoutes } from "./operation-center-routes.js";
@@ -114,6 +121,8 @@ export interface AppDependencies {
   knowledgeRegistry?: KnowledgeRegistry;
   databaseAdminRegistry?: DatabaseAdminRegistry;
   spaceRegistry?: SpaceRegistry;
+  entityCollectionRegistry?: EntityCollectionRegistry;
+  entityCollectionTemplateRepeatRegistry?: EntityCollectionTemplateRepeatRegistry;
   documentDeliveryRegistry?: DocumentDeliveryRegistry;
   documentEmailDeliveryRegistry?: DocumentEmailDeliveryRegistry;
   documentGenerationRegistry?: DocumentGenerationRegistry;
@@ -157,6 +166,11 @@ function databaseSchemaReady(store: SqliteStore): boolean {
         "space_entity_ownership",
         "audience_groups",
         "audience_snapshots",
+        "entity_collection_definitions",
+        "entity_collection_fields",
+        "entity_collection_items",
+        "entity_collection_item_values",
+        "entity_collection_template_repeats",
         "document_quarantine_records",
         "template_drafts",
         "template_draft_fields",
@@ -189,11 +203,16 @@ function databaseSchemaReady(store: SqliteStore): boolean {
       if (new Set(rows.map((row) => row.name)).size !== requiredTables.length) {
         return false;
       }
-      const xlsxRepeatMigration = database
-        .prepare("SELECT name FROM schema_migrations WHERE name = ?")
-        .get("0025_xlsx_repeat_rows.sql");
-      if (xlsxRepeatMigration === undefined) {
-        return false;
+      for (const migration of [
+        "0025_xlsx_repeat_rows.sql",
+        "0033_entity_collections.sql",
+        "0035_entity_collection_template_repeat.sql",
+        "0036_entity_collection_multi_test_repeat_guard.sql"
+      ]) {
+        const row = database
+          .prepare("SELECT name FROM schema_migrations WHERE name = ?")
+          .get(migration);
+        if (row === undefined) return false;
       }
       const requiredColumns = [
         ["template_draft_fields", "formatter_json"],
@@ -233,6 +252,11 @@ export function buildApp(
     dependencies.databaseAdminRegistry ??
     new DatabaseAdminRegistry(store, knowledgeRegistry);
   const spaceRegistry = dependencies.spaceRegistry ?? new SpaceRegistry(store);
+  const entityCollectionRegistry =
+    dependencies.entityCollectionRegistry ?? new EntityCollectionRegistry(store);
+  const entityCollectionTemplateRepeatRegistry =
+    dependencies.entityCollectionTemplateRepeatRegistry ??
+    new EntityCollectionTemplateRepeatRegistry(store);
   const documentDeliveryRegistry =
     dependencies.documentDeliveryRegistry ?? new DocumentDeliveryRegistry(store);
   const documentEmailDeliveryRegistry =
@@ -442,6 +466,18 @@ export function buildApp(
       statusCode = 404;
       code = "template_activation_not_found";
       message = toUserMessage(error);
+    } else if (error instanceof EntityCollectionValidationError) {
+      statusCode = 400;
+      code = "entity_collection_validation_failed";
+      message = toUserMessage(error);
+    } else if (error instanceof EntityCollectionNotFoundError) {
+      statusCode = 404;
+      code = "entity_collection_not_found";
+      message = toUserMessage(error);
+    } else if (error instanceof EntityCollectionConflictError) {
+      statusCode = 409;
+      code = "entity_collection_conflict";
+      message = toUserMessage(error);
     } else if (error instanceof KnowledgeValidationError) {
       statusCode = 400;
       code = "knowledge_validation_failed";
@@ -574,6 +610,7 @@ export function buildApp(
   registerKnowledgeRoutes(app, knowledgeRegistry);
   registerSpaceRoutes(app, spaceRegistry);
   registerEmployeeRoutes(app, employeeRegistry);
+  registerEntityCollectionRoutes(app, entityCollectionRegistry);
   registerOperationCenterRoutes(app, operationCenterRegistry);
   registerEmailRecipientRoutes(app, config, emailRecipientRegistry);
   registerDocumentScheduleRoutes(app, config, documentScheduleRegistry);
@@ -609,6 +646,11 @@ export function buildApp(
     objectStore,
     templateDraftRegistry
   );
+  registerEntityCollectionTemplateRoutes(
+    app,
+    templateDraftRegistry,
+    entityCollectionTemplateRepeatRegistry
+  );
   registerTemplateDraftFieldEditRoutes(app, templateDraftFieldEditor);
   registerTemplateTestVersionRoutes(
     app,
@@ -620,7 +662,8 @@ export function buildApp(
     app,
     objectStore,
     templateDraftRegistry,
-    multiFieldTestVersionRegistry
+    multiFieldTestVersionRegistry,
+    entityCollectionTemplateRepeatRegistry
   );
   registerTemplatePreviewActivationRoutes(
     app,
