@@ -20,7 +20,7 @@
 
 ## После стабилизации текущего среза
 
-Nested entity-collection repeat для XLSX не входит в заявленную поддержку `0.7.0`. Его можно добавлять только отдельным вертикальным изменением с fixture, deterministic renderer/reverse-read regression, real-stack сценарием и отдельным SemVer bump. Существующий `audience.members` repeat DOCX/XLSX не должен регрессировать.
+Nested entity-collection repeat для XLSX не входит в заявленную поддержку `0.7.0` и остаётся незакрытой частью #131/#128. Его можно добавлять только отдельным вертикальным изменением с fixture, deterministic renderer/reverse-read regression, real-stack сценарием и отдельным SemVer bump. Существующий `audience.members` repeat DOCX/XLSX не должен регрессировать.
 
 ## Ограничение объёма разработки
 
