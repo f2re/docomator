@@ -206,7 +206,8 @@ function databaseSchemaReady(store: SqliteStore): boolean {
       for (const migration of [
         "0025_xlsx_repeat_rows.sql",
         "0033_entity_collections.sql",
-        "0035_entity_collection_template_repeat.sql"
+        "0035_entity_collection_template_repeat.sql",
+        "0036_entity_collection_multi_test_repeat_guard.sql"
       ]) {
         const row = database
           .prepare("SELECT name FROM schema_migrations WHERE name = ?")
