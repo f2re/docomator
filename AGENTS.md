@@ -117,6 +117,7 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Product versioning follows `docs/VERSIONING.md`: use `npm run version:bump -- patch` for backward-compatible fixes and `-- minor` for new compatible capabilities. Do not keep an old product version merely because release maturity is still `candidate`.
 - `version` describes the product capability/compatibility set; `status` and `channel` describe release maturity. A `candidate/pilot` release may and must receive a new SemVer when product behavior changes.
 - Product-changing PRs must update `RELEASE_IDENTITY.json.version`; CI rejects a runtime/product change that keeps the previous version. A pure `candidate/pilot → stable/production` maturity transition may retain the same version when product behavior is unchanged.
+- Every new SemVer merged to `main` must receive its own verified GitHub Release after successful post-merge CI on the exact `main` SHA. Candidate uses the tag convention defined in `docs/VERSIONING.md`; do not bundle multiple product versions into one Release and do not publish from an unverified feature branch.
 - Quote shell variables; use `set -Eeuo pipefail`; run `bash -n` for every changed shell script.
 
 ## Definition of done
@@ -130,7 +131,8 @@ A change is done when:
 - product-changing behavior has the SemVer bump required by `docs/VERSIONING.md`;
 - `npm run check` passes;
 - migration/rollback notes are present when applicable;
-- roadmap status is updated when a milestone changes.
+- roadmap status is updated when a milestone changes;
+- if the change introduces a new SemVer and is merged to `main`, the corresponding verified GitHub Release has been published and re-read through GitHub API before release completion is claimed.
 
 ## GitHub write workflow
 
@@ -141,5 +143,6 @@ A change is done when:
 - После commit проверить `compare_commits`, открыть PR в `main` и дождаться всех обязательных jobs. Локальные/фокусные проверки не заменяют полный CI.
 - Перед merge повторно проверить head SHA, mergeability, review threads и обязательные checks. Сливать squash-методом с `expected_head_sha`.
 - После merge получить новый `refs/heads/main` и дождаться успешного post-merge CI на этом exact SHA.
-- Не сообщать о commit, push, PR, merge или зелёном CI, пока соответствующий объект фактически не получен через GitHub API.
+- Если `RELEASE_IDENTITY.json.version` изменился, после зелёного post-merge CI дождаться автоматической публикации отдельного GitHub Release этой версии и проверить через GitHub API exact tag/commit/assets; до этого выпуск новой версии не считается завершённым.
+- Не сообщать о commit, push, PR, merge, GitHub Release или зелёном CI, пока соответствующий объект фактически не получен через GitHub API.
 - Если write actions действительно отсутствуют после discovery, прямо сообщить об этом; не подменять удалённый commit локальным patch и не придумывать SHA.
