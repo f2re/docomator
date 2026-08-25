@@ -1,6 +1,6 @@
--- Extend the immutable 0024 multi-field repeat guard for the separate
+-- Extend the 0025 multi-field repeat guard for the separate
 -- entity_collection_template_repeats binding introduced by 0035.
--- Legacy audience.members repeats keep the exact previous contract.
+-- Existing DOCX/XLSX audience.members contracts keep their previous boundary.
 
 DROP TRIGGER IF EXISTS trg_template_multi_test_version_space_insert;
 
@@ -35,16 +35,38 @@ BEGIN
                 AND entity_repeat.space_id = d.space_id
             )
             AND json_extract(NEW.repeat_contract_json, '$.version') = 1
-            AND json_extract(NEW.repeat_contract_json, '$.kind') = 'docx.repeat-row-contract'
-            AND json_extract(NEW.repeat_contract_json, '$.technicalBinding.kind') = 'docx.repeat-sdt'
-            AND json_type(NEW.repeat_contract_json, '$.technicalBinding.identifier') = 'text'
-            AND length(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier')) = 33
-            AND substr(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier'), 1, 9) = 'airepeat:'
-            AND substr(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier'), 10) NOT GLOB '*[^0-9a-f]*'
-            AND json_extract(NEW.repeat_contract_json, '$.technicalBinding.part') = json_extract(NEW.repeat_contract_json, '$.binding.part')
-            AND json_type(NEW.repeat_contract_json, '$.technicalBinding.target') = 'text'
-            AND length(json_extract(NEW.repeat_contract_json, '$.technicalBinding.target')) > 0
             AND json(json_extract(NEW.repeat_contract_json, '$.binding')) = json(d.repeat_binding_json)
+            AND (
+              (
+                d.format = 'docx'
+                AND json_extract(NEW.repeat_contract_json, '$.kind') = 'docx.repeat-row-contract'
+                AND json_extract(NEW.repeat_contract_json, '$.binding.kind') = 'docx.repeat-row'
+                AND json_extract(NEW.repeat_contract_json, '$.binding.source') = 'audience.members'
+                AND json_extract(NEW.repeat_contract_json, '$.technicalBinding.kind') = 'docx.repeat-sdt'
+                AND json_type(NEW.repeat_contract_json, '$.technicalBinding.identifier') = 'text'
+                AND length(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier')) = 33
+                AND substr(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier'), 1, 9) = 'airepeat:'
+                AND substr(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier'), 10) NOT GLOB '*[^0-9a-f]*'
+                AND json_extract(NEW.repeat_contract_json, '$.technicalBinding.part') = json_extract(NEW.repeat_contract_json, '$.binding.part')
+                AND json_type(NEW.repeat_contract_json, '$.technicalBinding.target') = 'text'
+                AND length(json_extract(NEW.repeat_contract_json, '$.technicalBinding.target')) > 0
+              )
+              OR (
+                d.format = 'xlsx'
+                AND json_extract(NEW.repeat_contract_json, '$.kind') = 'xlsx.repeat-row-contract'
+                AND json_extract(NEW.repeat_contract_json, '$.binding.kind') = 'xlsx.repeat-row'
+                AND json_extract(NEW.repeat_contract_json, '$.binding.source') = 'audience.members'
+                AND json_extract(NEW.repeat_contract_json, '$.binding.selection') IN ('used-row', 'range')
+                AND json_extract(NEW.repeat_contract_json, '$.technicalBinding.kind') = 'xlsx.repeat-defined-name'
+                AND json_type(NEW.repeat_contract_json, '$.technicalBinding.identifier') = 'text'
+                AND length(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier')) = 42
+                AND substr(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier'), 1, 18) = '_DOCOMATOR_REPEAT_'
+                AND substr(json_extract(NEW.repeat_contract_json, '$.technicalBinding.identifier'), 19) NOT GLOB '*[^0-9A-F]*'
+                AND json_extract(NEW.repeat_contract_json, '$.technicalBinding.part') = 'xl/workbook.xml'
+                AND json_type(NEW.repeat_contract_json, '$.technicalBinding.target') = 'text'
+                AND length(json_extract(NEW.repeat_contract_json, '$.technicalBinding.target')) > 0
+              )
+            )
           )
           OR EXISTS (
             SELECT 1
@@ -52,6 +74,7 @@ BEGIN
             WHERE entity_repeat.draft_id = d.id
               AND entity_repeat.space_id = d.space_id
               AND d.repeat_binding_json IS NULL
+              AND d.format = 'docx'
               AND NEW.repeat_contract_json IS NOT NULL
               AND json_extract(NEW.repeat_contract_json, '$.version') = 1
               AND json_extract(NEW.repeat_contract_json, '$.kind') = 'docx.repeat-row-contract'
