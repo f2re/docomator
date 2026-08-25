@@ -7,14 +7,30 @@
   width: 100%;
 }
 
-/* The template mapper is a work surface, not a compact settings sidebar. */
+/*
+ * The template mapper is a work surface, not a compact settings sidebar.
+ * Keep the document and the mapping form in a horizontal split: document on
+ * top, controls below. This gives the DOCX/XLSX preview the full page width
+ * and prevents long selectors from being squeezed against the viewport edge.
+ */
 .template-visual-workspace {
-  grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.1rem;
+}
+
+.template-visual-canvas {
+  max-height: min(54vh, 44rem);
+  scrollbar-gutter: stable both-edges;
+  overscroll-behavior: contain;
 }
 
 .template-visual-inspector.structure-selection {
-  scrollbar-gutter: stable;
-  overscroll-behavior: contain;
+  position: static;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  scrollbar-gutter: auto;
+  overscroll-behavior: auto;
 }
 
 .structure-field-form {
@@ -28,22 +44,36 @@
 .structure-field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.85rem;
+  gap: 0.9rem 1rem;
 }
 
-/* Inside the inspector a second two-column grid made controls unreadably narrow. */
-.template-visual-inspector .structure-field-grid,
+/* Entity type is global for the template, so it reads as the first full row. */
+.template-visual-inspector #documentEntityTypeField {
+  grid-column: 1 / -1;
+  width: min(100%, 38rem);
+}
+
+/* Full-width controls keep their semantic grouping even in the two-column form. */
+.template-visual-inspector .structure-text-range-field,
+.template-visual-inspector .structure-placement-field,
+.template-visual-inspector .structure-placement-card,
+.template-visual-inspector .structure-new-property,
+.template-visual-inspector .structure-required-field {
+  grid-column: 1 / -1;
+}
+
 .template-visual-inspector .structure-new-property,
 .template-visual-inspector .structure-name-options {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .template-visual-inspector .structure-new-property .structure-required-field {
-  grid-column: auto;
+  grid-column: 1 / -1;
 }
 
 .structure-field-grid label {
   display: grid;
+  min-width: 0;
   gap: 0.35rem;
   align-content: start;
 }
@@ -58,6 +88,7 @@
 .structure-field-grid select,
 .structure-field-grid textarea {
   width: 100%;
+  min-width: 0;
   min-height: 2.75rem;
   border: 1px solid var(--border);
   border-radius: 0.75rem;
@@ -115,6 +146,7 @@
 
 .structure-new-property > label {
   display: grid;
+  min-width: 0;
   gap: 0.35rem;
 }
 
@@ -174,15 +206,22 @@
   color: var(--danger);
 }
 
-@media (max-width: 1240px) {
-  .template-visual-workspace {
+@media (max-width: 900px) {
+  .template-visual-canvas {
+    max-height: min(50vh, 36rem);
+  }
+
+  .template-visual-inspector .structure-field-grid,
+  .template-visual-inspector .structure-new-property,
+  .template-visual-inspector .structure-name-options {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .template-visual-inspector.structure-selection {
-    position: static;
-    max-height: none;
-    overflow: visible;
+  .template-visual-inspector #documentEntityTypeField,
+  .template-visual-inspector .structure-required-field,
+  .template-visual-inspector .structure-new-property .structure-required-field {
+    grid-column: auto;
+    width: 100%;
   }
 }
 
