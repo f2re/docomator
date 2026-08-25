@@ -205,4 +205,7 @@
   void import("/ui/data-export.js").catch((error) => {
     console.error("Не удалось загрузить модуль экспорта данных.", error);
   });
+  void import("/ui/entity-collections-bootstrap.js").catch((error) => {
+    console.error("Не удалось подключить таблицы и списки данных сотрудников.", error);
+  });
 }

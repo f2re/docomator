@@ -37,6 +37,19 @@ export type {
   RenderedScalarFieldValue
 } from "./multi-field.js";
 
+export {
+  compileEntityCollectionDocx,
+  renderEntityCollectionDocxTrial
+} from "./entity-collection-repeat.js";
+export type {
+  CompileEntityCollectionDocxInput,
+  CompileEntityCollectionDocxResult,
+  EntityCollectionDocxRepeatSource,
+  RenderEntityCollectionDocxTrialInput,
+  RenderEntityCollectionDocxTrialResult,
+  RenderEntityCollectionTrialField
+} from "./entity-collection-repeat.js";
+
 export { renderAudienceAggregate } from "./audience-render.js";
 export type {
   AudienceAggregateField,

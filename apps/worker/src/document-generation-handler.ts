@@ -1,8 +1,12 @@
 import {
   ContentAddressedObjectStore,
   DocumentGenerationRegistry,
+  ENTITY_COLLECTION_ROW_NUMBER_KEY,
+  EntityCollectionTemplateRepeatRegistry,
   documentValueMissing,
   resolveDocumentMemberValues,
+  type DocumentGenerationField,
+  type EntityCollectionTemplateRepeatRecord,
   type JsonValue
 } from "@docomator/storage";
 import {
@@ -28,11 +32,12 @@ class DocumentGenerationInterruptedError extends Error {
 export interface DocumentGenerationHandlerOptions {
   registry: DocumentGenerationRegistry;
   objectStore: ContentAddressedObjectStore;
+  entityCollectionTemplateRepeatRegistry?: EntityCollectionTemplateRepeatRegistry;
   workerId: string;
   now?: () => Date;
 }
 
-function isJsonObject(value: JsonValue): value is { [key: string]: JsonValue } {
+function isJsonObject(value: unknown): value is { [key: string]: JsonValue } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -79,6 +84,184 @@ function unitFileName(
   return `${number}-${safeName(displayName, "участник")}-${safeName(title, "документ")}.${extension}`;
 }
 
+function fieldInsideEntityRepeat(
+  field: DocumentGenerationField,
+  repeat: EntityCollectionTemplateRepeatRecord
+): boolean {
+  if (!isJsonObject(field.binding) || !isJsonObject(field.binding.tableLocation)) {
+    return false;
+  }
+  return (
+    field.binding.part === repeat.part &&
+    field.binding.tableLocation.tableIndex === repeat.tableIndex &&
+    field.binding.tableLocation.rowIndex === repeat.rowIndex
+  );
+}
+
+function collectionScalarValue(
+  value: JsonValue | undefined,
+  rowNumber: number,
+  fieldLabel: string
+): string | number | boolean | null | undefined {
+  if (
+    value === undefined ||
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  throw new PermanentJobError(
+    `Строка ${rowNumber}: поле «${fieldLabel}» содержит значение, которое нельзя подставить в документ.`
+  );
+}
+
+function renderFieldDefinition(field: DocumentGenerationField) {
+  return {
+    fieldId: field.id,
+    fieldKey: field.key,
+    required: field.required,
+    technicalBinding:
+      field.technicalBinding as unknown as CompiledTechnicalBinding,
+    fieldBinding: field.binding as unknown as ScalarFieldBinding,
+    valueType: field.valueType as ScalarValueType,
+    formatter: field.formatter
+  };
+}
+
+async function renderOnePerMemberWithCollection(
+  options: DocumentGenerationHandlerOptions,
+  work: ReturnType<DocumentGenerationRegistry["getWorkForWorker"]>,
+  member: ReturnType<DocumentGenerationRegistry["getWorkForWorker"]>["members"][number],
+  compiled: Uint8Array,
+  shared: { spaceName: string; spaceKey: string; audienceCount: number }
+): Promise<Buffer> {
+  const repeatRegistry = options.entityCollectionTemplateRepeatRegistry;
+  if (repeatRegistry === undefined) {
+    throw new PermanentJobError(
+      "Служба повторяемых таблиц не инициализирована. Перезапустите приложение после обновления."
+    );
+  }
+  const source = repeatRegistry.getOwnerCollectionForActiveRelease(
+    work.job.spaceId,
+    work.job.activeReleaseId,
+    member.entityId
+  );
+  if (source === null) {
+    throw new PermanentJobError(
+      "В активном шаблоне не найден источник повторяемой таблицы."
+    );
+  }
+  if (work.template.format !== "docx") {
+    throw new PermanentJobError(
+      "Повторяемая таблица из карточки сотрудника поддерживается только в DOCX."
+    );
+  }
+  if (
+    !isJsonObject(work.template.repeatContract) ||
+    work.template.repeatContract.kind !== "docx.repeat-row-contract"
+  ) {
+    throw new PermanentJobError(
+      "Активный шаблон потерял технический контракт повторяемой строки DOCX."
+    );
+  }
+  if (source.collection.items.length === 0) {
+    throw new PermanentJobError(
+      `У сотрудника «${member.displayName}» таблица «${source.collection.definition.label}» пуста. Добавьте хотя бы одну строку и повторите формирование.`
+    );
+  }
+
+  const rowFields = work.template.fields.filter((field) =>
+    fieldInsideEntityRepeat(field, source.repeat)
+  );
+  const scalarFields = work.template.fields.filter(
+    (field) => !fieldInsideEntityRepeat(field, source.repeat)
+  );
+  if (rowFields.length === 0) {
+    throw new PermanentJobError(
+      "В активном шаблоне нет полей внутри настроенной повторяемой строки."
+    );
+  }
+
+  let intermediate: Uint8Array = compiled;
+  if (scalarFields.length > 0) {
+    const resolved = resolveDocumentMemberValues(scalarFields, member, shared);
+    if (resolved.missingRequired.length > 0) {
+      throw new PermanentJobError(
+        `Не заполнены обязательные поля сотрудника: ${resolved.missingRequired
+          .map((field) => field.label)
+          .join(", ")}.`
+      );
+    }
+    const scalar = await renderScalarValues({
+      compiled: intermediate,
+      fields: scalarFields.map((field, index) => {
+        const value = resolved.values[index];
+        const emptyOptional = !field.required && documentValueMissing(value);
+        return {
+          fieldId: field.id,
+          fieldKey: field.key,
+          technicalBinding:
+            field.technicalBinding as unknown as CompiledTechnicalBinding,
+          fieldBinding: field.binding as unknown as ScalarFieldBinding,
+          valueType: (emptyOptional ? "string" : field.valueType) as ScalarValueType,
+          value: emptyOptional ? "" : value,
+          ...(emptyOptional ? {} : { formatter: field.formatter })
+        };
+      })
+    });
+    intermediate = scalar.output;
+  }
+
+  const definitionFields = new Map(
+    source.collection.definition.fields.map((field) => [field.key, field])
+  );
+  const members = source.collection.items.map((item, itemIndex) => ({
+    memberId: item.id,
+    values: rowFields.map((field) => {
+      if (field.key === ENTITY_COLLECTION_ROW_NUMBER_KEY) {
+        return source.repeat.numbering.start + itemIndex * source.repeat.numbering.step;
+      }
+      const definition = definitionFields.get(field.key);
+      if (definition === undefined) {
+        throw new PermanentJobError(
+          `Поле «${field.label}» больше не найдено в схеме таблицы «${source.collection.definition.label}». Перепроверьте шаблон.`
+        );
+      }
+      const value = collectionScalarValue(
+        item.values[field.key],
+        item.rowNumber,
+        field.label
+      );
+      if (field.required && documentValueMissing(value)) {
+        throw new PermanentJobError(
+          `Строка ${item.rowNumber}: не заполнено обязательное поле «${field.label}» таблицы «${source.collection.definition.label}».`
+        );
+      }
+      return value;
+    })
+  }));
+  const repeat = parseDocxRepeatRowContract(work.template.repeatContract);
+  if (
+    repeat.binding.part !== source.repeat.part ||
+    repeat.binding.tableIndex !== source.repeat.tableIndex ||
+    repeat.binding.rowIndex !== source.repeat.rowIndex
+  ) {
+    throw new PermanentJobError(
+      "Техническая строка активного DOCX не совпадает с сохранённым источником таблицы. Перепроверьте шаблон."
+    );
+  }
+  const rendered = await renderDocxRepeatRows({
+    compiled: intermediate,
+    binding: repeat.binding,
+    technicalBinding: repeat.technicalBinding,
+    fields: rowFields.map(renderFieldDefinition),
+    members
+  });
+  return rendered.output;
+}
+
 export function createDocumentGenerationHandler(
   options: DocumentGenerationHandlerOptions
 ): JobHandler {
@@ -100,10 +283,20 @@ export function createDocumentGenerationHandler(
         spaceKey: work.space.key,
         audienceCount: work.members.length
       };
+      const entityRepeat =
+        options.entityCollectionTemplateRepeatRegistry?.getForActiveRelease(
+          work.job.spaceId,
+          work.job.activeReleaseId
+        ) ?? null;
 
       throwIfInterrupted(signal, "Формирование отменено до начала обработки.");
 
       if (work.job.targetMode === "aggregate") {
+        if (entityRepeat !== null) {
+          throw new PermanentJobError(
+            "Шаблон с таблицей из карточки сотрудника формируется только как отдельный документ для каждого участника. Выберите режим «Отдельный документ» и повторите операцию."
+          );
+        }
         const unit = work.job.units[0];
         if (unit === undefined) {
           throw new Error("Для сводного документа не создана единица формирования.");
@@ -160,16 +353,7 @@ export function createDocumentGenerationHandler(
             const compiled = await options.objectStore.getBuffer(
               work.template.compiledSha256
             );
-            const fields = work.template.fields.map((field) => ({
-              fieldId: field.id,
-              fieldKey: field.key,
-              required: field.required,
-              technicalBinding:
-                field.technicalBinding as unknown as CompiledTechnicalBinding,
-              fieldBinding: field.binding as unknown as ScalarFieldBinding,
-              valueType: field.valueType as ScalarValueType,
-              formatter: field.formatter
-            }));
+            const fields = work.template.fields.map(renderFieldDefinition);
             const members = rows.map(({ member, resolved }) => ({
               memberId: member.entityId,
               values: resolved.values
@@ -245,56 +429,82 @@ export function createDocumentGenerationHandler(
             );
             continue;
           }
-          const resolved = resolveDocumentMemberValues(
-            work.template.fields,
-            member,
-            shared
-          );
-          if (resolved.missingRequired.length > 0) {
-            options.registry.failUnit(
+
+          try {
+            let output: Buffer;
+            if (entityRepeat !== null) {
+              output = await renderOnePerMemberWithCollection(
+                options,
+                work,
+                member,
+                compiled,
+                shared
+              );
+            } else {
+              const resolved = resolveDocumentMemberValues(
+                work.template.fields,
+                member,
+                shared
+              );
+              if (resolved.missingRequired.length > 0) {
+                options.registry.failUnit(
+                  unit.id,
+                  errorPayload(
+                    `Не заполнены обязательные поля: ${resolved.missingRequired
+                      .map((field) => field.label)
+                      .join(", ")}.`,
+                    "required_values_missing"
+                  ),
+                  context
+                );
+                continue;
+              }
+              const rendered = await renderScalarValues({
+                compiled,
+                fields: work.template.fields.map((field, index) => {
+                  const value = resolved.values[index];
+                  const emptyOptional = !field.required && documentValueMissing(value);
+                  return {
+                    fieldId: field.id,
+                    fieldKey: field.key,
+                    technicalBinding:
+                      field.technicalBinding as unknown as CompiledTechnicalBinding,
+                    fieldBinding: field.binding as unknown as ScalarFieldBinding,
+                    valueType: (emptyOptional
+                      ? "string"
+                      : field.valueType) as ScalarValueType,
+                    value: emptyOptional ? "" : value,
+                    ...(emptyOptional ? {} : { formatter: field.formatter })
+                  };
+                })
+              });
+              output = rendered.output;
+            }
+            const outputName = unitFileName(
+              unit.position,
+              member.displayName,
+              work.template.title,
+              work.template.format
+            );
+            await options.registry.completeUnit(
               unit.id,
-              errorPayload(
-                `Не заполнены обязательные поля: ${resolved.missingRequired
-                  .map((field) => field.label)
-                  .join(", ")}.`,
-                "required_values_missing"
-              ),
+              output,
+              outputName,
+              work.template.format,
               context
             );
-            continue;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            const code =
+              entityRepeat !== null && /пуста/u.test(message)
+                ? "entity_collection_empty"
+                : "required_values_missing";
+            options.registry.failUnit(
+              unit.id,
+              errorPayload(message, code),
+              context
+            );
           }
-          const rendered = await renderScalarValues({
-            compiled,
-            fields: work.template.fields.map((field, index) => {
-              const value = resolved.values[index];
-              const emptyOptional = !field.required && documentValueMissing(value);
-              return {
-                fieldId: field.id,
-                fieldKey: field.key,
-                technicalBinding:
-                  field.technicalBinding as unknown as CompiledTechnicalBinding,
-                fieldBinding: field.binding as unknown as ScalarFieldBinding,
-                valueType: (emptyOptional
-                  ? "string"
-                  : field.valueType) as ScalarValueType,
-                value: emptyOptional ? "" : value,
-                ...(emptyOptional ? {} : { formatter: field.formatter })
-              };
-            })
-          });
-          const outputName = unitFileName(
-            unit.position,
-            member.displayName,
-            work.template.title,
-            work.template.format
-          );
-          await options.registry.completeUnit(
-            unit.id,
-            rendered.output,
-            outputName,
-            work.template.format,
-            context
-          );
         }
       }
 

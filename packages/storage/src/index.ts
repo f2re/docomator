@@ -23,6 +23,8 @@ export * from "./document-schedules.js";
 export * from "./document-values.js";
 export * from "./email-address.js";
 export * from "./email-recipients.js";
+export * from "./entity-collections.js";
+export * from "./entity-collection-template-repeat.js";
 
 export { STANDARD_PERSON_TYPE_KEY } from "./employees.js";
 export type {

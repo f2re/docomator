@@ -4,9 +4,9 @@
 
 Канал выпуска: `pilot`
 
-Текущая версия: `0.6.5`.
+Текущая версия: `0.7.0`.
 
-Этот документ описывает fail-closed переход от текущего кандидата `0.6.5` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
+Этот документ описывает fail-closed переход от текущего кандидата `0.7.0` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
 
 ## 1. Зафиксировать exact release binding
 
@@ -66,7 +66,8 @@ chmod 600 /tmp/docomator-code
 - отсутствие horizontal overflow;
 - import error recovery без потери файла/mapping;
 - Visual Template Studio на реальном DOCX/XLSX;
-- полный сценарий `пространство → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`;
+- полный сценарий `пространство → сотрудники/группа → пользовательские поля → коллекции → шаблон → заполненный документ`;
+- два владельца с разным числом строк коллекции, reorder и пустая коллекция без фиктивной sample row;
 - выбор любого поля обычной прокруткой и клавиатурой без обязательного поиска;
 - выпуск документов и поиск результата;
 - access-code первый запуск/закрытие/recovery;
@@ -76,7 +77,7 @@ chmod 600 /tmp/docomator-code
 
 На отдельном чистом стенде восстановите backup из target act. В `recovery/restore-act.json` зафиксируйте source act, backup manifest SHA-256, exact release binding и сверку counts/IDs/SHA-256.
 
-После restore должны сохраниться пространства, сущности, поля/значения, группы, templates, jobs/results/deliveries, object store и credential/session configuration. API/worker обязаны работать после reboot.
+После restore должны сохраниться пространства, сущности, поля/значения, коллекции, группы, templates, jobs/results/deliveries, object store и credential/session configuration. API/worker обязаны работать после reboot.
 
 Проверьте disk-full, corrupt backup/object, worker restart, delivery failure, повтор операции, update failure/rollback. Потеря данных или дубликат результата — блокер.
 
@@ -86,11 +87,13 @@ chmod 600 /tmp/docomator-code
 
 Проверяются поддерживаемые стили, таблицы/merge, колонтитулы, изображения, formulas/OMML, repeat blocks, unknown parts, reverse-read и открытие результатов в согласованных LibreOffice + Microsoft Office. Неподдерживаемая конструкция должна давать понятное ограничение/отказ, а не повреждённый документ.
 
+Collection-repeat `0.7.0` проверяется на персональных DOCX. Nested entity-collection repeat для XLSX не включается в supported matrix до отдельной реализации и acceptance; существующий `audience.members` repeat DOCX/XLSX проверяется как раньше.
+
 ## 7. Нагрузка и пространства
 
 CSV/XLSX import и document generation: 10/100/1000 объектов. Проверяются пустые ячейки, Excel dates, mixed types, дубли, повторный import, partial invalid files и retry only failed units.
 
-Два пространства с одинаковыми именами/ключами не читают, не изменяют, не удаляют и не связывают данные друг друга. Import A не влияет на B.
+Два пространства с одинаковыми именами/ключами не читают, не изменяют, не удаляют и не связывают данные друг друга. Import A не влияет на B. Collection schema/items и template repeat binding также не пересекают пространство.
 
 ## 8. Финальный gate кандидата
 
@@ -100,7 +103,7 @@ CSV/XLSX import и document generation: 10/100/1000 объектов. Прове
 npm run release:evidence -- \
   /srv/docomator-release-evidence \
   --expected-commit '<полный Git SHA>' \
-  --expected-version '0.6.5'
+  --expected-version '0.7.0'
 ```
 
 Gate = 0 обязателен.
@@ -110,11 +113,11 @@ Gate = 0 обязателен.
 Только после успешного candidate gate:
 
 1. отдельным PR изменить `RELEASE_IDENTITY.json` на `stable/production`;
-2. если capability set не изменился, оставить version `0.6.5`;
+2. если capability set не изменился, оставить version `0.7.0`;
 3. выполнить полный CI stable commit;
 4. пересобрать Debian/Astra bundles именно из stable commit;
 5. повторно подтвердить target identity/update/rollback/recovery;
 6. обновить `SUPPORT_MATRIX.md` только фактически подтверждёнными строками;
-7. создать подписанный tag и опубликовать проверенные archives/SHA-256/SBOM/release notes.
+7. убедиться, что GitHub Release этой версии опубликован автоматическим release workflow и его tag/assets относятся к exact stable commit.
 
 До этого никакой UI/doc/issue/bundle не должен называть текущий выпуск стабильным.

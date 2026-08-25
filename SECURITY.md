@@ -4,7 +4,7 @@
 
 Канал выпуска: `pilot`
 
-Текущая версия: `0.6.5`.
+Текущая версия: `0.7.0`.
 
 Это предварительный выпуск. До завершения целевой приёмки, восстановления резервной копии и проверки реальных документов Оформлятор нельзя использовать для штатной обработки персональных или ограниченных данных; допускается только контролируемый пилот на обезличенных данных.
 
@@ -97,7 +97,7 @@ DOCX/XLSX считаются недоверенным входом. Визуал
 - applied migrations immutable; legacy data исправляются новой migration;
 - каждый внешний side effect имеет correlation ID и idempotency key;
 - security-sensitive defect получает negative regression test;
-- write-enabled GitHub workflow допускается только по явному allowlist CI-policy: одноразовые workflows удаляются до финального PR; постоянный release publisher разрешён только после успешного push-CI default branch, с exact verified SHA, pinned actions и минимальными `actions: read` + `contents: write`;
+- write-enabled GitHub workflow допускается только для узкой одноразовой задачи и удаляется до финального PR;
 - изменение security boundary требует ADR, требований, rollback notes и полной повторной acceptance.
 
 ## Сообщение об уязвимости
