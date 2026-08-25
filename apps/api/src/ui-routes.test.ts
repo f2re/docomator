@@ -7,6 +7,7 @@ import test from "node:test";
 import { loadApiConfig } from "@docomator/config";
 
 import { buildApp } from "./app.js";
+import { registerSupplementalUiRoutes } from "./supplemental-ui-routes.js";
 
 async function testApp() {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-ui-"));
@@ -16,6 +17,7 @@ async function testApp() {
       DOCOMATOR_LOG_LEVEL: "fatal"
     })
   );
+  registerSupplementalUiRoutes(app);
   return { app, dataDir };
 }
 
