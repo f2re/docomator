@@ -181,6 +181,56 @@ test("шаблонизатор не скрывает поля пространс
   await expect(page.locator("#documentFieldProperty")).toHaveValue("employee.faith");
 });
 
+test("рабочая область разделяет документ и сопоставление по горизонтали без наложения списка", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await openVisualTemplate(page, {
+    properties: [
+      {
+        key: "employee.long-field",
+        label: "Очень длинное название пользовательского поля для проверки границ выпадающего списка",
+        valueType: "string",
+        sensitivity: "personal",
+        appliesTo: ["person"],
+        aliases: [],
+        validation: { uiGroup: "common" }
+      }
+    ]
+  });
+
+  await page.locator(".template-visual-target").first().click();
+  await expect(page.locator("#documentStructureSelection")).toBeVisible();
+
+  const canvas = page.locator(".template-visual-canvas");
+  const inspector = page.locator(".template-visual-inspector");
+  const canvasBox = await canvas.boundingBox();
+  const inspectorBox = await inspector.boundingBox();
+  expect(canvasBox).not.toBeNull();
+  expect(inspectorBox).not.toBeNull();
+  expect(inspectorBox.y).toBeGreaterThan(canvasBox.y + canvasBox.height - 2);
+  expect(inspectorBox.width).toBeGreaterThanOrEqual(canvasBox.width - 2);
+
+  const customSelect = page
+    .locator("#documentFieldProperty")
+    .locator("xpath=following-sibling::*[1]");
+  await customSelect.locator(".searchable-select-trigger").click();
+  const panel = customSelect.locator(".searchable-select-panel");
+  await expect(panel).toBeVisible();
+
+  const panelBox = await panel.boundingBox();
+  const selectBox = await customSelect.boundingBox();
+  const openInspectorBox = await inspector.boundingBox();
+  expect(panelBox).not.toBeNull();
+  expect(selectBox).not.toBeNull();
+  expect(openInspectorBox).not.toBeNull();
+  expect(panelBox.x).toBeGreaterThanOrEqual(openInspectorBox.x - 1);
+  expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(
+    openInspectorBox.x + openInspectorBox.width + 1
+  );
+  expect(panelBox.width).toBeLessThanOrEqual(selectBox.width + 2);
+});
+
 test("DOCX-таблица остаётся таблицей в визуальной разметке и помещается на узком экране", async ({
   page
 }) => {
