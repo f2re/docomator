@@ -44,6 +44,11 @@ function currentMultiTrialSpaceId() {
   return globalThis.docomatorTemplateWizard?.spaceId() || "";
 }
 
+function currentMultiTrialDraftId() {
+  const value = globalThis.docomatorTemplateWizard?.artifacts?.()?.draftId;
+  return typeof value === "string" ? value : "";
+}
+
 function createMultiTrialPanel() {
   if (!multiTrialView || multiTrialPanel()) return;
   const panel = document.createElement("section");
@@ -318,21 +323,24 @@ async function loadMultiTrialHistory() {
 function renderMultiTrialWorkspace() {
   const content = document.querySelector("#templateMultiTrialContent");
   if (!content) return;
+  const currentDraftId = currentMultiTrialDraftId();
   const usable = multiTrialDrafts.filter(
     (draft) =>
+      (!currentDraftId || draft.id === currentDraftId) &&
       draft.status === "draft" &&
       Array.isArray(draft.fields) &&
       (draft.fields.length >= 2 ||
         (draft.repeatBinding && draft.fields.length >= 1))
   );
+  multiTrialDrafts = usable;
   if (usable.length === 0) {
     content.innerHTML = `
       <div class="multi-trial-state"><span aria-hidden="true">📭</span><div><strong>Нет черновика для полной проверки</strong><p>Сохраните не менее двух разных полей или одно поле в повторяемой строке DOCX. После этого форма появится автоматически.</p></div></div>`;
+    globalThis.docomatorTemplateWizard?.render?.();
     return;
   }
-  multiTrialDrafts = usable;
   content.innerHTML = `
-    <form class="multi-trial-form" id="templateMultiTrialForm" novalidate>
+    <form class="multi-trial-form" id="templateMultiTrialForm" novalidate data-draft-id="${multiTrialEscape(usable[0].id)}">
       <label class="multi-trial-draft-select">
         <span>Черновик шаблона</span>
         <select id="templateMultiTrialDraft">${usable
@@ -358,6 +366,7 @@ function renderMultiTrialWorkspace() {
     .querySelector("#templateMultiTrialForm")
     ?.addEventListener("submit", submitMultiTrial);
   renderMultiTrialFields();
+  globalThis.docomatorTemplateWizard?.render?.();
 }
 
 async function loadMultiTrialDrafts() {
@@ -382,7 +391,7 @@ async function loadMultiTrialDrafts() {
     );
     multiTrialDrafts = Array.isArray(body.data) ? body.data : [];
     renderMultiTrialWorkspace();
-    return Boolean(document.querySelector("#templateMultiTrialForm"));
+    return globalThis.docomatorMultiTrial?.hasForm?.() === true;
   } catch (error) {
     content.querySelector("#templateMultiTrialReloadState")?.remove();
     const errorHtml = `<div class="multi-trial-state is-error" id="templateMultiTrialLoadError"><span aria-hidden="true">⚠️</span><div><strong>Черновики получить не удалось</strong><p>${multiTrialEscape(error?.message || "Повторите действие.")} Введённые значения сохранены.</p>${error?.operationId ? `<small>Идентификатор операции: <code>${multiTrialEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateMultiTrialRetry" type="button">Повторить</button></div></div>`;
@@ -545,12 +554,18 @@ async function submitMultiTrial(event) {
 }
 
 window.addEventListener("docomator:template-draft-changed", (event) => {
-  const selected = selectedMultiTrialDraft();
+  const currentDraftId = currentMultiTrialDraftId();
   if (
-    selected &&
-    event.detail?.draftId === selected.id &&
-    event.detail?.spaceId === currentMultiTrialSpaceId()
+    event.detail?.spaceId === currentMultiTrialSpaceId() &&
+    (!currentDraftId || event.detail?.draftId === currentDraftId)
   ) {
+    multiTrialRememberValues();
+    void loadMultiTrialDrafts();
+  }
+});
+
+document.addEventListener("docomator:template-wizard-step-completed", (event) => {
+  if (event.detail?.step === 2 && event.detail?.spaceId === currentMultiTrialSpaceId()) {
     multiTrialRememberValues();
     void loadMultiTrialDrafts();
   }
@@ -581,7 +596,14 @@ function multiTrialSourceMarker() {
 
 globalThis.docomatorMultiTrial = {
   reload: loadMultiTrialDrafts,
-  hasForm: () => Boolean(document.querySelector("#templateMultiTrialForm"))
+  hasForm: () => {
+    const form = document.querySelector("#templateMultiTrialForm");
+    const currentDraftId = currentMultiTrialDraftId();
+    return Boolean(
+      form &&
+        (!currentDraftId || form.dataset.draftId === currentDraftId)
+    );
+  }
 };
 
 if (multiTrialView) {
