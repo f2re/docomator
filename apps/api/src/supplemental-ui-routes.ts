@@ -44,6 +44,20 @@ export function registerSupplementalUiRoutes(
   );
   registerUiAsset(
     app,
+    "/ui/entity-collections-bootstrap.js",
+    "entity-collections-bootstrap.js",
+    "text/javascript; charset=utf-8",
+    uiDirectory
+  );
+  registerUiAsset(
+    app,
+    "/ui/entity-collections-ui.js",
+    "entity-collections-ui.js",
+    "text/javascript; charset=utf-8",
+    uiDirectory
+  );
+  registerUiAsset(
+    app,
     "/ui/data-export.css",
     "data-export.css",
     "text/css; charset=utf-8",
@@ -53,6 +67,13 @@ export function registerSupplementalUiRoutes(
     app,
     "/ui/interaction-contract.css",
     "interaction-contract.css",
+    "text/css; charset=utf-8",
+    uiDirectory
+  );
+  registerUiAsset(
+    app,
+    "/ui/entity-collections.css",
+    "entity-collections.css",
     "text/css; charset=utf-8",
     uiDirectory
   );

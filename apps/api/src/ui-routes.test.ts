@@ -37,10 +37,20 @@ test("UI shell is served locally with security headers", async () => {
 test("UI assets are served without external runtime dependencies", async () => {
   const { app, dataDir } = await testApp();
   try {
-    const [styles, script, icon] = await Promise.all([
+    const [
+      styles,
+      script,
+      icon,
+      collectionBootstrap,
+      collectionEditor,
+      collectionStyles
+    ] = await Promise.all([
       app.inject({ method: "GET", url: "/ui/styles.css" }),
       app.inject({ method: "GET", url: "/ui/app.js" }),
-      app.inject({ method: "GET", url: "/favicon.svg" })
+      app.inject({ method: "GET", url: "/favicon.svg" }),
+      app.inject({ method: "GET", url: "/ui/entity-collections-bootstrap.js" }),
+      app.inject({ method: "GET", url: "/ui/entity-collections-ui.js" }),
+      app.inject({ method: "GET", url: "/ui/entity-collections.css" })
     ]);
 
     assert.equal(styles.statusCode, 200);
@@ -59,6 +69,26 @@ test("UI assets are served without external runtime dependencies", async () => {
 
     assert.equal(icon.statusCode, 200);
     assert.match(icon.headers["content-type"] ?? "", /^image\/svg\+xml/);
+
+    assert.equal(collectionBootstrap.statusCode, 200);
+    assert.match(
+      collectionBootstrap.headers["content-type"] ?? "",
+      /^text\/javascript/
+    );
+    assert.match(collectionBootstrap.body, /entity-collections-ui\.js/u);
+    assert.match(collectionBootstrap.body, /entity-collections\.css/u);
+
+    assert.equal(collectionEditor.statusCode, 200);
+    assert.match(
+      collectionEditor.headers["content-type"] ?? "",
+      /^text\/javascript/
+    );
+    assert.match(collectionEditor.body, /Таблицы и списки/u);
+    assert.doesNotMatch(collectionEditor.body, /https?:\/\//);
+
+    assert.equal(collectionStyles.statusCode, 200);
+    assert.match(collectionStyles.headers["content-type"] ?? "", /^text\/css/);
+    assert.match(collectionStyles.body, /employee-collections/u);
   } finally {
     await app.close();
     await fs.rm(dataDir, { recursive: true, force: true });

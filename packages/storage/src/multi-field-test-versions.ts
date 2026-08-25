@@ -128,6 +128,13 @@ interface DraftRow {
   repeat_binding_json: string | null;
 }
 
+interface EntityCollectionRepeatDraftRow {
+  anchor_element_id: string;
+  part: string;
+  table_index: number;
+  row_index: number;
+}
+
 interface DraftFieldRow {
   id: string;
   draft_id: string;
@@ -560,6 +567,42 @@ function repeatBindingFromContract(
   return toJsonValue(binding);
 }
 
+function expectedRepeatBindingForDraft(
+  connection: SqliteExecutor,
+  draft: DraftRow
+): JsonValue | null {
+  const entityRepeat = connection
+    .prepare(`
+      SELECT anchor_element_id, part, table_index, row_index
+      FROM entity_collection_template_repeats
+      WHERE draft_id = ? AND space_id = ?
+    `)
+    .get(draft.id, draft.space_id) as EntityCollectionRepeatDraftRow | undefined;
+  if (draft.repeat_binding_json !== null && entityRepeat !== undefined) {
+    throw new MultiFieldTestVersionValidationError(
+      "Template draft contains two different repeat row sources"
+    );
+  }
+  if (draft.repeat_binding_json !== null) {
+    return parseJson(draft.repeat_binding_json);
+  }
+  if (entityRepeat === undefined) return null;
+  if (draft.format !== "docx") {
+    throw new MultiFieldTestVersionValidationError(
+      "Entity collection repeat is supported only for DOCX"
+    );
+  }
+  return toJsonValue({
+    version: 1,
+    kind: "docx.repeat-row",
+    source: "audience.members",
+    anchorElementId: entityRepeat.anchor_element_id,
+    part: entityRepeat.part,
+    tableIndex: Number(entityRepeat.table_index),
+    rowIndex: Number(entityRepeat.row_index)
+  });
+}
+
 function versionRow(
   connection: SqliteExecutor,
   spaceId: string,
@@ -686,12 +729,16 @@ export class MultiFieldTestVersionRegistry {
           "Multi-field test format does not match the template draft"
         );
       }
+      const expectedRepeatBinding = expectedRepeatBindingForDraft(connection, draft);
+      const testedRepeatBinding =
+        repeatContract === null
+          ? null
+          : repeatBindingFromContract(repeatContract, format);
       if (
-        (draft.repeat_binding_json === null) !== (repeatContract === null) ||
-        (draft.repeat_binding_json !== null &&
-          repeatContract !== null &&
-          stringifyJson(parseJson(draft.repeat_binding_json)) !==
-            stringifyJson(repeatBindingFromContract(repeatContract, format)))
+        (expectedRepeatBinding === null) !== (testedRepeatBinding === null) ||
+        (expectedRepeatBinding !== null &&
+          testedRepeatBinding !== null &&
+          stringifyJson(expectedRepeatBinding) !== stringifyJson(testedRepeatBinding))
       ) {
         throw new MultiFieldTestVersionValidationError(
           "Repeat row contract does not match the template draft"
