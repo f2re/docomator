@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import test from "node:test";
 
@@ -10,6 +11,7 @@ import {
   EntityCollectionTemplateRepeatValidationError
 } from "./entity-collection-template-repeat.js";
 import { EntityCollectionRegistry } from "./entity-collections.js";
+import { MultiFieldTestVersionRegistry } from "./multi-field-test-versions.js";
 import { ContentAddressedObjectStore } from "./object-store.js";
 import { DEFAULT_SPACE_ID, SpaceRegistry } from "./spaces.js";
 import { TemplateDraftRegistry } from "./template-drafts.js";
@@ -27,6 +29,23 @@ function context(correlationId: string) {
   };
 }
 
+function repeatTechnicalIdentifier(binding: {
+  part: string;
+  tableIndex: number;
+  rowIndex: number;
+}): string {
+  return `airepeat:${createHash("sha256")
+    .update(binding.part)
+    .update("\u0000")
+    .update(String(binding.tableIndex))
+    .update("\u0000")
+    .update(String(binding.rowIndex))
+    .update("\u0000")
+    .update("audience.members")
+    .digest("hex")
+    .slice(0, 24)}`;
+}
+
 async function setupFixture() {
   const fixture = createMigratedTestStore();
   const objectStore = new ContentAddressedObjectStore(
@@ -36,6 +55,7 @@ async function setupFixture() {
   const drafts = new TemplateDraftRegistry(fixture.store);
   const collections = new EntityCollectionRegistry(fixture.store);
   const repeats = new EntityCollectionTemplateRepeatRegistry(fixture.store);
+  const versions = new MultiFieldTestVersionRegistry(fixture.store, objectStore);
   const source = await quarantine.saveAcceptedDocument(
     {
       spaceId: DEFAULT_SPACE_ID,
@@ -178,7 +198,17 @@ async function setupFixture() {
     },
     context("corr-field-question")
   );
-  return { fixture, drafts, collections, repeats, draft, definition, question };
+  return {
+    fixture,
+    objectStore,
+    drafts,
+    collections,
+    repeats,
+    versions,
+    draft,
+    definition,
+    question
+  };
 }
 
 test("entity collection repeat keeps scalar fields outside row and freezes collection schema", async () => {
@@ -258,6 +288,127 @@ test("entity collection repeat keeps scalar fields outside row and freezes colle
             .run(setup.draft.id)
         ),
       /immutable/u
+    );
+  } finally {
+    setup.fixture.cleanup();
+  }
+});
+
+test("entity collection repeat can be frozen in a tested version and SQL rejects another row", async () => {
+  const setup = await setupFixture();
+  try {
+    setup.repeats.configure(
+      DEFAULT_SPACE_ID,
+      setup.draft.id,
+      {
+        collectionId: setup.definition.id,
+        anchorElementId: "number-cell",
+        part: "word/document.xml",
+        tableIndex: 0,
+        rowIndex: 1,
+        numberingStart: 1,
+        numberingStep: 1
+      },
+      context("corr-repeat-tested")
+    );
+    const binding = {
+      version: 1,
+      kind: "docx.repeat-row",
+      source: "audience.members",
+      anchorElementId: "number-cell",
+      part: "word/document.xml",
+      tableIndex: 0,
+      rowIndex: 1
+    } as const;
+    const repeatContract = {
+      version: 1,
+      kind: "docx.repeat-row-contract",
+      binding,
+      technicalBinding: {
+        kind: "docx.repeat-sdt",
+        identifier: repeatTechnicalIdentifier(binding),
+        part: binding.part,
+        target: "w:tbl[1]/w:tr[2]"
+      }
+    } as const;
+    const currentDraft = setup.drafts.getDraft(DEFAULT_SPACE_ID, setup.draft.id);
+    const fieldValues = currentDraft.fields.map((field) => {
+      const sampleValue =
+        field.key === ENTITY_COLLECTION_ROW_NUMBER_KEY
+          ? 1
+          : field.key === setup.question.key
+            ? "Проверочный вопрос"
+            : "Иванов Иван Иванович";
+      const renderedValue = String(sampleValue);
+      return {
+        fieldId: field.id,
+        fieldKey: field.key,
+        fieldLabel: field.label,
+        valueType: field.valueType,
+        required: field.required,
+        binding: field.binding,
+        formatter: field.formatter,
+        technicalBinding: {
+          kind: "docx.sdt",
+          identifier: `aifield:${field.id}`
+        },
+        sampleValue,
+        renderedValue,
+        readBackValue: renderedValue,
+        verification: { matched: true }
+      };
+    });
+    const version = await setup.versions.recordTestedVersion(
+      {
+        spaceId: DEFAULT_SPACE_ID,
+        draftId: setup.draft.id,
+        format: "docx",
+        compiledBuffer: Buffer.from("compiled-entity-repeat"),
+        trialBuffer: Buffer.from("trial-entity-repeat"),
+        fields: fieldValues,
+        repeatContract,
+        verification: { matched: true, repeatSource: "entity_collection" }
+      },
+      context("corr-repeat-version")
+    );
+    assert.deepEqual(version.repeatContract, repeatContract);
+
+    const invalidContract = {
+      ...repeatContract,
+      binding: { ...binding, rowIndex: 2 }
+    };
+    assert.throws(
+      () =>
+        setup.fixture.store.execute((database) =>
+          database
+            .prepare(`
+              INSERT INTO template_multi_test_versions(
+                id, space_id, draft_id, version_number, format,
+                compiled_file_id, trial_file_id, compiled_sha256, trial_sha256,
+                sample_values_json, verification_json, field_count, status,
+                repeat_contract_json, created_by, correlation_id, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tested', ?, ?, ?, ?)
+            `)
+            .run(
+              "invalid-entity-repeat-version",
+              DEFAULT_SPACE_ID,
+              setup.draft.id,
+              999,
+              "docx",
+              version.compiledFileId,
+              version.trialFileId,
+              version.compiledSha256,
+              version.trialSha256,
+              "{}",
+              "{}",
+              1,
+              JSON.stringify(invalidContract),
+              null,
+              "corr-invalid-repeat-version",
+              T0
+            )
+        ),
+      /multi-field test version must match its draft and repeat binding/u
     );
   } finally {
     setup.fixture.cleanup();
