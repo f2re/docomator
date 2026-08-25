@@ -128,7 +128,7 @@ async function putJson(page, url, data) {
 }
 
 async function createStudent(page, selectedSpaceId, displayName, supervisorLabel, supervisorValue, propertyKey = null) {
-  return postJson(page, `/api/v1/spaces/${encodeURIComponent(selectedSpaceId)}/employees`, {
+  const profile = await postJson(page, `/api/v1/spaces/${encodeURIComponent(selectedSpaceId)}/employees`, {
     displayName,
     fields: [
       propertyKey
@@ -143,6 +143,7 @@ async function createStudent(page, selectedSpaceId, displayName, supervisorLabel
           }
     ]
   });
+  return { ...profile, entityId: profile.id };
 }
 
 async function collectionDefinition(page, selectedSpaceId, suffix) {
