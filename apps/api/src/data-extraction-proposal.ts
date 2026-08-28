@@ -72,7 +72,7 @@ const HEADER_WORDS = new Set([
 ]);
 
 function cleanText(value: string): string {
-  return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim();
+  return String(value ?? "").normalize("NFC").replace(/\s+/gu, " ").trim();
 }
 
 function identity(value: string): string {
