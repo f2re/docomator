@@ -15,6 +15,7 @@ import {
 } from "./access-code-gate.js";
 import { buildApp } from "./app.js";
 import { installDataExtractionHttpErrorMapping } from "./data-extraction-http-errors.js";
+import { registerDataExtractionProposalRoutes } from "./data-extraction-proposal-routes.js";
 import { registerDataExtractionRoutes } from "./data-extraction-routes.js";
 import { registerDataExportRoutes } from "./data-export-routes.js";
 import { registerProductRoutes } from "./product-routes.js";
@@ -39,6 +40,7 @@ registerDataExtractionRoutes(
   objectStore,
   new DataExtractionRegistry(store)
 );
+registerDataExtractionProposalRoutes(app);
 
 let closing = false;
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
