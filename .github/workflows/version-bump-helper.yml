@@ -1,0 +1,65 @@
+name: Version bump helper
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  generate-version-bump:
+    if: github.event.pull_request.head.ref == 'feature/data-extraction'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+
+      - name: Read Node.js version
+        id: node-version
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ steps.node-version.outputs.version }}
+
+      - name: Generate minor version bump
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node scripts/release/bump-version.mjs minor
+          mkdir -p version-bump-output
+          cp --parents \
+            RELEASE_IDENTITY.json \
+            VERSION \
+            package.json \
+            package-lock.json \
+            apps/api/package.json \
+            apps/worker/package.json \
+            packages/config/package.json \
+            packages/contracts/package.json \
+            packages/document-intake/package.json \
+            packages/storage/package.json \
+            packages/template-compiler/package.json \
+            packages/config/src/index.ts \
+            config/docomator.env.example \
+            docs/RELEASE_NOTES.md \
+            SECURITY.md \
+            docs/SUPPORT_MATRIX.md \
+            docs/FINALIZATION.md \
+            docs/ROADMAP.md \
+            docs/NEXT_ITERATIONS.md \
+            version-bump-output/
+
+      - name: Upload generated files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: version-bump-0.7.0
+          path: version-bump-output
+          if-no-files-found: error
+          retention-days: 1

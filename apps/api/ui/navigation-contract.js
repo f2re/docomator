@@ -178,4 +178,15 @@
   window.addEventListener("docomator:view-changed", (event) => {
     refresh(event.detail?.view);
   });
+
+  if (!document.querySelector('link[data-data-extraction-style]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "/ui/data-extraction.css";
+    link.dataset.dataExtractionStyle = "";
+    document.head.append(link);
+  }
+  void import("/ui/data-extraction.js").catch((error) => {
+    console.error("Не удалось загрузить модуль извлечения данных.", error);
+  });
 }
