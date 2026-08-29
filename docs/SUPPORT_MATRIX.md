@@ -6,9 +6,9 @@
 
 Статус: **кандидатные строки зафиксированы; целевые акты ещё не получены**
 
-Текущая версия: `0.6.6`.
+Текущая версия: `0.7.0`.
 
-Дата: **2026-08-25**
+Дата: **2026-08-29**
 
 Эта матрица относится к `SYS-002—003`, `DOC-006—007`, `OFF-001—005`, `OFF-009—014`, `SEC-008`, `UX-015—022` и `NFR-011—012`. Состояние `проверено` разрешено только при сохранённом акте конкретной машины, связанном с exact version/commit/release metadata SHA-256. CI разработчика не заменяет target act.
 
@@ -34,6 +34,7 @@
 - `/api/v1/access/unlock` и рабочая session cookie, `401` без `WWW-Authenticate` для закрытой рабочей области;
 - локальный recovery `reset-access-code.sh` и `first-run.sh --reset-code` без потери данных;
 - CSV/XLSX import, DOCX/XLSX generation, LibreOffice preview и reverse-read;
+- DOCX/XLSX extraction: automatic proposal без LLM, визуальная коррекция, batch, restart, provenance/structured issues и CSV; второй space не читает template/run/correction первого;
 - реальный сценарий `пространство → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`, включая выбор длинного списка без обязательного поиска и изоляцию другого пространства;
 - `/gost` без session cookie при сохранении закрытого обычного space API;
 - restart API/worker, backup/restore, update/rollback с сохранением credential/session configuration;
@@ -49,7 +50,7 @@ Visual Template Studio показывает безопасную read-only пр�
 
 ## Исторические свидетельства
 
-Акты `0.1.x—0.6.5` остаются историческими и **не закрывают** acceptance `0.6.6`. Изменение template-flow/layout требует нового evidence exact `0.6.6`, даже при неизменной security boundary ADR-0011.
+Акты `0.1.x—0.6.6` остаются историческими и **не закрывают** acceptance `0.7.0`. Изменение extraction-flow требует нового evidence exact `0.7.0`, даже при неизменной security boundary ADR-0011.
 
 ## Финальная фиксация
 

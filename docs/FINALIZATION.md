@@ -4,9 +4,9 @@
 
 Канал выпуска: `pilot`
 
-Текущая версия: `0.6.6`.
+Текущая версия: `0.7.0`.
 
-Этот документ описывает fail-closed переход от текущего кандидата `0.6.6` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
+Этот документ описывает fail-closed переход от текущего кандидата `0.7.0` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
 
 ## 1. Зафиксировать exact release binding
 
@@ -34,7 +34,7 @@ chmod 600 /tmp/docomator-code
 
 Для Astra дополнительно обязательны `--require-network --require-smtp`.
 
-Акт должен доказать: verify bundle; install/migrations; reboot/systemd; CSV/XLSX import; DOCX/XLSX generation; настоящий LibreOffice; worker restart; backup; update/rollback; `/gost`; access-code flow и recovery. `SKIPPED` в обязательном этапе не считается успехом.
+Акт должен доказать: verify bundle; install/migrations; reboot/systemd; CSV/XLSX import; DOCX/XLSX generation; DOCX/XLSX extraction с automatic proposal/visual correction/batch/CSV; настоящий LibreOffice; worker/API restart; backup; update/rollback; `/gost`; access-code flow и recovery. `SKIPPED` в обязательном этапе не считается успехом.
 
 ## 3. Отдельно проверить код доступа
 
@@ -66,6 +66,7 @@ chmod 600 /tmp/docomator-code
 - отсутствие horizontal overflow;
 - import error recovery без потери файла/mapping;
 - Visual Template Studio на реальном DOCX/XLSX;
+- «Извлечение данных»: загрузка без предварительной настройки → автоматическое предложение → визуальная коррекция → batch из нескольких файлов → повторное открытие результата → CSV;
 - полный сценарий `пространство → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`;
 - выбор любого поля обычной прокруткой и клавиатурой без обязательного поиска;
 - выпуск документов и поиск результата;
@@ -88,9 +89,9 @@ chmod 600 /tmp/docomator-code
 
 ## 7. Нагрузка и пространства
 
-CSV/XLSX import и document generation: 10/100/1000 объектов. Проверяются пустые ячейки, Excel dates, mixed types, дубли, повторный import, partial invalid files и retry only failed units.
+CSV/XLSX import и document generation: 10/100/1000 объектов. Extraction отдельно: batch 1/10/100 документов, включая partially invalid file, duplicate bytes и restart API. Проверяются пустые ячейки, Excel dates, mixed types, дубли, повторный import, partial invalid files и retry only failed units.
 
-Два пространства с одинаковыми именами/ключами не читают, не изменяют, не удаляют и не связывают данные друг друга. Import A не влияет на B.
+Два пространства с одинаковыми именами/ключами не читают, не изменяют, не удаляют и не связывают данные друг друга. Import A не влияет на B. Extraction template/run/correction A не виден и не изменяется из B.
 
 ## 8. Финальный gate кандидата
 
@@ -100,7 +101,7 @@ CSV/XLSX import и document generation: 10/100/1000 объектов. Прове
 npm run release:evidence -- \
   /srv/docomator-release-evidence \
   --expected-commit '<полный Git SHA>' \
-  --expected-version '0.6.6'
+  --expected-version '0.7.0'
 ```
 
 Gate = 0 обязателен.
@@ -110,7 +111,7 @@ Gate = 0 обязателен.
 Только после успешного candidate gate:
 
 1. отдельным PR изменить `RELEASE_IDENTITY.json` на `stable/production`;
-2. если capability set не изменился, оставить version `0.6.6`;
+2. если capability set не изменился, оставить version `0.7.0`;
 3. выполнить полный CI stable commit;
 4. пересобрать Debian/Astra bundles именно из stable commit;
 5. повторно подтвердить target identity/update/rollback/recovery;
