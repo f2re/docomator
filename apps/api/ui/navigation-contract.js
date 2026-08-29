@@ -1,59 +1,20 @@
 {
-  const primaryDesktopViews = new Set([
-    "overview",
-    "employees",
-    "templates",
-    "generation",
-    "documents",
-    "automations",
-    "settings"
-  ]);
-  const primaryMobileViews = new Set([
-    "overview",
-    "employees",
-    "generation",
-    "documents",
-    "settings"
-  ]);
+  const primaryDesktopViews = new Set(["overview", "employees", "templates", "generation", "documents", "automations", "settings"]);
+  const primaryMobileViews = new Set(["overview", "employees", "generation", "documents", "settings"]);
 
   const overflowMetadata = Object.freeze({
-    entities: Object.freeze({
-      label: "Объекты и импорт",
-      description: "Дополнительные типы записей и массовая загрузка данных",
-      icon: "◇"
-    }),
-    publications: Object.freeze({
-      label: "Публикации",
-      description: "Научные статьи, авторы, классификации и отчёты",
-      icon: "◫"
-    }),
-    "gost-formatting": Object.freeze({
-      label: "Форматирование по ГОСТ",
-      description: "Оформление готовых DOCX по выбранному профилю",
-      icon: "§"
-    }),
-    help: Object.freeze({
-      label: "Руководство",
-      description: "Рабочие сценарии, подсказки и восстановление после ошибок",
-      icon: "?"
-    })
+    entities: Object.freeze({ label: "Объекты и импорт", description: "Дополнительные типы записей и массовая загрузка данных", icon: "◇" }),
+    publications: Object.freeze({ label: "Публикации", description: "Научные статьи, авторы, классификации и отчёты", icon: "◫" }),
+    "gost-formatting": Object.freeze({ label: "Форматирование по ГОСТ", description: "Оформление готовых DOCX по выбранному профилю", icon: "§" }),
+    help: Object.freeze({ label: "Руководство", description: "Рабочие сценарии, подсказки и восстановление после ошибок", icon: "?" })
   });
 
   function viewLabel(target) {
-    return (
-      overflowMetadata[target]?.label ||
-      document
-        .querySelector(`.nav-list [data-view-target="${CSS.escape(target)}"] span:last-child`)
-        ?.textContent?.trim() ||
-      "Дополнительный раздел"
-    );
+    return overflowMetadata[target]?.label || document.querySelector(`.nav-list [data-view-target="${CSS.escape(target)}"] span:last-child`)?.textContent?.trim() || "Дополнительный раздел";
   }
 
   function viewDescription(target) {
-    return (
-      overflowMetadata[target]?.description ||
-      "Дополнительные возможности текущего рабочего пространства"
-    );
+    return overflowMetadata[target]?.description || "Дополнительные возможности текущего рабочего пространства";
   }
 
   function viewIcon(target) {
@@ -119,19 +80,15 @@
         button.remove();
       }
     }
-
     removeDuplicateManagementPrimaryActions();
     for (const target of Object.keys(overflowMetadata)) {
-      if (document.querySelector(`[data-view="${CSS.escape(target)}"]`)) {
-        ensureSettingsShortcut(target);
-      }
+      if (document.querySelector(`[data-view="${CSS.escape(target)}"]`)) ensureSettingsShortcut(target);
     }
   }
 
   function normalizeMobileNavigation() {
     const navigation = document.querySelector(".mobile-nav");
     if (!navigation) return;
-
     for (const button of [...navigation.querySelectorAll("[data-view-target]")]) {
       const target = String(button.dataset.viewTarget || "").trim();
       if (!target || primaryMobileViews.has(target)) continue;
@@ -145,7 +102,6 @@
     if (!navigation) return;
     const target = String(view || location.hash.slice(1) || "overview");
     if (primaryMobileViews.has(target)) return;
-
     for (const button of navigation.querySelectorAll("[data-view-target]")) {
       button.classList.remove("is-active");
       button.removeAttribute("aria-current");
@@ -164,18 +120,24 @@
   const observer = new MutationObserver(() => refresh());
   const start = () => {
     refresh();
-    if (document.body) {
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
+    if (document.body) observer.observe(document.body, { childList: true, subtree: true });
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
 
-  window.addEventListener("docomator:view-changed", (event) => {
-    refresh(event.detail?.view);
-  });
+  window.addEventListener("docomator:view-changed", (event) => refresh(event.detail?.view));
+
+  if (!document.querySelector('link[data-data-extraction-style]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "/ui/data-extraction.css";
+    link.dataset.dataExtractionStyle = "";
+    document.head.append(link);
+  }
+  void import("/ui/data-extraction.js")
+    .then(() => import("/ui/data-extraction-auto.js"))
+    .catch((error) => {
+      console.error("Не удалось загрузить модуль извлечения данных.", error);
+    });
 }

@@ -1,12 +1,24 @@
-# Оформлятор 0.6.7
+# Оформлятор 0.7.0
 
-Текущая версия: `0.6.7`.
+Текущая версия: `0.7.0`.
 
 Статус выпуска: `candidate`
 
 Канал выпуска: `pilot`
 
 Статус: **кандидат на стабильный выпуск**. Номер версии описывает состав продукта и не означает завершение эксплуатационной приёмки. Единственный машинный источник версии, статуса и канала — `RELEASE_IDENTITY.json`.
+
+## 2026-08-29 — интеллектуальное извлечение данных из DOCX/XLSX (`0.7.0`)
+
+- Добавлен отдельный раздел «Извлечение данных»: DOCX/XLSX проходят существующий безопасный intake и разбираются в bounded Document IR без Internet и без обязательного LLM.
+- Детерминированный авторазбор предлагает пары «поле — значение», табличные заголовки, повторяемые строки и типы text/integer/number/date; усечённая или неоднозначная структура не закрепляется молча.
+- Пользователь сначала получает готовое предложение и корректирует его визуально; ручная разметка остаётся fallback. Технические elementId/OOXML обычному интерфейсу не нужны.
+- Подтверждённая схема хранит переносимые структурные селекторы, поэтому применяется к однотипным документам с другим SHA-256.
+- Пакетный запуск принимает до 100 документов, сохраняет provenance, structured issues, отдельные versioned corrections и восстанавливается после restart; повтор по idempotency key не создаёт второй run.
+- CSV-экспорт содержит имя исходного документа и нейтрализует formula-like значения. Extraction preview/run не создаёт entities/property definitions и не обходит существующий typed import.
+- Persisted templates/runs/items/corrections жёстко scoped по spaceId и защищены application + SQLite cross-space checks.
+- Добавлены unit/API/browser regressions для auto-proposal, Unicode-заголовков, переносимости structural recipe, correction immutability и automatic-first UX.
+- Поддержка не расширяется на PDF/ODT/OCR: для них требуются отдельные безопасные adapters, fixtures и acceptance.
 
 ## 2026-08-28 — упрощён выпуск и проверка документов (`0.6.7`)
 
@@ -49,7 +61,7 @@
 ## 2026-08-24 — единый 4-значный код доступа (`0.6.3`)
 
 - Удалена текущая password/login-модель: встроенная рабочая область использует один общий код из ровно четырёх цифр без имени пользователя, учётной записи и роли.
-- Канонический экран — `/access`; API — `/api/v1/access/setup|unlock|lock|status`. Встроенный сервер не использует HTTP Basic Auth и не выдаёт `WWW-Authenticate`.
+- Канонический экран — `/access`; API — `/api/v1/access/setup|unlock|lock|status`. Встроенный сервер не использует HTTP Basic Authentication и не выдаёт `WWW-Authenticate`.
 - Первый запуск требует один раз задать четыре цифры и сразу открывает рабочую область; повторный ввод/confirmation отсутствует.
 - Scrypt, constant-time verification, signed `HttpOnly`/`SameSite=Strict` session, `Secure` over HTTPS, same-origin mutation и локальный backoff сохранены.
 - Обработка истёкшей session/`401` централизована в `access-session.js`; дублирующие auth monkey-patches из бизнес-модулей удалены.
@@ -80,6 +92,6 @@
 
 ## Что ещё блокирует `stable`
 
-До `status=stable/channel=production` обязательны фактические доказательства exact `0.6.7`: чистая offline-установка Debian и Astra Linux 1.7; реальный LibreOffice; ≥20 DOCX + ≥20 XLSX; import/generation 10/100/1000; restart/retry без дублей; backup/restore; update/rollback без потери данных; ручная P5/accessibility-приёмка, включая первый запуск/recovery 4-значного кода и полный сценарий `пространство → сотрудники/группа → шаблон → документ`; пустой список блокеров и успешный release-evidence.
+До `status=stable/channel=production` обязательны фактические доказательства exact `0.7.0`: чистая offline-установка Debian и Astra Linux 1.7; реальный LibreOffice; ≥20 DOCX + ≥20 XLSX; import/generation 10/100/1000; restart/retry без дублей; backup/restore; update/rollback без потери данных; ручная P5/accessibility-приёмка, включая первый запуск/recovery 4-значного кода, упрощённый сценарий `пространство → сотрудники/группа → шаблон → проверка и формирование → результат`, а также `DOCX/XLSX → авторазбор → визуальная коррекция → batch → CSV` с изоляцией второго пространства; пустой список блокеров и успешный release-evidence.
 
 Точный протокол: `docs/FINALIZATION.md`, `docs/SUPPORT_MATRIX.md`, `docs/UX_ACCEPTANCE_PROTOCOL.md`.

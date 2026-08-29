@@ -24,6 +24,17 @@ export class ОформляторPage {
           .first()
           .click();
       }
+    } else if (name === "extraction") {
+      const sidebarButton = this.page.locator("[data-extraction-open]:visible");
+      if ((await sidebarButton.count()) > 0) {
+        await sidebarButton.click();
+      } else {
+        await this.openView("settings");
+        await this.page
+          .locator('[data-view="settings"] [data-extraction-settings-open]:visible')
+          .first()
+          .click();
+      }
     } else {
       const visibleTarget = this.page
         .locator(`[data-view-target="${name}"]:visible`)

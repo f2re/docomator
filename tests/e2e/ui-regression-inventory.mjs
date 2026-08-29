@@ -5,6 +5,7 @@ export const CANONICAL_UI_VIEWS = Object.freeze([
   Object.freeze({ view: "employees", label: "Сотрудники", tier: "primary" }),
   Object.freeze({ view: "entities", label: "Объекты", tier: "primary" }),
   Object.freeze({ view: "templates", label: "Шаблоны", tier: "primary" }),
+  Object.freeze({ view: "extraction", label: "Извлечение данных", tier: "primary" }),
   Object.freeze({ view: "gost-formatting", label: "Форматирование по ГОСТ", tier: "primary" }),
   Object.freeze({ view: "generation", label: "Создать документы", tier: "primary" }),
   Object.freeze({ view: "documents", label: "Результаты", tier: "primary" }),
@@ -144,6 +145,10 @@ export async function installUiRegressionScenario(page) {
   );
   await page.route(
     /\/api\/v1\/spaces\/[^/]+\/publications\/reports\/snapshots(?:\?.*)?$/u,
+    (route) => fulfillJson(route, [])
+  );
+  await page.route(
+    /\/api\/v1\/spaces\/[^/]+\/data-extraction\/(?:templates|runs)(?:\?.*)?$/u,
     (route) => fulfillJson(route, [])
   );
   await installDatabaseRegressionScenario(page);

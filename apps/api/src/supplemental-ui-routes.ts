@@ -28,32 +28,11 @@ export function registerSupplementalUiRoutes(
   app: FastifyInstance,
   uiDirectory: string = defaultUiDirectory
 ): void {
-  registerUiAsset(
-    app,
-    "/ui/data-export.js",
-    "data-export.js",
-    "text/javascript; charset=utf-8",
-    uiDirectory
-  );
-  registerUiAsset(
-    app,
-    "/ui/navigation-contract.js",
-    "navigation-contract.js",
-    "text/javascript; charset=utf-8",
-    uiDirectory
-  );
-  registerUiAsset(
-    app,
-    "/ui/data-export.css",
-    "data-export.css",
-    "text/css; charset=utf-8",
-    uiDirectory
-  );
-  registerUiAsset(
-    app,
-    "/ui/interaction-contract.css",
-    "interaction-contract.css",
-    "text/css; charset=utf-8",
-    uiDirectory
-  );
+  registerUiAsset(app, "/ui/data-export.js", "data-export.js", "text/javascript; charset=utf-8", uiDirectory);
+  registerUiAsset(app, "/ui/navigation-contract.js", "navigation-contract.js", "text/javascript; charset=utf-8", uiDirectory);
+  registerUiAsset(app, "/ui/data-extraction.js", "data-extraction.js", "text/javascript; charset=utf-8", uiDirectory);
+  registerUiAsset(app, "/ui/data-extraction-auto.js", "data-extraction-auto.js", "text/javascript; charset=utf-8", uiDirectory);
+  registerUiAsset(app, "/ui/data-export.css", "data-export.css", "text/css; charset=utf-8", uiDirectory);
+  registerUiAsset(app, "/ui/interaction-contract.css", "interaction-contract.css", "text/css; charset=utf-8", uiDirectory);
+  registerUiAsset(app, "/ui/data-extraction.css", "data-extraction.css", "text/css; charset=utf-8", uiDirectory);
 }

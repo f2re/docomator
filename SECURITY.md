@@ -4,7 +4,7 @@
 
 Канал выпуска: `pilot`
 
-Текущая версия: `0.6.7`.
+Текущая версия: `0.7.0`.
 
 Это предварительный выпуск. До завершения целевой приёмки, восстановления резервной копии и проверки реальных документов Оформлятор нельзя использовать для штатной обработки персональных или ограниченных данных; допускается только контролируемый пилот на обезличенных данных.
 
@@ -67,6 +67,14 @@ DOCX/XLSX считаются недоверенным входом. Визуал
 - binding остаётся серверно проверяемой координатой, а не DOM selector/HTML fragment;
 - visual-layout scoped по `spaceId + draft`, read-only и `Cache-Control: private, no-store`;
 - ошибка rich projection не меняет данные и приводит к безопасному fallback.
+
+## Извлечение данных
+
+Extraction использует только существующий безопасный DOCX/XLSX intake и bounded Document IR. Автоматическое предложение является данными, а не исполняемым планом: оно может ссылаться только на реальные elementId/ячейки текущей структуры и не создаёт paths, SQL, shell, HTML или OOXML.
+
+Persisted extraction templates, runs, items и corrections всегда получают явный `spaceId`; чтение/preview не меняют ownership и не создают property definitions. Automatic result не переписывается пользовательской коррекцией: исправления хранятся отдельно с optimistic version. CSV-экспорт обязан нейтрализовать spreadsheet formulas.
+
+Базовый auto-detector детерминирован и работает без LLM. Будущий LLM допускается только как bounded assistant над Document IR/candidate IDs с JSON Schema + business validation; документ не может менять system prompt, tools или policy. PDF/ODT/OCR не входят в поддерживаемый контур без отдельного adapter/threat review/fixtures.
 
 ## Приоритетные классы риска
 
