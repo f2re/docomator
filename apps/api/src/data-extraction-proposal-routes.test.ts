@@ -84,7 +84,7 @@ test("auto-proposal API returns safe Document IR coordinates without persisting 
       assert.equal(ids.has(column.elementId), true, column.elementId);
     }
     assert.ok(body.data.proposal.confidence >= 0.8);
-    await assert.rejects(fs.access(path.join(dataDir, "docomator.db")));
+    await assert.rejects(fs.access(path.join(dataDir, "objects")));
   } finally {
     await app.close();
     await fs.rm(dataDir, { recursive: true, force: true });
