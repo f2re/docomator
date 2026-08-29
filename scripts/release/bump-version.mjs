@@ -48,6 +48,17 @@ function replaceRequired(content, pattern, replacement, label) {
   return content.replace(pattern, replacement);
 }
 
+export function updatePlanningDocumentVersion(content, oldVersion, nextVersion, label = "planning document") {
+  let updated = replaceRequired(
+    content,
+    /^Текущая версия:\s*`[^`]+`\.?$/mu,
+    `Текущая версия: \`${nextVersion}\`.`,
+    `${label}: Текущая версия`
+  );
+  updated = updated.replaceAll(`exact \`${oldVersion}\``, `exact \`${nextVersion}\``);
+  return updated;
+}
+
 async function writeJson(relativePath, value) {
   await fs.writeFile(path.join(repositoryRoot, relativePath), `${JSON.stringify(value, null, 2)}\n`);
 }
@@ -64,19 +75,37 @@ async function syncPackage(relativePath, nextVersion) {
   await fs.writeFile(target, `${JSON.stringify(data, null, 2)}\n`);
 }
 
-async function syncLock(nextVersion) {
-  const target = path.join(repositoryRoot, "package-lock.json");
-  const lock = JSON.parse(await fs.readFile(target, "utf8"));
-  lock.version = nextVersion;
+export function updateLockVersion(content, oldVersion, nextVersion) {
+  const lock = JSON.parse(content);
+  if (lock.version !== oldVersion) {
+    throw new Error(`package-lock.json: ожидалась версия ${oldVersion}, получена ${lock.version}`);
+  }
+  let expectedOccurrences = 1;
   for (const [packagePath, record] of Object.entries(lock.packages || {})) {
-    if (packagePath === "" || packagePath.startsWith("apps/") || packagePath.startsWith("packages/")) {
-      record.version = nextVersion;
-      for (const name of Object.keys(record.dependencies || {})) {
-        if (name.startsWith("@docomator/")) record.dependencies[name] = nextVersion;
+    if (packagePath !== "" && !packagePath.startsWith("apps/") && !packagePath.startsWith("packages/")) continue;
+    if (record.version !== oldVersion) {
+      throw new Error(`package-lock.json: ${packagePath || "root"} имеет неожиданную версию ${record.version}`);
+    }
+    expectedOccurrences += 1;
+    for (const [name, version] of Object.entries(record.dependencies || {})) {
+      if (!name.startsWith("@docomator/")) continue;
+      if (version !== oldVersion) {
+        throw new Error(`package-lock.json: ${packagePath || "root"} -> ${name} имеет неожиданную версию ${version}`);
       }
+      expectedOccurrences += 1;
     }
   }
-  await fs.writeFile(target, `${JSON.stringify(lock, null, 2)}\n`);
+  const actualOccurrences = content.split(oldVersion).length - 1;
+  if (actualOccurrences !== expectedOccurrences) {
+    throw new Error(`package-lock.json: найдено ${actualOccurrences} ссылок ${oldVersion}, ожидалось ${expectedOccurrences}`);
+  }
+  return content.replaceAll(oldVersion, nextVersion);
+}
+
+async function syncLock(oldVersion, nextVersion) {
+  const target = path.join(repositoryRoot, "package-lock.json");
+  const content = await fs.readFile(target, "utf8");
+  await fs.writeFile(target, updateLockVersion(content, oldVersion, nextVersion));
 }
 
 async function syncRuntimeDefaults(oldVersion, nextVersion) {
@@ -104,7 +133,10 @@ async function syncReleaseDocuments(oldVersion, nextVersion) {
   for (const relativePath of ["docs/ROADMAP.md", "docs/NEXT_ITERATIONS.md"]) {
     const target = path.join(repositoryRoot, relativePath);
     const content = await fs.readFile(target, "utf8");
-    await fs.writeFile(target, content.replaceAll(oldVersion, nextVersion));
+    await fs.writeFile(
+      target,
+      updatePlanningDocumentVersion(content, oldVersion, nextVersion, relativePath)
+    );
   }
 }
 
@@ -120,7 +152,7 @@ export async function syncVersion(change) {
   await writeJson("RELEASE_IDENTITY.json", identity);
   await fs.writeFile(path.join(repositoryRoot, "VERSION"), `${nextVersion}\n`);
   for (const relativePath of packageFiles) await syncPackage(relativePath, nextVersion);
-  await syncLock(nextVersion);
+  await syncLock(oldVersion, nextVersion);
   await syncRuntimeDefaults(oldVersion, nextVersion);
   await syncReleaseDocuments(oldVersion, nextVersion);
   process.stdout.write(`Оформлятор: ${oldVersion} → ${nextVersion}. Статус выпуска сохранён: ${identity.status}/${identity.channel}.\n`);

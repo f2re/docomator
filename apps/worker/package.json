@@ -1,6 +1,6 @@
 {
   "name": "@docomator/worker",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,8 +8,8 @@
     "test": "node --test dist/*.test.js"
   },
   "dependencies": {
-    "@docomator/config": "0.6.6",
-    "@docomator/storage": "0.6.6",
-    "@docomator/template-compiler": "0.6.6"
+    "@docomator/config": "0.6.7",
+    "@docomator/storage": "0.6.7",
+    "@docomator/template-compiler": "0.6.7"
   }
 }
