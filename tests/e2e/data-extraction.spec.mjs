@@ -78,9 +78,7 @@ test("извлечение сначала предлагает структур�
 
   const app = new ОформляторPage(page);
   await app.open();
-  const openButton = page.locator("[data-extraction-open]");
-  await expect(openButton).toBeVisible();
-  await openButton.click();
+  await app.openView("extraction");
   await expect(page.locator("#data-extraction-heading")).toHaveText("Извлечение данных");
   await expect(page.locator("#extraction-template-title")).toHaveText("Проверьте найденную структуру");
 
