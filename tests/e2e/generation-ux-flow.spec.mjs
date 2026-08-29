@@ -199,8 +199,14 @@ test("UX выпуска сохраняет терминологию произв
   await app.open();
   await app.openView("generation");
 
-  await expect(page.locator("#generationEntityType")).toBeVisible();
-  await page.locator("#generationEntityType").selectOption("room", { force: true });
+  const nativeTypeSelect = page.locator("#generationEntityType");
+  await expect(nativeTypeSelect).toBeAttached();
+  await expect(
+    nativeTypeSelect
+      .locator("xpath=following-sibling::*[1]")
+      .locator(".searchable-select-trigger")
+  ).toBeVisible();
+  await nativeTypeSelect.selectOption("room", { force: true });
   await expect(page.locator("#generationEntityType")).toHaveValue("room");
   await expect
     .poll(() =>
