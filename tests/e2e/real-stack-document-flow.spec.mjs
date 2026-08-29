@@ -231,15 +231,24 @@ async function generateAndDownloadByGroup(page, groupName, expectedValue) {
     timeout: 20_000
   });
   await page.locator("#generationSourceKind").selectOption("group");
-  await expect(page.locator("#generationGroup")).toBeVisible({ timeout: 20_000 });
-  const groupOption = page
-    .locator("#generationGroup option")
+  const nativeGroupSelect = page.locator("#generationGroup");
+  await expect(nativeGroupSelect).toBeAttached({ timeout: 20_000 });
+  const groupControl = nativeGroupSelect.locator("xpath=following-sibling::*[1]");
+  const groupTrigger = groupControl.locator(".searchable-select-trigger");
+  await expect(groupTrigger).toBeVisible({ timeout: 20_000 });
+  const groupOption = nativeGroupSelect
+    .locator("option")
     .filter({ hasText: groupName })
     .first();
   await expect(groupOption).toHaveCount(1);
   const groupId = await groupOption.getAttribute("value");
   expect(groupId).toBeTruthy();
-  await page.locator("#generationGroup").selectOption(groupId);
+  await groupTrigger.click();
+  await groupControl
+    .locator('.searchable-select-option[role="option"]')
+    .filter({ hasText: groupName })
+    .click();
+  await expect(nativeGroupSelect).toHaveValue(groupId);
   await expect(page.locator("#generationEstimate")).toContainText(
     "1 сотрудников → 1 DOCX",
     { timeout: 20_000 }
