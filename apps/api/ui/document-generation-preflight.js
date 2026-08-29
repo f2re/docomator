@@ -15,10 +15,10 @@ function renderGenerationPreflight(preflight) {
   const missingMembers = preflight.members.filter((member) => !member.ready);
   const readyText =
     preflight.targetMode === "one_per_member"
-      ? `Можно сформировать индивидуальных документов: ${preflight.readyMemberCount}.`
+      ? `Можно сформировать документов: ${preflight.readyMemberCount}.`
       : preflight.missingMemberCount === 0
         ? "Сводный документ готов к запуску."
-        : "Сводный документ нельзя сформировать, пока обязательные значения заполнены не у всех сотрудников.";
+        : "Сводный документ нельзя сформировать, пока обязательные значения заполнены не для всего выбранного состава.";
   holder.innerHTML = `
     <article class="generation-summary ${preflight.missingMemberCount === 0 ? "is-success" : "is-warning"}">
       <div>
@@ -27,7 +27,7 @@ function renderGenerationPreflight(preflight) {
       </div>
     </article>
     <div class="generation-progress-grid">
-      <div class="generation-progress-item"><span>Сотрудников</span><strong>${preflight.memberCount}</strong></div>
+      <div class="generation-progress-item"><span>Всего в составе</span><strong>${preflight.memberCount}</strong></div>
       <div class="generation-progress-item"><span>Полностью готовы</span><strong>${preflight.readyMemberCount}</strong></div>
       <div class="generation-progress-item"><span>Требуют данных</span><strong>${preflight.missingMemberCount}</strong></div>
       <div class="generation-progress-item"><span>Пропущенных значений</span><strong>${preflight.missingValueCount}</strong></div>
@@ -47,14 +47,14 @@ function renderGenerationPreflight(preflight) {
               </article>`
           )
           .join("")}
-        ${missingMembers.length > 100 ? `<div class="generation-history-empty">Показаны первые 100 сотрудников. Всего требуют данных: ${missingMembers.length}.</div>` : ""}
+        ${missingMembers.length > 100 ? `<div class="generation-history-empty">Показаны первые 100 записей. Всего требуют данных: ${missingMembers.length}.</div>` : ""}
       </section>` : ""}
     <div class="generation-downloads">
       ${preflight.canStart && preflight.targetMode === "one_per_member" && preflight.missingMemberCount > 0 ? `<button class="primary-button" id="generationStartPrepared" type="button">Сформировать готовые документы (${preflight.readyMemberCount})</button>` : ""}
       ${preflight.canStart && preflight.missingMemberCount === 0 ? `<button class="primary-button" id="generationStartPrepared" type="button">Сформировать документы</button>` : ""}
       <button class="secondary-button" id="generationPreflightRefresh" type="button">Обновить проверку</button>
     </div>
-    ${preflight.targetMode === "one_per_member" && preflight.missingMemberCount > 0 ? `<div class="generation-state is-warning"><div><strong>Можно выпустить готовые карточки</strong><p>Документы для заполненных карточек будут созданы. Сотрудники с пропусками останутся в списке для исправления.</p></div></div>` : ""}`;
+    ${preflight.targetMode === "one_per_member" && preflight.missingMemberCount > 0 ? `<div class="generation-state is-warning"><div><strong>Можно сформировать готовые документы</strong><p>Документы для полностью заполненных записей будут созданы. Остальные останутся в списке для исправления.</p></div></div>` : ""}`;
   const submit = document.querySelector("#generationSubmit");
   if (submit) submit.hidden = true;
   holder
@@ -89,7 +89,7 @@ async function refreshPreparedGenerationPreflight() {
   generationBusy = true;
   holder.insertAdjacentHTML(
     "afterbegin",
-    `<div class="generation-state is-pending" id="generationPreflightProgress" role="status"><div><strong>Проверяем актуальные значения</strong><p>Используем тот же список сотрудников и перечитываем значения их карточек.</p></div></div>`
+    `<div class="generation-state is-pending" id="generationPreflightProgress" role="status"><div><strong>Проверяем актуальные значения</strong><p>Используем тот же выбранный состав и перечитываем актуальные значения.</p></div></div>`
   );
   try {
     const preflight = await inspectPreparedGeneration();
@@ -128,7 +128,7 @@ async function startPreparedGeneration() {
     message.className = "is-loading";
     message.textContent = "Создаём сохраняемое задание формирования.";
   }
-  holder.innerHTML = `<div class="generation-state is-pending" role="status"><div><strong>Начинаем формирование</strong><p>Шаблон и список сотрудников уже сохранены для этого выпуска.</p></div></div>`;
+  holder.innerHTML = `<div class="generation-state is-pending" role="status"><div><strong>Начинаем формирование</strong><p>Шаблон и выбранный состав уже сохранены для этого выпуска.</p></div></div>`;
   try {
     const body = await generationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(generationPreparedRun.spaceId)}/document-jobs`,
@@ -181,7 +181,7 @@ async function prepareGenerationWithPreflight(event) {
   try {
     source = generationSourcePayload();
   } catch (error) {
-    message.textContent = error?.message || "Проверьте список сотрудников.";
+    message.textContent = error?.message || "Проверьте выбранный состав.";
     message.className = "is-error";
     return;
   }
@@ -189,8 +189,8 @@ async function prepareGenerationWithPreflight(event) {
   generationBusy = true;
   button.disabled = true;
   message.className = "is-loading";
-  message.textContent = "Сохраняем выбранный список и проверяем обязательные данные.";
-  status.innerHTML = `<div class="generation-state is-pending" role="status"><div><strong>Проверяем карточки сотрудников</strong><p>Система покажет, каких сведений не хватает до запуска.</p></div></div>`;
+  message.textContent = "Сохраняем выбранный состав и проверяем обязательные данные.";
+  status.innerHTML = `<div class="generation-state is-pending" role="status"><div><strong>Проверяем обязательные данные</strong><p>Система покажет, каких сведений не хватает до запуска.</p></div></div>`;
   try {
     const snapshotBody = await generationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/audience-snapshots`,
@@ -240,7 +240,8 @@ function generationUxIcon(kind) {
 }
 
 function generationUxIsPerson() {
-  return typeof genericGenerationIsPerson !== "function" || genericGenerationIsPerson();
+  const typeKey = String(globalThis.docomatorGenerationEntityTypeKey || "").trim();
+  return typeKey === "" || typeKey === "person";
 }
 
 function enhanceGenerationSelect(select, placeholder, searchPlaceholder) {

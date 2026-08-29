@@ -177,3 +177,40 @@ test("ошибка запуска сохраняет проверенный со
   await expect(page.locator("#documentGenerationStatus")).toContainText("Готово");
   await expect(generationCurrentStep(page)).toHaveText("Результат");
 });
+
+test("UX выпуска сохраняет терминологию произвольных объектов", async ({ page }) => {
+  const scenario = await installОформляторApiMock(page, {
+    employeeCount: 1,
+    activeTemplate: true,
+    entityTypes: [
+      { key: "person", label: "Человек", description: "Сотрудник" },
+      { key: "room", label: "Аудитория", description: "Учебное помещение" }
+    ]
+  });
+  scenario.primary.entities.push({
+    entityId: "room-e2e-1",
+    displayName: "Аудитория 101",
+    entityTypeKey: "room",
+    entityTypeLabel: "Аудитория",
+    status: "active"
+  });
+
+  const app = new ОформляторPage(page);
+  await app.open();
+  await app.openView("generation");
+
+  await expect(page.locator("#generationEntityType")).toBeVisible();
+  await page.locator("#generationEntityType").selectOption("room", { force: true });
+  await expect(page.locator("#generationEntityType")).toHaveValue("room");
+  await expect
+    .poll(() =>
+      page.evaluate(() => globalThis.docomatorGenerationEntityTypeKey || "")
+    )
+    .toBe("room");
+  await expect(page.locator("#generationPeopleLabel")).toHaveText("Объекты");
+  await expect(page.locator("#generationSourceKind option")).toHaveText([
+    "Для всех объектов выбранного типа",
+    "Для сохранённой группы",
+    "Для выбранных объектов"
+  ]);
+});
