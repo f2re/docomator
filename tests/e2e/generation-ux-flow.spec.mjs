@@ -7,6 +7,10 @@ function preflightEnvelope(data) {
   return JSON.stringify({ data, correlationId: "e2e-generation-ux" });
 }
 
+function generationCurrentStep(page) {
+  return page.locator('.generation-step-rail [aria-current="step"] strong');
+}
+
 test("выпуск показывает одну шкалу этапов и не держит два основных действия после проверки", async ({
   page
 }) => {
@@ -83,7 +87,7 @@ test("выпуск показывает одну шкалу этапов и не
   await page.keyboard.press("Escape");
 
   await page.locator("#generationSubmit").click();
-  await expect(page.locator('[aria-current="step"] strong')).toHaveText("Проверка");
+  await expect(generationCurrentStep(page)).toHaveText("Проверка");
   await expect(page.locator("#documentGenerationStatus")).toContainText(
     "Найдены незаполненные обязательные поля"
   );
@@ -101,7 +105,7 @@ test("выпуск показывает одну шкалу этапов и не
   );
 
   await page.locator("#generationSourceKind").selectOption("selected");
-  await expect(page.locator('[aria-current="step"] strong')).toHaveText("Шаблон");
+  await expect(generationCurrentStep(page)).toHaveText("Шаблон");
   await expect(page.locator("#documentGenerationStatus")).toBeEmpty();
   await expect(page.locator("#generationSubmit")).toBeVisible();
   await expect(page.locator("#generationFormMessage")).toContainText(
@@ -127,7 +131,7 @@ test("явная кнопка проверки запускает готовый
 
   await expect.poll(() => scenario.primary.generationCreated).toBe(true);
   await expect(page.locator("#documentGenerationStatus")).toContainText("Готово");
-  await expect(page.locator('[aria-current="step"] strong')).toHaveText("Результат");
+  await expect(generationCurrentStep(page)).toHaveText("Результат");
 });
 
 test("ошибка запуска сохраняет проверенный состав и даёт безопасный повтор", async ({
@@ -171,5 +175,5 @@ test("ошибка запуска сохраняет проверенный со
   await page.locator("#generationStartPreparedRetry").click();
   await expect.poll(() => scenario.primary.generationCreated).toBe(true);
   await expect(page.locator("#documentGenerationStatus")).toContainText("Готово");
-  await expect(page.locator('[aria-current="step"] strong')).toHaveText("Результат");
+  await expect(generationCurrentStep(page)).toHaveText("Результат");
 });
