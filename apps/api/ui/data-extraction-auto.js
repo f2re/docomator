@@ -93,42 +93,47 @@
     control.dispatchEvent(new Event(eventName, { bubbles: true }));
   }
 
-  function applyCandidate(candidate, role) {
+  function selectCandidate(candidate, role) {
     const id = String(candidate?.elementId || "");
     if (!id) return false;
     const sourceButton = document.querySelector(`[data-extraction-element="${CSS.escape(id)}"]`);
     if (!sourceButton) return false;
-    const alreadySelected = sourceButton.classList.contains("is-selected");
-    if (!alreadySelected) sourceButton.click();
+    if (!sourceButton.classList.contains("is-selected")) sourceButton.click();
     const card = document.querySelector(`[data-assignment-id="${CSS.escape(id)}"]`);
     if (!card) return false;
-    if (alreadySelected) return true;
 
     dispatchValue(card.querySelector("[data-assignment-label]"), candidate.label, "input");
     dispatchValue(card.querySelector("[data-assignment-type]"), candidate.outputType || "text", "change");
     dispatchValue(card.querySelector("[data-assignment-role]"), role, "change");
-
-    const header = card.querySelector(".extraction-assignment-heading");
-    if (header && !header.querySelector("[data-extraction-auto-badge]")) {
-      const badge = document.createElement("span");
-      badge.className = "pill";
-      badge.dataset.extractionAutoBadge = "";
-      const confidence = Math.round(Number(candidate.confidence || 0) * 100);
-      badge.textContent = confidence > 0 ? `Найдено автоматически · ${confidence}%` : "Найдено автоматически";
-      header.append(badge);
-    }
     return true;
   }
 
+  function decorateCandidate(candidate) {
+    const id = String(candidate?.elementId || "");
+    if (!id) return;
+    const card = document.querySelector(`[data-assignment-id="${CSS.escape(id)}"]`);
+    const header = card?.querySelector(".extraction-assignment-heading");
+    if (!header || header.querySelector("[data-extraction-auto-badge]")) return;
+    const badge = document.createElement("span");
+    badge.className = "pill";
+    badge.dataset.extractionAutoBadge = "";
+    const confidence = Math.round(Number(candidate.confidence || 0) * 100);
+    badge.textContent = confidence > 0 ? `Найдено автоматически · ${confidence}%` : "Найдено автоматически";
+    header.append(badge);
+  }
+
   function applyProposal(proposal) {
-    let applied = 0;
+    const applied = [];
     for (const field of Array.isArray(proposal?.fields) ? proposal.fields : []) {
-      if (applyCandidate(field, "field")) applied += 1;
+      if (selectCandidate(field, "field")) applied.push(field);
     }
     for (const column of Array.isArray(proposal?.repeat?.columns) ? proposal.repeat.columns : []) {
-      if (applyCandidate(column, "repeat")) applied += 1;
+      if (selectCandidate(column, "repeat")) applied.push(column);
     }
-    return applied;
+    // Каждый новый выбор перерисовывает весь список assignments. Декорируем только
+    // после завершения всех выборов, иначе следующий render удалит предыдущий badge.
+    for (const candidate of applied) decorateCandidate(candidate);
+    return applied.length;
   }
 
   async function requestProposal(file, token) {
