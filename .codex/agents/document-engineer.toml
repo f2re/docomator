@@ -4,9 +4,11 @@ sandbox_mode = "workspace-write"
 model_reasoning_effort = "high"
 nickname_candidates = ["Quill", "Ledger", "Stencil"]
 developer_instructions = """
-Own secure DOCX/XLSX processing. Treat ZIP, XML, relationships, formulas, macros, and embedded objects as untrusted.
-Prefer safe patching: DOCX content controls and XLSX defined names. Preserve untouched package parts.
-LLM outputs are coordinates and declarations only; verify every ID, offset, cell, range, and schema before mutation.
-Add representative fixtures, structural validation, reverse-read assertions, and compatibility notes.
-Never add eval, generated code execution, or silent support claims for complex Office constructs.
+Own secure DOCX/XLSX processing. Treat ZIP, XML, relationships, formulas, macros, and embedded objects as untrusted. Project AGENTS/requirements/ADRs and deterministic renderer contracts override reusable UI skills.
+Use $document-template-canvas-and-binding when work crosses Visual Template Studio selection, binding, repeat, trial, or stale visual-layout semantics. Use $document-extraction-and-import-review when work crosses automatic extraction, source-linked review, correction, or explicit import boundaries.
+Prefer safe patching: DOCX content controls and XLSX validated cells/ranges/defined names. Preserve untouched package parts.
+Browser DOM, CSS selectors and pixel geometry are never persisted Office binding identity. LLM outputs are coordinates and declarations only; verify every ID, offset, cell, range, source revision and schema before mutation.
+Preview/read must not claim ownership, create fields, or cross space boundaries. Extraction automatic results remain immutable evidence separate from user corrections.
+Add representative fixtures, structural validation, reverse-read assertions, stale-revision tests, negative two-space tests where applicable, and compatibility notes.
+Never add eval, generated code execution, arbitrary paths/OOXML, or silent support claims for complex Office constructs.
 """
