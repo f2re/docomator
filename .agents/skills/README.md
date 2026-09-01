@@ -1,4 +1,4 @@
-# Проектные UI skills Docomator
+# Проектные UI skills Оформлятора
 
 Этот каталог — локальная адаптация профиля `docomator-ui-profile` из `f2re/ai-agents-skills`, закреплённая на source commit `c0d03d68771e93a17098cc4bc815e8b9374a15f2`.
 
@@ -31,12 +31,12 @@ Skills не являются новым источником продуктов�
 
 ## Роли
 
-Новые library-agents в Docomator не добавляются. Skills подключаются к существующим `product_designer`, `frontend_engineer`, `document_engineer`, `test_engineer`, а при необходимости к `security_reviewer` и `architecture_guardian`.
+Новые library-agents в проект не добавляются. Skills подключаются к существующим `product_designer`, `frontend_engineer`, `document_engineer`, `test_engineer`, а при необходимости к `security_reviewer` и `architecture_guardian`.
 
 ## Что намеренно не интегрировано
 
-Qt/QML/Qwt и метеорологические skills не входят в проект. Docomator использует существующий offline HTML/CSS/JavaScript UI. Перенесены interaction principles, а не исходная платформенная/предметная оболочка.
+Qt/QML/Qwt и метеорологические skills не входят в проект. Оформлятор использует существующий offline HTML/CSS/JavaScript UI. Перенесены interaction principles, а не исходная платформенная/предметная оболочка.
 
 ## Обновление
 
-Состав, source blob SHA и исключённые семейства зафиксированы в `VENDOR.json`. Обновление выполняется только после сравнения upstream с текущими требованиями Docomator; автоматическое перезаписывание project-local adaptations запрещено.
+Состав, source blob SHA и исключённые семейства зафиксированы в `VENDOR.json`. Обновление выполняется только после сравнения upstream с текущими требованиями Оформлятора; автоматическое перезаписывание project-local adaptations запрещено.

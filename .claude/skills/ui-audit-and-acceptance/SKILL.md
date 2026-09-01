@@ -1,9 +1,9 @@
 ---
 name: ui-audit-and-acceptance
-description: Docomator-specific UI/UX acceptance gate for hierarchy, document workflows, state/recovery, control recomposition, offline web implementation, accessibility, motion and document/data invariants.
+description: UI/UX acceptance gate for Оформлятор covering hierarchy, document workflows, state/recovery, control recomposition, offline web implementation, accessibility, motion and document/data invariants.
 ---
 
-# Docomator UI Audit and Acceptance
+# UI Audit and Acceptance for Оформлятор
 
 Use this as the final quality gate for material UI changes or as a read-only audit.
 

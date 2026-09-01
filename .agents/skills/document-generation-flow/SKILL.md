@@ -1,6 +1,6 @@
 ---
 name: document-generation-flow
-description: Design Docomator's document-generation journey from template and audience through preflight, correction, immutable launch, progress, partial failure, retry and results without losing prepared context or exposing backend choreography.
+description: Design Оформлятор's document-generation journey from template and audience through preflight, correction, immutable launch, progress, partial failure, retry and results without losing prepared context or exposing backend choreography.
 ---
 
 # Document Generation Flow

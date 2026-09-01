@@ -7,7 +7,7 @@ description: Design a calm document-automation workstation around data, template
 
 A document-automation product is an operational workstation. The user comes to prepare, bind, generate, check and retrieve documents — not to operate database entities, OOXML internals or a dashboard of unrelated cards.
 
-Use this skill for Docomator-like products and document-centric primary surfaces.
+Use this skill for docomator and document-centric primary surfaces.
 
 ## Primary questions
 
@@ -26,7 +26,7 @@ If the user has to infer these answers from technical IDs, disabled controls, ge
 
 ## Defining navigation mechanism
 
-For Docomator, treat the durable route as:
+For Оформлятор, treat the durable route as:
 
 `Данные → Шаблон → Выпуск → Результат`
 

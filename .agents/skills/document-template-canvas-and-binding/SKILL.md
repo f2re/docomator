@@ -1,6 +1,6 @@
 ---
 name: document-template-canvas-and-binding
-description: Design Docomator's visual DOCX/XLSX template workbench where users select real document regions, bind human-readable fields and repeats, preview safely and preserve Office structure without making browser DOM the source of truth.
+description: Design Оформлятор's visual DOCX/XLSX template workbench where users select real document regions, bind human-readable fields and repeats, preview safely and preserve Office structure without making browser DOM the source of truth.
 ---
 
 # Document Template Canvas and Binding

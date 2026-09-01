@@ -1,9 +1,9 @@
 ---
 name: skill-agent-orchestrator
-description: Docomator project-local skill/agent orchestrator that routes document UI work to the smallest relevant skills and existing project agents without creating parallel library roles.
+description: Project-local skill/agent orchestrator for Оформлятор that routes document UI work to the smallest relevant skills and existing project agents without creating parallel library roles.
 ---
 
-# Docomator Skill and Agent Orchestrator
+# Skill and Agent Orchestrator for Оформлятор
 
 Use this for multi-area document UI work. It routes and synthesizes; `ui-skill-router` owns detailed skill selection.
 
@@ -15,7 +15,7 @@ Before delegation read the applicable root/scoped `AGENTS.md`, requirements, acc
 
 ## Existing agents are the roles
 
-Do not install parallel library agents. Use the existing Docomator profiles:
+Do not install parallel library agents. Use the existing project profiles:
 
 | Workstream | Existing agent |
 |---|---|

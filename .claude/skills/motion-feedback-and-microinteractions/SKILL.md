@@ -1,6 +1,6 @@
 ---
 name: motion-feedback-and-microinteractions
-description: Docomator-specific motion and micro-feedback rules: purposeful, fast, interruptible, reduced-motion-safe and subordinate to document selection, validation, generation and recovery state.
+description: Motion and micro-feedback rules for Оформлятор: purposeful, fast, interruptible, reduced-motion-safe and subordinate to document selection, validation, generation and recovery state.
 ---
 
 # Motion, Feedback and Microinteractions
@@ -31,7 +31,7 @@ Use project tokens rather than arbitrary values.
 - `fast`: about 120–160/180 ms for popover/inspector/state swap;
 - `standard`: at most about 160–240 ms for an infrequent small panel/dialog transition when spatial continuity genuinely helps.
 
-Routine Docomator transitions should remain near the existing 120–160 ms product contract. Avoid >240 ms for ordinary work.
+Routine transitions should remain near the existing 120–160 ms product contract. Avoid >240 ms for ordinary work.
 
 ## Allowed purposes
 

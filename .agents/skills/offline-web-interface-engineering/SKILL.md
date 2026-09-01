@@ -1,11 +1,11 @@
 ---
 name: offline-web-interface-engineering
-description: Implement Docomator document-workstation UI in its offline local web stack with semantic HTML, shared CSS tokens, small JavaScript modules, truthful server state, CSP-safe assets, responsive reflow, keyboard access and restrained motion.
+description: Implement the document-workstation UI of Оформлятор in its offline local web stack with semantic HTML, shared CSS tokens, small JavaScript modules, truthful server state, CSP-safe assets, responsive reflow, keyboard access and restrained motion.
 ---
 
 # Offline Web Interface Engineering
 
-Use this skill for concrete Docomator browser UI implementation.
+Use this skill for concrete browser UI implementation in Оформлятор.
 
 The repository's own `apps/api/ui/AGENTS.md`, `docs/UX_UI_SPECIFICATION.md`, `docs/BRANDING.md`, `docs/INTERFACE_HIERARCHY.md`, architecture and tests are authoritative. This skill never overrides them.
 

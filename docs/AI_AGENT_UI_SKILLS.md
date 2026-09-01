@@ -4,7 +4,7 @@
 
 ## Назначение
 
-В проект встроен документно-ориентированный профиль из `f2re/ai-agents-skills`, адаптированный под фактический Docomator: offline HTML/CSS/JavaScript, Visual Template Studio, typed import/extraction, deterministic DOCX/XLSX generation и результат/recovery flow.
+В проект встроен документно-ориентированный профиль из `f2re/ai-agents-skills`, адаптированный под фактический Оформлятор: offline HTML/CSS/JavaScript, Visual Template Studio, typed import/extraction, deterministic DOCX/XLSX generation и result/recovery flow.
 
 Источник закреплён в `.agents/skills/VENDOR.json`. Project-local версии намеренно уже исходного универсального каталога: Qt/QML/Qwt и метеорологические маршруты не включены.
 

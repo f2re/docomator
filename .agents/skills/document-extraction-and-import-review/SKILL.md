@@ -1,11 +1,11 @@
 ---
 name: document-extraction-and-import-review
-description: Design automatic-first DOCX/XLSX extraction and structured import review so Docomator users see a proposed interpretation, correct only ambiguity, repair row/cell problems in place and explicitly commit data without re-uploading files.
+description: Design automatic-first DOCX/XLSX extraction and structured import review so users of Оформлятор see a proposed interpretation, correct only ambiguity, repair row/cell problems in place and explicitly commit data without re-uploading files.
 ---
 
 # Document Extraction and Import Review
 
-Use this skill for document/data intake where Docomator analyzes DOCX/XLSX, proposes structured datasets and may later import confirmed values into application storage.
+Use this skill for document/data intake where Оформлятор analyzes DOCX/XLSX, proposes structured datasets and may later import confirmed values into application storage.
 
 The primary interaction model is automatic first, correction second.
 

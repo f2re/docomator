@@ -1,11 +1,11 @@
 ---
 name: ui-skill-router
-description: Project-local focused UI router for Docomator; selects the smallest relevant document-workstation skill set and keeps project requirements, offline web constraints and document truth authoritative.
+description: Project-local focused UI router for Оформлятор; selects the smallest relevant document-workstation skill set and keeps project requirements, offline web constraints and document truth authoritative.
 ---
 
-# Docomator UI Skill Router
+# UI Skill Router for Оформлятор
 
-Use this router for material UI/UX work in Docomator. Do not load every skill. First classify the user job, primary work object, affected surface and scale of change.
+Use this router for material UI/UX work. Do not load every UI skill. First classify the user job, primary work object, affected surface and scale of change.
 
 Project-local authority always wins in this order: applicable `AGENTS.md`, `docs/REQUIREMENTS.md`, accepted ADRs, `docs/ARCHITECTURE.md`, `docs/UX_UI_SPECIFICATION.md`, `docs/BRANDING.md`, `docs/INTERFACE_HIERARCHY.md`, current implementation/tests, then reusable skills.
 
@@ -59,7 +59,7 @@ When several controls implement one frequent user intent, do not fix them indepe
 - derived metadata/status;
 - rare override.
 
-Then remove only derived/redundant controls, move rare controls into contextual disclosure, and preserve independent semantics. Typical Docomator examples are template/group/mode/check chains, permanent template inspectors, and import mapping controls.
+Then remove only derived/redundant controls, move rare controls into contextual disclosure, and preserve independent semantics. Typical examples are template/group/mode/check chains, permanent template inspectors, and import mapping controls.
 
 The target is fewer unnecessary decisions and popup cycles, not minimum widget count.
 
@@ -75,7 +75,7 @@ Every affected async flow defines applicable loading, pending, stale, partial, e
 
 ## Hard rules
 
-1. Do not route Docomator UI to Qt/QML/Qwt or meteorological skills.
+1. Do not route Оформлятор UI to Qt/QML/Qwt or meteorological skills.
 2. Do not introduce a frontend framework merely to satisfy a design pattern.
 3. Document/browser projection never becomes Office/storage source of truth.
 4. Space context and cross-space invariants cannot be hidden or weakened by simplification.

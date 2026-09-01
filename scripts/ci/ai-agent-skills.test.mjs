@@ -44,7 +44,7 @@ async function exists(target) {
   }
 }
 
-test("project UI skill set is pinned, Docomator-specific and mirrored for Claude", async () => {
+test("project UI skill set is pinned, document-specific and mirrored for Claude", async () => {
   const manifest = JSON.parse(await fs.readFile(path.join(skillsRoot, "VENDOR.json"), "utf8"));
   assert.equal(manifest.schema, "docomator-ai-agent-skills/v1");
   assert.equal(manifest.source.repository, "f2re/ai-agents-skills");
@@ -62,8 +62,8 @@ test("project UI skill set is pinned, Docomator-specific and mirrored for Claude
   }
 
   for (const name of forbiddenSkills) {
-    assert.equal(await exists(path.join(skillsRoot, name)), false, `${name} must not be vendored into Docomator`);
-    assert.equal(await exists(path.join(claudeSkillsRoot, name)), false, `${name} must not be mirrored into Docomator`);
+    assert.equal(await exists(path.join(skillsRoot, name)), false, `${name} must not be vendored into the project`);
+    assert.equal(await exists(path.join(claudeSkillsRoot, name)), false, `${name} must not be mirrored into the project`);
   }
 });
 
@@ -88,7 +88,7 @@ test("existing project agents are augmented instead of replaced", async () => {
   assert.equal(agentEntries.some((name) => /meteo|qt-interface|ui-methodology-director/u.test(name)), false);
 });
 
-test("Docomator routing keeps project authority and document truth explicit", async () => {
+test("project routing keeps authority and document truth explicit", async () => {
   const router = await fs.readFile(path.join(skillsRoot, "ui-skill-router", "SKILL.md"), "utf8");
   const template = await fs.readFile(path.join(skillsRoot, "document-template-canvas-and-binding", "SKILL.md"), "utf8");
   const generation = await fs.readFile(path.join(skillsRoot, "document-generation-flow", "SKILL.md"), "utf8");
@@ -96,7 +96,7 @@ test("Docomator routing keeps project authority and document truth explicit", as
   const web = await fs.readFile(path.join(skillsRoot, "offline-web-interface-engineering", "SKILL.md"), "utf8");
 
   assert.match(router, /Project-local authority always wins/u);
-  assert.match(router, /Do not route Docomator UI to Qt\/QML\/Qwt or meteorological skills/u);
+  assert.match(router, /Do not route Оформлятор UI to Qt\/QML\/Qwt or meteorological skills/u);
   assert.match(template, /browser DOM.*never.*authoritative binding contract/iu);
   assert.match(generation, /mark old preflight stale immediately/iu);
   assert.match(extraction, /Never recover row\/field semantics by regexp parsing localized error text/iu);

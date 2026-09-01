@@ -1,9 +1,9 @@
 ---
 name: anti-slop-ui-direction
-description: Docomator-specific concept gate for substantial UI redesigns; derives a document-native interaction mechanism, rejects generic dashboard styling and preserves deterministic document/data boundaries before implementation.
+description: Concept gate for substantial UI redesigns in Оформлятор; derives a document-native interaction mechanism, rejects generic dashboard styling and preserves deterministic document/data boundaries before implementation.
 ---
 
-# Docomator Anti-Slop UI Direction
+# Anti-Slop UI Direction for Оформлятор
 
 Use this skill only before substantial changes to a primary surface, information architecture, navigation model or high-frequency document workflow. It is a concept gate, not a visual theme.
 
@@ -11,7 +11,7 @@ Project requirements, accepted ADRs, architecture, UX specification, branding/to
 
 ## 1. State the job and primary work object
 
-Record the user's operational job and name the primary work object. In Docomator this is normally one of:
+Record the user's operational job and name the primary work object. In Оформлятор this is normally one of:
 
 - source data/problem values;
 - document/template canvas;
@@ -25,7 +25,7 @@ Controls are not the primary work object.
 
 Concepts must differ in organizing logic, not palette or component styling.
 
-Useful Docomator mechanisms include:
+Useful mechanisms include:
 
 ### Route-led workbench
 

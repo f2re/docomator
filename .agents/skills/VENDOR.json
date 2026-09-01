@@ -42,5 +42,5 @@
     "viewport-map-interactions",
     "meteorological-visualization"
   ],
-  "updatePolicy": "Review upstream changes against current Docomator authority and tests; never overwrite project-local adaptations automatically."
+  "updatePolicy": "Review upstream changes against current project authority and tests; never overwrite project-local adaptations automatically."
 }
