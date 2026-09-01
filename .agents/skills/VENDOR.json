@@ -1,0 +1,46 @@
+{
+  "schema": "docomator-ai-agent-skills/v1",
+  "source": {
+    "repository": "f2re/ai-agents-skills",
+    "commit": "c0d03d68771e93a17098cc4bc815e8b9374a15f2",
+    "profileBranch": "docomator-ui-profile",
+    "pullRequest": 9
+  },
+  "authority": [
+    "AGENTS.md and scoped AGENTS.md",
+    "docs/REQUIREMENTS.md",
+    "accepted docs/adr/*.md",
+    "docs/ARCHITECTURE.md",
+    "docs/UX_UI_SPECIFICATION.md",
+    "docs/BRANDING.md",
+    "docs/INTERFACE_HIERARCHY.md",
+    "current implementation and tests",
+    "project skills"
+  ],
+  "platforms": {
+    "codex": ".agents/skills",
+    "claude": ".claude/skills",
+    "antigravity": ".agents/skills"
+  },
+  "skills": [
+    {"name":"skill-agent-orchestrator","sourceBlob":"8aafe162107f9cd426e901cf69d2e3d0013c4d0d","mode":"project-adapted"},
+    {"name":"ui-skill-router","sourceBlob":"c38100cb996ad7f076963fc471ba49f4e40317cd","mode":"project-adapted"},
+    {"name":"anti-slop-ui-direction","sourceBlob":"35108abe12bf626f3e30e0b655637bf11620f9bc","mode":"project-adapted"},
+    {"name":"ui-audit-and-acceptance","sourceBlob":"82ccbc41a743be6cfc92e22abe2b45e36e6fdf3f","mode":"project-adapted"},
+    {"name":"motion-feedback-and-microinteractions","sourceBlob":"862eba599f7de61dde5086e898837b327e674446","mode":"project-adapted"},
+    {"name":"document-workstation-ux","sourceBlob":"cee17677552890bafd19342433f64be1653b2a96","mode":"project-adapted"},
+    {"name":"document-template-canvas-and-binding","sourceBlob":"7a0a8ae1483a20048fae22e9c5cbbddda560147b","mode":"project-adapted"},
+    {"name":"document-generation-flow","sourceBlob":"f506fd056ed7d7185fffb4a9f918f615ff2b778f","mode":"project-adapted"},
+    {"name":"document-extraction-and-import-review","sourceBlob":"d4f7295817d31971699bb3618d04934d57c64ffb","mode":"project-adapted"},
+    {"name":"offline-web-interface-engineering","sourceBlob":"97fc33f81483d031fed11d14e60b3260a8a76b39","mode":"project-adapted"}
+  ],
+  "excludedFamilies": [
+    "qt-cpp-design-system",
+    "meteorologist-workstation-ux",
+    "radar-timeline-and-playback",
+    "time-data-navigation",
+    "viewport-map-interactions",
+    "meteorological-visualization"
+  ],
+  "updatePolicy": "Review upstream changes against current Docomator authority and tests; never overwrite project-local adaptations automatically."
+}

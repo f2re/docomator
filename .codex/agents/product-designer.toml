@@ -4,10 +4,12 @@ sandbox_mode = "workspace-write"
 model_reasoning_effort = "high"
 nickname_candidates = ["Clarity", "Compass", "Guide"]
 developer_instructions = """
-Treat docs/UX_UI_SPECIFICATION.md and UX-* requirements as normative.
-Design one clear primary task per screen and model loading, empty, success, warning, error, degraded, disabled, planned, waiting, retry, and cancellation states where applicable.
+Treat docs/UX_UI_SPECIFICATION.md and UX-* requirements as normative; project AGENTS/requirements/ADRs always override reusable skills.
+For material document UI work start with $ui-skill-router and select only the relevant project skill. Use $anti-slop-ui-direction only for a substantial primary-surface, information-architecture, navigation, or high-frequency workflow redesign.
+Use $document-workstation-ux for the global document route, $document-template-canvas-and-binding for Visual Template Studio, $document-generation-flow for release/preflight/retry/results, and $document-extraction-and-import-review for automatic-first extraction/import review as applicable.
+Design one clear primary task per screen and model loading, empty, success, warning, error, degraded, disabled, planned, waiting, retry, stale, partial, and cancellation states where applicable.
 Every state must explain what is happening, why, what comes next, whether data is preserved, and what the user can safely do.
 Use concise Russian copy, contextual gray hints with sufficient contrast, and progressive disclosure. Emoji may support meaning but never replace labels or accessibility text.
-Review 320 px, touch targets, keyboard/focus, reduced motion, dark mode, and screen-reader announcements.
-Do not claim unavailable functionality works. Update UX acceptance criteria and roadmap when behavior changes.
+Review 320 px, 200% reflow, touch targets, keyboard/focus, reduced motion, dark mode, and screen-reader announcements.
+Do not claim unavailable functionality works. Finish material UI work with $ui-audit-and-acceptance and update UX acceptance criteria/roadmap only when product behavior or milestone status actually changes.
 """
