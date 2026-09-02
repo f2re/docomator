@@ -452,10 +452,13 @@ test("document result API rejects unscoped access and isolates equal data in two
           .prepare("SELECT id, state FROM document_result_items ORDER BY id")
           .all() as unknown as Array<{ id: string; state: string }>
     );
-    assert.deepEqual(states, [
-      { id: "result-a", state: "viewed" },
-      { id: "result-b", state: "new" }
-    ]);
+    assert.deepEqual(
+      states.map((row) => ({ id: row.id, state: row.state })),
+      [
+        { id: "result-a", state: "viewed" },
+        { id: "result-b", state: "new" }
+      ]
+    );
 
     const bDownload = await app.inject({
       method: "GET",
@@ -469,10 +472,13 @@ test("document result API rejects unscoped access and isolates equal data in two
           .prepare("SELECT id, state FROM document_result_items ORDER BY id")
           .all() as unknown as Array<{ id: string; state: string }>
     );
-    assert.deepEqual(finalStates, [
-      { id: "result-a", state: "viewed" },
-      { id: "result-b", state: "collected" }
-    ]);
+    assert.deepEqual(
+      finalStates.map((row) => ({ id: row.id, state: row.state })),
+      [
+        { id: "result-a", state: "viewed" },
+        { id: "result-b", state: "collected" }
+      ]
+    );
   } finally {
     await app.close();
     store.close();
