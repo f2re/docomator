@@ -69,14 +69,16 @@ function officeMediaType(format: "docx" | "xlsx"): string {
     : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 }
 
+function resultBaseUrl(spaceId: string, resultId: string): string {
+  return `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-results/${encodeURIComponent(resultId)}`;
+}
+
 function jobPayload(
   job: ReturnType<DocumentGenerationRegistry["getJob"]>,
   result: DocumentResultRecord | null
 ) {
   const resultUrl =
-    result === null
-      ? null
-      : `/api/v1/document-results/${encodeURIComponent(result.id)}`;
+    result === null ? null : resultBaseUrl(job.spaceId, result.id);
   return {
     job,
     resultId: result?.id ?? null,
@@ -233,10 +235,7 @@ export function registerDocumentGenerationRoutes(
       return reply
         .code(307)
         .header("cache-control", "private, no-store")
-        .header(
-          "location",
-          `/api/v1/document-results/${encodeURIComponent(result.id)}/download`
-        )
+        .header("location", `${resultBaseUrl(job.spaceId, result.id)}/download`)
         .send();
     }
   );
@@ -279,6 +278,7 @@ export function registerDocumentGenerationRoutes(
         );
       }
       resultRegistry.markCollected(
+        job.spaceId,
         result.id,
         mutationContextFromRequest(request),
         { kind: "unit", unitId: unit.id }

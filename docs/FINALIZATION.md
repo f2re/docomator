@@ -4,9 +4,9 @@
 
 Канал выпуска: `pilot`
 
-Текущая версия: `0.6.7`.
+Текущая версия: `0.6.8`.
 
-Этот документ описывает fail-closed переход от текущего кандидата `0.6.7` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
+Этот документ описывает fail-closed переход от текущего кандидата `0.6.8` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
 
 ## 1. Зафиксировать exact release binding
 
@@ -66,9 +66,10 @@ chmod 600 /tmp/docomator-code
 - отсутствие horizontal overflow;
 - import error recovery без потери файла/mapping;
 - Visual Template Studio на реальном DOCX/XLSX;
-- полный сценарий `пространство → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`;
+- полный сценарий `раздел данных → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`;
 - выбор любого поля обычной прокруткой и клавиатурой без обязательного поиска;
-- выпуск документов и поиск результата;
+- выпуск документов и поиск результата только в текущем разделе;
+- отрицательный сценарий двух разделов: A не list/read/download/view/delete result B, включая `view-all` и быстрое A → B переключение;
 - access-code первый запуск/закрытие/recovery;
 - Playwright/axe artifacts того же release binding.
 
@@ -90,7 +91,7 @@ chmod 600 /tmp/docomator-code
 
 CSV/XLSX import и document generation: 10/100/1000 объектов. Проверяются пустые ячейки, Excel dates, mixed types, дубли, повторный import, partial invalid files и retry only failed units.
 
-Два пространства с одинаковыми именами/ключами не читают, не изменяют, не удаляют и не связывают данные друг друга. Import A не влияет на B.
+Два пространства с одинаковыми именами/ключами не читают, не изменяют, не удаляют и не связывают данные друг друга. Import A не влияет на B. Persisted document results требуют явного `spaceId`; глобальный unscoped result API считается блокером.
 
 ## 8. Финальный gate кандидата
 
@@ -100,7 +101,7 @@ CSV/XLSX import и document generation: 10/100/1000 объектов. Прове
 npm run release:evidence -- \
   /srv/docomator-release-evidence \
   --expected-commit '<полный Git SHA>' \
-  --expected-version '0.6.7'
+  --expected-version '0.6.8'
 ```
 
 Gate = 0 обязателен.
@@ -110,7 +111,7 @@ Gate = 0 обязателен.
 Только после успешного candidate gate:
 
 1. отдельным PR изменить `RELEASE_IDENTITY.json` на `stable/production`;
-2. если capability set не изменился, оставить version `0.6.7`;
+2. если capability set не изменился, оставить version `0.6.8`;
 3. выполнить полный CI stable commit;
 4. пересобрать Debian/Astra bundles именно из stable commit;
 5. повторно подтвердить target identity/update/rollback/recovery;

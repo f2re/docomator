@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   ContentAddressedObjectStore,
+  DocumentGenerationNotFoundError,
   DocumentGenerationRegistry,
   SqliteStore
 } from "@docomator/storage";
@@ -113,7 +114,9 @@ function createResultSchema(store: SqliteStore): void {
   });
 }
 
-async function setupApp(options: { archive?: boolean } = {}) {
+async function setupApp(
+  options: { archive?: boolean; secondSpace?: boolean } = {}
+) {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-result-api-"));
   const store = new SqliteStore({ databasePath: path.join(dataDir, "docomator.db") });
   const objectStore = new ContentAddressedObjectStore(path.join(dataDir, "objects"));
@@ -162,9 +165,64 @@ async function setupApp(options: { archive?: boolean } = {}) {
         ) VALUES ('result-a', 'job-a', 'new', 'manual', NULL, ?, NULL, NULL, NULL, ?)
       `)
       .run(NOW, NOW);
+
+    if (options.secondSpace === true) {
+      connection.exec(`
+        INSERT INTO spaces VALUES ('space-b', 'beta', 'Отдел эксплуатации');
+        INSERT INTO template_releases VALUES (
+          'release-b', 'Личная карточка сотрудника', 'docx'
+        );
+        INSERT INTO audience_snapshots VALUES ('snapshot-b', 1);
+        INSERT INTO worker_jobs VALUES ('worker-b', 'completed');
+      `);
+      connection
+        .prepare(`
+          INSERT INTO document_generation_jobs(
+            id, space_id, active_release_id, snapshot_id, target_mode, state,
+            expected_count, generated_count, failed_count, worker_job_id,
+            archive_file_id, archive_sha256, error_json, created_by,
+            correlation_id, created_at, started_at, completed_at, updated_at
+          ) VALUES (
+            'job-b', 'space-b', 'release-b', 'snapshot-b', 'aggregate', 'completed',
+            1, 1, 0, 'worker-b', NULL, NULL, NULL, 'operator-2',
+            'generation-b', ?, ?, ?, ?
+          )
+        `)
+        .run(NOW, NOW, NOW, NOW);
+      connection
+        .prepare(`
+          INSERT INTO document_generation_units(
+            id, job_id, position, unit_key, primary_entity_id, state,
+            output_file_id, output_sha256, output_name, error_json,
+            started_at, completed_at, updated_at
+          ) VALUES (
+            'unit-b', 'job-b', 0, 'aggregate-b', NULL, 'completed',
+            NULL, ?, 'Личная карточка.docx', NULL, ?, ?, ?
+          )
+        `)
+        .run(stored.sha256, NOW, NOW, NOW);
+      connection
+        .prepare(`
+          INSERT INTO document_result_items(
+            id, document_job_id, state, origin, schedule_run_id,
+            available_at, viewed_at, collected_at, deleted_at, updated_at
+          ) VALUES ('result-b', 'job-b', 'new', 'manual', NULL, ?, NULL, NULL, NULL, ?)
+        `)
+        .run(NOW, NOW);
+    }
   });
 
   const app = Fastify({ logger: false });
+  app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof DocumentGenerationNotFoundError) {
+      reply.code(404).send({
+        error: { code: "document_generation_not_found", message: error.message }
+      });
+      return;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    reply.code(500).send({ error: { message } });
+  });
   registerDocumentGenerationRoutes(
     app,
     objectStore,
@@ -173,7 +231,7 @@ async function setupApp(options: { archive?: boolean } = {}) {
   return { app, dataDir, objectStore, store, stored };
 }
 
-test("generation downloads use the shared result state and AUD-003 log", async () => {
+test("generation downloads use the space-scoped result state and AUD-003 log", async () => {
   const { app, dataDir, store } = await setupApp();
   try {
     const jobResponse = await app.inject({
@@ -189,8 +247,8 @@ test("generation downloads use the shared result state and AUD-003 log", async (
       },
       {
         resultId: "result-a",
-        resultUrl: "/api/v1/document-results/result-a",
-        downloadUrl: "/api/v1/document-results/result-a/download"
+        resultUrl: "/api/v1/spaces/space-a/document-results/result-a",
+        downloadUrl: "/api/v1/spaces/space-a/document-results/result-a/download"
       }
     );
 
@@ -201,7 +259,7 @@ test("generation downloads use the shared result state and AUD-003 log", async (
     assert.equal(listResponse.statusCode, 200);
     assert.equal(
       listResponse.json().data[0].downloadUrl,
-      "/api/v1/document-results/result-a/download"
+      "/api/v1/spaces/space-a/document-results/result-a/download"
     );
 
     const legacyResponse = await app.inject({
@@ -211,20 +269,20 @@ test("generation downloads use the shared result state and AUD-003 log", async (
     assert.equal(legacyResponse.statusCode, 307);
     assert.equal(
       legacyResponse.headers.location,
-      "/api/v1/document-results/result-a/download"
+      "/api/v1/spaces/space-a/document-results/result-a/download"
     );
 
-    const sharedDownload = await app.inject({
+    const scopedDownload = await app.inject({
       method: "GET",
-      url: "/api/v1/document-results/result-a/download",
+      url: "/api/v1/spaces/alpha/document-results/result-a/download",
       headers: {
-        "x-correlation-id": "download-shared-a",
+        "x-correlation-id": "download-scoped-a",
         "x-actor-id": "operator-1"
       }
     });
-    assert.equal(sharedDownload.statusCode, 200);
-    assert.deepEqual(sharedDownload.rawPayload, Buffer.from("generated-document"));
-    assert.equal(sharedDownload.headers["x-content-type-options"], "nosniff");
+    assert.equal(scopedDownload.statusCode, 200);
+    assert.deepEqual(scopedDownload.rawPayload, Buffer.from("generated-document"));
+    assert.equal(scopedDownload.headers["x-content-type-options"], "nosniff");
 
     const unitDownload = await app.inject({
       method: "GET",
@@ -294,7 +352,7 @@ test("generation downloads use the shared result state and AUD-003 log", async (
           action: "download",
           objectType: "document_result",
           objectId: "result-a",
-          correlationId: "download-shared-a",
+          correlationId: "download-scoped-a",
           details: {
             documentJobId: "job-a",
             stateBefore: "new",
@@ -322,12 +380,118 @@ test("generation downloads use the shared result state and AUD-003 log", async (
   }
 });
 
+test("document result API rejects unscoped access and isolates equal data in two spaces", async () => {
+  const { app, dataDir, store } = await setupApp({ secondSpace: true });
+  try {
+    const [unscopedList, unscopedDownload] = await Promise.all([
+      app.inject({ method: "GET", url: "/api/v1/document-results" }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/document-results/result-a/download"
+      })
+    ]);
+    assert.equal(unscopedList.statusCode, 404);
+    assert.equal(unscopedDownload.statusCode, 404);
+
+    const [aList, bList, aSummary, bSummary] = await Promise.all([
+      app.inject({
+        method: "GET",
+        url: "/api/v1/spaces/alpha/document-results?state=all"
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/spaces/beta/document-results?state=all"
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/spaces/alpha/document-results/summary"
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/spaces/beta/document-results/summary"
+      })
+    ]);
+    assert.deepEqual(aList.json().data.map((item: { id: string }) => item.id), ["result-a"]);
+    assert.deepEqual(bList.json().data.map((item: { id: string }) => item.id), ["result-b"]);
+    assert.equal(aSummary.json().data.availableCount, 1);
+    assert.equal(bSummary.json().data.availableCount, 1);
+
+    const wrongSpaceResponses = await Promise.all([
+      app.inject({
+        method: "GET",
+        url: "/api/v1/spaces/alpha/document-results/result-b"
+      }),
+      app.inject({
+        method: "POST",
+        url: "/api/v1/spaces/alpha/document-results/result-b/view"
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/spaces/alpha/document-results/result-b/download"
+      }),
+      app.inject({
+        method: "DELETE",
+        url: "/api/v1/spaces/alpha/document-results/result-b"
+      })
+    ]);
+    for (const response of wrongSpaceResponses) {
+      assert.equal(response.statusCode, 404);
+    }
+
+    const viewAllA = await app.inject({
+      method: "POST",
+      url: "/api/v1/spaces/alpha/document-results/view-all",
+      headers: { "x-correlation-id": "view-all-a" }
+    });
+    assert.equal(viewAllA.statusCode, 200);
+    assert.equal(viewAllA.json().data.changed, 1);
+
+    const states = store.execute(
+      (connection) =>
+        connection
+          .prepare("SELECT id, state FROM document_result_items ORDER BY id")
+          .all() as unknown as Array<{ id: string; state: string }>
+    );
+    assert.deepEqual(
+      states.map((row) => ({ id: row.id, state: row.state })),
+      [
+        { id: "result-a", state: "viewed" },
+        { id: "result-b", state: "new" }
+      ]
+    );
+
+    const bDownload = await app.inject({
+      method: "GET",
+      url: "/api/v1/spaces/beta/document-results/result-b/download",
+      headers: { "x-correlation-id": "download-b" }
+    });
+    assert.equal(bDownload.statusCode, 200);
+    const finalStates = store.execute(
+      (connection) =>
+        connection
+          .prepare("SELECT id, state FROM document_result_items ORDER BY id")
+          .all() as unknown as Array<{ id: string; state: string }>
+    );
+    assert.deepEqual(
+      finalStates.map((row) => ({ id: row.id, state: row.state })),
+      [
+        { id: "result-a", state: "viewed" },
+        { id: "result-b", state: "collected" }
+      ]
+    );
+  } finally {
+    await app.close();
+    store.close();
+    await fs.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("archive download is collected and audited as an archive", async () => {
   const { app, dataDir, store } = await setupApp({ archive: true });
   try {
     const response = await app.inject({
       method: "GET",
-      url: "/api/v1/document-results/result-a/download",
+      url: "/api/v1/spaces/alpha/document-results/result-a/download",
       headers: { "x-correlation-id": "download-archive-a" }
     });
     assert.equal(response.statusCode, 200);
@@ -364,7 +528,7 @@ test("a missing object does not collect or audit a result", async () => {
     assert.equal(await objectStore.deleteObject(stored.sha256), true);
     const response = await app.inject({
       method: "GET",
-      url: "/api/v1/document-results/result-a/download",
+      url: "/api/v1/spaces/alpha/document-results/result-a/download",
       headers: { "x-correlation-id": "download-missing-a" }
     });
     assert.equal(response.statusCode, 500);
@@ -403,7 +567,7 @@ test("a checksum mismatch does not collect or audit a result", async () => {
     await fs.writeFile(stored.storagePath, Buffer.from("tampered-document"));
     const response = await app.inject({
       method: "GET",
-      url: "/api/v1/document-results/result-a/download",
+      url: "/api/v1/spaces/alpha/document-results/result-a/download",
       headers: { "x-correlation-id": "download-tampered-a" }
     });
     assert.equal(response.statusCode, 500);
@@ -442,7 +606,7 @@ test("audit failure rolls back collection and the outbox event", async () => {
     });
     const response = await app.inject({
       method: "GET",
-      url: "/api/v1/document-results/result-a/download",
+      url: "/api/v1/spaces/alpha/document-results/result-a/download",
       headers: { "x-correlation-id": "download-audit-failure-a" }
     });
     assert.equal(response.statusCode, 500);
@@ -490,7 +654,7 @@ test("deleted results stay closed through canonical and legacy links", async () 
     const [canonical, legacy, unit] = await Promise.all([
       app.inject({
         method: "GET",
-        url: "/api/v1/document-results/result-a/download"
+        url: "/api/v1/spaces/alpha/document-results/result-a/download"
       }),
       app.inject({
         method: "GET",

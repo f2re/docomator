@@ -8,6 +8,8 @@ let sharedDocumentInitialized = false;
 let sharedDocumentLastNewCount = null;
 let sharedDocumentTargetId = null;
 let sharedDocumentReloadRequested = false;
+let sharedDocumentRequestToken = 0;
+let sharedDocumentSummaryToken = 0;
 
 function sharedDocumentEscape(value) {
   return String(value ?? "").replace(
@@ -20,6 +22,23 @@ function sharedDocumentEscape(value) {
         "'": "&#39;",
         '"': "&quot;"
       })[character]
+  );
+}
+
+function sharedDocumentSpaceId() {
+  return String(globalThis.docomatorCurrentSpaceId || "").trim();
+}
+
+function sharedDocumentEndpoint(spaceId, suffix = "") {
+  const identity = String(spaceId || "").trim();
+  if (!identity) throw new Error("Сначала выберите раздел данных.");
+  return `/api/v1/spaces/${encodeURIComponent(identity)}/document-results${suffix}`;
+}
+
+function sharedDocumentResultUrl(resultId, suffix = "") {
+  return sharedDocumentEndpoint(
+    sharedDocumentSpaceId(),
+    `/${encodeURIComponent(resultId)}${suffix}`
   );
 }
 
@@ -92,8 +111,12 @@ function sharedDocumentCountLabel(item) {
 }
 
 function renderSharedDocumentSummary() {
-  const summary = sharedDocumentSummary;
-  if (!summary) return;
+  const summary = sharedDocumentSummary || {
+    newCount: 0,
+    availableCount: 0,
+    collectedCount: 0,
+    automaticNewCount: 0
+  };
   const values = {
     sharedDocumentNewCount: summary.newCount,
     sharedDocumentAvailableCount: summary.availableCount,
@@ -120,14 +143,15 @@ function renderSharedDocumentItems() {
       <div class="empty-state shared-result-empty">
         <div><span class="empty-emoji" aria-hidden="true">📭</span><h3>В этом разделе пока пусто</h3><p>${
           sharedDocumentFilter === "new"
-            ? "Новых документов нет. Автоматические результаты появятся здесь сразу после формирования."
+            ? "Новых документов нет. Автоматические результаты этого раздела появятся здесь после формирования."
             : sharedDocumentFilter === "collected"
-              ? "Забранных документов пока нет."
-              : "Сформируйте документ вручную или создайте расписание. Результат сохранится в общем хранилище."
+              ? "Забранных документов в этом разделе пока нет."
+              : "Сформируйте документ вручную или создайте расписание. Результат останется в выбранном разделе данных."
         }</p></div>
       </div>`;
     return;
   }
+  const spaceId = sharedDocumentSpaceId();
   root.innerHTML = sharedDocumentItems
     .map(
       (item) => `
@@ -141,7 +165,6 @@ function renderSharedDocumentItems() {
               </div>
               <p>${sharedDocumentEscape(sharedDocumentOriginLabel(item))}</p>
               <div class="shared-result-meta">
-                <span>${sharedDocumentEscape(item.spaceName)}</span>
                 <span>${sharedDocumentEscape(sharedDocumentModeLabel(item.targetMode))}</span>
                 <span>${sharedDocumentEscape(sharedDocumentCountLabel(item))}</span>
                 <span>${sharedDocumentEscape(new Date(item.availableAt).toLocaleString("ru-RU"))}</span>
@@ -152,7 +175,7 @@ function renderSharedDocumentItems() {
           </div>
           <div class="shared-result-actions">
             ${item.state === "new" ? `<button class="secondary-button compact-button" type="button" data-shared-view="${sharedDocumentEscape(item.id)}">Отметить просмотренным</button>` : ""}
-            <a class="primary-button compact-button" href="/api/v1/document-results/${encodeURIComponent(item.id)}/download" data-shared-download="${sharedDocumentEscape(item.id)}">${item.archiveSha256 ? "Скачать комплект" : "Скачать документ"}</a>
+            <a class="primary-button compact-button" href="${sharedDocumentEscape(sharedDocumentEndpoint(spaceId, `/${encodeURIComponent(item.id)}/download`))}" data-shared-download="${sharedDocumentEscape(item.id)}">${item.archiveSha256 ? "Скачать комплект" : "Скачать документ"}</a>
             <button class="quiet-button compact" type="button" data-shared-delete="${sharedDocumentEscape(item.id)}">Удалить</button>
           </div>
         </article>`
@@ -179,22 +202,31 @@ function renderSharedDocumentFilters() {
   });
 }
 
+function renderSharedDocumentLoading() {
+  const root = document.querySelector("#sharedDocumentList");
+  const message = document.querySelector("#sharedDocumentMessage");
+  if (root) {
+    root.innerHTML = '<div class="generation-history-empty">Получаем результаты выбранного раздела…</div>';
+  }
+  if (message) message.textContent = "Результаты всегда относятся к выбранному разделу данных.";
+}
+
 function initializeSharedDocumentsView() {
   if (!sharedDocumentsView || sharedDocumentInitialized) return;
   sharedDocumentInitialized = true;
   sharedDocumentsView.innerHTML = `
     <div class="section-intro shared-result-intro">
       <div>
-        <p class="eyebrow">Общее корпоративное хранилище</p>
+        <p class="eyebrow">Выбранный раздел данных</p>
         <h2 id="documents-heading">Результаты и операции</h2>
-        <p>Следите за формированием и доставкой, затем скачивайте готовые ручные и автоматические документы.</p>
+        <p>Следите за формированием и доставкой, затем скачивайте готовые документы текущего раздела.</p>
       </div>
       <div class="shared-result-heading-actions">
         <button class="secondary-button" id="sharedDocumentMarkAll" type="button">Отметить новые просмотренными</button>
         <button class="primary-button" id="sharedDocumentRefresh" type="button">Обновить</button>
       </div>
     </div>
-    <div class="metric-grid shared-result-metrics" aria-label="Состояние общего хранилища">
+    <div class="metric-grid shared-result-metrics" aria-label="Результаты выбранного раздела">
       <article class="metric-card"><span class="metric-icon" aria-hidden="true">🔔</span><div><strong id="sharedDocumentNewCount">0</strong><span>новых</span></div></article>
       <article class="metric-card"><span class="metric-icon" aria-hidden="true">📥</span><div><strong id="sharedDocumentAvailableCount">0</strong><span>ожидают работы</span></div></article>
       <article class="metric-card"><span class="metric-icon" aria-hidden="true">✅</span><div><strong id="sharedDocumentCollectedCount">0</strong><span>забрано</span></div></article>
@@ -208,10 +240,10 @@ function initializeSharedDocumentsView() {
           <button type="button" data-shared-filter="collected" aria-pressed="false">Забранные</button>
           <button type="button" data-shared-filter="all" aria-pressed="false">Все</button>
         </div>
-        <p id="sharedDocumentMessage">Общее хранилище не зависит от выбранного пространства.</p>
+        <p id="sharedDocumentMessage">Результаты всегда относятся к выбранному разделу данных.</p>
       </div>
       <div id="sharedDocumentList" class="shared-result-list" aria-live="polite">
-        <div class="generation-history-empty">Получаем документы…</div>
+        <div class="generation-history-empty">Получаем результаты выбранного раздела…</div>
       </div>
     </article>`;
 
@@ -269,8 +301,24 @@ function initializeSharedDocumentNavigation() {
 }
 
 async function loadSharedDocumentSummary(showNotification = true) {
+  const spaceId = sharedDocumentSpaceId();
+  if (!spaceId) {
+    sharedDocumentSummary = null;
+    sharedDocumentLastNewCount = null;
+    renderSharedDocumentSummary();
+    return;
+  }
+  const requestToken = ++sharedDocumentSummaryToken;
   try {
-    const body = await sharedDocumentFetchJson("/api/v1/document-results/summary");
+    const body = await sharedDocumentFetchJson(
+      sharedDocumentEndpoint(spaceId, "/summary")
+    );
+    if (
+      requestToken !== sharedDocumentSummaryToken ||
+      spaceId !== sharedDocumentSpaceId()
+    ) {
+      return;
+    }
     const summary = body.data;
     const previousNewCount = sharedDocumentLastNewCount;
     sharedDocumentSummary = summary;
@@ -284,48 +332,64 @@ async function loadSharedDocumentSummary(showNotification = true) {
       const added = summary.newCount - previousNewCount;
       sharedDocumentNotify(
         "Появились новые документы",
-        `В общем хранилище новых результатов: ${added}.`
+        `В выбранном разделе новых результатов: ${added}.`
       );
     }
+    const noticeKey = `docomator.shared-results.initial-notice:${spaceId}`;
     if (
       showNotification &&
       previousNewCount === null &&
       summary.automaticNewCount > 0 &&
-      sessionStorage.getItem("docomator.shared-results.initial-notice") !== summary.latestAvailableAt
+      sessionStorage.getItem(noticeKey) !== summary.latestAvailableAt
     ) {
-      sessionStorage.setItem(
-        "docomator.shared-results.initial-notice",
-        summary.latestAvailableAt || "shown"
-      );
+      sessionStorage.setItem(noticeKey, summary.latestAvailableAt || "shown");
       sharedDocumentNotify(
         "Есть автоматические документы",
-        `По расписаниям создано новых результатов: ${summary.automaticNewCount}.`
+        `По расписаниям этого раздела создано новых результатов: ${summary.automaticNewCount}.`
       );
     }
   } catch {
-    // The persistent badge will be refreshed on the next poll.
+    // Сводка повторно загрузится при следующем polling; старые данные другого раздела не показываются.
   }
 }
 
 async function loadSharedDocuments(showMessage) {
   initializeSharedDocumentsView();
   if (!sharedDocumentsView) return;
+  const spaceId = sharedDocumentSpaceId();
+  if (!spaceId) {
+    sharedDocumentItems = [];
+    sharedDocumentSummary = null;
+    renderSharedDocumentSummary();
+    const root = document.querySelector("#sharedDocumentList");
+    if (root) {
+      root.innerHTML = '<div class="generation-state is-warning"><div><strong>Раздел данных не выбран</strong><p>Выберите раздел данных в верхней части экрана. Результаты других разделов здесь не показываются.</p></div></div>';
+    }
+    return;
+  }
   if (sharedDocumentBusy) {
     sharedDocumentReloadRequested = true;
     return;
   }
   sharedDocumentBusy = true;
+  const requestToken = ++sharedDocumentRequestToken;
   const root = document.querySelector("#sharedDocumentList");
   const message = document.querySelector("#sharedDocumentMessage");
   if (root) root.setAttribute("aria-busy", "true");
-  if (showMessage && message) message.textContent = "Обновляем общее хранилище…";
+  if (showMessage && message) message.textContent = "Обновляем результаты выбранного раздела…";
   try {
     const [summaryBody, listBody] = await Promise.all([
-      sharedDocumentFetchJson("/api/v1/document-results/summary"),
+      sharedDocumentFetchJson(sharedDocumentEndpoint(spaceId, "/summary")),
       sharedDocumentFetchJson(
-        `/api/v1/document-results?state=${encodeURIComponent(sharedDocumentFilter)}&limit=300`
+        `${sharedDocumentEndpoint(spaceId)}?state=${encodeURIComponent(sharedDocumentFilter)}&limit=300`
       )
     ]);
+    if (
+      requestToken !== sharedDocumentRequestToken ||
+      spaceId !== sharedDocumentSpaceId()
+    ) {
+      return;
+    }
     sharedDocumentSummary = summaryBody.data;
     sharedDocumentItems = Array.isArray(listBody.data) ? listBody.data : [];
     sharedDocumentLastNewCount = sharedDocumentSummary.newCount;
@@ -335,10 +399,16 @@ async function loadSharedDocuments(showMessage) {
       message.textContent = `Показано документов: ${sharedDocumentItems.length}. Новых: ${sharedDocumentSummary.newCount}.`;
     }
   } catch (error) {
-    if (root) {
-      root.innerHTML = `<div class="generation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Общее хранилище недоступно</strong><p>${sharedDocumentEscape(error?.message || "Повторите обновление.")}</p></div></div>`;
+    if (
+      requestToken !== sharedDocumentRequestToken ||
+      spaceId !== sharedDocumentSpaceId()
+    ) {
+      return;
     }
-    if (message) message.textContent = "Данные не обновлены.";
+    if (root) {
+      root.innerHTML = `<div class="generation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Результаты не обновлены</strong><p>${sharedDocumentEscape(error?.message || "Повторите обновление.")} Сохранённые документы не изменены.</p></div></div>`;
+    }
+    if (message) message.textContent = "Данные не обновлены. Повторите действие.";
   } finally {
     sharedDocumentBusy = false;
     if (root) root.setAttribute("aria-busy", "false");
@@ -351,15 +421,22 @@ async function loadSharedDocuments(showMessage) {
 
 async function markAllSharedDocumentsViewed() {
   if (sharedDocumentBusy) return;
+  const spaceId = sharedDocumentSpaceId();
+  if (!spaceId) return;
   sharedDocumentBusy = true;
   const message = document.querySelector("#sharedDocumentMessage");
   try {
-    const body = await sharedDocumentFetchJson("/api/v1/document-results/view-all", {
-      method: "POST"
-    });
-    if (message) message.textContent = `Отмечено просмотренными: ${body.data.changed}.`;
+    const body = await sharedDocumentFetchJson(
+      sharedDocumentEndpoint(spaceId, "/view-all"),
+      { method: "POST" }
+    );
+    if (spaceId === sharedDocumentSpaceId() && message) {
+      message.textContent = `Отмечено просмотренными: ${body.data.changed}.`;
+    }
   } catch (error) {
-    if (message) message.textContent = error?.message || "Действие не выполнено.";
+    if (spaceId === sharedDocumentSpaceId() && message) {
+      message.textContent = `${error?.message || "Действие не выполнено."} Состояние документов не изменено.`;
+    }
   } finally {
     sharedDocumentBusy = false;
     await loadSharedDocuments(false);
@@ -367,10 +444,15 @@ async function markAllSharedDocumentsViewed() {
 }
 
 async function handleSharedDocumentAction(event) {
+  const spaceId = sharedDocumentSpaceId();
+  if (!spaceId) return;
   const viewButton = event.target.closest("[data-shared-view]");
   if (viewButton) {
     await sharedDocumentFetchJson(
-      `/api/v1/document-results/${encodeURIComponent(viewButton.dataset.sharedView)}/view`,
+      sharedDocumentEndpoint(
+        spaceId,
+        `/${encodeURIComponent(viewButton.dataset.sharedView)}/view`
+      ),
       { method: "POST" }
     );
     await loadSharedDocuments(false);
@@ -382,25 +464,49 @@ async function handleSharedDocumentAction(event) {
       (candidate) => candidate.id === deleteButton.dataset.sharedDelete
     );
     const label = item?.templateTitle || "этот результат";
-    if (!globalThis.confirm(`Удалить «${label}» из общего хранилища? Скачивание после удаления будет недоступно.`)) {
+    if (!globalThis.confirm(`Удалить «${label}» из результатов этого раздела? Скачивание после удаления будет недоступно.`)) {
       return;
     }
     deleteButton.disabled = true;
     try {
       await sharedDocumentFetchJson(
-        `/api/v1/document-results/${encodeURIComponent(deleteButton.dataset.sharedDelete)}`,
+        sharedDocumentEndpoint(
+          spaceId,
+          `/${encodeURIComponent(deleteButton.dataset.sharedDelete)}`
+        ),
         { method: "DELETE" }
       );
-      await loadSharedDocuments(false);
+      if (spaceId === sharedDocumentSpaceId()) await loadSharedDocuments(false);
     } catch (error) {
       deleteButton.disabled = false;
-      sharedDocumentNotify("Удаление не выполнено", error?.message || "Повторите действие.");
+      sharedDocumentNotify(
+        "Удаление не выполнено",
+        `${error?.message || "Повторите действие."} Сохранённый результат не изменён.`
+      );
     }
     return;
   }
   const download = event.target.closest("[data-shared-download]");
   if (download) {
-    setTimeout(() => void loadSharedDocuments(false), 1_000);
+    setTimeout(() => {
+      if (spaceId === sharedDocumentSpaceId()) void loadSharedDocuments(false);
+    }, 1_000);
+  }
+}
+
+function resetSharedDocumentsForSpaceChange() {
+  sharedDocumentRequestToken += 1;
+  sharedDocumentSummaryToken += 1;
+  sharedDocumentItems = [];
+  sharedDocumentSummary = null;
+  sharedDocumentLastNewCount = null;
+  sharedDocumentTargetId = null;
+  sharedDocumentReloadRequested = sharedDocumentBusy;
+  renderSharedDocumentSummary();
+  renderSharedDocumentLoading();
+  void loadSharedDocumentSummary(true);
+  if (sharedDocumentsView?.classList.contains("is-visible")) {
+    void loadSharedDocuments(true);
   }
 }
 
@@ -422,6 +528,10 @@ if (sharedDocumentsView) {
     renderSharedDocumentFilters();
     document.querySelector('[data-view-target="documents"]')?.click();
   });
+  document.addEventListener(
+    "docomator:space-changed",
+    resetSharedDocumentsForSpaceChange
+  );
   initializeSharedDocumentsView();
   initializeSharedDocumentNavigation();
   void loadSharedDocumentSummary(true);

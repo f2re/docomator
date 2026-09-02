@@ -4,7 +4,7 @@
 
 Канал выпуска: `pilot`
 
-Текущая версия: `0.6.7`.
+Текущая версия: `0.6.8`.
 
 Это предварительный выпуск. До завершения целевой приёмки, восстановления резервной копии и проверки реальных документов Оформлятор нельзя использовать для штатной обработки персональных или ограниченных данных; допускается только контролируемый пилот на обезличенных данных.
 
@@ -48,7 +48,7 @@ Recovery не требует старого кода, не меняет доку
 
 Применённая миграция `0031_shared_access_password.sql` неизменяема. Её исторические table/column names скрыты внутри adapter. `DOCOMATOR_ACCESS_PASSWORD_HASH`, `set-password.sh` и `reset-password.sh` допустимы только в локализованном upgrade/rollback compatibility layer; новая конфигурация и текущий UI/API их не используют.
 
-Пространства остаются жёсткой границей пользовательских данных. Access-code gate и публичный `/gost` не должны ослаблять `spaceId` validation, database constraints/triggers и отрицательные тесты с двумя пространствами.
+Пространства остаются жёсткой границей пользовательских данных. Общая trusted-workspace session позволяет явно переключиться в другой раздел, но не превращает его данные в глобальный read/list context. В `0.6.8` list/read/download/view/delete результатов документов требуют явный `spaceId`; результат другого раздела не раскрывается и не изменяется через текущий раздел. Access-code gate и публичный `/gost` не должны ослаблять `spaceId` validation, database constraints/triggers и отрицательные тесты с двумя пространствами.
 
 Добавление пользователей, персональной идентификации, ролей, ACL, MFA или внешнего IAM требует отдельного ADR и новой threat model.
 
@@ -74,7 +74,7 @@ DOCX/XLSX считаются недоверенным входом. Визуал
 - ошибочное расширение публичного `/gost` на persisted data;
 - brute force 4-значного кода при отсутствии внешнего trusted perimeter;
 - утечка code hash/session secret/cookie или session fixation;
-- cross-space read/write/link/import/render/delivery;
+- cross-space read/write/link/import/render/result/delivery;
 - path traversal, ZIP bomb, XML amplification, macros/ActiveX/OLE/external relationships;
 - prompt injection из документа, приводящий к shell/SQL/path/OOXML/external side effect;
 - CSV/XLSX formula injection при экспорте;

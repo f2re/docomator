@@ -14,7 +14,11 @@ import {
 
 import { correlationId, mutationContextFromRequest } from "./request-context.js";
 
-interface ResultParams {
+interface SpaceParams {
+  spaceId: string;
+}
+
+interface ResultParams extends SpaceParams {
   resultId: string;
 }
 
@@ -30,11 +34,21 @@ const idSchema = {
   maxLength: 160
 } as const;
 
+const spaceParamsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["spaceId"],
+  properties: { spaceId: idSchema }
+} as const;
+
 const resultParamsSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["resultId"],
-  properties: { resultId: idSchema }
+  required: ["spaceId", "resultId"],
+  properties: {
+    spaceId: idSchema,
+    resultId: idSchema
+  }
 } as const;
 
 function responseEnvelope<T>(request: FastifyRequest, data: T) {
@@ -84,15 +98,23 @@ export function registerDocumentResultRoutes(
   objectStore: ContentAddressedObjectStore,
   registry: DocumentResultRegistry
 ): void {
-  app.get("/api/v1/document-results/summary", async (request, reply) => {
-    reply.header("cache-control", "no-store");
-    return responseEnvelope(request, resultOperation(() => registry.summary()));
-  });
+  app.get<{ Params: SpaceParams }>(
+    "/api/v1/spaces/:spaceId/document-results/summary",
+    { schema: { params: spaceParamsSchema } },
+    async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      return responseEnvelope(
+        request,
+        resultOperation(() => registry.summary(request.params.spaceId))
+      );
+    }
+  );
 
-  app.get<{ Querystring: ResultQuery }>(
-    "/api/v1/document-results",
+  app.get<{ Params: SpaceParams; Querystring: ResultQuery }>(
+    "/api/v1/spaces/:spaceId/document-results",
     {
       schema: {
+        params: spaceParamsSchema,
         querystring: {
           type: "object",
           additionalProperties: false,
@@ -110,7 +132,7 @@ export function registerDocumentResultRoutes(
     async (request, reply) => {
       reply.header("cache-control", "no-store");
       const items = resultOperation(() =>
-        registry.list({
+        registry.list(request.params.spaceId, {
           ...(request.query.state === undefined
             ? {}
             : { state: request.query.state }),
@@ -126,20 +148,37 @@ export function registerDocumentResultRoutes(
     }
   );
 
+  app.post<{ Params: SpaceParams }>(
+    "/api/v1/spaces/:spaceId/document-results/view-all",
+    { schema: { params: spaceParamsSchema } },
+    async (request, reply) => {
+      const changed = resultOperation(() =>
+        registry.markAllViewed(
+          request.params.spaceId,
+          mutationContextFromRequest(request)
+        )
+      );
+      reply.header("cache-control", "no-store");
+      return responseEnvelope(request, { changed });
+    }
+  );
+
   app.get<{ Params: ResultParams }>(
-    "/api/v1/document-results/:resultId",
+    "/api/v1/spaces/:spaceId/document-results/:resultId",
     { schema: { params: resultParamsSchema } },
     async (request, reply) => {
       reply.header("cache-control", "no-store");
       return responseEnvelope(
         request,
-        resultOperation(() => registry.get(request.params.resultId))
+        resultOperation(() =>
+          registry.get(request.params.spaceId, request.params.resultId)
+        )
       );
     }
   );
 
   app.post<{ Params: ResultParams }>(
-    "/api/v1/document-results/:resultId/view",
+    "/api/v1/spaces/:spaceId/document-results/:resultId/view",
     { schema: { params: resultParamsSchema } },
     async (request, reply) => {
       reply.header("cache-control", "no-store");
@@ -147,6 +186,7 @@ export function registerDocumentResultRoutes(
         request,
         resultOperation(() =>
           registry.markViewed(
+            request.params.spaceId,
             request.params.resultId,
             mutationContextFromRequest(request)
           )
@@ -155,22 +195,13 @@ export function registerDocumentResultRoutes(
     }
   );
 
-  app.post(
-    "/api/v1/document-results/view-all",
-    async (request, reply) => {
-      const changed = resultOperation(() =>
-        registry.markAllViewed(mutationContextFromRequest(request))
-      );
-      reply.header("cache-control", "no-store");
-      return responseEnvelope(request, { changed });
-    }
-  );
-
   app.get<{ Params: ResultParams }>(
-    "/api/v1/document-results/:resultId/download",
+    "/api/v1/spaces/:spaceId/document-results/:resultId/download",
     { schema: { params: resultParamsSchema } },
     async (request, reply) => {
-      const result = resultOperation(() => registry.get(request.params.resultId));
+      const result = resultOperation(() =>
+        registry.get(request.params.spaceId, request.params.resultId)
+      );
       const sha256 = result.archiveSha256 ?? result.singleOutputSha256;
       if (sha256 === null) {
         throw new DocumentGenerationConflictError(
@@ -181,6 +212,7 @@ export function registerDocumentResultRoutes(
       const isArchive = result.archiveSha256 !== null;
       resultOperation(() =>
         registry.markCollected(
+          request.params.spaceId,
           request.params.resultId,
           mutationContextFromRequest(request),
           { kind: isArchive ? "archive" : "single" }
@@ -200,11 +232,12 @@ export function registerDocumentResultRoutes(
   );
 
   app.delete<{ Params: ResultParams }>(
-    "/api/v1/document-results/:resultId",
+    "/api/v1/spaces/:spaceId/document-results/:resultId",
     { schema: { params: resultParamsSchema } },
     async (request, reply) => {
       const result = resultOperation(() =>
         registry.delete(
+          request.params.spaceId,
           request.params.resultId,
           mutationContextFromRequest(request)
         )

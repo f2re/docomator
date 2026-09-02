@@ -496,12 +496,55 @@ test("выпуск создаёт N личных карточек и показ�
   ]);
   expect(download.suggestedFilename()).toBe("docomator-e2e.zip");
   expect(scenario.resultDownloadPaths).toEqual([
-    "/api/v1/document-results/document-result-e2e/download"
+    `/api/v1/spaces/${E2E_SPACE_ID}/document-results/document-result-e2e/download`
   ]);
   await page.locator('[data-shared-filter="collected"]').click();
   await expect(page.locator("#sharedDocumentList")).toContainText(
     "Забран"
   );
+});
+
+test("результаты переключаются вместе с разделом и не принимают поздний ответ прошлого раздела", async ({
+  page
+}) => {
+  const scenario = await installОформляторApiMock(page, {
+    secondSpace: true,
+    employeeCount: 1,
+    activeTemplate: true,
+    secondaryEmployeeCount: 1,
+    secondaryActiveTemplate: true,
+    resultListDelayOnceMs: 2_000
+  });
+  scenario.primary.generationCreated = true;
+  scenario.secondary.generationCreated = true;
+  const app = new ОформляторPage(page);
+  await app.open();
+  await app.openView("documents");
+  await expect.poll(() => scenario.resultListRequests).toBe(1);
+
+  await app.openView("settings");
+  await app.openView("spaces");
+  await page.locator(`[data-space-id="${E2E_SECOND_SPACE_ID}"]`).click();
+  await expect(page.locator("#currentSpaceChipText")).toHaveText(
+    "Отдел эксплуатации"
+  );
+  await app.openView("documents");
+
+  await expect(
+    page.locator('[data-shared-result-id="document-result-e2e-secondary"]')
+  ).toBeVisible({ timeout: 8_000 });
+  await expect(
+    page.locator('[data-shared-result-id="document-result-e2e"]')
+  ).toHaveCount(0);
+  expect(scenario.resultRequestPaths.length).toBeGreaterThan(0);
+  expect(
+    scenario.resultRequestPaths.every((path) =>
+      /^\/api\/v1\/spaces\/[^/]+\/document-results(?:\/|$)/u.test(path)
+    )
+  ).toBe(true);
+  expect(
+    scenario.resultRequestPaths.some((path) => path.includes(E2E_SECOND_SPACE_ID))
+  ).toBe(true);
 });
 
 test("repeat-шаблон выбирает один сводный документ и блокирует персональный режим", async ({

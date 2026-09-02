@@ -61,18 +61,24 @@ function createSpaceState(employeeCount = 0, activeTemplate = false) {
   };
 }
 
-function generationPayload(space) {
+function generationPayload(space, spaceId = E2E_SPACE_ID) {
+  const secondary = spaceId === E2E_SECOND_SPACE_ID;
   const format = space.activeTemplates[0]?.format || "docx";
+  const jobId = secondary ? "document-job-e2e-secondary" : "document-job-e2e";
+  const resultId = secondary
+    ? "document-result-e2e-secondary"
+    : "document-result-e2e";
   const units = space.entities.map((entity, position) => ({
-    id: `output-e2e-${position + 1}`,
+    id: `${secondary ? "secondary-" : ""}output-e2e-${position + 1}`,
     position,
     state: "completed",
     outputName: `${entity.displayName}.${format}`
   }));
+  const resultUrl = `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-results/${encodeURIComponent(resultId)}`;
   return {
     job: {
-      id: "document-job-e2e",
-      spaceId: E2E_SPACE_ID,
+      id: jobId,
+      spaceId,
       templateTitle: "Личная карточка сотрудника",
       targetMode: "one_per_member",
       memberCount: units.length,
@@ -84,18 +90,19 @@ function generationPayload(space) {
       archiveSha256: "e2e-archive-sha256",
       createdAt: "2026-07-15T09:00:00.000Z"
     },
-    resultId: "document-result-e2e",
-    resultUrl: "/api/v1/document-results/document-result-e2e",
-    downloadUrl: "/api/v1/document-results/document-result-e2e/download"
+    resultId,
+    resultUrl,
+    downloadUrl: `${resultUrl}/download`
   };
 }
 
-function sharedResultFixture(space) {
+function sharedResultFixture(space, spaceId = E2E_SPACE_ID) {
+  const secondary = spaceId === E2E_SECOND_SPACE_ID;
   return {
-    id: "document-result-e2e",
+    id: secondary ? "document-result-e2e-secondary" : "document-result-e2e",
     templateTitle: "Личная карточка сотрудника",
     origin: "manual",
-    spaceName: "Отдел разработки",
+    spaceName: secondary ? "Отдел эксплуатации" : "Отдел разработки",
     targetMode: "one_per_member",
     generatedCount: space.entities.length,
     failedCount: 0,
@@ -272,7 +279,10 @@ export function createОформляторScenario(options = {}) {
     options.employeeCount || 0,
     Boolean(options.activeTemplate)
   );
-  const secondary = createSpaceState(0, false);
+  const secondary = createSpaceState(
+    options.secondaryEmployeeCount || 0,
+    Boolean(options.secondaryActiveTemplate)
+  );
   primary.operations = Array.isArray(options.operations)
     ? options.operations.map((operation) => ({ ...operation }))
     : [];
@@ -304,6 +314,7 @@ export function createОформляторScenario(options = {}) {
       ? structuredClone(options.importPreview)
       : null,
     resultDownloadPaths: [],
+    resultRequestPaths: [],
     resultListDelayMs: Number(options.resultListDelayOnceMs || 0),
     resultListDelayRemaining: options.resultListDelayOnceMs ? 1 : 0,
     resultListRequests: 0,
@@ -470,7 +481,7 @@ export async function installОформляторApiMock(page, options = {}) {
                 id: E2E_SECOND_SPACE_ID,
                 name: "Отдел эксплуатации",
                 description: "Второй изолированный раздел",
-                entityCount: 0,
+                entityCount: state.secondary.entities.length,
                 groupCount: state.secondary.groups.filter((group) => group.status === "active").length
               }
             ]
@@ -1077,7 +1088,7 @@ export async function installОформляторApiMock(page, options = {}) {
     } else if (/\/audience-snapshots$/.test(path) && method === "POST") {
       data = {
         snapshot: {
-          id: "audience-snapshot-e2e",
+          id: `audience-snapshot-e2e-${spaceId}`,
           memberCount: space.entities.length
         },
         plan: {
@@ -1102,9 +1113,9 @@ export async function installОформляторApiMock(page, options = {}) {
       };
     } else if (/\/document-jobs$/.test(path) && method === "POST") {
       space.generationCreated = true;
-      data = generationPayload(space);
+      data = generationPayload(space, spaceId);
     } else if (/\/document-jobs$/.test(path) && method === "GET") {
-      data = space.generationCreated ? [generationPayload(space)] : [];
+      data = space.generationCreated ? [generationPayload(space, spaceId)] : [];
     } else if (/\/document-jobs\/[^/]+\/download$/.test(path) && method === "GET") {
       await route.fulfill({
         status: 200,
@@ -1117,10 +1128,14 @@ export async function installОформляторApiMock(page, options = {}) {
       });
       return;
     } else if (/\/document-jobs\/[^/]+$/.test(path) && method === "GET") {
-      data = generationPayload(space);
-    } else if (/\/document-results\/[^/]+\/download$/.test(path) && method === "GET") {
+      data = generationPayload(space, spaceId);
+    } else if (
+      /^\/api\/v1\/spaces\/[^/]+\/document-results\/[^/]+\/download$/.test(path) &&
+      method === "GET"
+    ) {
+      state.resultRequestPaths.push(path);
       state.resultDownloadPaths.push(path);
-      state.primary.resultCollected = true;
+      space.resultCollected = true;
       await route.fulfill({
         status: 200,
         headers: {
@@ -1131,26 +1146,54 @@ export async function installОформляторApiMock(page, options = {}) {
         body: "PK\u0003\u0004e2e-zip"
       });
       return;
-    } else if (path === "/api/v1/document-results/summary") {
-      const available = state.primary.generationCreated && !state.primary.resultCollected;
+    } else if (
+      /^\/api\/v1\/spaces\/[^/]+\/document-results\/summary$/.test(path) &&
+      method === "GET"
+    ) {
+      state.resultRequestPaths.push(path);
+      const available = space.generationCreated && !space.resultCollected;
       data = {
         newCount: available ? 1 : 0,
         availableCount: available ? 1 : 0,
-        collectedCount: state.primary.resultCollected ? 1 : 0,
+        collectedCount: space.resultCollected ? 1 : 0,
         automaticNewCount: 0,
-        latestAvailableAt: state.primary.generationCreated
+        latestAvailableAt: space.generationCreated
           ? "2026-07-15T09:00:00.000Z"
           : null
       };
-    } else if (path === "/api/v1/document-results") {
+    } else if (
+      /^\/api\/v1\/spaces\/[^/]+\/document-results\/view-all$/.test(path) &&
+      method === "POST"
+    ) {
+      state.resultRequestPaths.push(path);
+      data = { changed: space.generationCreated && !space.resultCollected ? 1 : 0 };
+    } else if (
+      /^\/api\/v1\/spaces\/[^/]+\/document-results\/[^/]+\/view$/.test(path) &&
+      method === "POST"
+    ) {
+      state.resultRequestPaths.push(path);
+      data = sharedResultFixture(space, spaceId);
+      data.state = "viewed";
+    } else if (
+      /^\/api\/v1\/spaces\/[^/]+\/document-results\/[^/]+$/.test(path) &&
+      method === "DELETE"
+    ) {
+      state.resultRequestPaths.push(path);
+      space.generationCreated = false;
+      data = { id: path.split("/").pop(), state: "deleted" };
+    } else if (
+      /^\/api\/v1\/spaces\/[^/]+\/document-results$/.test(path) &&
+      method === "GET"
+    ) {
+      state.resultRequestPaths.push(path);
       state.resultListRequests += 1;
       const filter = url.searchParams.get("state") || "available";
       const matchesFilter =
         filter === "all" ||
-        (filter === "collected" && state.primary.resultCollected) ||
-        (["available", "new"].includes(filter) && !state.primary.resultCollected);
-      data = state.primary.generationCreated && matchesFilter
-        ? [sharedResultFixture(state.primary)]
+        (filter === "collected" && space.resultCollected) ||
+        (["available", "new"].includes(filter) && !space.resultCollected);
+      data = space.generationCreated && matchesFilter
+        ? [sharedResultFixture(space, spaceId)]
         : [];
       if (state.resultListDelayRemaining > 0) {
         state.resultListDelayRemaining -= 1;
