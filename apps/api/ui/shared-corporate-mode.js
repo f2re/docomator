@@ -14,7 +14,7 @@ if (spacesIntro) {
   if (heading) heading.textContent = "Разделы, участники и группы";
   if (description) {
     description.textContent =
-      "Разделы помогают организовать участников, группы и шаблоны. Все пользователи корпоративного сервиса могут работать с любым разделом и общим хранилищем документов.";
+      "Разделы помогают организовать участников, группы, шаблоны и результаты. Открытая рабочая область позволяет явно переключаться между разделами, но их данные не смешиваются.";
   }
 }
 
@@ -22,10 +22,10 @@ const overviewHero = document.querySelector('[data-view="overview"] .hero-copy')
 if (overviewHero) {
   const heading = overviewHero.querySelector("h2");
   const description = overviewHero.querySelector("p");
-  if (heading) heading.textContent = "Организуйте общие данные и готовые документы";
+  if (heading) heading.textContent = "Подготовьте данные и создайте документы";
   if (description) {
     description.textContent =
-      "Разделы группируют участников, шаблоны и расписания, а все готовые ручные и автоматические документы попадают в единое корпоративное хранилище.";
+      "Текущий раздел объединяет участников, шаблоны, расписания и готовые документы. При переключении раздела Оформлятор показывает только его данные.";
   }
 }
 
@@ -33,7 +33,7 @@ const storedMetric = document
   .querySelector("#sharedDocumentAvailableCount")
   ?.closest(".metric-card")
   ?.querySelector("span:last-child");
-if (storedMetric) storedMetric.textContent = "всего хранится";
+if (storedMetric) storedMetric.textContent = "в этом разделе";
 
 const automationNavigation = document.querySelector(
   '[data-view-target="automations"] span:nth-child(2)'

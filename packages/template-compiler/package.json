@@ -1,6 +1,6 @@
 {
   "name": "@docomator/template-compiler",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "private": true,
   "type": "module",
   "exports": {
@@ -18,7 +18,7 @@
     "test": "node --test dist/*.test.js"
   },
   "dependencies": {
-    "@docomator/document-intake": "0.6.7",
+    "@docomator/document-intake": "0.6.8",
     "yauzl": "3.4.0"
   }
 }

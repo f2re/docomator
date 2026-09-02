@@ -230,21 +230,33 @@ function mapResult(row: ResultRow): DocumentResultRecord {
   };
 }
 
+function resolveSpaceId(connection: SqliteExecutor, spaceIdValue: string): string {
+  const identity = requiredText(spaceIdValue, "spaceId");
+  const row = connection
+    .prepare("SELECT id FROM spaces WHERE id = ? OR key = ? LIMIT 1")
+    .get(identity, identity.toLowerCase()) as { id: string } | undefined;
+  if (row === undefined) {
+    throw new DocumentResultNotFoundError(`Space was not found: ${identity}`);
+  }
+  return row.id;
+}
+
 function resultRow(
   connection: SqliteExecutor,
+  spaceId: string,
   resultId: string,
   includeDeleted = false
 ): ResultRow | undefined {
   return connection
     .prepare(
-      `${selectResults()} WHERE ri.id = ?${includeDeleted ? "" : " AND ri.state <> 'deleted'"}`
+      `${selectResults()} WHERE j.space_id = ? AND ri.id = ?${includeDeleted ? "" : " AND ri.state <> 'deleted'"}`
     )
-    .get(resultId) as ResultRow | undefined;
+    .get(spaceId, resultId) as ResultRow | undefined;
 }
 
 function resultRowsByDocumentJobs(
   connection: SqliteExecutor,
-  spaceIdentity: string,
+  spaceId: string,
   documentJobIds: string[]
 ): ResultRow[] {
   if (documentJobIds.length === 0) return [];
@@ -252,15 +264,11 @@ function resultRowsByDocumentJobs(
   return connection
     .prepare(`
       ${selectResults()}
-      WHERE (j.space_id = ? OR sp.key = ?)
+      WHERE j.space_id = ?
         AND ri.document_job_id IN (${placeholders})
         AND ri.state <> 'deleted'
     `)
-    .all(
-      spaceIdentity,
-      spaceIdentity.toLowerCase(),
-      ...documentJobIds
-    ) as unknown as ResultRow[];
+    .all(spaceId, ...documentJobIds) as unknown as ResultRow[];
 }
 
 function normalizedLimit(value: number | undefined): number {
@@ -293,20 +301,23 @@ export class DocumentResultRegistry {
     this.audit = options.audit ?? new AuditRepository(store);
   }
 
-  summary(): DocumentResultSummary {
+  summary(spaceIdValue: string): DocumentResultSummary {
     return this.store.execute((connection) => {
+      const spaceId = resolveSpaceId(connection, spaceIdValue);
       const row = connection
         .prepare(`
           SELECT
-            SUM(CASE WHEN state = 'new' THEN 1 ELSE 0 END) AS new_count,
-            SUM(CASE WHEN state = 'viewed' THEN 1 ELSE 0 END) AS viewed_count,
-            SUM(CASE WHEN state = 'collected' THEN 1 ELSE 0 END) AS collected_count,
-            SUM(CASE WHEN state <> 'deleted' THEN 1 ELSE 0 END) AS available_count,
-            SUM(CASE WHEN state = 'new' AND origin = 'schedule' THEN 1 ELSE 0 END) AS automatic_new_count,
-            MAX(CASE WHEN state <> 'deleted' THEN available_at END) AS latest_available_at
-          FROM document_result_items
+            SUM(CASE WHEN ri.state = 'new' THEN 1 ELSE 0 END) AS new_count,
+            SUM(CASE WHEN ri.state = 'viewed' THEN 1 ELSE 0 END) AS viewed_count,
+            SUM(CASE WHEN ri.state = 'collected' THEN 1 ELSE 0 END) AS collected_count,
+            SUM(CASE WHEN ri.state <> 'deleted' THEN 1 ELSE 0 END) AS available_count,
+            SUM(CASE WHEN ri.state = 'new' AND ri.origin = 'schedule' THEN 1 ELSE 0 END) AS automatic_new_count,
+            MAX(CASE WHEN ri.state <> 'deleted' THEN ri.available_at END) AS latest_available_at
+          FROM document_result_items ri
+          JOIN document_generation_jobs j ON j.id = ri.document_job_id
+          WHERE j.space_id = ?
         `)
-        .get() as {
+        .get(spaceId) as {
         new_count: number | null;
         viewed_count: number | null;
         collected_count: number | null;
@@ -325,7 +336,10 @@ export class DocumentResultRegistry {
     });
   }
 
-  list(options: ListDocumentResultsOptions = {}): DocumentResultRecord[] {
+  list(
+    spaceIdValue: string,
+    options: ListDocumentResultsOptions = {}
+  ): DocumentResultRecord[] {
     const filter = normalizedFilter(options.state);
     const origin = options.origin === undefined ? null : originValue(options.origin);
     const limit = normalizedLimit(options.limit);
@@ -335,14 +349,16 @@ export class DocumentResultRegistry {
         : filter === "available"
           ? "ri.state IN ('new', 'viewed')"
           : "ri.state = ?";
-    const parameters: Array<string | number | null> = [];
-    if (filter !== "all" && filter !== "available") parameters.push(filter);
-    parameters.push(origin, origin, limit);
     return this.store.execute((connection) => {
+      const spaceId = resolveSpaceId(connection, spaceIdValue);
+      const parameters: Array<string | number | null> = [spaceId];
+      if (filter !== "all" && filter !== "available") parameters.push(filter);
+      parameters.push(origin, origin, limit);
       const rows = connection
         .prepare(`
           ${selectResults()}
-          WHERE ${stateClause}
+          WHERE j.space_id = ?
+            AND ${stateClause}
             AND (? IS NULL OR ri.origin = ?)
           ORDER BY CASE ri.state WHEN 'new' THEN 0 WHEN 'viewed' THEN 1 ELSE 2 END,
                    ri.available_at DESC,
@@ -354,10 +370,11 @@ export class DocumentResultRegistry {
     });
   }
 
-  get(resultIdValue: string): DocumentResultRecord {
+  get(spaceIdValue: string, resultIdValue: string): DocumentResultRecord {
     const resultId = requiredText(resultIdValue, "resultId");
     return this.store.execute((connection) => {
-      const row = resultRow(connection, resultId);
+      const spaceId = resolveSpaceId(connection, spaceIdValue);
+      const row = resultRow(connection, spaceId, resultId);
       if (row === undefined) {
         throw new DocumentResultNotFoundError(`Document result was not found: ${resultId}`);
       }
@@ -369,7 +386,6 @@ export class DocumentResultRegistry {
     spaceIdValue: string,
     documentJobIdValues: string[]
   ): Map<string, DocumentResultRecord> {
-    const spaceIdentity = requiredText(spaceIdValue, "spaceId");
     if (documentJobIdValues.length > 500) {
       throw new DocumentResultValidationError(
         "documentJobIds must not contain more than 500 values"
@@ -381,11 +397,8 @@ export class DocumentResultRegistry {
       )
     ];
     return this.store.execute((connection) => {
-      const rows = resultRowsByDocumentJobs(
-        connection,
-        spaceIdentity,
-        documentJobIds
-      );
+      const spaceId = resolveSpaceId(connection, spaceIdValue);
+      const rows = resultRowsByDocumentJobs(connection, spaceId, documentJobIds);
       return new Map(
         rows.map((row) => {
           const result = mapResult(row);
@@ -403,11 +416,16 @@ export class DocumentResultRegistry {
     return this.findByDocumentJobs(spaceIdValue, [documentJobId]).get(documentJobId) ?? null;
   }
 
-  markViewed(resultIdValue: string, contextInput: MutationContext): DocumentResultRecord {
+  markViewed(
+    spaceIdValue: string,
+    resultIdValue: string,
+    contextInput: MutationContext
+  ): DocumentResultRecord {
     const resultId = requiredText(resultIdValue, "resultId");
     const context = contextValue(contextInput);
     return this.store.transaction((connection) => {
-      const current = resultRow(connection, resultId);
+      const spaceId = resolveSpaceId(connection, spaceIdValue);
+      const current = resultRow(connection, spaceId, resultId);
       if (current === undefined) {
         throw new DocumentResultNotFoundError(`Document result was not found: ${resultId}`);
       }
@@ -420,22 +438,28 @@ export class DocumentResultRegistry {
           `)
           .run(context.now, context.now, resultId);
       }
-      const row = resultRow(connection, resultId);
+      const row = resultRow(connection, spaceId, resultId);
       if (row === undefined) throw new Error(`Viewed result was not found: ${resultId}`);
       return mapResult(row);
     });
   }
 
-  markAllViewed(contextInput: MutationContext): number {
+  markAllViewed(spaceIdValue: string, contextInput: MutationContext): number {
     const context = contextValue(contextInput);
     return this.store.transaction((connection) => {
+      const spaceId = resolveSpaceId(connection, spaceIdValue);
       const changed = connection
         .prepare(`
           UPDATE document_result_items
           SET state = 'viewed', viewed_at = ?, updated_at = ?
           WHERE state = 'new'
+            AND document_job_id IN (
+              SELECT id
+              FROM document_generation_jobs
+              WHERE space_id = ?
+            )
         `)
-        .run(context.now, context.now);
+        .run(context.now, context.now, spaceId);
       const count = Number(changed.changes);
       if (count > 0) {
         this.audit.record(
@@ -445,9 +469,9 @@ export class DocumentResultRegistry {
             actorId: context.actorId,
             action: "mark_all_viewed",
             objectType: "document_result_inbox",
-            objectId: "shared",
+            objectId: spaceId,
             correlationId: context.correlationId,
-            details: { count }
+            details: { count, spaceId }
           },
           connection
         );
@@ -457,6 +481,7 @@ export class DocumentResultRegistry {
   }
 
   markCollected(
+    spaceIdValue: string,
     resultIdValue: string,
     contextInput: MutationContext,
     downloadDetails: DocumentResultDownloadDetails
@@ -477,7 +502,8 @@ export class DocumentResultRegistry {
       );
     }
     return this.store.transaction((connection) => {
-      const current = resultRow(connection, resultId);
+      const spaceId = resolveSpaceId(connection, spaceIdValue);
+      const current = resultRow(connection, spaceId, resultId);
       if (current === undefined) {
         throw new DocumentResultNotFoundError(`Document result was not found: ${resultId}`);
       }
@@ -553,17 +579,22 @@ export class DocumentResultRegistry {
         },
         connection
       );
-      const row = resultRow(connection, resultId);
+      const row = resultRow(connection, spaceId, resultId);
       if (row === undefined) throw new Error(`Collected result was not found: ${resultId}`);
       return mapResult(row);
     });
   }
 
-  delete(resultIdValue: string, contextInput: MutationContext): DocumentResultRecord {
+  delete(
+    spaceIdValue: string,
+    resultIdValue: string,
+    contextInput: MutationContext
+  ): DocumentResultRecord {
     const resultId = requiredText(resultIdValue, "resultId");
     const context = contextValue(contextInput);
     return this.store.transaction((connection) => {
-      const current = resultRow(connection, resultId);
+      const spaceId = resolveSpaceId(connection, spaceIdValue);
+      const current = resultRow(connection, spaceId, resultId);
       if (current === undefined) {
         throw new DocumentResultNotFoundError(`Document result was not found: ${resultId}`);
       }
@@ -603,7 +634,7 @@ export class DocumentResultRegistry {
         },
         connection
       );
-      const row = resultRow(connection, resultId, true);
+      const row = resultRow(connection, spaceId, resultId, true);
       if (row === undefined) throw new Error(`Deleted result was not found: ${resultId}`);
       return mapResult(row);
     });

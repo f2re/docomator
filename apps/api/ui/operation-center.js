@@ -117,9 +117,9 @@ function operationCenterDescription(operation) {
     return "PDF готов к просмотру. После проверки шаблон можно активировать.";
   }
   if (operation.kind === "document_generation") {
-    return `${progress || "Документы готовы"}. Результат сохранён в общем хранилище.`;
+    return `${progress || "Документы готовы"}. Результат сохранён в выбранном разделе данных.`;
   }
-  return "Доставка завершена. Результат сохранён в истории.";
+  return "Доставка завершена. Результат сохранён в истории выбранного раздела.";
 }
 
 function operationCenterAction(operation) {
