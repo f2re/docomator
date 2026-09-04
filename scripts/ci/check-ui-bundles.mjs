@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -50,6 +51,65 @@ const bundles = {
   ]
 };
 
+function navigationTargets(html, className) {
+  const marker = `<nav class="${className}"`;
+  const start = html.indexOf(marker);
+  assert.notEqual(start, -1, `Не найдена навигация ${className}.`);
+  const end = html.indexOf("</nav>", start);
+  assert.notEqual(end, -1, `Не найден конец навигации ${className}.`);
+  const fragment = html.slice(start, end);
+  return [...fragment.matchAll(/data-view-target="([^"]+)"/gu)].map((match) => match[1]);
+}
+
+const indexHtml = await fs.readFile(path.join(uiDirectory, "index.html"), "utf8");
+assert.deepEqual(
+  navigationTargets(indexHtml, "nav-list"),
+  ["overview", "employees", "templates", "generation", "documents", "automations", "settings"],
+  "Первичная desktop-навигация должна быть канонической уже в исходном HTML."
+);
+assert.deepEqual(
+  navigationTargets(indexHtml, "mobile-nav"),
+  ["overview", "employees", "generation", "documents", "settings"],
+  "Первичная mobile-навигация должна быть канонической уже в исходном HTML."
+);
+assert.match(
+  indexHtml,
+  /data-view-target="settings"[^>]*>[\s\S]*?<span>Управление<\/span>/u,
+  "Desktop shell должен называть вторичный раздел «Управление»."
+);
+const navigationScriptPosition = indexHtml.indexOf('src="/ui/navigation-contract.js"');
+const applicationScriptPosition = indexHtml.indexOf('src="/ui/app.js"');
+assert.ok(navigationScriptPosition >= 0, "Контракт навигации должен подключаться shell-страницей.");
+assert.ok(
+  applicationScriptPosition >= 0 && navigationScriptPosition < applicationScriptPosition,
+  "Контракт навигации должен быть объявлен до основного приложения."
+);
+
+const navigationContract = await fs.readFile(
+  path.join(uiDirectory, "navigation-contract.js"),
+  "utf8"
+);
+for (const [label, pattern] of [
+  ["MutationObserver", /MutationObserver/u],
+  ["DOM query", /document\.querySelector/u],
+  ["DOM creation", /document\.createElement/u],
+  ["DOM removal", /\.remove\(/u],
+  ["DOM insertion", /insertBefore\(|\.append\(/u]
+]) {
+  assert.doesNotMatch(
+    navigationContract,
+    pattern,
+    `navigation-contract.js остаётся декларативным и не должен выполнять ${label}.`
+  );
+}
+
+const fieldGroupsUi = await fs.readFile(path.join(uiDirectory, "field-groups-ui.js"), "utf8");
+assert.doesNotMatch(
+  fieldGroupsUi,
+  /navigation-contract/u,
+  "Модуль групп полей не должен загружать или владеть контрактом навигации."
+);
+
 const temporaryDirectory = await fs.mkdtemp(
   path.join(os.tmpdir(), "docomator-ui-check-")
 );
@@ -82,5 +142,5 @@ try {
 }
 
 if (process.exitCode === undefined) {
-  process.stdout.write("Пользовательские UI-бандлы прошли синтаксическую проверку.\n");
+  process.stdout.write("Пользовательские UI-бандлы и каноническая навигация прошли проверку.\n");
 }
