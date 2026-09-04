@@ -432,10 +432,17 @@ test("employee API keeps explicit property compatibility and denies cross-space 
       (employeesAfterRollback.json() as { data: unknown[] }).data.length,
       1
     );
-    const definitionsAfterRollback = await app.inject({
+    const missingPropertyScope = await app.inject({
       method: "GET",
       url: "/api/v1/knowledge/property-definitions"
     });
+    assert.equal(missingPropertyScope.statusCode, 400, missingPropertyScope.body);
+
+    const definitionsAfterRollback = await app.inject({
+      method: "GET",
+      url: "/api/v1/knowledge/property-definitions?spaceId=default"
+    });
+    assert.equal(definitionsAfterRollback.statusCode, 200, definitionsAfterRollback.body);
     assert.deepEqual(
       (
         definitionsAfterRollback.json() as {

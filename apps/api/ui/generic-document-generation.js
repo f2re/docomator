@@ -19,7 +19,8 @@
   }
 
   function genericGenerationStorageKey() {
-    return `docomator.generation-entity-type:${currentGenerationSpaceId() || "default"}`;
+    const spaceId = currentGenerationSpaceId();
+    return spaceId ? `docomator.generation-entity-type:${spaceId}` : "";
   }
 
   function genericGenerationIsPerson() {
@@ -28,7 +29,8 @@
 
   function genericGenerationEnsureType() {
     const types = genericGenerationTypes();
-    const stored = localStorage.getItem(genericGenerationStorageKey()) || "";
+    const storageKey = genericGenerationStorageKey();
+    const stored = storageKey ? localStorage.getItem(storageKey) || "" : "";
     const candidates = [
       genericGenerationTypeKey,
       globalThis.docomatorTemplateEntityTypeKey,
@@ -105,7 +107,8 @@
       sourceSection.insertBefore(field, sourceLabel || sourceSection.lastChild);
       field.querySelector("#generationEntityType")?.addEventListener("change", (event) => {
         genericGenerationTypeKey = event.target.value;
-        localStorage.setItem(genericGenerationStorageKey(), genericGenerationTypeKey);
+        const storageKey = genericGenerationStorageKey();
+        if (storageKey) localStorage.setItem(storageKey, genericGenerationTypeKey);
         globalThis.docomatorGenerationEntityTypeKey = genericGenerationTypeKey;
         genericGenerationApplyFilter();
         renderGenerationWorkspace();

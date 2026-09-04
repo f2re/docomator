@@ -11,7 +11,8 @@
   }
 
   function genericTemplateTypeStorageKey() {
-    return `docomator.template-entity-type:${genericTemplateSpaceId() || "default"}`;
+    const spaceId = genericTemplateSpaceId();
+    return spaceId ? `docomator.template-entity-type:${spaceId}` : "";
   }
 
   function genericTemplateType() {
@@ -28,10 +29,8 @@
 
   function genericTemplatePublishType() {
     globalThis.docomatorTemplateEntityTypeKey = genericTemplateEntityTypeKey;
-    localStorage.setItem(
-      genericTemplateTypeStorageKey(),
-      genericTemplateEntityTypeKey
-    );
+    const storageKey = genericTemplateTypeStorageKey();
+    if (storageKey) localStorage.setItem(storageKey, genericTemplateEntityTypeKey);
     const system = structureSystemPropertyDefinitions[0];
     if (system) {
       system.label = genericTemplateIsPerson()
@@ -53,13 +52,16 @@
   loadStructurePropertyDefinitions = async function loadGenericStructureDefinitions() {
     const [types, properties] = await Promise.all([
       structureFetchJson("/api/v1/knowledge/entity-types?limit=500"),
-      structureFetchJson("/api/v1/knowledge/property-definitions?limit=500")
+      structureFetchJson(
+        globalThis.docomatorPropertyDefinitionsUrl("", { limit: 500 })
+      )
     ]);
     genericTemplateEntityTypes = Array.isArray(types.data) ? types.data : [];
     structurePropertyDefinitions = Array.isArray(properties.data)
       ? properties.data
       : [];
-    const stored = localStorage.getItem(genericTemplateTypeStorageKey()) || "";
+    const storageKey = genericTemplateTypeStorageKey();
+    const stored = storageKey ? localStorage.getItem(storageKey) || "" : "";
     const candidates = [
       globalThis.docomatorSelectedEntityTypeKey,
       stored,
@@ -150,8 +152,9 @@
 
   const genericTemplateBaseFetch = structureFetchJson;
   structureFetchJson = async function genericTemplateFetch(url, options = {}) {
+    const requestUrl = new URL(url, globalThis.location?.origin || "http://localhost");
     if (
-      url === "/api/v1/knowledge/property-definitions" &&
+      requestUrl.pathname === "/api/v1/knowledge/property-definitions" &&
       options.method === "POST" &&
       typeof options.body === "string"
     ) {

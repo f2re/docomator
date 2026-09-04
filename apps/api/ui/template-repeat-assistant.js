@@ -228,16 +228,20 @@
       if (matches[0].valueType !== valueType) throw { message: `Поле «${label}» уже существует с другим типом.` };
       return matches[0];
     }
-    const body = await structureFetchJson("/api/v1/knowledge/property-definitions", {
+    const body = await structureFetchJson(
+      globalThis.docomatorPropertyDefinitionsUrl(),
+      {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         label,
         valueType,
         appliesTo: ["person"],
-        sensitivity: /паспорт|снилс|адрес регистрации/u.test(rosterNormalize(label)) ? "restricted" : "internal"
+        sensitivity: /паспорт|снилс|адрес регистрации/u.test(rosterNormalize(label)) ? "restricted" : "internal",
+        validation: { uiGroup: "common" }
       })
-    });
+      }
+    );
     structurePropertyDefinitions = [...structurePropertyDefinitions, body.data];
     return body.data;
   }

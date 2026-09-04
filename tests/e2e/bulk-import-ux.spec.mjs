@@ -239,21 +239,28 @@ test("legacy XLS gives a concrete recovery action and keeps the selected file", 
   expect(await page.locator("#bulkImportFile").evaluate((input) => input.files?.[0]?.name)).toBe("Сотрудники.xls");
 });
 
-test("запросы определений полей автоматически получают текущее пространство", async ({
+test("определения полей используют явный контекст раздела без переписывания fetch", async ({
   page
 }) => {
   await installОформляторApiMock(page);
   await openImport(page);
+
+  const explicitUrl = await page.evaluate(() =>
+    globalThis.docomatorPropertyDefinitionsUrl("", { limit: 500 })
+  );
+  expect(explicitUrl).toMatch(
+    /spaceId=00000000-0000-4000-8000-000000000001/u
+  );
+
   const requested = [];
   page.on("request", (request) => {
     if (request.url().includes("/api/v1/knowledge/property-definitions")) {
       requested.push(request.url());
     }
   });
-
   await page.evaluate(async () => {
-    await fetch("/api/v1/knowledge/property-definitions?limit=500");
+    await fetch("/api/v1/knowledge/property-definitions?probe=raw");
   });
-
-  expect(requested.at(-1)).toMatch(/spaceId=00000000-0000-4000-8000-000000000001/u);
+  expect(requested.at(-1)).toContain("probe=raw");
+  expect(requested.at(-1)).not.toMatch(/[?&]spaceId=/u);
 });

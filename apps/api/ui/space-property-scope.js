@@ -1,127 +1,29 @@
-const DOCOMATOR_DEFAULT_SPACE_ID = "00000000-0000-4000-8000-000000000001";
 const DOCOMATOR_IMPORT_MAX_BYTES = 8 * 1024 * 1024;
 
 function currentRequestSpaceId() {
-  return String(
-    globalThis.docomatorCurrentSpaceId ||
-      localStorage.getItem("docomator.space") ||
-      DOCOMATOR_DEFAULT_SPACE_ID
-  ).trim();
-}
-
-function requestUrlString(input) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  if (typeof Request !== "undefined" && input instanceof Request) return input.url;
-  return null;
-}
-
-function relativeOrAbsoluteUrl(url, rawUrl) {
-  return /^https?:/u.test(rawUrl)
-    ? url.toString()
-    : `${url.pathname}${url.search}${url.hash}`;
-}
-
-function rewriteSpaceScopedRequest(rawUrl) {
-  const origin = globalThis.location?.origin;
-  if (!origin) return rawUrl;
-  const url = new URL(rawUrl, origin);
-  if (url.origin !== origin) return rawUrl;
-  const spaceId = currentRequestSpaceId();
-  if (!spaceId) return rawUrl;
-
-  if (
-    url.pathname.startsWith("/api/v1/knowledge/property-definitions") &&
-    !url.searchParams.has("spaceId")
-  ) {
-    url.searchParams.set("spaceId", spaceId);
-    return relativeOrAbsoluteUrl(url, rawUrl);
-  }
-
-  if (
-    url.pathname === "/api/v1/admin/database/properties" &&
-    !url.searchParams.has("spaceId")
-  ) {
-    url.searchParams.set("spaceId", spaceId);
-    return relativeOrAbsoluteUrl(url, rawUrl);
-  }
-
-  const propertyWrite = /^\/api\/v1\/knowledge\/entities\/([^/]+)\/properties\/([^/]+)$/u.exec(
-    url.pathname
-  );
-  if (propertyWrite) {
-    url.pathname = `/api/v1/spaces/${encodeURIComponent(spaceId)}/entities/${propertyWrite[1]}/properties/${propertyWrite[2]}`;
-    return relativeOrAbsoluteUrl(url, rawUrl);
-  }
-
-  const propertyHistory = /^\/api\/v1\/knowledge\/entities\/([^/]+)\/property-values$/u.exec(
-    url.pathname
-  );
-  if (propertyHistory) {
-    url.pathname = `/api/v1/spaces/${encodeURIComponent(spaceId)}/entities/${propertyHistory[1]}/property-values`;
-    return relativeOrAbsoluteUrl(url, rawUrl);
-  }
-
-  return rawUrl;
+  return String(globalThis.docomatorCurrentSpaceId || "").trim();
 }
 
 function importUxState() {
   globalThis.__docomatorImportUxState ??= {
-    previewBySpace: new Map(),
     planBySpace: new Map(),
     planSequence: 0
   };
   return globalThis.__docomatorImportUxState;
 }
 
-function captureImportResponse(urlValue, response) {
-  const origin = globalThis.location?.origin;
-  if (!origin || !response?.ok) return;
-  const url = new URL(urlValue, origin);
-  const match = /^\/api\/v1\/spaces\/([^/]+)\/data-import\/(preview|plan)$/u.exec(
-    url.pathname
-  );
-  if (!match) return;
-  const spaceId = decodeURIComponent(match[1]);
-  void response
-    .clone()
-    .json()
-    .then((body) => {
-      const data = body?.data;
-      if (!data || typeof data !== "object") return;
-      const state = importUxState();
-      if (match[2] === "preview") {
-        state.previewBySpace.set(spaceId, data);
-      } else {
-        state.planSequence += 1;
-        state.planBySpace.set(spaceId, {
-          sequence: state.planSequence,
-          data
-        });
-      }
-      queueMicrotask(enhanceEntityImportUx);
-    })
-    .catch(() => {});
+function rememberEntityImportPlan(spaceId, plan) {
+  if (!spaceId || !plan || typeof plan !== "object") return;
+  const state = importUxState();
+  state.planSequence += 1;
+  state.planBySpace.set(spaceId, {
+    sequence: state.planSequence,
+    data: plan
+  });
+  queueMicrotask(enhanceEntityImportUx);
 }
 
-function installSpaceScopedPropertyRequests() {
-  if (globalThis.__docomatorSpacePropertyScopeInstalled) return;
-  globalThis.__docomatorSpacePropertyScopeInstalled = true;
-  const originalFetch = globalThis.fetch.bind(globalThis);
-  globalThis.fetch = (input, init) => {
-    const rawUrl = requestUrlString(input);
-    if (rawUrl === null) return originalFetch(input, init);
-    const rewrittenUrl = rewriteSpaceScopedRequest(rawUrl);
-    const nextInput =
-      typeof Request !== "undefined" && input instanceof Request && rewrittenUrl !== rawUrl
-        ? new Request(rewrittenUrl, input)
-        : rewrittenUrl;
-    return originalFetch(nextInput, init).then((response) => {
-      captureImportResponse(rewrittenUrl, response);
-      return response;
-    });
-  };
-}
+globalThis.docomatorRememberEntityImportPlan = rememberEntityImportPlan;
 
 function validEntityImportFile(file) {
   if (!(file instanceof File)) return "Выберите CSV или XLSX.";
@@ -252,6 +154,7 @@ function enhanceEntityImportErrors() {
   const root = document.querySelector("#entityImportWorkspace");
   if (!root) return;
   const spaceId = currentRequestSpaceId();
+  if (!spaceId) return;
   const state = importUxState();
   const storedPlan = state.planBySpace.get(spaceId);
   if (!storedPlan || root.dataset.docomatorPlanSequence === String(storedPlan.sequence)) {
@@ -361,5 +264,4 @@ function installEntityImportUxObserver() {
   });
 }
 
-installSpaceScopedPropertyRequests();
 installEntityImportUxObserver();

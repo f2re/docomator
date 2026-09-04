@@ -46,7 +46,7 @@ test("operator property suggestions and edits stay inside one space", () => {
         valueType: "enum",
         sensitivity: "personal",
         appliesTo: ["person"],
-        validation: { enum: ["Первая"], allowCustom: true }
+        validation: { enum: ["Первая"], allowCustom: true, uiGroup: "common" }
       },
       context("corr-field-a")
     );
@@ -78,6 +78,17 @@ test("operator property suggestions and edits stay inside one space", () => {
       context("corr-update-a")
     );
     assert.equal(updated.label, "Категория A");
+    const validationUpdated = assist.updatePropertyDefinitionInSpace(
+      first.id,
+      firstField.key,
+      { validation: { allowCustom: false } },
+      context("corr-validation-a")
+    );
+    assert.deepEqual(validationUpdated.validation, {
+      enum: ["Первая"],
+      allowCustom: false,
+      uiGroup: "common"
+    });
     assert.throws(
       () =>
         assist.updatePropertyDefinitionInSpace(

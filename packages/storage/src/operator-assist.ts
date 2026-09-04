@@ -464,7 +464,13 @@ export class OperatorAssistRegistry {
     const validation =
       input.validation === undefined
         ? current.validation
-        : normalizedValidation(current.valueType, input.validation);
+        : normalizedValidation(
+            current.valueType,
+            toJsonValue({
+              ...jsonObject(current.validation, "validation"),
+              ...jsonObject(input.validation, "validation")
+            })
+          );
     const version = current.version + 1;
 
     this.store.transaction((connection) => {

@@ -1,11 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
-  DEFAULT_SPACE_ID,
   PROPERTY_UI_GROUPS,
   PROPERTY_VALUE_TYPES,
   SpaceScopedKnowledgeRegistry,
-  type EntityStatus,
   type JsonValue,
   type KnowledgeRegistry,
   type PropertyCardinality,
@@ -18,17 +16,8 @@ interface PaginationQuery {
   limit?: number;
 }
 
-interface PropertyDefinitionQuery extends PaginationQuery {
-  spaceId?: string;
-}
-
 interface RequiredPropertyDefinitionQuery extends PaginationQuery {
   spaceId: string;
-}
-
-interface EntityListQuery extends PaginationQuery {
-  entityTypeKey?: string;
-  status?: EntityStatus;
 }
 
 interface PropertyValueHistoryQuery extends PaginationQuery {
@@ -39,16 +28,9 @@ interface KeyParams {
   key: string;
 }
 
-interface EntityParams {
-  entityId: string;
-}
-
-interface EntityPropertyParams extends EntityParams {
-  propertyKey: string;
-}
-
-interface SpaceEntityParams extends EntityParams {
+interface SpaceEntityParams {
   spaceId: string;
+  entityId: string;
 }
 
 interface SpaceEntityPropertyParams extends SpaceEntityParams {
@@ -77,12 +59,6 @@ interface CreatePropertyDefinitionBody {
 
 interface UpdatePropertyUiGroupBody {
   uiGroup: string;
-}
-
-interface CreateEntityBody {
-  entityTypeKey: string;
-  displayName: string;
-  status?: EntityStatus;
 }
 
 interface AppendPropertyValueBody {
@@ -123,6 +99,16 @@ const requiredPropertyScopeQuerySchema = {
   properties: propertyScopeProperties
 } as const;
 
+const requiredPropertyListQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["spaceId"],
+  properties: {
+    ...paginationProperties,
+    ...propertyScopeProperties
+  }
+} as const;
+
 const appendPropertyValueBodySchema = {
   type: "object",
   additionalProperties: false,
@@ -153,20 +139,15 @@ function responseEnvelope<T>(request: FastifyRequest, data: T) {
 
 function propertyRegistry(
   registry: KnowledgeRegistry,
-  spaceId: string | undefined
+  spaceId: string
 ): SpaceScopedKnowledgeRegistry {
-  return SpaceScopedKnowledgeRegistry.fromRegistry(
-    registry,
-    spaceId ?? DEFAULT_SPACE_ID
-  );
+  return SpaceScopedKnowledgeRegistry.fromRegistry(registry, spaceId);
 }
 
 export function registerKnowledgeRoutes(
   app: FastifyInstance,
   registry: KnowledgeRegistry
 ): void {
-  const defaultSpaceRegistry = () => propertyRegistry(registry, DEFAULT_SPACE_ID);
-
   app.post<{ Body: CreateEntityTypeBody }>(
     "/api/v1/knowledge/entity-types",
     {
@@ -277,20 +258,9 @@ export function registerKnowledgeRoutes(
     }
   );
 
-  app.get<{ Querystring: PropertyDefinitionQuery }>(
+  app.get<{ Querystring: RequiredPropertyDefinitionQuery }>(
     "/api/v1/knowledge/property-definitions",
-    {
-      schema: {
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            ...paginationProperties,
-            ...propertyScopeProperties
-          }
-        }
-      }
-    },
+    { schema: { querystring: requiredPropertyListQuerySchema } },
     async (request) =>
       responseEnvelope(
         request,
@@ -300,7 +270,7 @@ export function registerKnowledgeRoutes(
       )
   );
 
-  app.get<{ Params: KeyParams; Querystring: PropertyDefinitionQuery }>(
+  app.get<{ Params: KeyParams; Querystring: RequiredPropertyDefinitionQuery }>(
     "/api/v1/knowledge/property-definitions/:key",
     {
       schema: {
@@ -309,11 +279,7 @@ export function registerKnowledgeRoutes(
           required: ["key"],
           properties: { key: stableKeySchema }
         },
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: propertyScopeProperties
-        }
+        querystring: requiredPropertyScopeQuerySchema
       }
     },
     async (request) =>
@@ -359,70 +325,6 @@ export function registerKnowledgeRoutes(
           mutationContextFromRequest(request)
         )
       )
-  );
-
-  // Legacy entity API is deterministic default-space compatibility only.
-  // Space-aware UI and integrations must use /api/v1/spaces/:spaceId/entities.
-  app.post<{ Body: CreateEntityBody }>(
-    "/api/v1/knowledge/entities",
-    {
-      schema: {
-        body: {
-          type: "object",
-          additionalProperties: false,
-          required: ["entityTypeKey", "displayName"],
-          properties: {
-            entityTypeKey: stableKeySchema,
-            displayName: { type: "string", minLength: 1, maxLength: 500 },
-            status: { type: "string", enum: ["active", "inactive", "archived"] }
-          }
-        }
-      }
-    },
-    async (request, reply) => {
-      const created = defaultSpaceRegistry().createEntity(
-        request.body,
-        mutationContextFromRequest(request)
-      );
-      reply.code(201);
-      return responseEnvelope(request, created);
-    }
-  );
-
-  app.get<{ Querystring: EntityListQuery }>(
-    "/api/v1/knowledge/entities",
-    {
-      schema: {
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            ...paginationProperties,
-            entityTypeKey: stableKeySchema,
-            status: { type: "string", enum: ["active", "inactive", "archived"] }
-          }
-        }
-      }
-    },
-    async (request) =>
-      responseEnvelope(request, defaultSpaceRegistry().listEntities(request.query))
-  );
-
-  app.get<{ Params: EntityParams }>(
-    "/api/v1/knowledge/entities/:entityId",
-    {
-      schema: {
-        params: {
-          type: "object",
-          required: ["entityId"],
-          properties: {
-            entityId: identifierSchema
-          }
-        }
-      }
-    },
-    async (request) =>
-      responseEnvelope(request, defaultSpaceRegistry().getEntity(request.params.entityId))
   );
 
   app.put<{ Params: SpaceEntityPropertyParams; Body: AppendPropertyValueBody }>(
@@ -485,59 +387,6 @@ export function registerKnowledgeRoutes(
           registry,
           request.params.spaceId
         ).listPropertyValueHistory(request.params.entityId, request.query)
-      )
-  );
-
-  app.put<{ Params: EntityPropertyParams; Body: AppendPropertyValueBody }>(
-    "/api/v1/knowledge/entities/:entityId/properties/:propertyKey",
-    {
-      schema: {
-        params: {
-          type: "object",
-          required: ["entityId", "propertyKey"],
-          properties: {
-            entityId: identifierSchema,
-            propertyKey: stableKeySchema
-          }
-        },
-        body: appendPropertyValueBodySchema
-      }
-    },
-    async (request, reply) => {
-      const created = defaultSpaceRegistry().appendPropertyValue(
-        {
-          entityId: request.params.entityId,
-          propertyKey: request.params.propertyKey,
-          ...request.body
-        },
-        mutationContextFromRequest(request)
-      );
-      reply.code(201);
-      return responseEnvelope(request, created);
-    }
-  );
-
-  app.get<{ Params: EntityParams; Querystring: PropertyValueHistoryQuery }>(
-    "/api/v1/knowledge/entities/:entityId/property-values",
-    {
-      schema: {
-        params: {
-          type: "object",
-          required: ["entityId"],
-          properties: {
-            entityId: identifierSchema
-          }
-        },
-        querystring: propertyHistoryQuerySchema
-      }
-    },
-    async (request) =>
-      responseEnvelope(
-        request,
-        defaultSpaceRegistry().listPropertyValueHistory(
-          request.params.entityId,
-          request.query
-        )
       )
   );
 }

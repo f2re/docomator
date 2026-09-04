@@ -1,6 +1,6 @@
 # Roadmap завершения Оформлятора
 
-Текущая версия: `0.6.8`.
+Текущая версия: `0.7.0`.
 
 Статус: `candidate / pilot`.
 
@@ -14,7 +14,7 @@
 
 Оставшаяся работа — release acceptance одного точного candidate commit и закрытие обнаруженных регрессий, а не расширение продуктовой модели:
 
-1. полный зелёный repository/Chromium/real-stack/offline CI exact `0.6.8`;
+1. полный зелёный repository/Chromium/real-stack/offline CI exact `0.7.0`;
 2. сквозной acceptance `раздел данных → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`, включая отрицательную изоляцию второго раздела и результатов;
 3. чистая offline-установка и target act Debian x86-64;
 4. чистая offline-установка и target act Astra Linux 1.7 x86-64;

@@ -63,7 +63,7 @@ const headers = {
   "x-actor-id": "operator-1"
 };
 
-test("legacy knowledge entity API is confined to default space", async () => {
+test("knowledge data has no default-space or legacy global API bypass", async () => {
   const fixture = migratedFixture();
   const app = buildApp(
     loadApiConfig({
@@ -82,6 +82,95 @@ test("legacy knowledge entity API is confined to default space", async () => {
     });
     assert.equal(otherSpace.statusCode, 201, otherSpace.body);
 
+    const [defaultPropertyResponse, otherPropertyResponse] = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/api/v1/knowledge/property-definitions?spaceId=default",
+        headers,
+        payload: {
+          label: "Должность",
+          valueType: "string",
+          appliesTo: ["person"]
+        }
+      }),
+      app.inject({
+        method: "POST",
+        url: "/api/v1/knowledge/property-definitions?spaceId=other",
+        headers,
+        payload: {
+          label: "Должность",
+          valueType: "string",
+          appliesTo: ["person"]
+        }
+      })
+    ]);
+    assert.equal(defaultPropertyResponse.statusCode, 201, defaultPropertyResponse.body);
+    assert.equal(otherPropertyResponse.statusCode, 201, otherPropertyResponse.body);
+    const defaultPropertyKey = (
+      defaultPropertyResponse.json() as { data: { key: string } }
+    ).data.key;
+    const otherPropertyKey = (
+      otherPropertyResponse.json() as { data: { key: string } }
+    ).data.key;
+    assert.notEqual(defaultPropertyKey, otherPropertyKey);
+
+    const ownershipBefore = fixture.store.execute((connection) =>
+      Number(
+        (
+          connection
+            .prepare("SELECT COUNT(*) AS count FROM space_property_definitions")
+            .get() as { count: number }
+        ).count
+      )
+    );
+
+    const [defaultList, otherList, missingScope] = await Promise.all([
+      app.inject({
+        method: "GET",
+        url: "/api/v1/knowledge/property-definitions?spaceId=default&limit=500",
+        headers
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/knowledge/property-definitions?spaceId=other&limit=500",
+        headers
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/knowledge/property-definitions?limit=500",
+        headers
+      })
+    ]);
+    assert.equal(defaultList.statusCode, 200, defaultList.body);
+    assert.equal(otherList.statusCode, 200, otherList.body);
+    assert.equal(missingScope.statusCode, 400, missingScope.body);
+
+    const defaultKeys = (
+      defaultList.json() as { data: Array<{ key: string; label: string }> }
+    ).data.map((item) => item.key);
+    const otherKeys = (
+      otherList.json() as { data: Array<{ key: string; label: string }> }
+    ).data.map((item) => item.key);
+    assert.ok(defaultKeys.includes(defaultPropertyKey));
+    assert.ok(!defaultKeys.includes(otherPropertyKey));
+    assert.ok(otherKeys.includes(otherPropertyKey));
+    assert.ok(!otherKeys.includes(defaultPropertyKey));
+
+    const [foreignReadFromDefault, foreignReadFromOther] = await Promise.all([
+      app.inject({
+        method: "GET",
+        url: `/api/v1/knowledge/property-definitions/${otherPropertyKey}?spaceId=default`,
+        headers
+      }),
+      app.inject({
+        method: "GET",
+        url: `/api/v1/knowledge/property-definitions/${defaultPropertyKey}?spaceId=other`,
+        headers
+      })
+    ]);
+    assert.equal(foreignReadFromDefault.statusCode, 404, foreignReadFromDefault.body);
+    assert.equal(foreignReadFromOther.statusCode, 404, foreignReadFromOther.body);
+
     const foreignEntity = await app.inject({
       method: "POST",
       url: "/api/v1/spaces/other/entities",
@@ -93,43 +182,35 @@ test("legacy knowledge entity API is confined to default space", async () => {
       foreignEntity.json() as { data: { entityId: string } }
     ).data.entityId;
 
-    const defaultEntity = await app.inject({
-      method: "POST",
-      url: "/api/v1/knowledge/entities",
-      headers,
-      payload: { entityTypeKey: "person", displayName: "Основной объект" }
-    });
-    assert.equal(defaultEntity.statusCode, 201, defaultEntity.body);
-    const defaultEntityId = (
-      defaultEntity.json() as { data: { id: string } }
-    ).data.id;
+    const [legacyList, legacyRead, legacyWrite, legacyHistory] = await Promise.all([
+      app.inject({ method: "GET", url: "/api/v1/knowledge/entities?limit=500", headers }),
+      app.inject({ method: "GET", url: `/api/v1/knowledge/entities/${foreignEntityId}`, headers }),
+      app.inject({
+        method: "PUT",
+        url: `/api/v1/knowledge/entities/${foreignEntityId}/properties/${otherPropertyKey}`,
+        headers,
+        payload: { value: "forbidden", sourceType: "test" }
+      }),
+      app.inject({
+        method: "GET",
+        url: `/api/v1/knowledge/entities/${foreignEntityId}/property-values`,
+        headers
+      })
+    ]);
+    for (const response of [legacyList, legacyRead, legacyWrite, legacyHistory]) {
+      assert.equal(response.statusCode, 404, response.body);
+    }
 
-    const list = await app.inject({
-      method: "GET",
-      url: "/api/v1/knowledge/entities?limit=500",
-      headers
-    });
-    assert.equal(list.statusCode, 200, list.body);
-    const listedIds = (list.json() as { data: Array<{ id: string }> }).data.map(
-      (entity) => entity.id
+    const ownershipAfter = fixture.store.execute((connection) =>
+      Number(
+        (
+          connection
+            .prepare("SELECT COUNT(*) AS count FROM space_property_definitions")
+            .get() as { count: number }
+        ).count
+      )
     );
-    assert.ok(listedIds.includes(defaultEntityId));
-    assert.ok(!listedIds.includes(foreignEntityId));
-
-    const foreignRead = await app.inject({
-      method: "GET",
-      url: `/api/v1/knowledge/entities/${foreignEntityId}`,
-      headers
-    });
-    assert.equal(foreignRead.statusCode, 404, foreignRead.body);
-
-    const foreignLegacyWrite = await app.inject({
-      method: "PUT",
-      url: `/api/v1/knowledge/entities/${foreignEntityId}/properties/system.entity_import_key`,
-      headers,
-      payload: { value: "forbidden", sourceType: "test" }
-    });
-    assert.equal(foreignLegacyWrite.statusCode, 404, foreignLegacyWrite.body);
+    assert.equal(ownershipAfter, ownershipBefore, "GET/list must not claim property ownership");
   } finally {
     await app.close();
     fixture.cleanup();
