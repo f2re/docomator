@@ -350,7 +350,10 @@
     try {
       const [types, properties, entities] = await Promise.all([
         entityWorkspaceFetch("/api/v1/knowledge/entity-types?limit=500"),
-        entityWorkspaceFetch("/api/v1/knowledge/property-definitions?limit=500"),
+        entityWorkspaceFetch(
+          globalThis.docomatorPropertyDefinitionsUrl?.("", { limit: 500 }) ||
+            `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(spaceId)}&limit=500`
+        ),
         entityWorkspaceFetch(`/api/v1/spaces/${encodeURIComponent(spaceId)}/entities?limit=1000`)
       ]);
       entityWorkspaceState.types = Array.isArray(types.data) ? types.data : [];
@@ -427,7 +430,10 @@
       .map((item) => item.trim())
       .filter(Boolean);
     try {
-      await entityWorkspaceFetch("/api/v1/knowledge/property-definitions", {
+      await entityWorkspaceFetch(
+        globalThis.docomatorPropertyDefinitionsUrl?.() ||
+          `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(entityWorkspaceSpaceId())}`,
+        {
         method: "POST",
         body: JSON.stringify({
           label: document.querySelector("#entityPropertyLabel")?.value.trim(),
@@ -435,7 +441,10 @@
           unit: document.querySelector("#entityPropertyUnit")?.value.trim() || undefined,
           sensitivity: document.querySelector("#entityPropertySensitivity")?.value || "internal",
           appliesTo: [entityWorkspaceState.selectedTypeKey],
-          validation: valueType === "enum" ? { enum: [...new Set(variants)], allowCustom: true } : {}
+          validation: {
+            ...(valueType === "enum" ? { enum: [...new Set(variants)], allowCustom: true } : {}),
+            ...(entityWorkspaceState.selectedTypeKey === "person" ? { uiGroup: "common" } : {})
+          }
         })
       });
       document.querySelector("#entityPropertyDialog")?.close();
@@ -474,7 +483,7 @@
     if (entity) document.querySelector("#entityRecordName").value = entity.displayName;
     try {
       const history = await entityWorkspaceFetch(
-        `/api/v1/knowledge/entities/${encodeURIComponent(entityId)}/property-values?limit=500`
+        `/api/v1/spaces/${encodeURIComponent(entityWorkspaceSpaceId())}/entities/${encodeURIComponent(entityId)}/property-values?limit=500`
       );
       entityWorkspaceRenderRecordFields(entityWorkspaceLatestValues(history.data));
     } catch (error) {
@@ -525,7 +534,7 @@
         const value = entityWorkspaceReadValue(control);
         if (value === undefined) continue;
         await entityWorkspaceFetch(
-          `/api/v1/knowledge/entities/${encodeURIComponent(entityId)}/properties/${encodeURIComponent(control.dataset.entityProperty)}`,
+          `/api/v1/spaces/${encodeURIComponent(entityWorkspaceSpaceId())}/entities/${encodeURIComponent(entityId)}/properties/${encodeURIComponent(control.dataset.entityProperty)}`,
           {
             method: "PUT",
             body: JSON.stringify({
@@ -707,6 +716,10 @@
       message.className = body.data.failedCount ? "bulk-import-message is-warning" : "bulk-import-message is-success";
       message.textContent = body.data.failedCount ? `Проверка завершена: ${body.data.failedCount} строк требуют исправления.` : "Проверка завершена. Данные можно сохранить.";
       entityWorkspaceRenderImportPlan(body.data);
+      globalThis.docomatorRememberEntityImportPlan?.(
+        entityWorkspaceSpaceId(),
+        body.data
+      );
     } catch (error) {
       message.className = "bulk-import-message is-error";
       message.textContent = error.message || "Проверка не выполнена.";

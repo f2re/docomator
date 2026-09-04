@@ -445,7 +445,7 @@ async function operatorPersistEmployee() {
           throw new ApiError(`Для поля «${property.label}» выберите значение из списка.`);
         }
         if (!known) {
-          const updated = await api(`/api/v1/knowledge/property-definitions/${encodeURIComponent(property.key)}/options`, {
+          const updated = await api(propertyDefinitionsEndpoint(`/${encodeURIComponent(property.key)}/options`), {
             method: "POST",
             body: JSON.stringify({ values: [String(value)] })
           });
@@ -458,7 +458,7 @@ async function operatorPersistEmployee() {
     for (const staged of operatorState.employeeStagedFields) {
       const control = document.querySelector(`[data-staged-id="${CSS.escape(staged.stagedId)}"]`);
       const value = control ? operatorControlJsonValue(control) : staged.value;
-      const created = await api("/api/v1/knowledge/property-definitions", {
+      const created = await api(propertyDefinitionsEndpoint(), {
         method: "POST",
         body: JSON.stringify(compact({
           label: staged.label,
@@ -466,7 +466,7 @@ async function operatorPersistEmployee() {
           unit: staged.unit,
           sensitivity: "personal",
           appliesTo: ["person"],
-          validation: staged.validation
+          validation: { ...staged.validation, uiGroup: staged.validation?.uiGroup || "common" }
         }))
       });
       if (!state.data.properties.some((property) => property.key === created.data.key)) {
@@ -588,6 +588,11 @@ async function operatorSubmitProperty(event) {
   try {
     const valueType = document.querySelector("#operatorPropertyType")?.value || "string";
     const options = operatorPropertyOptionsFromForm();
+    const editing = state.dialogKind === "operator-property-edit";
+    const existing = editing
+      ? state.data.properties.find((property) => property.key === operatorState.propertyEditingKey)
+      : null;
+    const existingValidation = operatorValidation(existing);
     const payload = compact({
       label: document.querySelector("#operatorPropertyLabel")?.value.trim(),
       valueType,
@@ -595,19 +600,22 @@ async function operatorSubmitProperty(event) {
       sensitivity: document.querySelector("#operatorPropertySensitivity")?.value,
       description: document.querySelector("#operatorPropertyDescription")?.value.trim(),
       aliases: operatorParseOptions(document.querySelector("#operatorPropertyAliases")?.value || ""),
-      appliesTo: state.dialogKind === "operator-property-create" ? ["person"] : undefined,
-      validation: valueType === "enum"
-        ? {
-            enum: options,
-            allowCustom: Boolean(document.querySelector("#operatorPropertyAllowCustom")?.checked)
-          }
-        : {}
+      appliesTo: editing ? undefined : ["person"],
+      validation: {
+        ...existingValidation,
+        ...(valueType === "enum"
+          ? {
+              enum: options,
+              allowCustom: Boolean(document.querySelector("#operatorPropertyAllowCustom")?.checked)
+            }
+          : { enum: undefined, allowCustom: undefined }),
+        uiGroup: existingValidation.uiGroup || "common"
+      }
     });
-    const editing = state.dialogKind === "operator-property-edit";
     const body = await api(
       editing
-        ? `/api/v1/knowledge/property-definitions/${encodeURIComponent(operatorState.propertyEditingKey)}`
-        : "/api/v1/knowledge/property-definitions",
+        ? propertyDefinitionsEndpoint(`/${encodeURIComponent(operatorState.propertyEditingKey)}`)
+        : propertyDefinitionsEndpoint(),
       {
         method: editing ? "PUT" : "POST",
         body: JSON.stringify(payload)

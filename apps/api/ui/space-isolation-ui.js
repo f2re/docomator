@@ -3,7 +3,7 @@ function bulkImportScopedMemoryKey() {
     typeof bulkImportCurrentSpaceId === "function"
       ? bulkImportCurrentSpaceId()
       : String(globalThis.docomatorCurrentSpaceId || "").trim();
-  return `${bulkImportMemoryKey}.${spaceId || "default"}`;
+  return spaceId ? `${bulkImportMemoryKey}.${spaceId}` : "";
 }
 
 function installBulkImportScopedMemory() {
@@ -16,9 +16,9 @@ function installBulkImportScopedMemory() {
   }
   readBulkImportMappingMemory = function readScopedBulkImportMappingMemory() {
     try {
-      const parsed = JSON.parse(
-        localStorage.getItem(bulkImportScopedMemoryKey()) || "{}"
-      );
+      const memoryKey = bulkImportScopedMemoryKey();
+      if (!memoryKey) return {};
+      const parsed = JSON.parse(localStorage.getItem(memoryKey) || "{}");
       return parsed && typeof parsed === "object" && !Array.isArray(parsed)
         ? parsed
         : {};
@@ -39,7 +39,8 @@ function installBulkImportScopedMemory() {
           updatedAt: new Date().toISOString()
         };
       }
-      localStorage.setItem(bulkImportScopedMemoryKey(), JSON.stringify(memory));
+      const memoryKey = bulkImportScopedMemoryKey();
+      if (memoryKey) localStorage.setItem(memoryKey, JSON.stringify(memory));
     } catch {
       // Необязательная локальная подсказка не должна блокировать импорт.
     }

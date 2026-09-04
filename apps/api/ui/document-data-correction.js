@@ -102,9 +102,14 @@ function generationCorrectionValue(control, valueType, label) {
 }
 
 async function loadGenerationPropertyDefinitions() {
+  const spaceId = String(globalThis.docomatorCurrentSpaceId || "").trim();
+  if (!spaceId) throw new Error("Сначала выберите раздел данных.");
   const body = await generationFetchJson(
-    "/api/v1/knowledge/property-definitions?limit=500"
+    globalThis.docomatorPropertyDefinitionsUrl("", { limit: 500 })
   );
+  if (String(globalThis.docomatorCurrentSpaceId || "").trim() !== spaceId) {
+    return generationPropertyDefinitions;
+  }
   generationPropertyDefinitions = Array.isArray(body.data) ? body.data : [];
   return generationPropertyDefinitions;
 }
@@ -203,8 +208,10 @@ async function saveGenerationCorrectionRow(row) {
   try {
     const definition = ensureGenerationPropertyDefinition(fieldKey, fieldLabel);
     const value = generationCorrectionValue(control, definition.valueType, fieldLabel);
+    const spaceId = String(globalThis.docomatorCurrentSpaceId || "").trim();
+    if (!spaceId) throw new Error("Сначала выберите раздел данных.");
     await generationFetchJson(
-      `/api/v1/knowledge/entities/${encodeURIComponent(entityId)}/properties/${encodeURIComponent(definition.key)}`,
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/entities/${encodeURIComponent(entityId)}/properties/${encodeURIComponent(definition.key)}`,
       {
         method: "PUT",
         headers: { "content-type": "application/json" },

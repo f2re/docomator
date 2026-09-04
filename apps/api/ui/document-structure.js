@@ -318,7 +318,8 @@ function refreshStructurePropertySelector() {
 
 async function loadStructurePropertyDefinitions() {
   const body = await structureFetchJson(
-    "/api/v1/knowledge/property-definitions?limit=500"
+    globalThis.docomatorPropertyDefinitionsUrl?.("", { limit: 500 }) ||
+      `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(globalThis.docomatorTemplateWizard?.spaceId?.() || "")}&limit=500`
   );
   structurePropertyDefinitions = Array.isArray(body.data) ? body.data : [];
 }
@@ -1039,7 +1040,8 @@ async function saveSelectedField(event) {
         definition = labelMatch;
       } else {
         const definitionBody = await structureFetchJson(
-          "/api/v1/knowledge/property-definitions",
+          globalThis.docomatorPropertyDefinitionsUrl?.() ||
+            `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(spaceId)}`,
           {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -1066,7 +1068,8 @@ async function saveSelectedField(event) {
       fieldGroup !== "unassigned"
     ) {
       const classified = await structureFetchJson(
-        `/api/v1/knowledge/property-definitions/${encodeURIComponent(definition.key)}/group`,
+        globalThis.docomatorPropertyDefinitionsUrl?.(`/${encodeURIComponent(definition.key)}/group`) ||
+          `/api/v1/knowledge/property-definitions/${encodeURIComponent(definition.key)}/group?spaceId=${encodeURIComponent(spaceId)}`,
         {
           method: "PUT",
           headers: { "content-type": "application/json" },

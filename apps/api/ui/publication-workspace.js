@@ -260,7 +260,10 @@
       const [configuration, types, properties, entities, snapshots] = await Promise.all([
         publicationFetch(publicationEndpoint("/config")),
         publicationFetch("/api/v1/knowledge/entity-types?limit=500"),
-        publicationFetch("/api/v1/knowledge/property-definitions?limit=500"),
+        publicationFetch(
+          globalThis.docomatorPropertyDefinitionsUrl?.("", { limit: 500 }) ||
+            `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(publicationSpaceId())}&limit=500`
+        ),
         publicationFetch(`/api/v1/spaces/${encodeURIComponent(publicationSpaceId())}/entities?limit=1000`),
         publicationFetch(publicationEndpoint("/reports/snapshots?limit=20"))
       ]);

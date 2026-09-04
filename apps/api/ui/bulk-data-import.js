@@ -101,7 +101,8 @@ async function bulkImportApi(url, options = {}) {
 async function loadBulkImportPropertyDefinitions() {
   try {
     const body = await bulkImportApi(
-      "/api/v1/knowledge/property-definitions?limit=500"
+      globalThis.docomatorPropertyDefinitionsUrl?.("", { limit: 500 }) ||
+        `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(bulkImportCurrentSpaceId())}&limit=500`
     );
     bulkImportPropertyDefinitions = Array.isArray(body.data) ? body.data : [];
   } catch {

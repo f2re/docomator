@@ -21,11 +21,9 @@ business record
 > [!WARNING]
 > Согласно [ADR-0006](adr/0006-shared-trusted-workspace-without-iam.md), приложение намеренно не реализует authentication, authorization, учётные записи и роли. API по умолчанию слушает `127.0.0.1`; публиковать его можно только внутри доверенного корпоративного периметра. Оформлятор не заменяет сетевой и системный контроль допуска.
 
-## Базовый URL
+## Базовые URL
 
-```text
-/api/v1/knowledge
-```
+Системные типы сущностей остаются глобальной схемой и используют `/api/v1/knowledge/entity-types`. Пользовательские определения свойств требуют явный `spaceId` в query. Сущности, значения и история работают только внутри выбранного раздела данных через `/api/v1/spaces/:spaceId/entities...`.
 
 ## Correlation и actor
 
@@ -72,14 +70,13 @@ X-Correlation-ID: request-2026-07-11-001
 | `POST` | `/entity-types` | создать тип сущности |
 | `GET` | `/entity-types` | получить каталог типов |
 | `GET` | `/entity-types/:key` | получить тип по стабильному ключу |
-| `POST` | `/property-definitions` | создать определение свойства |
-| `GET` | `/property-definitions` | получить каталог свойств |
-| `GET` | `/property-definitions/:key` | получить свойство по ключу |
-| `POST` | `/entities` | создать сущность |
-| `GET` | `/entities` | получить сущности с фильтрами |
-| `GET` | `/entities/:entityId` | получить сущность |
-| `PUT` | `/entities/:entityId/properties/:propertyKey` | добавить новую версию значения |
-| `GET` | `/entities/:entityId/property-values` | получить историю значений |
+| `POST` | `/api/v1/knowledge/property-definitions?spaceId=:spaceId` | создать определение свойства текущего раздела |
+| `GET` | `/api/v1/knowledge/property-definitions?spaceId=:spaceId` | получить каталог свойств текущего раздела |
+| `GET` | `/api/v1/knowledge/property-definitions/:key?spaceId=:spaceId` | получить свойство текущего раздела |
+| `POST` | `/api/v1/spaces/:spaceId/entities` | создать сущность в разделе |
+| `GET` | `/api/v1/spaces/:spaceId/entities` | получить сущности раздела с фильтрами |
+| `PUT` | `/api/v1/spaces/:spaceId/entities/:entityId/properties/:propertyKey` | добавить новую версию значения |
+| `GET` | `/api/v1/spaces/:spaceId/entities/:entityId/property-values` | получить историю значений |
 
 Параметр `limit` имеет диапазон `1..500`. История значений по умолчанию ограничена 200 записями.
 
@@ -147,7 +144,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/knowledge/entity-types \
 ## Создание свойства
 
 ```bash
-curl -X POST http://127.0.0.1:8080/api/v1/knowledge/property-definitions \
+curl -X POST http://127.0.0.1:8080/api/v1/knowledge/property-definitions?spaceId=default \
   -H 'content-type: application/json' \
   -H 'x-actor-id: workstation-1' \
   -d '{
@@ -167,7 +164,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/knowledge/property-definitions \
 ## Создание сущности
 
 ```bash
-curl -X POST http://127.0.0.1:8080/api/v1/knowledge/entities \
+curl -X POST http://127.0.0.1:8080/api/v1/spaces/default/entities \
   -H 'content-type: application/json' \
   -H 'x-actor-id: workstation-1' \
   -d '{
@@ -182,7 +179,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/knowledge/entities \
 
 ```bash
 curl -X PUT \
-  http://127.0.0.1:8080/api/v1/knowledge/entities/ENTITY_ID/properties/person.height \
+  http://127.0.0.1:8080/api/v1/spaces/default/entities/ENTITY_ID/properties/person.height \
   -H 'content-type: application/json' \
   -H 'x-actor-id: workstation-1' \
   -d '{
@@ -198,7 +195,7 @@ curl -X PUT \
 ## История значений
 
 ```bash
-curl 'http://127.0.0.1:8080/api/v1/knowledge/entities/ENTITY_ID/property-values?propertyKey=person.height'
+curl 'http://127.0.0.1:8080/api/v1/spaces/default/entities/ENTITY_ID/property-values?propertyKey=person.height'
 ```
 
 Ответ упорядочен по ключу свойства и убыванию версии. Политика выбора «текущего значения» для document resolution будет реализована отдельным application service; API M1 намеренно возвращает полную историю без скрытого выбора.

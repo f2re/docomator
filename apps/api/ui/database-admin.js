@@ -634,7 +634,7 @@
     errorBox.hidden = true;
     if (submit) submit.disabled = true;
     try {
-      await api("/api/v1/admin/database/properties", {
+      await api(`/api/v1/admin/database/properties?spaceId=${encodeURIComponent(state.currentSpaceId)}`, {
         method: "POST",
         body: JSON.stringify({
           label: document

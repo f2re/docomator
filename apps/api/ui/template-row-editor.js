@@ -471,7 +471,8 @@ async function rowEditorDefinition(card, element, existing) {
     if (!definition) throw new Error("Выбранное поле карточки больше не найдено. Обновите страницу.");
     if (rowEditorIsPerson() && structurePropertyGroup(definition) === "unassigned" && fieldGroup !== "unassigned") {
       const classified = await structureFetchJson(
-        `/api/v1/knowledge/property-definitions/${encodeURIComponent(definition.key)}/group`,
+        globalThis.docomatorPropertyDefinitionsUrl?.(`/${encodeURIComponent(definition.key)}/group`) ||
+          `/api/v1/knowledge/property-definitions/${encodeURIComponent(definition.key)}/group?spaceId=${encodeURIComponent(globalThis.docomatorTemplateWizard?.spaceId?.() || "")}`,
         {
           method: "PUT",
           headers: { "content-type": "application/json" },
@@ -518,7 +519,10 @@ async function rowEditorDefinition(card, element, existing) {
     }
     return matches[0];
   }
-  const created = await structureFetchJson("/api/v1/knowledge/property-definitions", {
+  const created = await structureFetchJson(
+    globalThis.docomatorPropertyDefinitionsUrl?.() ||
+      `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(globalThis.docomatorTemplateWizard?.spaceId?.() || "")}`,
+    {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

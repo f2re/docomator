@@ -63,7 +63,7 @@ const headers = {
   "x-actor-id": "operator-1"
 };
 
-test("knowledge API creates typed data with outbox and audit", async () => {
+test("knowledge API requires explicit space for properties and values", async () => {
   const fixture = migratedFixture();
   const app = buildApp(
     loadApiConfig({
@@ -85,17 +85,31 @@ test("knowledge API creates typed data with outbox and audit", async () => {
     assert.equal(typeResponse.statusCode, 200, typeResponse.body);
     assert.equal(typeResponse.headers["x-correlation-id"], headers["x-correlation-id"]);
 
-    const missingSpace = await app.inject({
-      method: "POST",
-      url: "/api/v1/knowledge/property-definitions",
-      headers,
-      payload: {
-        label: "Не должно создаться",
-        valueType: "string",
-        appliesTo: ["person"]
-      }
-    });
-    assert.equal(missingSpace.statusCode, 400, missingSpace.body);
+    const [missingSpaceCreate, missingSpaceList, missingSpaceRead] = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/api/v1/knowledge/property-definitions",
+        headers,
+        payload: {
+          label: "Не должно создаться",
+          valueType: "string",
+          appliesTo: ["person"]
+        }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/knowledge/property-definitions?limit=500",
+        headers
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/v1/knowledge/property-definitions/person.height",
+        headers
+      })
+    ]);
+    assert.equal(missingSpaceCreate.statusCode, 400, missingSpaceCreate.body);
+    assert.equal(missingSpaceList.statusCode, 400, missingSpaceList.body);
+    assert.equal(missingSpaceRead.statusCode, 400, missingSpaceRead.body);
 
     const propertyResponse = await app.inject({
       method: "POST",
@@ -115,9 +129,33 @@ test("knowledge API creates typed data with outbox and audit", async () => {
     ).data.key;
     assert.match(propertyKey, /^property\.[a-f0-9]{32}$/u);
 
+    const [propertyList, propertyRead] = await Promise.all([
+      app.inject({
+        method: "GET",
+        url: "/api/v1/knowledge/property-definitions?spaceId=default&limit=500",
+        headers
+      }),
+      app.inject({
+        method: "GET",
+        url: `/api/v1/knowledge/property-definitions/${propertyKey}?spaceId=default`,
+        headers
+      })
+    ]);
+    assert.equal(propertyList.statusCode, 200, propertyList.body);
+    assert.equal(propertyRead.statusCode, 200, propertyRead.body);
+    assert.ok(
+      (propertyList.json() as { data: Array<{ key: string }> }).data.some(
+        (property) => property.key === propertyKey
+      )
+    );
+    assert.equal(
+      (propertyRead.json() as { data: { key: string } }).data.key,
+      propertyKey
+    );
+
     const entityResponse = await app.inject({
       method: "POST",
-      url: "/api/v1/knowledge/entities",
+      url: "/api/v1/spaces/default/entities",
       headers,
       payload: {
         entityTypeKey: "person",
@@ -125,7 +163,9 @@ test("knowledge API creates typed data with outbox and audit", async () => {
       }
     });
     assert.equal(entityResponse.statusCode, 201, entityResponse.body);
-    const entityId = (entityResponse.json() as { data: { id: string } }).data.id;
+    const entityId = (
+      entityResponse.json() as { data: { entityId: string } }
+    ).data.entityId;
 
     const valueResponse = await app.inject({
       method: "PUT",
@@ -155,6 +195,24 @@ test("knowledge API creates typed data with outbox and audit", async () => {
     assert.equal(history.data[0]?.value, 181.5);
     assert.equal(history.data[0]?.valueType, "number");
     assert.equal(history.data[0]?.version, 1);
+
+    const [legacyEntityList, legacyValueWrite, legacyHistory] = await Promise.all([
+      app.inject({ method: "GET", url: "/api/v1/knowledge/entities", headers }),
+      app.inject({
+        method: "PUT",
+        url: `/api/v1/knowledge/entities/${entityId}/properties/${propertyKey}`,
+        headers,
+        payload: { value: 182, sourceType: "user_input" }
+      }),
+      app.inject({
+        method: "GET",
+        url: `/api/v1/knowledge/entities/${entityId}/property-values`,
+        headers
+      })
+    ]);
+    assert.equal(legacyEntityList.statusCode, 404, legacyEntityList.body);
+    assert.equal(legacyValueWrite.statusCode, 404, legacyValueWrite.body);
+    assert.equal(legacyHistory.statusCode, 404, legacyHistory.body);
   } finally {
     await app.close();
   }
@@ -222,11 +280,14 @@ test("knowledge API returns stable validation and conflict errors", async () => 
     assert.equal(heightDefinition.statusCode, 201, heightDefinition.body);
     const entity = await app.inject({
       method: "POST",
-      url: "/api/v1/knowledge/entities",
+      url: "/api/v1/spaces/default/entities",
       headers,
       payload: { entityTypeKey: "person", displayName: "Петров Пётр" }
     });
-    const entityId = (entity.json() as { data: { id: string } }).data.id;
+    assert.equal(entity.statusCode, 201, entity.body);
+    const entityId = (
+      entity.json() as { data: { entityId: string } }
+    ).data.entityId;
     const invalidValue = await app.inject({
       method: "PUT",
       url: `/api/v1/spaces/default/entities/${entityId}/properties/person.height`,
@@ -241,7 +302,7 @@ test("knowledge API returns stable validation and conflict errors", async () => 
 
     const missingType = await app.inject({
       method: "POST",
-      url: "/api/v1/knowledge/entities",
+      url: "/api/v1/spaces/default/entities",
       headers,
       payload: { entityTypeKey: "unknown", displayName: "Неизвестный объект" }
     });

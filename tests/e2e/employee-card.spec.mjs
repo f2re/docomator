@@ -34,8 +34,11 @@ test("пользователь добавляет сотрудника и пон
       new URL(request.url()).pathname ===
         `/api/v1/knowledge/property-definitions/${propertyKey}`
   );
-  await page.evaluate((key) => {
-    void fetch(`/api/v1/knowledge/property-definitions/${encodeURIComponent(key)}`, {
+  const edited = await page.evaluate(async (key) => {
+    const url = globalThis.docomatorPropertyDefinitionsUrl(
+      `/${encodeURIComponent(key)}`
+    );
+    const response = await fetch(url, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -43,7 +46,15 @@ test("пользователь добавляет сотрудника и пон
         validation: { allowCustom: true }
       })
     });
+    return response.json();
   }, propertyKey);
   const editRequest = await editRequestPromise;
-  expect(editRequest.postDataJSON().validation.uiGroup).toBe("common");
+  const editUrl = new URL(editRequest.url());
+  expect(editUrl.searchParams.get("spaceId")).toBe(
+    "00000000-0000-4000-8000-000000000001"
+  );
+  expect(editRequest.postDataJSON().validation.uiGroup).toBeUndefined();
+  expect(edited.data.validation.uiGroup).toBe("common");
+  expect(edited.data.validation.allowCustom).toBe(true);
+  expect(state.properties[0].validation?.uiGroup).toBe("common");
 });

@@ -73,6 +73,8 @@ const state = {
   }
 };
 
+let propertyLoadVersion = 0;
+
 function publishCurrentSpace() {
   window.docomatorCurrentSpaceId = state.currentSpaceId || "";
   document.dispatchEvent(new CustomEvent("docomator:space-changed", {
@@ -84,7 +86,7 @@ const views = {
   overview: ["Рабочий стол", "Главная", "Следующий понятный шаг к готовым документам.", null, null],
   employees: ["Карточки людей", "Сотрудники", "Добавляйте людей и нужные для документов сведения в одном месте.", null, null],
   spaces: ["Организационные наборы", "Пространства", "Люди, группы и точный план будущего документа.", "Создать пространство", "space"],
-  knowledge: ["Общая схема", "Типы и свойства", "Переиспользуемая структура данных для всех пространств.", "Создать тип", "entity-type"],
+  knowledge: ["Схема данных", "Типы и свойства", "Типы объектов общие для системы, а пользовательские поля относятся к выбранному разделу данных.", "Создать тип", "entity-type"],
   templates: ["Документ-основа", "Шаблоны", "Подключите DOCX или XLSX и сопоставьте поля по понятным названиям.", null, null],
   generation: ["Новый выпуск", "Создать документы", "Выберите шаблон, сотрудников и проверьте итог перед запуском.", null, null],
   documents: ["Готовые файлы", "Результаты", "Скачивайте документы, комплекты и повторяйте только неуспешные строки.", null, null],
@@ -104,7 +106,7 @@ const knowledgeTabs = {
   properties: {
     label: "Создать свойство",
     kind: "property",
-    hint: "<strong>Свойство</strong> — переиспользуемый параметр: ФИО, рост, вес, должность, ИНН или количество животных.",
+    hint: "<strong>Свойство</strong> — переиспользуемый параметр выбранного раздела: ФИО, рост, вес, должность, ИНН или количество животных.",
     emoji: "🏷️",
     title: "Пока нет определений свойств",
     text: "Добавьте параметр и выберите тип данных. Серые подсказки объяснят назначение каждого поля."
@@ -120,7 +122,7 @@ const help = {
   ],
   employees: [
     ["Как добавить новое поле?", "Откройте карточку сотрудника и нажмите «Добавить поле». Назовите его обычными словами, например «Должность»."],
-    ["Поле появится только у одного человека?", "Нет. После подтверждения поле станет доступно во всех карточках, а введённое значение сохранится у выбранного сотрудника."],
+    ["Поле появится только у одного человека?", "Нет. После подтверждения поле станет доступно во всех карточках текущего раздела данных, а введённое значение сохранится у выбранного сотрудника."],
     ["Где хранятся данные?", "На локальном сервере Оформлятор. Интерфейс не передаёт карточки внешним службам."]
   ],
   spaces: [
@@ -130,9 +132,9 @@ const help = {
     ["Как получить один общий документ?", "Выберите активный шаблон с настроенной повторяемой строкой. Система сформирует один DOCX/XLSX по упорядоченному снимку состава; для прежнего шаблона без такой строки используется стандартная сводная таблица."]
   ],
   knowledge: [
-    ["Почему здесь нет списка людей?", "Конкретные люди относятся к пространствам, чтобы не смешивать данные разных подразделений. Здесь хранится только общая схема типов и свойств."],
+    ["Почему здесь нет списка людей?", "Конкретные люди и пользовательские поля относятся к выбранному разделу данных. Общими для системы остаются только типы объектов."],
     ["Что такое стабильный ключ?", "Техническое имя на латинице: person, person.height, organization.inn. Оно остаётся неизменным при смене понятной подписи."],
-    ["Можно добавить необычный параметр?", "Да. Рост, вес, количество животных и другие сведения создаются как обычные типизированные свойства."],
+    ["Можно добавить необычный параметр?", "Да. Рост, вес, количество животных и другие сведения создаются как обычные типизированные свойства текущего раздела."],
     ["Что означает чувствительность?", "Это класс обработки: публичные, внутренние, персональные или ограниченные сведения. Он определяет маскирование, аудит и передачу локальной модели, но не ограничивает доступ пользователей."]
   ],
 templates: [
@@ -168,8 +170,8 @@ const dialogs = {
   property: {
     eyebrow: "Структура данных",
     title: "Новое свойство",
-    description: "Создайте параметр, который можно использовать в разных пространствах и документах.",
-    endpoint: "/api/v1/knowledge/property-definitions",
+    description: "Создайте параметр для карточек и документов текущего раздела данных.",
+    endpoint: () => propertyDefinitionsEndpoint(),
     success: "Свойство создано",
     submit: "Создать свойство",
     fields: [
@@ -263,6 +265,19 @@ function spaceEndpoint(pathname = "") {
   if (!state.currentSpaceId) throw new ApiError("Сначала выберите пространство.");
   return `/api/v1/spaces/${encodeURIComponent(state.currentSpaceId)}${pathname}`;
 }
+
+function propertyDefinitionsEndpoint(pathname = "", parameters = {}) {
+  if (!state.currentSpaceId) throw new ApiError("Сначала выберите пространство.");
+  const query = new URLSearchParams({
+    spaceId: state.currentSpaceId,
+    ...Object.fromEntries(
+      Object.entries(parameters).map(([key, value]) => [key, String(value)])
+    )
+  });
+  return `/api/v1/knowledge/property-definitions${pathname}?${query.toString()}`;
+}
+
+globalThis.docomatorPropertyDefinitionsUrl = propertyDefinitionsEndpoint;
 
 async function api(url, options = {}) {
   const response = await fetch(url, {
@@ -536,6 +551,25 @@ function renderLoadingStates() {
   $("#spaceMembers").innerHTML = '<div class="skeleton-card"></div><div class="skeleton-card"></div>';
 }
 
+async function loadCurrentSpaceProperties() {
+  const spaceId = state.currentSpaceId;
+  const requestVersion = ++propertyLoadVersion;
+  if (!spaceId) {
+    state.data.properties = [];
+    renderKnowledge();
+    return false;
+  }
+  const body = await api(
+    `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(spaceId)}&limit=500`
+  );
+  if (requestVersion !== propertyLoadVersion || state.currentSpaceId !== spaceId) {
+    return false;
+  }
+  state.data.properties = body?.data || [];
+  renderKnowledge();
+  return true;
+}
+
 async function loadCurrentSpaceData() {
   const space = currentSpace();
   if (!space) {
@@ -554,6 +588,7 @@ async function loadCurrentSpaceData() {
       api(`${base}/groups?limit=500`),
       api(`${base}/audience-snapshots?limit=50`)
     ]);
+    if (state.currentSpaceId !== space.id) return;
     state.data.spaceEntities = entities?.data || [];
     state.data.groups = groups?.data || [];
     state.data.snapshots = snapshots?.data || [];
@@ -573,21 +608,19 @@ async function loadData() {
   renderLoadingStates();
   setStatus("", "⏳", "Обновляем локальные данные", "Проверяем схему, пространства и выбранную аудиторию. Следующий шаг появится автоматически.");
   try {
-    const [ready, types, properties, spaces] = await Promise.all([
+    const [ready, types, spaces] = await Promise.all([
       api("/readyz"),
       api("/api/v1/knowledge/entity-types?limit=500"),
-      api("/api/v1/knowledge/property-definitions?limit=500"),
       api("/api/v1/spaces?limit=500")
     ]);
     state.data.types = types?.data || [];
-    state.data.properties = properties?.data || [];
     state.data.spaces = spaces?.data || [];
     if (!state.data.spaces.some((space) => space.id === state.currentSpaceId)) {
       state.currentSpaceId = state.data.spaces.find((space) => space.id === DEFAULT_SPACE_ID)?.id || state.data.spaces[0]?.id || "";
       if (state.currentSpaceId) localStorage.setItem("docomator.space", state.currentSpaceId);
     }
     publishCurrentSpace();
-    await loadCurrentSpaceData();
+    await Promise.all([loadCurrentSpaceProperties(), loadCurrentSpaceData()]);
     await Promise.all([loadEmployees(), loadActiveTemplates()]);
     setConnection("ok", "Локальный сервер готов");
     const detail = state.data.spaces.length === 0
@@ -612,6 +645,8 @@ async function selectSpace(spaceId) {
   if (spaceId === state.currentSpaceId || state.spaceLoading) return;
   state.currentSpaceId = spaceId;
   localStorage.setItem("docomator.space", spaceId);
+  propertyLoadVersion += 1;
+  state.data.properties = [];
   publishCurrentSpace();
   state.selectedEntityIds.clear();
   state.data.employees = [];
@@ -623,7 +658,7 @@ async function selectSpace(spaceId) {
   $("#audiencePlan").innerHTML = "";
   setStatus("", "⏳", "Переключаем пространство", "Получаем его участников, группы, снимки и сохранённые настройки.");
   try {
-    await loadCurrentSpaceData();
+    await Promise.all([loadCurrentSpaceProperties(), loadCurrentSpaceData()]);
     await Promise.all([loadEmployees(), loadActiveTemplates()]);
     setStatus("success", "✓", "Пространство выбрано", `Рабочий контекст: «${currentSpace()?.name || "пространство"}». Данные других пространств не показаны.`);
   } catch (cause) {
@@ -1230,7 +1265,7 @@ async function classifyLegacyEmployeeProperty(added) {
     !["common", "teacher", "student"].includes(added.targetUiGroup)
   ) return;
   const body = await api(
-    `/api/v1/knowledge/property-definitions/${encodeURIComponent(added.propertyKey)}/group`,
+    propertyDefinitionsEndpoint(`/${encodeURIComponent(added.propertyKey)}/group`),
     { method: "PUT", body: JSON.stringify({ uiGroup: added.targetUiGroup }) }
   );
   const index = state.data.properties.findIndex((property) => property.key === added.propertyKey);

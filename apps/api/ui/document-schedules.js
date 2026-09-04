@@ -188,12 +188,14 @@ let scheduleWorkspaceDependencyErrors = [];
 let scheduleWorkspaceLoadSequence = 0;
 
 function scheduleWorkspaceDefaultsKey() {
-  return `docomator.schedule.defaults.${currentGenerationSpaceId() || "default"}`;
+  const spaceId = currentGenerationSpaceId();
+  return spaceId ? `docomator.schedule.defaults.${spaceId}` : "";
 }
 
 function scheduleWorkspaceReadDefaults() {
   try {
-    const value = JSON.parse(localStorage.getItem(scheduleWorkspaceDefaultsKey()) || "{}");
+    const storageKey = scheduleWorkspaceDefaultsKey();
+    const value = JSON.parse(storageKey ? localStorage.getItem(storageKey) || "{}" : "{}");
     return value && typeof value === "object" && !Array.isArray(value) ? value : {};
   } catch {
     return {};
@@ -202,8 +204,10 @@ function scheduleWorkspaceReadDefaults() {
 
 function scheduleWorkspaceRememberDefaults(body) {
   try {
+    const storageKey = scheduleWorkspaceDefaultsKey();
+    if (!storageKey) return;
     localStorage.setItem(
-      scheduleWorkspaceDefaultsKey(),
+      storageKey,
       JSON.stringify({
         targetMode: body.targetMode,
         recurrenceKind: body.recurrenceKind,

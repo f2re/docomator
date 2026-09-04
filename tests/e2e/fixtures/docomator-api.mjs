@@ -453,6 +453,27 @@ export async function installОформляторApiMock(page, options = {}) {
       state.properties.push(definition);
       data = definition;
     } else if (
+      /\/knowledge\/property-definitions\/[^/]+$/.test(path) &&
+      method === "PUT"
+    ) {
+      const key = decodeURIComponent(path.split("/").pop());
+      const payload = await jsonBody(request);
+      const definition = state.properties.find((candidate) => candidate.key === key);
+      if (definition) {
+        if (payload.label !== undefined) definition.label = payload.label;
+        if (payload.description !== undefined) definition.description = payload.description;
+        if (payload.unit !== undefined) definition.unit = payload.unit;
+        if (payload.sensitivity !== undefined) definition.sensitivity = payload.sensitivity;
+        if (payload.aliases !== undefined) definition.aliases = payload.aliases;
+        if (payload.validation !== undefined) {
+          definition.validation = {
+            ...(definition.validation || {}),
+            ...payload.validation
+          };
+        }
+      }
+      data = definition;
+    } else if (
       /\/knowledge\/property-definitions\/[^/]+\/group$/.test(path) &&
       method === "PUT"
     ) {
