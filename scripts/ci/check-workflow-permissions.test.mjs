@@ -10,226 +10,101 @@ import {
 } from "./check-workflow-permissions.mjs";
 
 const checkoutAction = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262";
+const setupNodeAction = "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020";
 
-const safeWriteWorkflow = `name: Delete merged work branch
+const safeCi = `name: CI
 on:
   pull_request:
-    types: [closed]
+  push:
+    branches:
+      - main
 permissions:
-  contents: write
+  contents: read
 jobs:
-  delete-merged-branch:
-    if: >-
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref != github.event.repository.default_branch &&
-      (
-        startsWith(github.event.pull_request.head.ref, 'agent/') ||
-        startsWith(github.event.pull_request.head.ref, 'ci/') ||
-        startsWith(github.event.pull_request.head.ref, 'feature/') ||
-        startsWith(github.event.pull_request.head.ref, 'fix/') ||
-        startsWith(github.event.pull_request.head.ref, 'temp/') ||
-        startsWith(github.event.pull_request.head.ref, 'verify/')
-      )
-    runs-on: ubuntu-24.04
+  essential:
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Delete merged work branch
-        env:
-          HEAD_BRANCH: \${{ github.event.pull_request.head.ref }}
-          DEFAULT_BRANCH: \${{ github.event.repository.default_branch }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          [[ -n "$HEAD_BRANCH" ]]
-          [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]
-          case "$HEAD_BRANCH" in
-            agent/*|ci/*|feature/*|fix/*|temp/*|verify/*)
-              ;;
-            *)
-              echo "Branch $HEAD_BRANCH is not eligible for automatic deletion." >&2
-              exit 1
-              ;;
-          esac
-          if git ls-remote --exit-code --heads origin "refs/heads/$HEAD_BRANCH" >/dev/null 2>&1; then
-            git push origin --delete "$HEAD_BRANCH"
-          else
-            echo "Branch $HEAD_BRANCH is already absent."
-          fi
+      - uses: ${checkoutAction}
+      - uses: ${setupNodeAction}
 `;
 
-test("разрешает обычный workflow только для чтения", () => {
+test("разрешает единственный read-only CI с двумя закреплёнными bootstrap actions", () => {
+  assert.deepEqual(inspectWorkflow("ci.yml", safeCi), []);
+});
+
+test("запрещает любое право записи", () => {
   assert.deepEqual(
     inspectWorkflow(
       "ci.yml",
-      "name: CI\non:\n  push:\npermissions:\n  contents: read\n"
+      safeCi.replace("contents: read", "contents: write")
     ),
-    []
-  );
-});
-
-test("разрешает закреплённые, локальные и digest-based actions", () => {
-  assert.deepEqual(
-    inspectWorkflow(
-      "ci.yml",
-      [
-        "name: CI",
-        "on: push",
-        "permissions:",
-        "  contents: read",
-        "jobs:",
-        "  verify:",
-        "    steps:",
-        `      - uses: ${checkoutAction}`,
-        "      - uses: ./.github/actions/local-check",
-        `      - uses: docker://alpine@sha256:${"a".repeat(64)}`
-      ].join("\n")
-    ),
-    []
-  );
-});
-
-test("запрещает плавающий внешний action в read-only workflow", () => {
-  assert.deepEqual(
-    inspectWorkflow(
-      "ci.yml",
-      [
-        "name: CI",
-        "on: push",
-        "permissions:",
-        "  contents: read",
-        "jobs:",
-        "  verify:",
-        "    steps:",
-        "      - uses: actions/checkout@v4"
-      ].join("\n")
-    ),
-    ["внешний action не закреплён полным commit SHA или digest: actions/checkout@v4"]
-  );
-});
-
-test("разрешает точный защищённый workflow удаления слитой рабочей ветки", () => {
-  assert.deepEqual(
-    inspectWorkflow("delete-merged-work-branch.yml", safeWriteWorkflow),
-    []
-  );
-});
-
-test("запрещает новый workflow с блочным правом записи", () => {
-  assert.deepEqual(
-    inspectWorkflow(
-      "apply-patch.yml",
-      "name: Apply\non:\n  push:\npermissions:\n  contents: write\n"
-    ),
-    ["неразрешённые права записи: contents"]
-  );
-});
-
-test("запрещает встроенное право записи", () => {
-  assert.deepEqual(
-    inspectWorkflow(
-      "inline.yml",
-      "name: Inline\non: push\npermissions: { contents: write, issues: read }\n"
-    ),
-    ["неразрешённые права записи: contents"]
+    ["GitHub Actions должны быть read-only; найдены права записи: contents"]
   );
 });
 
 test("запрещает permissions: write-all", () => {
   assert.deepEqual(
     inspectWorkflow(
-      "write-all.yml",
-      "name: All\non: push\npermissions: write-all\n"
+      "ci.yml",
+      safeCi.replace("permissions:\n  contents: read", "permissions: write-all")
     ),
     ["запрещено общее право permissions: write-all"]
   );
 });
 
-test("запрещает блочный и скалярный запуск из комментария", () => {
+test("запрещает автоматические release и workflow chaining triggers", () => {
+  const releaseTriggered = safeCi.replace(
+    "on:\n  pull_request:\n  push:\n    branches:\n      - main",
+    "on:\n  workflow_run:\n    workflows: [CI]\n    types: [completed]"
+  );
+  assert.deepEqual(inspectWorkflow("ci.yml", releaseTriggered), [
+    "запрещён триггер workflow_run"
+  ]);
+});
+
+test("запрещает дополнительные и плавающие actions", () => {
   assert.deepEqual(
     inspectWorkflow(
-      "comment-block.yml",
-      "name: Command\non:\n  issue_comment:\n    types: [created]\npermissions:\n  contents: read\n"
+      "ci.yml",
+      safeCi.replace(checkoutAction, "actions/checkout@v4")
     ),
-    ["запрещён триггер issue_comment"]
+    ["неразрешённый action: actions/checkout@v4"]
   );
+
   assert.deepEqual(
     inspectWorkflow(
-      "comment-scalar.yml",
-      "name: Command\non: issue_comment\npermissions:\n  contents: read\n"
+      "ci.yml",
+      safeCi.replace(
+        `      - uses: ${setupNodeAction}`,
+        `      - uses: ${setupNodeAction}\n      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02`
+      )
     ),
-    ["запрещён триггер issue_comment"]
+    [
+      "неразрешённый action: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+    ]
   );
 });
 
-test("не принимает защитные строки, оставленные только в комментариях", () => {
-  const unsafe = safeWriteWorkflow.replace(
-    '          [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]',
-    '          # [[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]'
-  );
-  assert.match(
-    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
-    /утратил обязательное защитное условие/u
+test("игнорирует запрещённые слова в комментариях", () => {
+  assert.deepEqual(
+    inspectWorkflow("ci.yml", `${safeCi}\n# workflow_run:\n# permissions: write-all\n`),
+    []
   );
 });
 
-test("не принимает workflow без одного из разрешённых префиксов", () => {
-  const unsafe = safeWriteWorkflow.replace(
-    "        startsWith(github.event.pull_request.head.ref, 'verify/')",
-    "        false"
-  );
-  assert.match(
-    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
-    /утратил обязательное защитное условие/u
-  );
-});
-
-test("запрещает дополнительную команду в разрешённом write-workflow", () => {
-  const unsafe = safeWriteWorkflow.replace(
-    "          set -Eeuo pipefail",
-    "          set -Eeuo pipefail\n          git commit -am 'неразрешённое изменение'"
-  );
-  assert.match(
-    inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n"),
-    /неразрешённую команду: git commit/u
-  );
-});
-
-test("запрещает плавающий тег checkout в write-workflow", () => {
-  const unsafe = safeWriteWorkflow.replace(checkoutAction, "actions/checkout@v4");
-  const findings = inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n");
-  assert.match(findings, /внешний action не закреплён/u);
-  assert.match(findings, /может использовать только actions\/checkout@11d5960/u);
-});
-
-test("запрещает дополнительное стороннее action в разрешённом write-workflow", () => {
-  const unsafe = safeWriteWorkflow.replace(
-    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
-    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n      - uses: example/untrusted-action@v1"
-  );
-  const findings = inspectWorkflow("delete-merged-work-branch.yml", unsafe).join("\n");
-  assert.match(findings, /внешний action не закреплён/u);
-  assert.match(findings, /может использовать только actions\/checkout@11d5960/u);
-});
-
-test("проверяет весь каталог workflow", async () => {
+test("каталог workflow содержит только ci.yml", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-workflows-"));
   const workflows = path.join(root, ".github", "workflows");
   await fs.mkdir(workflows, { recursive: true });
-  await fs.writeFile(path.join(workflows, "ci.yml"), "permissions:\n  contents: read\n");
-  await fs.writeFile(
-    path.join(workflows, "delete-merged-work-branch.yml"),
-    safeWriteWorkflow
-  );
+  await fs.writeFile(path.join(workflows, "ci.yml"), safeCi);
 
   await assert.doesNotReject(checkWorkflowPermissions(root));
 
   await fs.writeFile(
-    path.join(workflows, "unsafe.yml"),
-    "on:\n  pull_request_target:\npermissions:\n  contents: write\n"
+    path.join(workflows, "release.yml"),
+    "name: Release\non:\n  push:\npermissions:\n  contents: read\n"
   );
   await assert.rejects(
     checkWorkflowPermissions(root),
-    /unsafe\.yml: запрещён триггер pull_request_target/u
+    /release\.yml: лишний workflow: разрешён только ci\.yml/u
   );
 });

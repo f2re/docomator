@@ -61,7 +61,18 @@ DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run migrate
 bash scripts/ci/validate-shell.sh
 ```
 
-For a quick focused check, run the workspace build/test, but run `npm run check` before a PR is considered complete.
+`npm run check` is the normal PR gate and must stay short: build, unit/regression tests, migration/security/workflow/version invariants, shell/runtime syntax and static UI checks. For a focused change, run the relevant workspace check first, then `npm run check` before the PR is considered complete.
+
+Heavy acceptance is explicit and does not belong to every PR:
+
+```bash
+npm run check:release
+npm run test:e2e
+npm run test:e2e:real-stack
+npm run acceptance:target
+```
+
+Use the heavy commands when preparing a release or when a change touches the corresponding browser/offline/Office/recovery path. GitHub Actions must not publish releases, upload distribution artifacts, delete branches or deploy the product.
 
 ## TypeScript rules
 
@@ -117,6 +128,7 @@ For a quick focused check, run the workspace build/test, but run `npm run check`
 - Product versioning follows `docs/VERSIONING.md`: use `npm run version:bump -- patch` for backward-compatible fixes and `-- minor` for new compatible capabilities. Do not keep an old product version merely because release maturity is still `candidate`.
 - `version` describes the product capability/compatibility set; `status` and `channel` describe release maturity. A `candidate/pilot` release may and must receive a new SemVer when product behavior changes.
 - Product-changing PRs must update `RELEASE_IDENTITY.json.version`; CI rejects a runtime/product change that keeps the previous version. A pure `candidate/pilot → stable/production` maturity transition may retain the same version when product behavior is unchanged.
+- Before publication run `npm run check:release` and the applicable browser/offline/target acceptance against the exact release SHA. GitHub Actions only validate source and never create a tag/Release or distribution asset.
 - Quote shell variables; use `set -Eeuo pipefail`; run `bash -n` for every changed shell script.
 
 ## Definition of done
@@ -132,14 +144,16 @@ A change is done when:
 - migration/rollback notes are present when applicable;
 - roadmap status is updated when a milestone changes.
 
+Release readiness is separate from ordinary PR completion: it additionally requires `npm run check:release` and the target/browser/Office/recovery evidence applicable to that release.
+
 ## GitHub write workflow
 
 - Для изменений удалённого репозитория сначала обнаружить доступные GitHub write actions; отсутствие `gh`, локального OAuth-токена или локального `.git` не означает отсутствие возможности коммита.
 - Перед изменением получить точный `refs/heads/main`, нормативные документы, открытые Issues, последние commits и CI.
 - Создать короткую рабочую ветку от проверенного SHA `main`; не использовать прямое изменение `main` вместо обычного PR.
 - Для нескольких связанных файлов предпочтителен один атомарный commit через `create_blob → create_tree → create_commit → update_ref`. `update_file` допустим для одиночного файла.
-- После commit проверить `compare_commits`, открыть PR в `main` и дождаться всех обязательных jobs. Локальные/фокусные проверки не заменяют полный CI.
-- Перед merge повторно проверить head SHA, mergeability, review threads и обязательные checks. Сливать squash-методом с `expected_head_sha`.
-- После merge получить новый `refs/heads/main` и дождаться успешного post-merge CI на этом exact SHA.
+- После commit проверить `compare_commits`, открыть PR в `main` и дождаться обязательного job `Essential checks`. Локальные/фокусные проверки не заменяют этот CI job.
+- Перед merge повторно проверить head SHA, mergeability, review threads и `Essential checks`. Сливать squash-методом с `expected_head_sha`.
+- После merge получить новый `refs/heads/main` и дождаться успешного post-merge `Essential checks` на этом exact SHA.
 - Не сообщать о commit, push, PR, merge или зелёном CI, пока соответствующий объект фактически не получен через GitHub API.
 - Если write actions действительно отсутствуют после discovery, прямо сообщить об этом; не подменять удалённый commit локальным patch и не придумывать SHA.

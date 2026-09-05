@@ -2,91 +2,23 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const APPROVED_BRANCH_DELETE_WORKFLOW = "delete-merged-work-branch.yml";
-const APPROVED_RELEASE_WORKFLOW = "release.yml";
-const APPROVED_CHECKOUT_ACTION = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262";
-const WRITE_PERMISSION_LINE = /^\s*([a-z][a-z0-9-]*):\s*write\s*$/gimu;
-const INLINE_WRITE_PERMISSION = /\b([a-z][a-z0-9-]*)\s*:\s*write(?!-all)\b/gimu;
-const WRITE_ALL_PERMISSION = /^\s*permissions\s*:\s*write-all\s*$/imu;
-const PINNED_ACTION = /^[^@\s]+@[a-f0-9]{40}$/u;
-const PINNED_DOCKER_IMAGE = /^docker:\/\/[^@\s]+@sha256:[a-f0-9]{64}$/u;
-const ELIGIBLE_BRANCH_PREFIXES = [
-  "agent/",
-  "ci/",
-  "feature/",
-  "fix/",
-  "temp/",
-  "verify/"
-];
-
+const ONLY_WORKFLOW = "ci.yml";
+const ALLOWED_ACTIONS = new Set([
+  "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+  "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020"
+]);
 const FORBIDDEN_TRIGGERS = [
   "issue_comment",
   "pull_request_target",
-  "repository_dispatch"
+  "repository_dispatch",
+  "workflow_run",
+  "workflow_dispatch",
+  "release",
+  "schedule"
 ];
-
-const BRANCH_DELETE_REQUIRED_PATTERNS = [
-  /^\s*pull_request:\s*$/mu,
-  /^\s*types:\s*\[closed\]\s*$/mu,
-  /^\s*contents:\s*write\s*$/mu,
-  /github\.event\.pull_request\.merged\s*==\s*true/u,
-  /github\.event\.pull_request\.head\.repo\.full_name\s*==\s*github\.repository/u,
-  /github\.event\.pull_request\.head\.ref\s*!=\s*github\.event\.repository\.default_branch/u,
-  /^\s*HEAD_BRANCH:\s*\$\{\{\s*github\.event\.pull_request\.head\.ref\s*\}\}\s*$/mu,
-  /^\s*DEFAULT_BRANCH:\s*\$\{\{\s*github\.event\.repository\.default_branch\s*\}\}\s*$/mu,
-  /\[\[\s*-n\s*"\$HEAD_BRANCH"\s*\]\]/u,
-  /\[\[\s*"\$HEAD_BRANCH"\s*!=\s*"\$DEFAULT_BRANCH"\s*\]\]/u,
-  /git\s+ls-remote\s+--exit-code\s+--heads\s+origin\s+"refs\/heads\/\$HEAD_BRANCH"/u,
-  /git\s+push\s+origin\s+--delete\s+"\$HEAD_BRANCH"/u
-];
-
-for (const prefix of ELIGIBLE_BRANCH_PREFIXES) {
-  BRANCH_DELETE_REQUIRED_PATTERNS.push(
-    new RegExp(
-      `startsWith\\(github\\.event\\.pull_request\\.head\\.ref,\\s*['"]${prefix.replace("/", "\\/")}['"]\\)`,
-      "u"
-    )
-  );
-}
-
-const RELEASE_REQUIRED_PATTERNS = [
-  /^\s*workflow_run:\s*$/mu,
-  /^\s*workflows:\s*\["CI"\]\s*$/mu,
-  /^\s*types:\s*\[completed\]\s*$/mu,
-  /^\s*actions:\s*read\s*$/mu,
-  /^\s*contents:\s*write\s*$/mu,
-  /github\.event\.workflow_run\.conclusion\s*==\s*['"]success['"]/u,
-  /github\.event\.workflow_run\.event\s*==\s*['"]push['"]/u,
-  /github\.event\.workflow_run\.head_branch\s*==\s*github\.event\.repository\.default_branch/u,
-  /^\s*ref:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}\s*$/mu,
-  /^\s*GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}\s*$/mu,
-  /^\s*DOCOMATOR_SOURCE_SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}\s*$/mu,
-  /^\s*DOCOMATOR_WORKFLOW_RUN_ID:\s*\$\{\{\s*github\.event\.workflow_run\.id\s*\}\}\s*$/mu
-];
-
-const BRANCH_DELETE_RUN_LINES = new Set([
-  "set -Eeuo pipefail",
-  '[[ -n "$HEAD_BRANCH" ]]',
-  '[[ "$HEAD_BRANCH" != "$DEFAULT_BRANCH" ]]',
-  'case "$HEAD_BRANCH" in',
-  "agent/*|ci/*|feature/*|fix/*|temp/*|verify/*)",
-  ";;",
-  "*)",
-  'echo "Branch $HEAD_BRANCH is not eligible for automatic deletion." >&2',
-  "exit 1",
-  ";;",
-  "esac",
-  'if git ls-remote --exit-code --heads origin "refs/heads/$HEAD_BRANCH" >/dev/null 2>&1; then',
-  'git push origin --delete "$HEAD_BRANCH"',
-  "else",
-  'echo "Branch $HEAD_BRANCH is already absent."',
-  "fi"
-]);
-
-const RELEASE_RUN_LINES = new Set([
-  "set -Eeuo pipefail",
-  "node scripts/ci/publish-github-release.mjs"
-]);
+const WRITE_PERMISSION_LINE = /^\s*([a-z][a-z0-9-]*):\s*write\s*$/gimu;
+const INLINE_WRITE_PERMISSION = /\b([a-z][a-z0-9-]*)\s*:\s*write(?!-all)\b/gimu;
+const WRITE_ALL_PERMISSION = /^\s*permissions\s*:\s*write-all\s*$/imu;
 
 function stripInlineComment(line) {
   let singleQuoted = false;
@@ -129,6 +61,12 @@ function triggerPattern(trigger) {
   );
 }
 
+function workflowUses(source) {
+  return [...source.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s]+)\s*$/gimu)].map(
+    (match) => match[1]
+  );
+}
+
 function writePermissions(source) {
   const permissions = [];
   for (const match of source.matchAll(WRITE_PERMISSION_LINE)) {
@@ -142,141 +80,13 @@ function writePermissions(source) {
   );
 }
 
-function workflowUses(source) {
-  return [...source.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s]+)\s*$/gimu)].map(
-    (match) => match[1]
-  );
-}
-
-function actionPinFindings(source) {
-  const findings = [];
-  for (const action of workflowUses(source)) {
-    if (action.startsWith("./")) continue;
-    if (PINNED_ACTION.test(action) || PINNED_DOCKER_IMAGE.test(action)) continue;
-    findings.push(
-      `внешний action не закреплён полным commit SHA или digest: ${action}`
-    );
-  }
-  return findings;
-}
-
-function workflowShells(source) {
-  return [...source.matchAll(/^\s*shell:\s*([^\s]+)\s*$/gimu)].map(
-    (match) => match[1]
-  );
-}
-
-function runBlockLines(source) {
-  const lines = source.split(/\r?\n/u);
-  const commands = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = /^(\s*)run:\s*\|[-+]?\s*$/u.exec(lines[index]);
-    if (!match) continue;
-    const indentation = match[1].length;
-    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-      const raw = lines[cursor];
-      if (raw.trim() === "") continue;
-      const leading = /^\s*/u.exec(raw)?.[0].length ?? 0;
-      if (leading <= indentation) break;
-      const command = stripInlineComment(raw).trim();
-      if (command !== "") commands.push(command);
-      index = cursor;
-    }
-  }
-  return commands;
-}
-
-function inspectRunLines(commands, approved, label) {
-  const findings = [];
-  if (commands.length === 0) {
-    findings.push(`${label} не содержит проверяемого run-блока`);
-  }
-  for (const command of commands) {
-    if (!approved.has(command)) {
-      findings.push(`${label} содержит неразрешённую команду: ${command}`);
-    }
-  }
-  for (const requiredCommand of approved) {
-    if (!commands.includes(requiredCommand)) {
-      findings.push(`${label} не содержит обязательную команду: ${requiredCommand}`);
-    }
-  }
-  return findings;
-}
-
-function inspectBranchDeleteWorkflow(source, permissions) {
-  const findings = [];
-  if (permissions.length !== 1 || permissions[0] !== "contents") {
-    findings.push(
-      `разрешённый workflow может иметь только contents: write; найдено: ${permissions.join(", ") || "нет"}`
-    );
-  }
-
-  for (const requiredPattern of BRANCH_DELETE_REQUIRED_PATTERNS) {
-    if (!requiredPattern.test(source)) {
-      findings.push("workflow удаления ветки утратил обязательное защитное условие");
-      break;
-    }
-  }
-
-  const uses = workflowUses(source);
-  if (uses.length !== 1 || uses[0] !== APPROVED_CHECKOUT_ACTION) {
-    findings.push(
-      `workflow удаления ветки может использовать только ${APPROVED_CHECKOUT_ACTION}; найдено: ${uses.join(", ") || "нет"}`
-    );
-  }
-
-  const shells = workflowShells(source);
-  if (shells.some((shell) => shell !== "bash")) {
-    findings.push(
-      `workflow удаления ветки может использовать только shell bash; найдено: ${shells.join(", ")}`
-    );
-  }
-
-  findings.push(
-    ...inspectRunLines(runBlockLines(source), BRANCH_DELETE_RUN_LINES, "workflow удаления ветки")
-  );
-  return findings;
-}
-
-function inspectReleaseWorkflow(source, permissions) {
-  const findings = [];
-  if (permissions.length !== 1 || permissions[0] !== "contents") {
-    findings.push(
-      `release workflow может иметь единственное write-право contents: write; найдено: ${permissions.join(", ") || "нет"}`
-    );
-  }
-
-  for (const requiredPattern of RELEASE_REQUIRED_PATTERNS) {
-    if (!requiredPattern.test(source)) {
-      findings.push("release workflow утратил обязательное защитное условие");
-      break;
-    }
-  }
-
-  const uses = workflowUses(source);
-  if (uses.length !== 1 || uses[0] !== APPROVED_CHECKOUT_ACTION) {
-    findings.push(
-      `release workflow может использовать только ${APPROVED_CHECKOUT_ACTION}; найдено: ${uses.join(", ") || "нет"}`
-    );
-  }
-
-  const shells = workflowShells(source);
-  if (shells.length !== 1 || shells[0] !== "bash") {
-    findings.push(
-      `release workflow должен иметь ровно один shell bash; найдено: ${shells.join(", ") || "нет"}`
-    );
-  }
-
-  findings.push(
-    ...inspectRunLines(runBlockLines(source), RELEASE_RUN_LINES, "release workflow")
-  );
-  return findings;
-}
-
 export function inspectWorkflow(fileName, source) {
   const findings = [];
   const effective = activeSource(source);
+
+  if (fileName !== ONLY_WORKFLOW) {
+    findings.push(`лишний workflow: разрешён только ${ONLY_WORKFLOW}`);
+  }
 
   for (const trigger of FORBIDDEN_TRIGGERS) {
     if (triggerPattern(trigger).test(effective)) {
@@ -284,41 +94,37 @@ export function inspectWorkflow(fileName, source) {
     }
   }
 
-  findings.push(...actionPinFindings(effective));
-
-  const writeAll = WRITE_ALL_PERMISSION.test(effective);
-  if (writeAll) {
+  if (WRITE_ALL_PERMISSION.test(effective)) {
     findings.push("запрещено общее право permissions: write-all");
   }
 
   const permissions = writePermissions(effective);
-  if (permissions.length === 0 && !writeAll) return [...new Set(findings)];
-
-  if (fileName === APPROVED_BRANCH_DELETE_WORKFLOW) {
-    findings.push(...inspectBranchDeleteWorkflow(effective, permissions));
-    return [...new Set(findings)];
-  }
-
-  if (fileName === APPROVED_RELEASE_WORKFLOW) {
-    findings.push(...inspectReleaseWorkflow(effective, permissions));
-    return [...new Set(findings)];
-  }
-
   if (permissions.length > 0) {
-    findings.push(`неразрешённые права записи: ${permissions.join(", ")}`);
+    findings.push(`GitHub Actions должны быть read-only; найдены права записи: ${permissions.join(", ")}`);
   }
+
+  for (const action of workflowUses(effective)) {
+    if (!ALLOWED_ACTIONS.has(action)) {
+      findings.push(`неразрешённый action: ${action}`);
+    }
+  }
+
   return [...new Set(findings)];
 }
 
 export async function checkWorkflowPermissions(rootDirectory = process.cwd()) {
   const workflowDirectory = path.join(rootDirectory, ".github", "workflows");
   const entries = await fs.readdir(workflowDirectory, { withFileTypes: true });
+  const workflowEntries = entries
+    .filter((entry) => entry.isFile() && /\.ya?ml$/u.test(entry.name))
+    .sort((left, right) => left.name.localeCompare(right.name, "en"));
   const findings = [];
 
-  for (const entry of entries.sort((left, right) =>
-    left.name.localeCompare(right.name, "en")
-  )) {
-    if (!entry.isFile() || !/\.ya?ml$/u.test(entry.name)) continue;
+  if (!workflowEntries.some((entry) => entry.name === ONLY_WORKFLOW)) {
+    findings.push(`отсутствует обязательный ${ONLY_WORKFLOW}`);
+  }
+
+  for (const entry of workflowEntries) {
     const source = await fs.readFile(path.join(workflowDirectory, entry.name), "utf8");
     for (const finding of inspectWorkflow(entry.name, source)) {
       findings.push(`${entry.name}: ${finding}`);
@@ -327,7 +133,7 @@ export async function checkWorkflowPermissions(rootDirectory = process.cwd()) {
 
   if (findings.length > 0) {
     throw new Error(
-      `Проверка прав GitHub Actions не пройдена:\n- ${findings.join("\n- ")}`
+      `Проверка GitHub Actions не пройдена:\n- ${findings.join("\n- ")}`
     );
   }
 }
