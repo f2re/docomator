@@ -67,7 +67,19 @@
             <p class="view-description" id="viewDescription">Показываем, что уже готово и какой шаг будет полезнее следующим.</p>
           </div>
           <div class="topbar-actions">
-            <span class="context-chip" id="currentSpaceChip" hidden><span class="context-dot" aria-hidden="true"></span><span id="currentSpaceChipText"></span></span>
+            <button class="icon-button mobile-guide-button" id="mobileHelpButton" type="button" aria-label="Открыть контекстную помощь" title="Контекстная помощь">?</button>
+            <span class="workflow-stage-chip" id="workflowStageChip" hidden></span>
+            <div class="workspace-switcher-host">
+              <button class="context-chip workspace-switcher-button" id="currentSpaceChip" type="button" hidden aria-haspopup="dialog" aria-expanded="false" aria-controls="workspaceSwitcherMenu">
+                <span class="context-dot" aria-hidden="true"></span><span id="currentSpaceChipText">Раздел данных</span><span class="workspace-switcher-chevron" aria-hidden="true">⌄</span>
+              </button>
+              <section class="workspace-switcher-menu" id="workspaceSwitcherMenu" aria-label="Выбор пространства" hidden>
+                <header class="workspace-switcher-heading"><div><strong>Разделы данных</strong><small>У каждого свои сотрудники, группы, шаблоны и результаты.</small></div><button class="workspace-switcher-add" type="button" data-workspace-switcher-action="create" aria-label="Создать раздел данных">＋</button></header>
+                <div class="workspace-switcher-list" id="workspaceSwitcherList" role="listbox" aria-label="Доступные разделы"></div>
+                <footer class="workspace-switcher-footer"><button type="button" data-workspace-switcher-action="edit">Название и цвет</button><button type="button" data-workspace-switcher-action="manage">Все разделы</button></footer>
+              </section>
+            </div>
+            <button class="system-status-control" id="systemStatusControl" type="button" aria-controls="statusRibbon" aria-expanded="false"><span class="system-status-dot" aria-hidden="true"></span><span id="systemStatusLabel">Проверяем систему…</span></button>
             <button class="icon-button" id="refreshButton" type="button" aria-label="Обновить данные" title="Обновить данные">↻</button>
             <button class="primary-button" id="primaryAction" type="button"><span aria-hidden="true">＋</span><span>Добавить сотрудника</span></button>
           </div>
@@ -75,10 +87,7 @@
 
         <div class="status-ribbon" id="statusRibbon" role="status" aria-live="polite">
           <div class="status-ribbon-icon" id="statusRibbonIcon" aria-hidden="true">⏳</div>
-          <div>
-            <strong id="statusRibbonTitle">Подключаемся к локальному серверу</strong>
-            <p id="statusRibbonDetail">Проверяем готовность базы данных. Это обычно занимает несколько секунд.</p>
-          </div>
+          <div><strong id="statusRibbonTitle">Подключаемся к локальному серверу</strong><p id="statusRibbonDetail">Проверяем готовность базы данных. Это обычно занимает несколько секунд.</p></div>
           <button class="quiet-button compact" id="statusRetryButton" type="button" hidden>Повторить</button>
         </div>
 
@@ -89,16 +98,15 @@
               <span class="pill pill-accent">Следующий шаг</span>
               <h2 id="homeNextTitle">Добавьте первого сотрудника</h2>
               <p id="homeNextDescription">Сохраните ФИО и нужные сведения в одной карточке. После этого можно подключить шаблон и сформировать документы.</p>
-              <div class="hero-actions">
-                <button class="primary-button" id="homeNextAction" type="button" data-view-target="employees">Добавить сотрудников</button>
-              </div>
+              <div class="hero-actions"><button class="primary-button" id="homeNextAction" type="button" data-view-target="employees">Добавить сотрудников</button></div>
             </div>
           </article>
 
-          <div class="path-grid" aria-label="Готовность к созданию документов">
-            <button class="path-card" type="button" data-view-target="employees"><span class="path-index">1</span><span><strong>Сотрудники</strong><small id="homeEmployeeStatus">Получаем список…</small></span><span aria-hidden="true">›</span></button>
-            <button class="path-card" type="button" data-view-target="templates"><span class="path-index">2</span><span><strong>Шаблон</strong><small id="homeTemplateStatus">Проверяем готовность…</small></span><span aria-hidden="true">›</span></button>
-            <button class="path-card" type="button" data-view-target="generation"><span class="path-index">3</span><span><strong>Создать документы</strong><small>Выберите шаблон и сотрудников</small></span><span aria-hidden="true">›</span></button>
+          <div class="path-grid" aria-label="Путь к готовому документу">
+            <button class="path-card" type="button" data-view-target="employees" data-workflow-step="data"><span class="path-index">1</span><span><strong>Данные</strong><small id="homeEmployeeStatus">Получаем сотрудников…</small></span><span aria-hidden="true">›</span></button>
+            <button class="path-card" type="button" data-view-target="templates" data-workflow-step="template"><span class="path-index">2</span><span><strong>Шаблон</strong><small id="homeTemplateStatus">Проверяем готовность…</small></span><span aria-hidden="true">›</span></button>
+            <button class="path-card" type="button" data-view-target="generation" data-workflow-step="generation"><span class="path-index">3</span><span><strong>Выпуск</strong><small>Выберите шаблон и состав</small></span><span aria-hidden="true">›</span></button>
+            <button class="path-card" type="button" data-view-target="documents" data-workflow-step="results"><span class="path-index">4</span><span><strong>Результат</strong><small id="homeResultStatus">Готовые файлы и ошибки</small></span><span aria-hidden="true">›</span></button>
           </div>
           <div class="legacy-metrics" hidden><span id="spaceCount">0</span><span id="spaceEntityCount">0</span><span id="groupCount">0</span><span id="snapshotCount">0</span></div>
         </section>
@@ -112,248 +120,77 @@
             <label class="search-field" for="employeeSearch"><span aria-hidden="true">⌕</span><input id="employeeSearch" type="search" placeholder="Найти сотрудника" autocomplete="off" /></label>
             <button class="secondary-button" type="button" data-bulk-import-open>Импортировать список</button>
           </div>
-          <div id="employeeWorkspaceStatus" class="employee-state is-loading" role="status" aria-live="polite" aria-busy="true">
-            <span class="state-mark" aria-hidden="true"></span><div><strong>Получаем сотрудников</strong><p>Список появится после ответа локального сервера.</p></div>
-          </div>
+          <div id="employeeWorkspaceStatus" class="employee-state is-loading" role="status" aria-live="polite" aria-busy="true"><span class="state-mark" aria-hidden="true"></span><div><strong>Получаем сотрудников</strong><p>Список появится после ответа локального сервера.</p></div></div>
           <div id="employeeList" class="employee-list" aria-live="polite"></div>
         </section>
 
-        <section class="view" data-view="entities" aria-labelledby="entities-heading">
-          <h2 class="visually-hidden" id="entities-heading">Объекты пространства</h2>
-          <div id="entityWorkspace" aria-live="polite"></div>
-        </section>
+        <section class="view" data-view="entities" aria-labelledby="entities-heading"><h2 class="visually-hidden" id="entities-heading">Объекты пространства</h2><div id="entityWorkspace" aria-live="polite"></div></section>
 
         <section class="view" data-view="spaces" aria-labelledby="spaces-heading">
-          <div class="section-intro">
-            <div><p class="eyebrow">Организация общих данных</p><h2 id="spaces-heading">Разделы, объекты и группы</h2><p>Разделы группируют объекты, шаблоны и процессы. Все пользователи корпоративного сервиса могут работать с любым разделом.</p></div>
-            <button class="primary-button" type="button" data-create="space"><span aria-hidden="true">＋</span><span>Создать пространство</span></button>
-          </div>
+          <div class="section-intro"><div><p class="eyebrow">Организация общих данных</p><h2 id="spaces-heading">Разделы, объекты и группы</h2><p>Разделы группируют объекты, шаблоны и процессы. Все пользователи корпоративного сервиса могут работать с любым разделом.</p></div><button class="primary-button" type="button" data-create="space"><span aria-hidden="true">＋</span><span>Создать пространство</span></button></div>
 
           <div class="workspace-layout">
-            <aside class="workspace-list-panel" aria-label="Список пространств">
-              <div class="list-panel-heading"><strong>Пространства</strong><small>Выберите текущую область данных</small></div>
-              <div id="spaceList" class="workspace-list" aria-live="polite"></div>
-            </aside>
-
+            <aside class="workspace-list-panel" aria-label="Список пространств"><div class="list-panel-heading"><strong>Пространства</strong><small>Выберите текущую область данных</small></div><div id="spaceList" class="workspace-list" aria-live="polite"></div></aside>
             <div class="workspace-content">
-              <article class="panel workspace-summary" id="spaceSummary">
-                <div><p class="eyebrow">Текущий раздел</p><h2 id="spaceName">Загружаем…</h2><p id="spaceDescription">Получаем состав и группы выбранного раздела.</p></div>
-                <div class="summary-actions">
-                  <button class="primary-button" type="button" data-view-target="entities">Добавить объект</button>
-                </div>
-              </article>
-
-              <div class="segmented-control workspace-tabs" role="tablist" aria-label="Раздел пространства">
-                <button type="button" role="tab" aria-selected="true" data-space-tab="members">Объекты</button>
-                <button type="button" role="tab" aria-selected="false" data-space-tab="groups">Группы</button>
-                <button type="button" role="tab" aria-selected="false" data-space-tab="audience">Документ</button>
-              </div>
-
-              <section class="space-pane is-visible" data-space-pane="members">
-                <div class="panel-heading compact-heading">
-                  <div><h2>Объекты пространства</h2><p>Отметьте однотипные объекты для разового документа или будущей группы.</p></div>
-                  <div class="selection-actions"><span class="selection-count" id="selectedCount">0 отмечено</span><button class="quiet-button" id="selectAllButton" type="button">Выбрать всех</button><button class="quiet-button" id="clearSelectionButton" type="button">Снять выбор</button></div>
-                </div>
-                <div class="inline-hint"><span aria-hidden="true">ⓘ</span><p>Выбор остаётся локальным в браузере, пока вы не создадите группу или неизменяемый снимок аудитории.</p></div>
-                <div id="spaceMembers" class="member-list" aria-live="polite"></div>
-              </section>
-
-              <section class="space-pane" data-space-pane="groups">
-                <div class="panel-heading compact-heading">
-                  <div><h2>Сохранённые группы</h2><p>Группа удобна для повторных запусков по одному и тому же составу.</p></div>
-                  <button class="primary-button" type="button" data-create="group">Создать из отмеченных</button>
-                </div>
-                <div id="spaceGroups" class="collection-grid" aria-live="polite"></div>
-              </section>
-
-              <section class="space-pane" data-space-pane="audience">
-                <article class="panel audience-builder">
-                  <div class="panel-heading"><div><p class="eyebrow">Предварительный план</p><h2>Для каких объектов формировать документ?</h2><p>Система фиксирует однородный состав и строит исполнимый план. Для выпуска готовых файлов перейдите в «Создать документы».</p></div><span class="large-emoji" aria-hidden="true">📋</span></div>
-                  <div class="audience-form-grid">
-                    <div class="field"><label for="audienceSource">Источник участников</label><select id="audienceSource"></select><small>Все активные участники, сохранённая группа или отмеченные вручную.</small></div>
-                    <fieldset class="mode-fieldset"><legend>Форма результата</legend>
-                      <label class="mode-card"><input type="radio" name="targetMode" value="aggregate" checked /><span aria-hidden="true">📋</span><strong>Один общий документ</strong><small>Таблица или список всех выбранных людей.</small></label>
-                      <label class="mode-card"><input type="radio" name="targetMode" value="one_per_member" /><span aria-hidden="true">📄</span><strong>По документу на каждого</strong><small>Отдельное задание и собственный контекст для каждого участника.</small></label>
-                    </fieldset>
-                  </div>
-                  <div class="audience-actions"><p id="audiencePreviewText">Выберите источник — система заранее покажет ожидаемое число документов.</p><button class="primary-button" id="createAudienceSnapshotButton" type="button">Зафиксировать состав и план</button></div>
-                </article>
-                <div id="audiencePlan" class="plan-result" aria-live="polite"></div>
-                <div class="panel-heading compact-heading"><div><h2>Последние снимки</h2><p>Состав каждого снимка остаётся неизменным.</p></div></div>
-                <div id="audienceSnapshots" class="snapshot-list"></div>
-              </section>
+              <article class="panel workspace-summary" id="spaceSummary"><div><p class="eyebrow">Текущий раздел</p><h2 id="spaceName">Загружаем…</h2><p id="spaceDescription">Получаем состав и группы выбранного раздела.</p></div><div class="summary-actions"><button class="primary-button" type="button" data-view-target="entities">Добавить объект</button></div></article>
+              <div class="segmented-control workspace-tabs" role="tablist" aria-label="Раздел пространства"><button type="button" role="tab" aria-selected="true" data-space-tab="members">Объекты</button><button type="button" role="tab" aria-selected="false" data-space-tab="groups">Группы</button><button type="button" role="tab" aria-selected="false" data-space-tab="audience">Документ</button></div>
+              <section class="space-pane is-visible" data-space-pane="members"><div class="panel-heading compact-heading"><div><h2>Объекты пространства</h2><p>Отметьте однотипные объекты для разового документа или будущей группы.</p></div><div class="selection-actions"><span class="selection-count" id="selectedCount">0 отмечено</span><button class="quiet-button" id="selectAllButton" type="button">Выбрать всех</button><button class="quiet-button" id="clearSelectionButton" type="button">Снять выбор</button></div></div><div class="inline-hint"><span aria-hidden="true">ⓘ</span><p>Выбор остаётся локальным в браузере, пока вы не создадите группу или неизменяемый снимок аудитории.</p></div><div id="spaceMembers" class="member-list" aria-live="polite"></div></section>
+              <section class="space-pane" data-space-pane="groups"><div class="panel-heading compact-heading"><div><h2>Сохранённые группы</h2><p>Группа удобна для повторных запусков по одному и тому же составу.</p></div><button class="primary-button" type="button" data-create="group">Создать из отмеченных</button></div><div id="spaceGroups" class="collection-grid" aria-live="polite"></div></section>
+              <section class="space-pane" data-space-pane="audience"><article class="panel audience-builder"><div class="panel-heading"><div><p class="eyebrow">Предварительный план</p><h2>Для каких объектов формировать документ?</h2><p>Система фиксирует однородный состав и строит исполнимый план. Для выпуска готовых файлов перейдите в «Создать документы».</p></div><span class="large-emoji" aria-hidden="true">📋</span></div><div class="audience-form-grid"><div class="field"><label for="audienceSource">Источник участников</label><select id="audienceSource"></select><small>Все активные участники, сохранённая группа или отмеченные вручную.</small></div><fieldset class="mode-fieldset"><legend>Форма результата</legend><label class="mode-card"><input type="radio" name="targetMode" value="aggregate" checked /><span aria-hidden="true">📋</span><strong>Один общий документ</strong><small>Таблица или список всех выбранных людей.</small></label><label class="mode-card"><input type="radio" name="targetMode" value="one_per_member" /><span aria-hidden="true">📄</span><strong>По документу на каждого</strong><small>Отдельное задание и собственный контекст для каждого участника.</small></label></fieldset></div><div class="audience-actions"><p id="audiencePreviewText">Выберите источник — система заранее покажет ожидаемое число документов.</p><button class="primary-button" id="createAudienceSnapshotButton" type="button">Зафиксировать состав и план</button></div></article><div id="audiencePlan" class="plan-result" aria-live="polite"></div><div class="panel-heading compact-heading"><div><h2>Последние снимки</h2><p>Состав каждого снимка остаётся неизменным.</p></div></div><div id="audienceSnapshots" class="snapshot-list"></div></section>
             </div>
           </div>
         </section>
 
         <section class="view" data-view="knowledge" aria-labelledby="knowledge-heading">
-          <div class="section-intro">
-            <div><p class="eyebrow">Общая схема</p><h2 id="knowledge-heading">Типы и свойства</h2><p>Типы и определения свойств общие для системы. Конкретные люди и организации создаются внутри выбранного пространства.</p></div>
-            <div class="segmented-control" role="tablist" aria-label="Раздел схемы данных"><button type="button" role="tab" aria-selected="true" data-knowledge-tab="types">Типы</button><button type="button" role="tab" aria-selected="false" data-knowledge-tab="properties">Свойства</button></div>
-          </div>
+          <div class="section-intro"><div><p class="eyebrow">Общая схема</p><h2 id="knowledge-heading">Типы и свойства</h2><p>Типы и определения свойств общие для системы. Конкретные люди и организации создаются внутри выбранного пространства.</p></div><div class="segmented-control" role="tablist" aria-label="Раздел схемы данных"><button type="button" role="tab" aria-selected="true" data-knowledge-tab="types">Типы</button><button type="button" role="tab" aria-selected="false" data-knowledge-tab="properties">Свойства</button></div></div>
           <div class="knowledge-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="knowledgeSearch" type="search" placeholder="Найти по названию" autocomplete="off" /></label><button class="primary-button" id="knowledgeCreateButton" type="button"><span aria-hidden="true">＋</span><span>Создать тип</span></button></div>
           <div class="inline-hint"><span aria-hidden="true">ⓘ</span><p id="knowledgeHint"><strong>Тип сущности</strong> описывает класс объектов. Например, «Человек», «Организация» или «Статья».</p></div>
           <div id="knowledgeContent" class="collection-grid" aria-live="polite" aria-busy="true"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
         </section>
 
-<section class="view" data-view="templates" aria-labelledby="templates-heading">
-  <div class="section-intro">
-    <div>
-      <p class="eyebrow">Документ-основа</p>
-      <h2 id="templates-heading">Подключить шаблон</h2>
-      <p>Выберите DOCX/XLSX, укажите поля и проверьте результат.</p>
-    </div>
-  </div>
-  <div class="template-wizard" id="templateWizard">
-    <ol class="template-step-rail" aria-label="Этапы подключения шаблона">
-      <li data-template-step="1"><button type="button" data-template-wizard-go="1" aria-current="step"><span>1</span><strong>Документ</strong></button></li>
-      <li data-template-step="2"><button type="button" data-template-wizard-go="2" disabled><span>2</span><strong>Поля</strong></button></li>
-      <li data-template-step="3"><button type="button" data-template-wizard-go="3" disabled><span>3</span><strong>Проверка</strong></button></li>
-      <li data-template-step="4"><button type="button" data-template-wizard-go="4" disabled><span>4</span><strong>Готово</strong></button></li>
-    </ol>
-
-    <header class="template-wizard-question" aria-live="polite">
-      <div>
-        <p class="eyebrow" id="templateWizardStep">Шаг 1 из 4</p>
-        <h3 id="templateWizardQuestion">Какой документ станет шаблоном?</h3>
-        <p id="templateWizardHint">Выберите готовый DOCX или XLSX. Система проверит его и попросит отдельно подтвердить сохранение.</p>
-      </div>
-      <p class="template-wizard-space"><span>Раздел данных</span><strong id="templateWizardSpace">Определяем…</strong></p>
-    </header>
-    <p class="template-safety-note">Проверка выполняется локально: файл не запускается и не отправляется во внешние службы.</p>
-
-    <div class="template-wizard-stages" id="templateWizardStages">
-      <section data-template-wizard-panel="1" aria-labelledby="templateWizardQuestion">
-  <div class="intake-layout">
-    <article class="panel intake-panel">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">Документ-основа</p>
-          <h2>Выберите файл</h2>
-          <p>Поддерживаются DOCX и XLSX размером до 32 МБ.</p>
-        </div>
-        <span class="template-file-mark" aria-hidden="true">DOC</span>
-      </div>
-
-      <div class="intake-drop-zone" id="documentIntakeDropZone">
-        <input
-          id="documentIntakeFile"
-          type="file"
-          accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        />
-        <label for="documentIntakeFile">
-          <span aria-hidden="true">↓</span>
-          <strong>Перетащите файл сюда или выберите его</strong>
-          <small>Файл будет передан только локальной службе Оформлятор. На этом этапе он не сохраняется как шаблон.</small>
-        </label>
-      </div>
-
-      <div class="intake-selected-file" id="documentIntakeSelected" hidden></div>
-      <div class="intake-actions">
-        <button class="primary-button" id="documentIntakeButton" type="button" disabled>Проверить документ</button>
-        <button class="quiet-button" id="documentIntakeClear" type="button" hidden>Выбрать другой файл</button>
-      </div>
-
-      <ul class="intake-limits" aria-label="Что проверяет система">
-        <li><span aria-hidden="true">✓</span><span>Количество и суммарный размер частей пакета.</span></li>
-        <li><span aria-hidden="true">✓</span><span>Опасные пути, шифрование, символические ссылки и подозрительное сжатие.</span></li>
-        <li><span aria-hidden="true">✓</span><span>Макросы, ActiveX, встроенные объекты, подписи и внешние связи.</span></li>
-      </ul>
-    </article>
-
-    <article class="panel intake-result-panel">
-      <div class="intake-status is-idle" id="documentIntakeStatus" role="status" aria-live="polite" aria-busy="false">
-        <span class="intake-status-mark" id="documentIntakeStatusIcon" aria-hidden="true">1</span>
-        <div>
-          <strong id="documentIntakeStatusTitle">Выберите документ</strong>
-          <p id="documentIntakeStatusDetail">После выбора система объяснит следующий шаг и не сохранит файл без отдельного подтверждения.</p>
-        </div>
-      </div>
-      <div id="documentIntakeResult" aria-live="polite">
-        <div class="intake-placeholder">
-          <span aria-hidden="true">🔎</span>
-          <h3>Отчёт появится после проверки</h3>
-          <p>Вы увидите найденные ограничения, предупреждения и безопасный следующий шаг.</p>
-        </div>
-      </div>
-    </article>
-  </div>
-      </section>
-      <div id="templateWizardDynamicStages"></div>
-    </div>
-
-    <footer class="template-wizard-navigation">
-      <button class="secondary-button" id="templateWizardBack" type="button" hidden>Назад</button>
-      <p id="templateWizardStatus" role="status" aria-live="polite">Начните с выбора документа. Введённые данные сохраняются при переходах между шагами.</p>
-    </footer>
-  </div>
-</section>
-
-        <section class="view" data-view="generation" aria-labelledby="generation-heading">
-          <h2 class="visually-hidden" id="generation-heading">Создать документы</h2>
-        </section>
-
-        <section class="view" data-view="documents" aria-labelledby="documents-heading">
-          <h2 class="visually-hidden" id="documents-heading">Результаты</h2>
-        </section>
-
-        <section class="view" data-view="automations" aria-labelledby="automations-heading">
-          <div class="section-intro"><div><p class="eyebrow">Повторные выпуски</p><h2 id="automations-heading">Расписания</h2><p>Здесь собраны запланированные выпуски документов и их состояние.</p></div></div>
-        </section>
-
-        <section class="view" data-view="settings" aria-labelledby="settings-heading">
-          <div class="section-intro"><div><p class="eyebrow">Дополнительные возможности</p><h2 id="settings-heading">Настройки</h2><p>Организация данных и диагностика доступны здесь и не мешают ежедневной работе.</p></div></div>
-          <div class="settings-grid">
-            <button class="settings-row" type="button" data-view-target="automations"><span><strong>Расписания</strong><small>Повторные выпуски и состояние запланированных запусков</small></span><span aria-hidden="true">›</span></button>
-            <button class="settings-row" type="button" data-view-target="spaces"><span><strong>Разделы данных и группы</strong><small>Проекты, пространства и сохранённые однородные составы</small></span><span aria-hidden="true">›</span></button>
-            <button class="settings-row" type="button" data-view-target="entities"><span><strong>Типы объектов и импорт</strong><small>Аудитории, статьи, оборудование и другие произвольные записи</small></span><span aria-hidden="true">›</span></button>
-            <button class="settings-row" type="button" data-view-target="knowledge"><span><strong>Дополнительные типы записей</strong><small>Расширенная настройка нестандартных данных</small></span><span aria-hidden="true">›</span></button>
+        <section class="view" data-view="templates" aria-labelledby="templates-heading">
+          <div class="section-intro"><div><p class="eyebrow">Документ-основа</p><h2 id="templates-heading">Подключить шаблон</h2><p>Выберите DOCX/XLSX, укажите поля и проверьте результат.</p></div></div>
+          <div class="template-wizard" id="templateWizard">
+            <ol class="template-step-rail" aria-label="Этапы подключения шаблона"><li data-template-step="1"><button type="button" data-template-wizard-go="1" aria-current="step"><span>1</span><strong>Документ</strong></button></li><li data-template-step="2"><button type="button" data-template-wizard-go="2" disabled><span>2</span><strong>Поля</strong></button></li><li data-template-step="3"><button type="button" data-template-wizard-go="3" disabled><span>3</span><strong>Проверка</strong></button></li><li data-template-step="4"><button type="button" data-template-wizard-go="4" disabled><span>4</span><strong>Готово</strong></button></li></ol>
+            <header class="template-wizard-question" aria-live="polite"><div><p class="eyebrow" id="templateWizardStep">Шаг 1 из 4</p><h3 id="templateWizardQuestion">Какой документ станет шаблоном?</h3><p id="templateWizardHint">Выберите готовый DOCX или XLSX. Система проверит его и попросит отдельно подтвердить сохранение.</p></div><p class="template-wizard-space"><span>Раздел данных</span><strong id="templateWizardSpace">Определяем…</strong></p></header>
+            <p class="template-safety-note">Проверка выполняется локально: файл не запускается и не отправляется во внешние службы.</p>
+            <div class="template-wizard-stages" id="templateWizardStages"><section data-template-wizard-panel="1" aria-labelledby="templateWizardQuestion"><div class="intake-layout"><article class="panel intake-panel"><div class="panel-heading"><div><p class="eyebrow">Документ-основа</p><h2>Выберите файл</h2><p>Поддерживаются DOCX и XLSX размером до 32 МБ.</p></div><span class="template-file-mark" aria-hidden="true">DOC</span></div><div class="intake-drop-zone" id="documentIntakeDropZone"><input id="documentIntakeFile" type="file" accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><label for="documentIntakeFile"><span aria-hidden="true">↓</span><strong>Перетащите файл сюда или выберите его</strong><small>Файл будет передан только локальной службе Оформлятор. На этом этапе он не сохраняется как шаблон.</small></label></div><div class="intake-selected-file" id="documentIntakeSelected" hidden></div><div class="intake-actions"><button class="primary-button" id="documentIntakeButton" type="button" disabled>Проверить документ</button><button class="quiet-button" id="documentIntakeClear" type="button" hidden>Выбрать другой файл</button></div><ul class="intake-limits" aria-label="Что проверяет система"><li><span aria-hidden="true">✓</span><span>Количество и суммарный размер частей пакета.</span></li><li><span aria-hidden="true">✓</span><span>Опасные пути, шифрование, символические ссылки и подозрительное сжатие.</span></li><li><span aria-hidden="true">✓</span><span>Макросы, ActiveX, встроенные объекты, подписи и внешние связи.</span></li></ul></article><article class="panel intake-result-panel"><div class="intake-status is-idle" id="documentIntakeStatus" role="status" aria-live="polite" aria-busy="false"><span class="intake-status-mark" id="documentIntakeStatusIcon" aria-hidden="true">1</span><div><strong id="documentIntakeStatusTitle">Выберите документ</strong><p id="documentIntakeStatusDetail">После выбора система объяснит следующий шаг и не сохранит файл без отдельного подтверждения.</p></div></div><div id="documentIntakeResult" aria-live="polite"><div class="intake-placeholder"><span aria-hidden="true">🔎</span><h3>Отчёт появится после проверки</h3><p>Вы увидите найденные ограничения, предупреждения и безопасный следующий шаг.</p></div></div></article></div></section><div id="templateWizardDynamicStages"></div></div>
+            <footer class="template-wizard-navigation"><button class="secondary-button" id="templateWizardBack" type="button" hidden>Назад</button><p id="templateWizardStatus" role="status" aria-live="polite">Начните с выбора документа. Введённые данные сохраняются при переходах между шагами.</p></footer>
           </div>
+        </section>
+
+        <section class="view" data-view="generation" aria-labelledby="generation-heading"><h2 class="visually-hidden" id="generation-heading">Создать документы</h2></section>
+        <section class="view" data-view="documents" aria-labelledby="documents-heading"><h2 class="visually-hidden" id="documents-heading">Результаты</h2></section>
+        <section class="view" data-view="automations" aria-labelledby="automations-heading"><div class="section-intro"><div><p class="eyebrow">Повторные выпуски</p><h2 id="automations-heading">Расписания</h2><p>Здесь собраны запланированные выпуски документов и их состояние.</p></div></div></section>
+
+        <section class="view management-view" data-view="settings" data-interface-ready="true" aria-labelledby="settings-heading">
+          <h2 class="visually-hidden" id="settings-heading">Управление</h2>
+          <section class="management-overview" aria-label="Текущий контекст и состояние системы">
+            <article class="management-context-card"><div><p class="eyebrow">Текущий раздел данных</p><h2 id="managementCurrentSpace">Определяем…</h2><p id="managementCurrentSpaceDescription">Получаем сведения о выбранном разделе.</p><div class="management-context-metrics" aria-label="Состав выбранного раздела"><div><strong id="managementEmployeeCount">0</strong><span>сотрудников</span></div><div><strong id="managementGroupCount">0</strong><span>групп</span></div><div><strong id="managementTemplateCount">0</strong><span>шаблонов</span></div></div></div><button class="secondary-button" type="button" data-view-target="spaces">Управлять разделом</button></article>
+            <article class="management-health-card"><span class="management-health-icon" aria-hidden="true">✓</span><div><p class="eyebrow">Локальный контур</p><h3 id="managementSystemStatus">Проверяем систему…</h3><p id="managementSystemDetail">Получаем состояние локального сервера.</p></div><button class="secondary-button" type="button" data-management-refresh>Обновить состояние</button></article>
+          </section>
+          <section class="management-section" aria-labelledby="managementMainHeading"><div class="management-section-heading"><div><h3 id="managementMainHeading">Организация работы</h3><p>Расширенные правила собраны здесь и не мешают ежедневному пути к готовым документам.</p></div></div><div class="settings-grid management-grid">
+            <button class="settings-row management-tile" type="button" data-view-target="spaces" data-management-tone="blue"><span class="management-tile-icon" aria-hidden="true">▦</span><span class="management-tile-copy"><strong>Разделы данных и группы</strong><small>Подразделения, проекты, составы и сохранённые группы.</small><em id="managementDataBadge">Состав</em></span><span class="management-chevron" aria-hidden="true">›</span></button>
+            <button class="settings-row management-tile" type="button" data-view-target="automations" data-management-tone="purple"><span class="management-tile-icon" aria-hidden="true">◷</span><span class="management-tile-copy"><strong>Расписания и доставка</strong><small>Повторные выпуски, почта и разрешённые сетевые папки.</small><em id="managementAutomationBadge">Правила и доставка</em></span><span class="management-chevron" aria-hidden="true">›</span></button>
+            <button class="settings-row management-tile" type="button" data-view-target="knowledge" data-management-tone="blue"><span class="management-tile-icon" aria-hidden="true">≡</span><span class="management-tile-copy"><strong>Поля и справочники</strong><small>Дополнительные типы записей, перечни вариантов и общие поля.</small><em id="managementFieldsBadge">Поля</em></span><span class="management-chevron" aria-hidden="true">›</span></button>
+            <button class="settings-row management-tile" type="button" data-help-center-open data-management-tone="purple"><span class="management-tile-icon" aria-hidden="true">?</span><span class="management-tile-copy"><strong>Руководство и рабочие кейсы</strong><small>Импорт, шаблоны, выпуск, расписания и восстановление после ошибок.</small><em>Доступно без Интернета</em></span><span class="management-chevron" aria-hidden="true">›</span></button>
+          </div></section>
+          <section class="management-section" aria-labelledby="managementAppearanceHeading"><div class="management-section-heading"><div><h3 id="managementAppearanceHeading">Оформление</h3><p>Выбор сохраняется в этом браузере. Системный режим следует настройке операционной системы.</p></div></div><div class="theme-choice" role="group" aria-label="Тема оформления"><button type="button" data-management-theme="system" aria-pressed="false"><span aria-hidden="true">◐</span><strong>Системная</strong><small>Как в системе</small></button><button type="button" data-management-theme="light" aria-pressed="false"><span aria-hidden="true">☀</span><strong>Светлая</strong><small>Светлый фон</small></button><button type="button" data-management-theme="dark" aria-pressed="false"><span aria-hidden="true">☾</span><strong>Тёмная</strong><small>Тёмный фон</small></button></div></section>
+          <details class="management-diagnostics"><summary><span>Диагностика и техническое состояние</span><span aria-hidden="true">›</span></summary><div class="management-diagnostics-body"><div><strong>Соединение</strong><span id="managementConnectionLabel">Проверяем локальный сервер…</span></div><div><strong>Общие поля</strong><span><b id="managementPropertyCount">0</b> определений</span></div></div><div class="management-readiness-mount" id="managementReadinessMount"></div></details>
         </section>
       </main>
 
-      <nav class="mobile-nav" aria-label="Навигация на мобильном устройстве">
-        <button class="is-active" type="button" data-view-target="overview" aria-current="page"><span aria-hidden="true">⌂</span><small>Главная</small></button>
-        <button type="button" data-view-target="employees"><span aria-hidden="true">◎</span><small>Сотрудники</small></button>
-        <button type="button" data-view-target="generation"><span aria-hidden="true">＋</span><small>Создать</small></button>
-        <button type="button" data-view-target="documents"><span aria-hidden="true">✓</span><small>Результаты</small></button>
-        <button type="button" data-view-target="settings"><span aria-hidden="true">⌘</span><small>Ещё</small></button>
-      </nav>
+      <nav class="mobile-nav" aria-label="Навигация на мобильном устройстве"><button class="is-active" type="button" data-view-target="overview" aria-current="page"><span aria-hidden="true">⌂</span><small>Главная</small></button><button type="button" data-view-target="employees"><span aria-hidden="true">◎</span><small>Сотрудники</small></button><button type="button" data-view-target="generation"><span aria-hidden="true">＋</span><small>Создать</small></button><button type="button" data-view-target="documents"><span aria-hidden="true">✓</span><small>Результаты</small></button><button type="button" data-view-target="settings"><span aria-hidden="true">⌘</span><small>Ещё</small></button></nav>
     </div>
 
     <aside class="help-drawer" id="helpDrawer" aria-labelledby="helpTitle" aria-hidden="true"><div class="drawer-backdrop" data-close-help></div><div class="drawer-panel" role="dialog" aria-modal="true"><header><div><p class="eyebrow">Контекстная помощь</p><h2 id="helpTitle">Что здесь можно сделать?</h2></div><button class="icon-button" type="button" data-close-help aria-label="Закрыть помощь">×</button></header><div id="helpContent" class="help-content"></div><footer><p>При ошибке сохраните идентификатор операции — он поможет найти точную операцию в журнале.</p></footer></div></aside>
 
     <dialog class="create-dialog" id="createDialog" aria-labelledby="dialogTitle"><form method="dialog" id="createForm" novalidate><header class="dialog-header"><div><p class="eyebrow" id="dialogEyebrow">Новая запись</p><h2 id="dialogTitle">Создать</h2><p id="dialogDescription"></p></div><button class="icon-button" type="button" id="dialogCloseButton" aria-label="Закрыть">×</button></header><div class="dialog-body" id="dialogFields"></div><div class="form-error" id="formError" role="alert" hidden></div><footer class="dialog-footer"><p class="save-explanation" id="saveExplanation">Изменение появится после подтверждения локального сервера.</p><div><button class="secondary-button" type="button" id="dialogCancelButton">Отмена</button><button class="primary-button" type="submit" id="dialogSubmitButton">Сохранить</button></div></footer></form></dialog>
 
-    <dialog class="create-dialog employee-dialog" id="employeeDialog" aria-labelledby="employeeDialogTitle">
-      <form id="employeeForm" novalidate>
-        <header class="dialog-header"><div><p class="eyebrow">Карточка сотрудника</p><h2 id="employeeDialogTitle">Новый сотрудник</h2><p id="employeeDialogDescription">Укажите имя и добавьте сведения, которые понадобятся в документах.</p></div><button class="icon-button" type="button" data-employee-action="close" aria-label="Закрыть">×</button></header>
-        <div class="dialog-body employee-dialog-body">
-          <div class="field"><label for="employeeDisplayName">ФИО <span class="required-marker">*</span></label><input id="employeeDisplayName" name="displayName" type="text" autocomplete="name" maxlength="300" required placeholder="Иванов Иван Иванович" /><small>Так имя будет показано в списке и документах.</small></div>
-          <div class="field" id="employeeStatusField"><label for="employeeStatus">Статус</label><select id="employeeStatus" name="status"><option value="active">Работает</option><option value="inactive">Не работает</option><option value="archived">В архиве</option></select></div>
-          <div id="employeeFields" class="employee-fields"></div>
-          <button class="field-add-button" id="employeeAddFieldButton" type="button" data-employee-action="show-field"><span aria-hidden="true">＋</span><span>Добавить поле</span></button>
-          <section class="employee-new-field" id="employeeNewField" hidden aria-labelledby="employeeNewFieldTitle">
-            <div class="employee-subheading"><div><strong id="employeeNewFieldTitle">Новое поле карточки</strong><small>Например, «Должность» или «Подразделение».</small></div><button class="quiet-button compact" type="button" data-employee-action="cancel-field">Убрать</button></div>
-            <div class="field"><label for="employeeFieldGroup">К кому относится поле</label><select id="employeeFieldGroup"><option value="common">Общие сведения</option><option value="teacher">Преподаватель</option><option value="student">Студент</option></select><small>Раздел не даёт одноимённым полям преподавателя и студента объединиться.</small></div>
-            <div class="field"><label for="employeeFieldSource">Какое поле добавить</label><select id="employeeFieldSource" data-searchable-select data-searchable-placeholder="Выберите поле" data-searchable-search-placeholder="Найти поле по названию"></select><small>Поиск работает по названию и разделу. Старые поля показаны отдельно как «Не распределено».</small></div>
-            <div class="field" id="employeeFieldLabelField" hidden><label for="employeeFieldLabel">Название</label><input id="employeeFieldLabel" type="text" maxlength="160" placeholder="Должность" /></div>
-            <div class="field" id="employeeFieldTypeField" hidden><label for="employeeFieldType">Тип значения</label><select id="employeeFieldType"><option value="string">Текст</option><option value="number">Число</option><option value="date">Дата</option><option value="boolean">Да или нет</option></select></div>
-            <div class="field" id="employeeFieldValueField" hidden><label for="employeeFieldValue">Значение</label><input id="employeeFieldValue" type="text" maxlength="2000" placeholder="Ведущий инженер" /></div>
-          </section>
-          <details class="technical-details" id="employeeTechnicalDetails" hidden><summary>Технические сведения</summary><dl id="employeeTechnicalContent"></dl></details>
-        </div>
-        <div class="form-error" id="employeeFormError" role="alert" hidden></div>
-        <footer class="dialog-footer"><p class="save-explanation" id="employeeSaveExplanation">Данные сохранятся на локальном сервере.</p><div><button class="secondary-button" type="button" data-employee-action="close">Отмена</button><button class="primary-button" type="submit" id="employeeSubmitButton">Сохранить сотрудника</button></div></footer>
-      </form>
-    </dialog>
+    <dialog class="create-dialog employee-dialog" id="employeeDialog" aria-labelledby="employeeDialogTitle"><form id="employeeForm" novalidate><header class="dialog-header"><div><p class="eyebrow">Карточка сотрудника</p><h2 id="employeeDialogTitle">Новый сотрудник</h2><p id="employeeDialogDescription">Укажите имя и добавьте сведения, которые понадобятся в документах.</p></div><button class="icon-button" type="button" data-employee-action="close" aria-label="Закрыть">×</button></header><div class="dialog-body employee-dialog-body"><div class="field"><label for="employeeDisplayName">ФИО <span class="required-marker">*</span></label><input id="employeeDisplayName" name="displayName" type="text" autocomplete="name" maxlength="300" required placeholder="Иванов Иван Иванович" /><small>Так имя будет показано в списке и документах.</small></div><div class="field" id="employeeStatusField"><label for="employeeStatus">Статус</label><select id="employeeStatus" name="status"><option value="active">Работает</option><option value="inactive">Не работает</option><option value="archived">В архиве</option></select></div><div id="employeeFields" class="employee-fields"></div><button class="field-add-button" id="employeeAddFieldButton" type="button" data-employee-action="show-field"><span aria-hidden="true">＋</span><span>Добавить поле</span></button><section class="employee-new-field" id="employeeNewField" hidden aria-labelledby="employeeNewFieldTitle"><div class="employee-subheading"><div><strong id="employeeNewFieldTitle">Новое поле карточки</strong><small>Например, «Должность» или «Подразделение».</small></div><button class="quiet-button compact" type="button" data-employee-action="cancel-field">Убрать</button></div><div class="field"><label for="employeeFieldGroup">К кому относится поле</label><select id="employeeFieldGroup"><option value="common">Общие сведения</option><option value="teacher">Преподаватель</option><option value="student">Студент</option></select><small>Раздел не даёт одноимённым полям преподавателя и студента объединиться.</small></div><div class="field"><label for="employeeFieldSource">Какое поле добавить</label><select id="employeeFieldSource" data-searchable-select data-searchable-placeholder="Выберите поле" data-searchable-search-placeholder="Найти поле по названию"></select><small>Поиск работает по названию и разделу. Старые поля показаны отдельно как «Не распределено».</small></div><div class="field" id="employeeFieldLabelField" hidden><label for="employeeFieldLabel">Название</label><input id="employeeFieldLabel" type="text" maxlength="160" placeholder="Должность" /></div><div class="field" id="employeeFieldTypeField" hidden><label for="employeeFieldType">Тип значения</label><select id="employeeFieldType"><option value="string">Текст</option><option value="number">Число</option><option value="date">Дата</option><option value="boolean">Да или нет</option></select></div><div class="field" id="employeeFieldValueField" hidden><label for="employeeFieldValue">Значение</label><input id="employeeFieldValue" type="text" maxlength="2000" placeholder="Ведущий инженер" /></div></section><details class="technical-details" id="employeeTechnicalDetails" hidden><summary>Технические сведения</summary><dl id="employeeTechnicalContent"></dl></details></div><div class="form-error" id="employeeFormError" role="alert" hidden></div><footer class="dialog-footer"><p class="save-explanation" id="employeeSaveExplanation">Данные сохранятся на локальном сервере.</p><div><button class="secondary-button" type="button" data-employee-action="close">Отмена</button><button class="primary-button" type="submit" id="employeeSubmitButton">Сохранить сотрудника</button></div></footer></form></dialog>
 
-    <dialog class="create-dialog confirmation-dialog" id="employeeFieldConfirmDialog" aria-labelledby="employeeFieldConfirmTitle">
-      <form method="dialog"><header class="dialog-header"><div><p class="eyebrow">Общее поле</p><h2 id="employeeFieldConfirmTitle">Добавить поле всем сотрудникам?</h2><p id="employeeFieldConfirmText">Поле станет доступно в каждой карточке. Введённое значение сохранится у текущего сотрудника.</p></div></header><footer class="dialog-footer"><p class="save-explanation">Это действие создаёт общую структуру карточек.</p><div><button class="secondary-button" value="cancel">Вернуться</button><button class="primary-button" value="confirm">Добавить поле</button></div></footer></form>
-    </dialog>
+    <dialog class="create-dialog confirmation-dialog" id="employeeFieldConfirmDialog" aria-labelledby="employeeFieldConfirmTitle"><form method="dialog"><header class="dialog-header"><div><p class="eyebrow">Общее поле</p><h2 id="employeeFieldConfirmTitle">Добавить поле всем сотрудникам?</h2><p id="employeeFieldConfirmText">Поле станет доступно в каждой карточке. Введённое значение сохранится у текущего сотрудника.</p></div></header><footer class="dialog-footer"><p class="save-explanation">Это действие создаёт общую структуру карточек.</p><div><button class="secondary-button" value="cancel">Вернуться</button><button class="primary-button" value="confirm">Добавить поле</button></div></footer></form></dialog>
 
-    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
-    <div class="sr-status" id="screenReaderStatus" role="status" aria-live="polite"></div>
-    <noscript><div class="noscript-message">Для интерактивного интерфейса требуется JavaScript. API и данные остаются доступны локально.</div></noscript>
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div><div class="sr-status" id="screenReaderStatus" role="status" aria-live="polite"></div><noscript><div class="noscript-message">Для интерактивного интерфейса требуется JavaScript. API и данные остаются доступны локально.</div></noscript>
   </body>
 </html>

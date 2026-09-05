@@ -1,4 +1,5 @@
-const operationsOverview = document.querySelector('[data-view="overview"]');
+const operationsMount = document.querySelector("#managementReadinessMount") || document.querySelector('[data-view="overview"]');
+const operationsManagementView = document.querySelector('[data-view="settings"]');
 let operationsReadinessCreated = false;
 let operationsReadinessBusy = false;
 let operationsReadinessTimer = null;
@@ -30,7 +31,7 @@ function operationsFormatBytes(value) {
 }
 
 function createOperationsReadinessPanel() {
-  if (!operationsOverview || operationsReadinessCreated) return;
+  if (!operationsMount || operationsReadinessCreated) return;
   operationsReadinessCreated = true;
   const panel = document.createElement("article");
   panel.id = "operationsReadinessPanel";
@@ -40,15 +41,15 @@ function createOperationsReadinessPanel() {
       <div>
         <p class="eyebrow">Пилотная эксплуатация</p>
         <h2>Готовность системы</h2>
-        <p>Проверяем не только настройки, но и фактическую работу базы, диска, worker, LibreOffice, доставок и резервирования.</p>
+        <p>Проверяем базу, диск, worker, LibreOffice, доставки и резервирование. Эта диагностика не мешает основному пользовательскому сценарию.</p>
       </div>
-      <button class="primary-button" id="operationsReadinessRefresh" type="button">Проверить сейчас</button>
+      <button class="secondary-button" id="operationsReadinessRefresh" type="button">Проверить сейчас</button>
     </div>
     <div id="operationsReadinessSummary" class="operations-readiness-summary" aria-live="polite">
       <div class="generation-history-empty">Получаем эксплуатационное состояние…</div>
     </div>
     <div id="operationsReadinessChecks" class="operations-check-list" aria-live="polite"></div>`;
-  operationsOverview.append(panel);
+  operationsMount.append(panel);
   panel
     .querySelector("#operationsReadinessRefresh")
     ?.addEventListener("click", loadOperationsReadiness);
@@ -153,7 +154,7 @@ async function loadOperationsReadiness() {
   operationsReadinessBusy = true;
   button.disabled = true;
   summary.className = "operations-readiness-summary";
-  summary.innerHTML = `<div class="generation-history-empty">Выполняем контрольные проверки…</div>`;
+  summary.innerHTML = '<div class="generation-history-empty">Выполняем контрольные проверки…</div>';
   list.innerHTML = "";
   try {
     const response = await fetch("/api/v1/operations/readiness", {
@@ -175,11 +176,11 @@ async function loadOperationsReadiness() {
   }
 }
 
-if (operationsOverview) {
+if (operationsMount) {
   createOperationsReadinessPanel();
   void loadOperationsReadiness();
   operationsReadinessTimer = setInterval(() => {
-    if (operationsOverview.classList.contains("is-visible")) {
+    if (operationsManagementView?.classList.contains("is-visible")) {
       void loadOperationsReadiness();
     }
   }, 60_000);

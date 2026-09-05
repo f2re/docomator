@@ -6,9 +6,9 @@
 
 Статус: **кандидатные строки зафиксированы; целевые акты ещё не получены**
 
-Текущая версия: `0.7.1`.
+Текущая версия: `0.7.2`.
 
-Дата: **2026-09-02**
+Дата: **2026-09-05**
 
 Эта матрица относится к `SYS-002—003`, `DOC-006—007`, `OFF-001—005`, `OFF-009—014`, `SEC-008`, `UX-015—022` и `NFR-011—012`. Состояние `проверено` разрешено только при сохранённом акте конкретной машины, связанном с exact version/commit/release metadata SHA-256. CI разработчика не заменяет target act.
 
@@ -35,6 +35,7 @@
 - локальный recovery `reset-access-code.sh` и `first-run.sh --reset-code` без потери данных;
 - CSV/XLSX import, DOCX/XLSX generation, LibreOffice preview и reverse-read;
 - реальный сценарий `раздел данных → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`, включая выбор длинного списка без обязательного поиска и отрицательную изоляцию второго раздела;
+- Home/topbar/Management показываются в каноническом виде при первой отрисовке без поздней перестройки shell через MutationObserver/таймеры;
 - result list/read/download/view/delete работают только через явный текущий `spaceId`; раздел A не видит и не изменяет результат B;
 - `/gost` без session cookie при сохранении закрытого обычного space API;
 - restart API/worker, backup/restore, update/rollback с сохранением credential/session configuration;
@@ -50,7 +51,7 @@ Visual Template Studio показывает безопасную read-only пр�
 
 ## Исторические свидетельства
 
-Акты `0.1.x—0.6.7` остаются историческими и **не закрывают** acceptance `0.6.8`. Исправление space-scoped Results требует нового evidence exact `0.6.8`, даже при неизменной security boundary ADR-0011.
+Акты предыдущих версий остаются историческими и **не закрывают** acceptance `0.7.2`. Любое пользовательски заметное изменение shell/flow требует нового UX evidence exact `0.7.2`; target/Office/recovery evidence также должно быть связано с exact release binding.
 
 ## Финальная фиксация
 
