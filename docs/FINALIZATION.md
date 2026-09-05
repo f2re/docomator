@@ -4,9 +4,9 @@
 
 Канал выпуска: `pilot`
 
-Текущая версия: `0.7.1`.
+Текущая версия: `0.7.2`.
 
-Этот документ описывает fail-closed переход от текущего кандидата `0.7.1` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
+Этот документ описывает fail-closed переход от текущего кандидата `0.7.2` к stable. Номер версии сам по себе не означает стабильность: машинный статус задаётся только `RELEASE_IDENTITY.json`. Пока он содержит `candidate/pilot`, разрешён только контролируемый пилот на обезличенных данных.
 
 ## 1. Зафиксировать exact release binding
 
@@ -64,6 +64,7 @@ chmod 600 /tmp/docomator-code
 - 320/768/1440 и 200% zoom;
 - light/dark и reduced motion;
 - отсутствие horizontal overflow;
+- канонический Home/topbar/Management появляется при первой отрисовке без заметной поздней перестройки DOM;
 - import error recovery без потери файла/mapping;
 - Visual Template Studio на реальном DOCX/XLSX;
 - полный сценарий `раздел данных → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`;
@@ -101,7 +102,7 @@ CSV/XLSX import и document generation: 10/100/1000 объектов. Прове
 npm run release:evidence -- \
   /srv/docomator-release-evidence \
   --expected-commit '<полный Git SHA>' \
-  --expected-version '0.7.1'
+  --expected-version '0.7.2'
 ```
 
 Gate = 0 обязателен.
@@ -111,11 +112,11 @@ Gate = 0 обязателен.
 Только после успешного candidate gate:
 
 1. отдельным PR изменить `RELEASE_IDENTITY.json` на `stable/production`;
-2. если capability set не изменился, оставить version `0.7.1`;
-3. выполнить полный CI stable commit;
+2. если capability set не изменился, оставить version `0.7.2`;
+3. выполнить `npm run check:release` exact stable commit и применимые browser/target проверки;
 4. пересобрать Debian/Astra bundles именно из stable commit;
 5. повторно подтвердить target identity/update/rollback/recovery;
 6. обновить `SUPPORT_MATRIX.md` только фактически подтверждёнными строками;
-7. создать подписанный tag и опубликовать проверенные archives/SHA-256/SBOM/release notes.
+7. создать подписанный tag и явно опубликовать проверенные archives/SHA-256/SBOM/release notes. GitHub Actions не выполняет публикацию автоматически.
 
 До этого никакой UI/doc/issue/bundle не должен называть текущий выпуск стабильным.

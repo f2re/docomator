@@ -72,23 +72,32 @@ assert.deepEqual(
   ["overview", "employees", "generation", "documents", "settings"],
   "Первичная mobile-навигация должна быть канонической уже в исходном HTML."
 );
-assert.match(
-  indexHtml,
-  /data-view-target="settings"[^>]*>[\s\S]*?<span>Управление<\/span>/u,
-  "Desktop shell должен называть вторичный раздел «Управление»."
-);
+assert.match(indexHtml, /data-view-target="settings"[^>]*>[\s\S]*?<span>Управление<\/span>/u);
+for (const id of [
+  "mobileHelpButton",
+  "workflowStageChip",
+  "currentSpaceChip",
+  "workspaceSwitcherMenu",
+  "systemStatusControl",
+  "managementCurrentSpace",
+  "managementSystemStatus",
+  "managementReadinessMount"
+]) {
+  assert.match(indexHtml, new RegExp(`id=["']${id}["']`, "u"), `${id} должен существовать в исходном HTML.`);
+}
+for (const step of ["data", "template", "generation", "results"]) {
+  assert.match(indexHtml, new RegExp(`data-workflow-step=["']${step}["']`, "u"), `Шаг ${step} должен существовать до запуска JS.`);
+}
+assert.match(indexHtml, /class="[^"]*management-view[^"]*"/u, "Экран «Управление» должен иметь канонический класс.");
+assert.match(indexHtml, /data-view="settings"/u, "Экран «Управление» должен существовать в исходном HTML.");
+assert.match(indexHtml, /data-interface-ready="true"/u, "Экран «Управление» не должен достраиваться после загрузки.");
+
 const navigationScriptPosition = indexHtml.indexOf('src="/ui/navigation-contract.js"');
 const applicationScriptPosition = indexHtml.indexOf('src="/ui/app.js"');
-assert.ok(navigationScriptPosition >= 0, "Контракт навигации должен подключаться shell-страницей.");
-assert.ok(
-  applicationScriptPosition >= 0 && navigationScriptPosition < applicationScriptPosition,
-  "Контракт навигации должен быть объявлен до основного приложения."
-);
+assert.ok(navigationScriptPosition >= 0);
+assert.ok(applicationScriptPosition >= 0 && navigationScriptPosition < applicationScriptPosition);
 
-const navigationContract = await fs.readFile(
-  path.join(uiDirectory, "navigation-contract.js"),
-  "utf8"
-);
+const navigationContract = await fs.readFile(path.join(uiDirectory, "navigation-contract.js"), "utf8");
 for (const [label, pattern] of [
   ["MutationObserver", /MutationObserver/u],
   ["DOM query", /document\.querySelector/u],
@@ -96,41 +105,36 @@ for (const [label, pattern] of [
   ["DOM removal", /\.remove\(/u],
   ["DOM insertion", /insertBefore\(|\.append\(/u]
 ]) {
-  assert.doesNotMatch(
-    navigationContract,
-    pattern,
-    `navigation-contract.js остаётся декларативным и не должен выполнять ${label}.`
-  );
+  assert.doesNotMatch(navigationContract, pattern, `navigation-contract.js не должен выполнять ${label}.`);
 }
 
-const fieldGroupsUi = await fs.readFile(path.join(uiDirectory, "field-groups-ui.js"), "utf8");
+const hierarchy = await fs.readFile(path.join(uiDirectory, "interface-hierarchy.js"), "utf8");
+for (const legacyComposer of [
+  "interfaceEnsureTopbarControls",
+  "interfaceEnsureWorkflow",
+  "interfaceEnsureManagement",
+  "interfaceMoveReadiness",
+  "interfaceRenameNavigation",
+  "interfaceSyncDuplicateIntros"
+]) {
+  assert.doesNotMatch(hierarchy, new RegExp(legacyComposer, "u"), `${legacyComposer} не должен возвращаться как post-hoc DOM patch.`);
+}
 assert.doesNotMatch(
-  fieldGroupsUi,
-  /navigation-contract/u,
-  "Модуль групп полей не должен загружать или владеть контрактом навигации."
+  hierarchy,
+  /setTimeout\s*\(/u,
+  "Shell/Home/Management controller не должен использовать таймеры для достижения финальной разметки."
 );
 
-const temporaryDirectory = await fs.mkdtemp(
-  path.join(os.tmpdir(), "docomator-ui-check-")
-);
+const fieldGroupsUi = await fs.readFile(path.join(uiDirectory, "field-groups-ui.js"), "utf8");
+assert.doesNotMatch(fieldGroupsUi, /navigation-contract/u);
 
+const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-ui-check-"));
 try {
   for (const [bundleName, fileNames] of Object.entries(bundles)) {
-    const parts = await Promise.all(
-      fileNames.map((fileName) => fs.readFile(path.join(uiDirectory, fileName)))
-    );
+    const parts = await Promise.all(fileNames.map((fileName) => fs.readFile(path.join(uiDirectory, fileName))));
     const bundlePath = path.join(temporaryDirectory, bundleName);
-    await fs.writeFile(
-      bundlePath,
-      Buffer.concat(
-        parts.flatMap((part, index) =>
-          index === 0 ? [part] : [Buffer.from("\n\n"), part]
-        )
-      )
-    );
-    const result = spawnSync(process.execPath, ["--check", bundlePath], {
-      encoding: "utf8"
-    });
+    await fs.writeFile(bundlePath, Buffer.concat(parts.flatMap((part, index) => index === 0 ? [part] : [Buffer.from("\n\n"), part])));
+    const result = spawnSync(process.execPath, ["--check", bundlePath], { encoding: "utf8" });
     if (result.status !== 0) {
       process.stderr.write(result.stderr || result.stdout);
       process.exitCode = result.status ?? 1;
@@ -142,5 +146,5 @@ try {
 }
 
 if (process.exitCode === undefined) {
-  process.stdout.write("Пользовательские UI-бандлы и каноническая навигация прошли проверку.\n");
+  process.stdout.write("Пользовательские UI-бандлы и канонический shell прошли проверку.\n");
 }
