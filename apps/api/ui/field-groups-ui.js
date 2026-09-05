@@ -96,9 +96,6 @@
     document.head.append(link);
   }
 
-  void import("/ui/navigation-contract.js").catch((error) => {
-    console.error("Не удалось загрузить контракт навигации.", error);
-  });
   void import("/ui/data-export.js").catch((error) => {
     console.error("Не удалось загрузить модуль экспорта данных.", error);
   });
