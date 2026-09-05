@@ -8,23 +8,13 @@
 **Автономный сервис формирования DOCX/XLSX по шаблонам и типизированным данным.** После установки рабочий runtime не требует Internet и не требует LLM. Рабочая область закрывается одним общим четырёхзначным кодом доступа.
 
 > [!IMPORTANT]
-> Текущий канал — **candidate / pilot**. Это готовая для скачивания проверенная CI-сборка, но не заявление о завершённой production-приёмке Debian/Astra/Office/recovery. Точный статус всегда задаёт [`RELEASE_IDENTITY.json`](RELEASE_IDENTITY.json).
+> Текущий канал — **candidate / pilot**. Опубликованный `v0.7.0-candidate` остаётся доступен для скачивания, но GitHub Actions больше не собирают и не публикуют новые Releases автоматически. Production-готовность по-прежнему требует отдельной Debian/Astra/Office/recovery acceptance. Точный статус задаёт [`RELEASE_IDENTITY.json`](RELEASE_IDENTITY.json).
 
-## 📦 Скачать готовую сборку
+## 📦 Скачать текущую сборку
 
-### [⬇️ Скачать последний выпуск](https://github.com/f2re/docomator/releases/latest)
+### [⬇️ Открыть последний опубликованный выпуск](https://github.com/f2re/docomator/releases/latest)
 
-В GitHub Release публикуются ровно пять проверяемых файлов:
-
-| Файл | Для чего |
-|---|---|
-| `docomator-<version>-linux-<arch>.tar.gz` | готовый автономный application bundle для ручной установки/обновления |
-| `docomator-<version>-linux-<arch>.tar.gz.sha256` | SHA-256 native bundle |
-| `docomator-<version>-project-control.f2re.zip` | готовый пакет обновления для F2RE Project Control |
-| `docomator-<version>-project-control.f2re.zip.sha256` | SHA-256 Project Control package |
-| `SHA256SUMS.txt` | общий список контрольных сумм |
-
-Проверка и установка:
+Текущий `v0.7.0-candidate` содержит проверяемые файлы поставки и контрольные суммы. Для ручной установки native bundle:
 
 ```bash
 sha256sum -c docomator-*.tar.gz.sha256
@@ -33,7 +23,7 @@ cd docomator-*-linux-*
 sudo ./install.sh
 ```
 
-GitHub-hosted release — **generic core bundle** с Node.js и приложением, без LLM, LibreOffice preview и target-specific `.deb` closure. Полные Debian/Astra bundles собираются на соответствующей reference VM и имеют отдельный target acceptance. См. [`docs/GITHUB_RELEASES.md`](docs/GITHUB_RELEASES.md) и [`docs/OFFLINE_DEPLOYMENT.md`](docs/OFFLINE_DEPLOYMENT.md).
+Новые distribution bundles формируются и публикуются как отдельная операция release owner после явной release/target acceptance. Обычный GitHub CI не собирает offline archive, не загружает artifacts и не выполняет deploy.
 
 ## Что умеет Оформлятор
 
@@ -141,17 +131,27 @@ Worker во втором терминале:
 DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run start:worker
 ```
 
-Проверка:
+Проверка обычного изменения:
 
 ```bash
-curl --fail http://127.0.0.1:8080/healthz
-curl --fail http://127.0.0.1:8080/readyz
 npm run check
 ```
 
+`npm run check` — короткий обязательный контур разработки: build, unit/regression tests, миграционные/security/version invariants, shell/runtime syntax и статический UI contract. GitHub запускает именно его плюс fresh migration smoke.
+
+Перед реальным выпуском:
+
+```bash
+npm run check:release
+npm run test:e2e
+npm run test:e2e:real-stack
+```
+
+Далее на reference/target host выполняются сборка offline bundle и требуемая target acceptance. Полный перечень зависит от выпуска и зафиксирован в [`SUPPORT_MATRIX`](docs/SUPPORT_MATRIX.md).
+
 ## 📦 Полные offline bundles Debian/Astra
 
-Debian и Astra Linux собираются как разные target-профили. Generic GitHub Release не подменяет target-specific поставку. Полный bundle собирается на reference VM той же ОС/архитектуры/glibc и включает проверенный package closure.
+Debian и Astra Linux собираются как разные target-профили. Полный bundle собирается на reference VM той же ОС/архитектуры/glibc и включает проверенный package closure.
 
 ### 🟦 Debian
 
@@ -179,13 +179,39 @@ npm run bundle:offline:astra -- \
 sudo /opt/docomator/current/first-run.sh --check
 ```
 
+## Упрощённый GitHub CI
+
+В `.github/workflows` поддерживается только `ci.yml`:
+
+```text
+PR / push main
+→ npm ci
+→ npm run check
+→ fresh migration smoke
+```
+
+CI имеет только `contents: read`. Разрешены только закреплённые `actions/checkout` и `actions/setup-node`.
+
+В GitHub Actions намеренно отсутствуют:
+
+- Chromium E2E;
+- сборка offline bundle;
+- Project Control packaging;
+- `upload-artifact`;
+- автоматическое создание tags/Releases;
+- verifier опубликованного Release;
+- auto-delete веток;
+- deploy/update target-машин.
+
+Тяжёлые проверки не удалены из проекта: они запускаются явно для затронутого контура или перед выпуском.
+
 ## Release discipline
 
 Единственный источник идентичности — [`RELEASE_IDENTITY.json`](RELEASE_IDENTITY.json):
 
 ```json
 {
-  "version": "0.6.5",
+  "version": "0.7.0",
   "status": "candidate",
   "channel": "pilot"
 }
@@ -197,11 +223,10 @@ sudo /opt/docomator/current/first-run.sh --check
 - новая обратно совместимая возможность → `MINOR`;
 - candidate получает immutable tag `vX.Y.Z-candidate`;
 - stable/production получает отдельный immutable tag `vX.Y.Z`;
-- **GitHub Release candidate публикуется обычным видимым Release**, а зрелость явно записана в tag/title/body и machine identity; это сделано, чтобы сборка была очевидно доступна на главной странице репозитория;
-- наличие Release не переводит продукт в stable;
-- assets никогда не перезаписываются под существующим tag;
-- release publisher берёт только exact artifact успешного push-CI `main`, сверяет SHA-256 и source commit;
-- отдельный read-only verifier скачивает уже опубликованный Release и побайтно проверяет оба bundle.
+- наличие GitHub Release не переводит продукт в stable;
+- существующие tags/assets не перемещаются и не перезаписываются;
+- release owner публикует только bundle, проверенный для exact source SHA;
+- GitHub Actions не имеют write permission и не участвуют в публикации.
 
 Подробнее: [`VERSIONING`](docs/VERSIONING.md), [`GITHUB_RELEASES`](docs/GITHUB_RELEASES.md), [`RELEASE_NOTES`](docs/RELEASE_NOTES.md).
 
@@ -218,7 +243,7 @@ sudo /opt/docomator/current/first-run.sh --check
 - backup/restore на отдельной чистой машине;
 - update/rollback без потери данных;
 - два новых пользователя, accessibility/P5;
-- защищённый `main` с required checks;
+- защищённый `main` с актуальным обязательным check;
 - пустой `blockers.json` и успешный `release:evidence`.
 
 ## Документация

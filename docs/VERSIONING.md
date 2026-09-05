@@ -1,6 +1,6 @@
 # Версионирование Оформлятора
 
-Актуально на **2026-08-24**.
+Актуально на **2026-09-05**.
 
 ## Источник истины
 
@@ -12,7 +12,7 @@
 - `status` — зрелость состава: `candidate` или `stable`;
 - `channel` — эксплуатационный канал: `pilot` или `production`.
 
-`VERSION`, package metadata, внутренние `@docomator/*` зависимости, lockfile, runtime default, пример env и текущие release-документы являются производными и проверяются CI.
+`VERSION`, package metadata, внутренние `@docomator/*` зависимости, lockfile, runtime default, пример env и текущие release-документы являются производными и проверяются проектными checks.
 
 ## SemVer
 
@@ -58,7 +58,7 @@ Bump не обязателен для изменения, которое не м
 - обновление release evidence/target act;
 - чистая смена `candidate/pilot → stable/production` после успешной приёмки, если продуктовый состав не менялся.
 
-Если вместе с документацией изменён runtime/API/UI/storage/offline-код, CI рассматривает это как product change и требует bump.
+Если вместе с документацией изменён runtime/API/UI/storage/offline-код, version policy рассматривает это как product change и требует bump.
 
 ## Как менять версию
 
@@ -76,15 +76,31 @@ npm run version:bump -- major
 npm run version:bump -- 0.7.0
 ```
 
-Команда синхронно обновляет machine identity и производные version markers. `status` и `channel` команда не меняет. После bump обязателен полный `npm run check`.
+Команда синхронно обновляет machine identity и производные version markers. `status` и `channel` команда не меняет. После bump выполняется `npm run check`; перед публикацией выпуска дополнительно выполняется `npm run check:release` и соответствующая target acceptance.
 
-## CI gates
+## Проверки разработки
 
-`npm run check:release-version` проверяет синхронность номера, статуса и канала.
+`npm run check` — короткий обязательный gate обычного PR. Он проверяет:
 
-`npm run check:version-policy` сравнивает product-changing paths с base-parent. Поставляемое изменение без нового SemVer блокируется.
+- сборку и unit/regression tests;
+- неизменность исторических migration prefixes;
+- отсутствие IAM drift и небезопасных GitHub Actions;
+- синхронность release identity и version policy;
+- shell/runtime syntax;
+- статический UI contract.
 
-При сомнении безопаснее сделать `PATCH`, чем слить пользовательски заметное изменение под старым номером.
+GitHub CI запускает именно этот контур и fresh migration smoke. В удалённом CI намеренно нет Chromium installation, offline bundle assembly, Project Control packaging, artifact upload, release publisher и release verifier.
+
+## Проверки выпуска
+
+`npm run check:release` добавляет проверки, которые не должны замедлять каждый PR:
+
+- examples/fixtures consistency;
+- release gates, включая LibreOffice gate;
+- документацию и audit remediation;
+- пользовательский язык и branding.
+
+Кроме него для конкретного выпуска выполняются относящиеся к изменению browser E2E, offline bundle verification, recovery/update/rollback и target acceptance. CI разработчика не заменяет target act.
 
 ## GitHub tags и Releases
 
@@ -92,12 +108,10 @@ GitHub не вводит второй номер версии. Tag являет�
 
 | Machine identity | Tag | GitHub presentation |
 |---|---|---|
-| `candidate / pilot` | `vX.Y.Z-candidate` | обычный **видимый Release**, maturity явно указана в tag/title/body |
+| `candidate / pilot` | `vX.Y.Z-candidate` | обычный видимый Release, maturity явно указана в tag/title/body |
 | `stable / production` | `vX.Y.Z` | обычный Release |
 
-Candidate намеренно **не использует GitHub `prerelease` flag**. GitHub скрывает prerelease из обычного блока Releases на главной странице репозитория, из-за чего готовая сборка выглядит как отсутствующая. Зрелость продукта при этом не теряется: её авторитетно задают `status/channel`, tag `-candidate`, заголовок и предупреждение в release body.
-
-Следовательно, ссылка `/releases/latest` может вести на candidate. Это означает только «последняя опубликованная сборка», а **не stable/production**.
+Candidate не обязан использовать GitHub `prerelease` flag: авторитетная зрелость хранится в `status/channel`, tag и release notes. Ссылка `/releases/latest` означает только «последняя опубликованная сборка», а не `stable/production`.
 
 Candidate tag и stable tag разделены потому, что успешный maturity transition может сохранить тот же product SemVer. Старый candidate ref при этом не перемещается.
 
@@ -105,38 +119,39 @@ Candidate tag и stable tag разделены потому, что успешн
 
 Tag и assets immutable для своей пары `version + maturity`.
 
-Повторный успешный CI:
+GitHub Actions больше не создают, не восстанавливают и не изменяют tags/Releases. Выпуск выполняет release owner как явную операцию после проверки exact source SHA и SHA-256 готовых assets.
 
-- не двигает существующий tag;
-- не заменяет assets под существующим Release;
-- может исправить только presentation metadata (`prerelease=false`, `latest`, exact target commit), если байты уже опубликованы.
+Нельзя:
 
-Если существует tag, но GitHub Release отсутствует, publisher вправе восстановить Release **только fail-closed**:
+- передвигать существующий release tag на новый commit;
+- заменять assets под существующим release identity;
+- привязывать старый tag к bundle, собранному из другого commit;
+- считать видимый candidate доказательством `stable/production`.
 
-1. tag разрешается в exact commit;
-2. historical `RELEASE_IDENTITY.json` и `VERSION` этого commit совпадают с текущей identity;
-3. для tag commit найден успешный `CI` события `push` default branch;
-4. существует exact Actions artifact `docomator-project-control-<commit>`;
-5. artifact, manifest, native payload и SHA-256 проходят повторную проверку;
-6. Release создаётся поверх существующего tag через `--verify-tag`; tag не перемещается.
-
-Если historical artifact уже удалён/истёк или checksum не совпадает, автоматическое «восстановление» запрещено. Требуется новый SemVer release, а не подмена старого tag новыми байтами.
+Если tag существует, а Release или подтверждённые assets отсутствуют, старый tag не переписывается. Восстановление допустимо только при наличии проверяемых exact artifacts того же commit; иначе создаётся новый SemVer release.
 
 ## Release pipeline
 
-Публикация выполняется только после успешного полного `CI` события `push` default branch:
+Обычный путь разработки короткий:
 
 ```text
-main commit
-→ repository/unit/release gates
-→ Chromium + real-stack
-→ assemble + verify offline archive
-→ Project Control package
-→ Publish verified release
-→ Verify published release
+PR / main commit
+→ Essential checks
+→ fresh migration smoke
 ```
 
-Publisher повторно проверяет exact workflow SHA, checksum и `f2re-service.json`. Независимый verifier имеет только read permission, скачивает уже опубликованные assets и сверяет их размеры/SHA-256, включая идентичность native `.tar.gz` и payload внутри `.f2re.zip`.
+Подготовка выпуска выполняется явно и отдельно:
+
+```text
+exact main SHA
+→ npm run check:release
+→ относящиеся к выпуску Chromium / real-stack checks
+→ build + verify offline bundle на контролируемом build host
+→ target / Office / recovery acceptance
+→ явное создание immutable tag и GitHub Release
+```
+
+GitHub Actions не собирают distribution bundle и не выполняют deploy. Это исключает автоматические write-side effects из обычной разработки и не смешивает fast CI с эксплуатационной приёмкой.
 
 ## Release binding
 

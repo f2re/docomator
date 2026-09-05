@@ -9,12 +9,22 @@
 
 ## Локальная проверка
 
+Обычная разработка и каждый PR используют короткий обязательный контур:
+
 ```bash
 npm ci
 npm run check
 ```
 
-`npm run check` включает обязательные сборку, тесты, release-gates и статические проверки, но не запускает браузерный E2E. Ручной запуск API/worker и проверка `/readyz` описаны в [основном README](README.md#ручная-проверка-с-реальным-api-и-sqlite), а команды Playwright — в [описании E2E-контура](tests/e2e/README.md).
+`npm run check` выполняет сборку, unit/regression tests, проверку миграций, space/security invariants, release identity/version policy, shell/runtime syntax и статический UI contract. Он намеренно не собирает offline bundle, не устанавливает Chromium, не запускает browser E2E и не выполняет release/LibreOffice gates.
+
+Перед реальным выпуском выполняется отдельная расширенная проверка:
+
+```bash
+npm run check:release
+```
+
+Затем на подходящем build/target host запускаются относящиеся к выпуску browser E2E, offline bundle verification и target acceptance. GitHub Actions не заменяет эти проверки и не публикует Release автоматически.
 
 Для migration:
 
@@ -28,6 +38,20 @@ DOCOMATOR_DATA_DIR="$PWD/.tmp/test-data" npm run migrate
 bash scripts/ci/validate-shell.sh
 scripts/offline/prepare-bundle.sh --help
 ```
+
+Команды Playwright описаны в [E2E-контуре](tests/e2e/README.md), offline install/update/rollback — в [OFFLINE_DEPLOYMENT](docs/OFFLINE_DEPLOYMENT.md).
+
+## GitHub CI
+
+В репозитории поддерживается один workflow `.github/workflows/ci.yml`:
+
+- запускается для PR и push в `main`;
+- имеет только `contents: read`;
+- использует только закреплённые `actions/checkout` и `actions/setup-node`;
+- выполняет `npm run check` и fresh migration smoke;
+- не загружает artifacts, не публикует releases, не удаляет ветки и не выполняет deploy.
+
+Тяжёлую приёмку не следует возвращать в обязательный PR CI. Если дефект требует browser/offline/Office regression, тест хранится в проекте и запускается в соответствующем focused/release контуре.
 
 ## Правила кода
 
