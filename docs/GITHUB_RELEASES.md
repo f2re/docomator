@@ -1,130 +1,78 @@
 # GitHub Releases и готовые bundles
 
-Актуально на **2026-08-24**.
+Актуально на **2026-09-05**.
 
-## Цель
+## Принцип
 
-Раздел **GitHub Releases** — основная публичная точка скачивания уже собранной и проверенной CI-поставки Оформлятора.
+GitHub Actions используется только как короткая read-only проверка исходного кода. Он не является системой сборки поставки, deploy-контуром или release publisher.
 
-Пользовательский критерий простой:
+В репозитории поддерживается один workflow `.github/workflows/ci.yml`. Он:
 
-```text
-открыть репозиторий
-→ увидеть Releases
-→ открыть Latest release
-→ скачать готовый .tar.gz или .f2re.zip
-→ проверить SHA-256
-→ установить / обновить
-```
+- запускает `npm run check` для PR и push в `main`;
+- выполняет fresh migration smoke;
+- имеет только `contents: read`;
+- использует только закреплённые `actions/checkout` и `actions/setup-node`;
+- не устанавливает Chromium;
+- не собирает offline bundle;
+- не упаковывает Project Control update;
+- не загружает Actions artifacts;
+- не создаёт и не изменяет tags/Releases;
+- не удаляет ветки и не выполняет deploy.
 
-Release publisher ничего не «собирает заново». Он публикует только байты exact successful CI artifact.
+Такой CI защищает базовую целостность проекта, но не пытается заменить эксплуатационную приёмку.
 
 ## Source of truth
 
-Единственный источник идентичности — `RELEASE_IDENTITY.json`.
+Единственный источник идентичности выпуска — `RELEASE_IDENTITY.json`.
 
-Для текущего candidate:
+`version` описывает состав продукта. `status/channel` описывают зрелость и эксплуатационный канал. GitHub tag и Release являются производным опубликованным представлением этой identity, а не вторым источником истины.
 
-```text
-product version: 0.6.5
-status/channel:  candidate / pilot
-tag:             v0.6.5-candidate
-GitHub state:    published visible Release
+Для candidate используется tag `vX.Y.Z-candidate`, для stable/production — `vX.Y.Z`.
+
+## Что проверяется на каждом PR
+
+Обычная обязательная проверка:
+
+```bash
+npm ci
+npm run check
+DOCOMATOR_DATA_DIR="$PWD/.tmp/data" npm run migrate
 ```
 
-Для stable:
+`npm run check` включает build, unit/regression tests, migration/security/workflow/version invariants, shell/runtime syntax и статический UI contract.
 
-```text
-product version: X.Y.Z
-status/channel:  stable / production
-tag:             vX.Y.Z
-GitHub state:    published Release
-```
+Browser E2E, LibreOffice release gate, offline bundle assembly и target acceptance не запускаются автоматически на каждом PR.
 
-GitHub `prerelease` flag для candidate не используется. Причина — он скрывает сборку из обычного release блока репозитория. Candidate semantics остаются явными в machine identity, tag `-candidate`, title и warning release body.
+## Что выполняется перед выпуском
 
-`/releases/latest` означает «последняя доступная сборка», а не «stable».
+Release owner работает с exact SHA `main`, для которого `Essential checks` завершён успешно.
 
-## Что публикуется
+Минимальный release flow:
 
-Release содержит **ровно пять assets**:
+1. получить exact source SHA и текущий `RELEASE_IDENTITY.json`;
+2. выполнить `npm ci` и `npm run check:release`;
+3. выполнить относящиеся к выпуску Chromium/real-stack проверки;
+4. собрать offline bundle на контролируемом build/reference host;
+5. проверить bundle, SHA-256 и embedded release metadata;
+6. выполнить Debian/Astra/Office/recovery acceptance, требуемую `SUPPORT_MATRIX.md`;
+7. только после этого явно создать immutable tag и GitHub Release;
+8. после публикации скачать опубликованные assets и сверить SHA-256 с локально принятыми файлами.
 
-1. `docomator-<version>-linux-<arch>.tar.gz`;
-2. `docomator-<version>-linux-<arch>.tar.gz.sha256`;
-3. `docomator-<version>-project-control.f2re.zip`;
-4. `docomator-<version>-project-control.f2re.zip.sha256`;
-5. `SHA256SUMS.txt`.
+Публикация — явная операция владельца выпуска через GitHub API/UI/CLI или другой контролируемый операторский инструмент. Она не запускается от `push`, `workflow_run`, `release` или комментария.
 
-Native `.tar.gz` и payload внутри `.f2re.zip` обязаны совпадать по SHA-256 и размеру.
+## Assets
 
-## Как формируется candidate release
+Опубликованный Release может содержать:
 
-После успешного main CI publisher:
+- `docomator-<version>-linux-<arch>.tar.gz`;
+- соседний `.sha256`;
+- `docomator-<version>-project-control.f2re.zip`;
+- соседний `.sha256`;
+- `SHA256SUMS.txt`.
 
-1. checkout-ит exact `workflow_run.head_sha`;
-2. сверяет `VERSION` и `RELEASE_IDENTITY.json`;
-3. скачивает только artifact `docomator-project-control-<exact-sha>` того же CI run;
-4. сверяет внешний SHA-256 Project Control package;
-5. читает `f2re-service.json` и проверяет schema/version/sourceCommit;
-6. извлекает native `.tar.gz` из package;
-7. сверяет native size + SHA-256;
-8. создаёт отдельный native `.sha256` и `SHA256SUMS.txt`;
-9. публикует Release с понятным описанием и примером установки;
-10. повторно читает release metadata и требует published, visible, exact target commit.
+Состав конкретного выпуска должен соответствовать его release notes и machine identity. Наличие GitHub Release само по себе не доказывает target compatibility.
 
-## Recovery: tag есть, Release нет
-
-Это отдельный поддерживаемый failure mode. Он важен, потому что GitHub/ручное действие может оставить tag без видимого Release.
-
-Publisher не двигает такой tag и не подсовывает ему текущие байты. Вместо этого:
-
-1. разрешает tag в historical commit;
-2. проверяет historical `RELEASE_IDENTITY.json` и `VERSION`;
-3. ищет успешный historical `CI` события `push` default branch для exact tag commit;
-4. скачивает artifact именно этого run;
-5. повторяет checksum/manifest/native verification;
-6. создаёт Release через существующий tag (`--verify-tag`).
-
-Если historical artifact недоступен, восстановление прекращается. Старый tag не перезаписывается; следующий выпуск должен получить новый SemVer.
-
-## Existing GitHub prerelease
-
-Если корректный Release уже существует, но был помечен GitHub как `prerelease`, publisher не пересобирает и не заменяет assets. Он изменяет только presentation metadata:
-
-- `prerelease=false`;
-- `make_latest=true`;
-- `target_commitish` = commit существующего tag.
-
-Таким образом готовый candidate становится видимым в стандартном блоке Releases, но его product maturity остаётся `candidate/pilot`.
-
-## Независимая проверка опубликованного Release
-
-После publisher запускается read-only workflow `Verify published release`.
-
-Он требует:
-
-- release существует и `isDraft=false`;
-- `isPrerelease=false`, то есть выпуск виден обычному пользователю;
-- target commit — полный 40-символьный SHA;
-- присутствуют ровно пять ожидаемых assets;
-- каждый asset реально скачивается;
-- размеры совпадают с GitHub metadata;
-- оба `.sha256` совпадают с файлами;
-- `SHA256SUMS.txt` совпадает с обоими основными bundle;
-- `f2re-service.json` совпадает с version/sourceCommit;
-- native payload внутри Project Control package побайтно совпадает с отдельно опубликованным native asset по SHA-256 и размеру.
-
-Verifier имеет только `contents: read` и не способен исправить плохой Release.
-
-## Скачивание и установка
-
-Откройте:
-
-```text
-https://github.com/f2re/docomator/releases/latest
-```
-
-Для ручной установки скачайте `.tar.gz` и соседний `.sha256`:
+Проверка native bundle перед установкой:
 
 ```bash
 sha256sum -c docomator-*.tar.gz.sha256
@@ -133,44 +81,28 @@ cd docomator-*-linux-*
 sudo ./install.sh
 ```
 
-Для F2RE Project Control используйте `.f2re.zip` и его `.sha256`.
-
 Target-side `verify/install/update/rollback` не используют Internet.
 
-## Что GitHub bundle доказывает — и чего не доказывает
+## Generic и target-specific bundles
 
-GitHub-hosted CI формирует **generic core bundle**:
+Generic application bundle и полный Debian/Astra bundle — разные уровни доказательства.
 
-- приложение;
-- production dependencies;
-- встроенный Node runtime;
-- migrations;
-- install/update/rollback/backup/recovery tooling;
-- без LLM;
-- без LibreOffice preview;
-- без UX acceptance payload;
-- без target-specific `.deb` closure.
-
-Это готовый application/update bundle. Он **не заменяет** native Debian/Astra target acceptance.
-
-Полный Debian/Astra bundle должен быть собран на соответствующей reference VM и пройти `docs/OFFLINE_DEPLOYMENT.md` / `docs/SUPPORT_MATRIX.md`.
+Полный Debian/Astra bundle должен быть собран на соответствующей reference VM и пройти `docs/OFFLINE_DEPLOYMENT.md` / `docs/SUPPORT_MATRIX.md`. Наличие generic archive не заменяет проверку target package closure, LibreOffice, reboot, backup/restore, update/rollback и Office corpus.
 
 ## Security GitHub Actions
 
-Publisher имеет только:
+Постоянная политика проста:
 
 ```text
-actions: read
-contents: write
+workflow files:  только .github/workflows/ci.yml
+permissions:     contents: read
+allowed actions: pinned actions/checkout + actions/setup-node
+write actions:   запрещены
+artifact upload: запрещён
+release/deploy:  запрещён
 ```
 
-Write permission нужен для tag/release metadata и assets. Workflow запускается только после успешного push-CI default branch и checkout-ит exact verified SHA. `pull_request_target`, `issue_comment` и `repository_dispatch` запрещены policy checker-ом.
-
-Verifier имеет только:
-
-```text
-contents: read
-```
+`workflow_run`, `workflow_dispatch`, `release`, `schedule`, `pull_request_target`, `issue_comment` и `repository_dispatch` не используются. Policy закреплена `scripts/ci/check-workflow-permissions.mjs` и regression tests.
 
 ## Immutability
 
@@ -178,7 +110,7 @@ contents: read
 
 - передвигать старый release tag на новый commit;
 - заменять assets под существующей release identity;
-- восстанавливать старый tag из artifact другого commit;
+- восстанавливать старый tag из bundle другого commit;
 - объявлять candidate stable только потому, что он отображается как Latest Release.
 
-Product change сначала получает новый SemVer, затем новый immutable tag и новый Release.
+Если старый Release невозможно достоверно восстановить из exact artifacts того же commit, выпускается новая версия вместо подмены старых байтов.
