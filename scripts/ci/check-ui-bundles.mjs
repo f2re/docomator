@@ -43,6 +43,7 @@ const bundles = {
     "shared-corporate-mode.js",
     "storage-maintenance.js",
     "bulk-data-import.js",
+    "bulk-data-import-controller.js",
     "space-isolation-ui.js",
     "operation-center.js",
     "operations-readiness.js",
@@ -127,6 +128,32 @@ assert.doesNotMatch(
 
 const fieldGroupsUi = await fs.readFile(path.join(uiDirectory, "field-groups-ui.js"), "utf8");
 assert.doesNotMatch(fieldGroupsUi, /navigation-contract/u);
+
+const bulkImportController = await fs.readFile(
+  path.join(uiDirectory, "bulk-data-import-controller.js"),
+  "utf8"
+);
+assert.match(
+  bulkImportController,
+  /addEventListener\("change",\s*bulkImportControllerPreviewSelectedFile\)/u,
+  "Контроллер импорта должен запускать чтение непосредственно после выбора файла."
+);
+assert.match(
+  bulkImportController,
+  /addEventListener\("drop"/u,
+  "Контроллер импорта должен поддерживать drag&drop."
+);
+for (const [label, pattern] of [
+  ["отложенный запуск", /setTimeout\s*\(/u],
+  ["синтетический click", /\.click\s*\(/u],
+  ["MutationObserver", /MutationObserver/u]
+]) {
+  assert.doesNotMatch(
+    bulkImportController,
+    pattern,
+    `Контроллер импорта не должен использовать ${label}.`
+  );
+}
 
 const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-ui-check-"));
 try {
