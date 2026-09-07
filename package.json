@@ -1,6 +1,6 @@
 {
   "name": "docomator",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "private": true,
   "description": "Автономная платформа формирования и автоматизации документов DOCX и XLSX с локальной поддержкой ИИ.",
   "type": "module",
@@ -64,7 +64,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "@types/node": "24.10.9",
     "typescript": "7.0.2"
   }

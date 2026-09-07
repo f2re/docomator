@@ -242,33 +242,6 @@
     );
   }
 
-  function guidedFlowInstallBulkImport() {
-    const input = document.querySelector("#bulkImportFile");
-    const button = document.querySelector("#bulkImportPreviewButton");
-    if (!(input instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) return;
-
-    guidedFlowSecondaryAction(button, "Прочитать сейчас", ["Прочитать файл", "Продолжить"]);
-    if (button.dataset.guidedAutoBound === "true") return;
-    button.dataset.guidedAutoBound = "true";
-
-    const schedule = () => {
-      if (!input.files?.[0] || button.disabled || button.hidden) return;
-      guidedFlowSchedule(button, () => {
-        const message = document.querySelector("#bulkImportMessage");
-        if (message) {
-          message.className = "bulk-import-message is-loading";
-          message.textContent =
-            "Файл выбран. Читаем колонки автоматически; до подтверждения импорта данные не сохраняются.";
-        }
-      });
-    };
-
-    input.addEventListener("change", () => setTimeout(schedule, 0));
-    const dropTarget = input.closest("label");
-    dropTarget?.addEventListener("drop", () => setTimeout(schedule, 0));
-    button.addEventListener("click", () => guidedFlowClear(button), { capture: true });
-  }
-
   function guidedFlowInstallTemplateStructure() {
     const button = document.querySelector("#documentStructureButton");
     const currentStep = document.querySelector(
@@ -312,7 +285,6 @@
     guidedFlowInstallDocumentIntake();
     guidedFlowInstallBulkImportDataHygiene();
     guidedFlowInstallBulkImportRepair();
-    guidedFlowInstallBulkImport();
     guidedFlowInstallTemplateStructure();
   }
 
