@@ -1,6 +1,6 @@
 # Roadmap завершения Оформлятора
 
-Текущая версия: `0.7.2`.
+Текущая версия: `0.7.3`.
 
 Статус: `candidate / pilot`.
 
@@ -8,13 +8,13 @@
 
 Кодовая часть основного пользовательского сценария включает пространства и данные, CSV/XLSX import с preview/repair, библиотеку шаблонов, deterministic DOCX/XLSX bindings и renderer, Visual Template Studio, публикации/доставку, persisted worker/schedules, backup/update/rollback, offline tooling, Project Control wrapper и публичный stateless `/gost`.
 
-В `0.6.3` устранён отдельный password/login-контур и введён единый 4-значный код доступа без username/account/roles. В `0.6.4` завершён пользовательский PIN-flow. В `0.6.5` восстановлена доступность пользовательских полей в шаблонизаторе. В `0.6.6` исправлена компоновка Visual Template Studio. В `0.6.7` упрощён выпуск документов. В `0.6.8` persisted результаты стали строго space-scoped. В `0.7.0` устранён legacy/global knowledge bypass. В `0.7.1` primary navigation стала канонической при первой отрисовке. В `0.7.2` Home, topbar и «Управление» также перенесены из позднего DOM-composition слоя в исходную разметку; `interface-hierarchy.js` оставлен только для синхронизации состояния, а эксплуатационная диагностика стала вторичным уровнем «Управления». Security boundary ADR-0011 не изменена.
+В `0.6.3` устранён отдельный password/login-контур и введён единый 4-значный код доступа без username/account/roles. В `0.6.4` завершён пользовательский PIN-flow. В `0.6.5` восстановлена доступность пользовательских полей в шаблонизаторе. В `0.6.6` исправлена компоновка Visual Template Studio. В `0.6.7` упрощён выпуск документов. В `0.6.8` persisted результаты стали строго space-scoped. В `0.7.0` устранён legacy/global knowledge bypass. В `0.7.1` primary navigation стала канонической при первой отрисовке. В `0.7.2` Home, topbar и «Управление» также перенесены из позднего DOM-composition слоя в исходную разметку; `interface-hierarchy.js` оставлен только для синхронизации состояния, а эксплуатационная диагностика стала вторичным уровнем «Управления». В `0.7.3` автоматический старт CSV/XLSX preview перенесён из 900-мс synthetic-click helper в отдельный import controller; ручной запуск сохранён как fallback. Security boundary ADR-0011 не изменена.
 
 ## Незавершённый UX/UI backlog перед финальной приёмкой
 
 Новый дизайн завершается без смены frontend framework и без расширения продуктовой модели:
 
-1. Data/employee/import: единый toolbar, сохранение введённых значений, устранение delayed synthetic clicks и глобальных monkey-patch функций;
+1. Data/employee/import: единый toolbar, сохранение введённых значений и перенос оставшихся import-specific mapping/repair monkey-patch функций в канонический controller;
 2. Visual Template Studio: selection-first inspector и progressive disclosure поверх существующей безопасной Document IR;
 3. Generation → Results: один пользовательский flow, без конкурирующего snapshot-мастера в «Разделах»;
 4. Schedules: человеко-ориентированная последовательность «что → когда → куда» и явный переход к результатам;
