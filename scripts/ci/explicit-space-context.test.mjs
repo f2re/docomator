@@ -95,7 +95,7 @@ test("space-local browser preferences never fall back to an implicit default sco
     "apps/api/ui/document-schedules.js",
     "apps/api/ui/generic-document-generation.js",
     "apps/api/ui/generic-template-entities.js",
-    "apps/api/ui/space-isolation-ui.js"
+    "apps/api/ui/bulk-data-import-controller.js"
   ];
   for (const relativePath of guardedFiles) {
     assertDoesNotContain(
@@ -109,7 +109,8 @@ test("space-local browser preferences never fall back to an implicit default sco
 test("transitional explicit-space adapter files are absent", () => {
   for (const relativePath of [
     "apps/api/ui/explicit-space-context.js",
-    "apps/api/ui/explicit-document-space-context.js"
+    "apps/api/ui/explicit-document-space-context.js",
+    "apps/api/ui/space-isolation-ui.js"
   ]) {
     assert.equal(
       fs.existsSync(path.join(repositoryRoot, relativePath)),
