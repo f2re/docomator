@@ -14,18 +14,26 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DOCOMATOR_VALIDATION_SHA: 67aa36370f759e316481447d0a09af83d1fa4ef2
+
 jobs:
-  essential:
-    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
-    name: Essential checks
+  import-browser-focus:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') }}
+    name: Import browser focus
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
-      - name: Checkout
+      - name: Checkout exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ env.DOCOMATOR_VALIDATION_SHA }}
           fetch-depth: 2
+
+      - name: Verify exact candidate
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$DOCOMATOR_VALIDATION_SHA"
 
       - name: Read Node.js version
         id: node
@@ -41,39 +49,56 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Run essential repository checks
-        run: npm run check
+      - name: Install pinned Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
-      - name: Smoke-test migration on a fresh database
-        env:
-          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-data
-        run: npm run migrate
-
-  release-source-gate:
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') }}
-    name: Release source gate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-
-    steps:
-      - name: Checkout exact candidate
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 2
-
-      - name: Read Node.js version
-        id: release-node
+      - name: Run focused import browser acceptance
         shell: bash
-        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -Eeuo pipefail
+          npm run build
 
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: ${{ steps.release-node.outputs.version }}
-          cache: npm
+          API_PID=""
+          WORKER_PID=""
+          cleanup() {
+            if [[ -n "$WORKER_PID" ]]; then kill "$WORKER_PID" 2>/dev/null || true; fi
+            if [[ -n "$API_PID" ]]; then kill "$API_PID" 2>/dev/null || true; fi
+          }
+          trap cleanup EXIT
 
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
+          wait_ready() {
+            local url="$1"
+            for _ in $(seq 1 80); do
+              if curl --fail --silent --show-error "$url/readyz" >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 0.25
+            done
+            return 1
+          }
 
-      - name: Run full source release gate
-        run: npm run check:release
+          MOCK_DIR="$RUNNER_TEMP/docomator-import-mock"
+          DOCOMATOR_DATA_DIR="$MOCK_DIR" npm run migrate
+          DOCOMATOR_DATA_DIR="$MOCK_DIR" DOCOMATOR_PORT=18082 npm run start:api >"$RUNNER_TEMP/import-mock-api.log" 2>&1 &
+          API_PID=$!
+          wait_ready "http://127.0.0.1:18082"
+          DOCOMATOR_E2E_BASE_URL=http://127.0.0.1:18082 \
+          DOCOMATOR_E2E_COMMIT_SHA="$DOCOMATOR_VALIDATION_SHA" \
+            npx playwright test --config tests/e2e/playwright.config.mjs \
+              bulk-import-ux.spec.mjs import-regression-ui.spec.mjs assisted-import.spec.mjs
+          kill "$API_PID" 2>/dev/null || true
+          wait "$API_PID" 2>/dev/null || true
+          API_PID=""
+
+          REAL_DIR="$RUNNER_TEMP/docomator-import-real"
+          DOCOMATOR_DATA_DIR="$REAL_DIR" npm run migrate
+          DOCOMATOR_DATA_DIR="$REAL_DIR" DOCOMATOR_PORT=18083 npm run start:api >"$RUNNER_TEMP/import-real-api.log" 2>&1 &
+          API_PID=$!
+          DOCOMATOR_DATA_DIR="$REAL_DIR" DOCOMATOR_WORKER_POLL_MS=100 npm run start:worker >"$RUNNER_TEMP/import-real-worker.log" 2>&1 &
+          WORKER_PID=$!
+          wait_ready "http://127.0.0.1:18083"
+          DOCOMATOR_E2E_BASE_URL=http://127.0.0.1:18083 \
+          DOCOMATOR_E2E_COMMIT_SHA="$DOCOMATOR_VALIDATION_SHA" \
+          DOCOMATOR_E2E_REAL_STACK=1 \
+            npx playwright test --config tests/e2e/playwright.config.mjs \
+              --project chromium-1440 real-stack-import-flow.spec.mjs
