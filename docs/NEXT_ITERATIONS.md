@@ -1,14 +1,14 @@
 # Следующие итерации
 
-Текущая версия: `0.7.3`.
+Текущая версия: `0.7.4`.
 
 Статус: `candidate / pilot`.
 
-`0.6.4` закрыл пользовательский разрыв доступа: первый запуск задаёт один общий 4-значный код без логина/пароля. `0.6.5` восстановил доступность полей сотрудников в шаблонизаторе. `0.6.6` исправил компоновку Visual Template Studio. `0.6.7` упростил выпуск документов. `0.6.8` сделал persisted результаты строго space-scoped. `0.7.0` убрал default-space knowledge bypass и глобальный `fetch` rewrite. `0.7.1` сделал первичную навигацию канонической при первой отрисовке. `0.7.2` перенёс Home/topbar/«Управление» из позднего DOM-composition слоя в исходную разметку. `0.7.3` переносит автоматический старт CSV/XLSX preview из 900-мс synthetic click в отдельный import controller. Граница shared trusted workspace и ADR-0011 не меняются.
+`0.6.4` закрыл пользовательский разрыв доступа: первый запуск задаёт один общий 4-значный код без логина/пароля. `0.6.5` восстановил доступность полей сотрудников в шаблонизаторе. `0.6.6` исправил компоновку Visual Template Studio. `0.6.7` упростил выпуск документов. `0.6.8` сделал persisted результаты строго space-scoped. `0.7.0` убрал default-space knowledge bypass и глобальный `fetch` rewrite. `0.7.1` сделал первичную навигацию канонической при первой отрисовке. `0.7.2` перенёс Home/topbar/«Управление» из позднего DOM-composition слоя в исходную разметку. `0.7.3` перенёс автоматический старт CSV/XLSX preview из 900-мс synthetic click в отдельный import controller. `0.7.4` консолидирует в том же controller space-scoped mapping memory и structured mapping/repair UX, удаляя поздний import overlay. Граница shared trusted workspace и ADR-0011 не меняются.
 
 ## P1 — завершение UX/UI перед внешней приёмкой
 
-- #153: продолжить Data/employee/import — перенести оставшиеся mapping/repair monkey-patch в канонический import controller, затем привести карточку и toolbar к единому рабочему потоку без потери введённых значений.
+- #153: import-controller consolidation выполнен в `0.7.4`; следующий срез — привести карточку сотрудника/объекта и toolbar к единому рабочему потоку без скрытия уже заполненных значений, затем закрепить оставшиеся preview inline-repair сценарии.
 - #154: Visual Template Studio — selection-first inspector и progressive disclosure поверх безопасной Document IR.
 - #155: Generation → Results — один сквозной flow, без дублирующей истории и snapshot-мастера.
 - #156: Schedules — «что → когда → куда», а история запусков и готовые файлы остаются в Results.

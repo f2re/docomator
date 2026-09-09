@@ -1,6 +1,6 @@
 # Roadmap завершения Оформлятора
 
-Текущая версия: `0.7.3`.
+Текущая версия: `0.7.4`.
 
 Статус: `candidate / pilot`.
 
@@ -8,13 +8,13 @@
 
 Кодовая часть основного пользовательского сценария включает пространства и данные, CSV/XLSX import с preview/repair, библиотеку шаблонов, deterministic DOCX/XLSX bindings и renderer, Visual Template Studio, публикации/доставку, persisted worker/schedules, backup/update/rollback, offline tooling, Project Control wrapper и публичный stateless `/gost`.
 
-В `0.6.3` устранён отдельный password/login-контур и введён единый 4-значный код доступа без username/account/roles. В `0.6.4` завершён пользовательский PIN-flow. В `0.6.5` восстановлена доступность пользовательских полей в шаблонизаторе. В `0.6.6` исправлена компоновка Visual Template Studio. В `0.6.7` упрощён выпуск документов. В `0.6.8` persisted результаты стали строго space-scoped. В `0.7.0` устранён legacy/global knowledge bypass. В `0.7.1` primary navigation стала канонической при первой отрисовке. В `0.7.2` Home, topbar и «Управление» также перенесены из позднего DOM-composition слоя в исходную разметку; `interface-hierarchy.js` оставлен только для синхронизации состояния, а эксплуатационная диагностика стала вторичным уровнем «Управления». В `0.7.3` автоматический старт CSV/XLSX preview перенесён из 900-мс synthetic-click helper в отдельный import controller; ручной запуск сохранён как fallback. Security boundary ADR-0011 не изменена.
+В `0.6.3` устранён отдельный password/login-контур и введён единый 4-значный код доступа без username/account/roles. В `0.6.4` завершён пользовательский PIN-flow. В `0.6.5` восстановлена доступность пользовательских полей в шаблонизаторе. В `0.6.6` исправлена компоновка Visual Template Studio. В `0.6.7` упрощён выпуск документов. В `0.6.8` persisted результаты стали строго space-scoped. В `0.7.0` устранён legacy/global knowledge bypass. В `0.7.1` primary navigation стала канонической при первой отрисовке. В `0.7.2` Home, topbar и «Управление» также перенесены из позднего DOM-composition слоя в исходную разметку; `interface-hierarchy.js` оставлен только для синхронизации состояния, а эксплуатационная диагностика стала вторичным уровнем «Управления». В `0.7.3` автоматический старт CSV/XLSX preview перенесён из 900-мс synthetic-click helper в отдельный import controller; ручной запуск сохранён как fallback. В `0.7.4` тот же controller становится единственным владельцем space-scoped mapping memory и structured mapping/repair UX; поздний `space-isolation-ui.js` удалён из runtime. Security boundary ADR-0011 не изменена.
 
 ## Незавершённый UX/UI backlog перед финальной приёмкой
 
 Новый дизайн завершается без смены frontend framework и без расширения продуктовой модели:
 
-1. Data/employee/import: единый toolbar, сохранение введённых значений и перенос оставшихся import-specific mapping/repair monkey-patch функций в канонический controller;
+1. Data/employee/import: import-controller consolidation выполнен; остаются единый toolbar, карточка без скрытия заполненных значений и оставшиеся inline preview repair сценарии;
 2. Visual Template Studio: selection-first inspector и progressive disclosure поверх существующей безопасной Document IR;
 3. Generation → Results: один пользовательский flow, без конкурирующего snapshot-мастера в «Разделах»;
 4. Schedules: человеко-ориентированная последовательность «что → когда → куда» и явный переход к результатам;
@@ -25,7 +25,7 @@
 
 После завершения UX/UI backlog остаётся release acceptance одного точного candidate commit:
 
-1. `npm run check:release` и применимые Chromium/real-stack checks exact candidate SHA; GitHub Actions при этом остаётся только read-only `Essential checks`;
+1. `npm run check:release` и применимые Chromium/real-stack checks exact candidate SHA; GitHub Actions при этом остаётся только read-only source validation;
 2. сквозной acceptance `раздел данных → сотрудники/группа → пользовательские поля → шаблон → заполненный документ`, включая отрицательную изоляцию второго раздела и результатов;
 3. чистая offline-установка и target act Debian x86-64;
 4. чистая offline-установка и target act Astra Linux 1.7 x86-64;
