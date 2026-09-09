@@ -123,7 +123,6 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "storage-maintenance.js",
       "bulk-data-import.js",
       "bulk-data-import-controller.js",
-      "space-isolation-ui.js",
       "operation-center.js",
       "operations-readiness.js",
       "template-row-flow.js",
