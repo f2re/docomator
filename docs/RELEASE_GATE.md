@@ -1,13 +1,19 @@
 # Сквозной release-gate
 
 Статус: **обязательный core gate реализован; реальный LibreOffice проверяется отдельной фазой**
-Последнее обновление: **2026-07-19**
+Последнее обновление: **2026-09-09**
 
 ## Назначение
 
-Release-gate подтверждает, что собранные runtime-процессы совместно формируют документы на свежей базе, а не только проходят изолированные модульные тесты. Он входит в `npm run check` и не использует сеть, SMTP, сетевую папку, LLM или внешний broker.
+Release-gate подтверждает, что собранные runtime-процессы совместно формируют документы на свежей базе, а не только проходят изолированные модульные тесты. Полный source-контур входит в `npm run check:release`; обычный `npm run check` остаётся коротким PR-gate и выполняет сборку, обязательные регрессии, статический аудит и инварианты репозитория. Release-gate не использует сеть, SMTP, сетевую папку, LLM или внешний broker.
 
 Связанный срез требований: `TPL-009`, `TPL-024`—`TPL-030`, `DOC-005`—`DOC-019`, `QUE-001`—`QUE-005`, `QUE-008`, `OFF-010`, `OFF-013`, `NFR-001`, `NFR-007`, `NFR-009`; критерии `AC-003`, `AC-010`, `AC-018`, `AC-024`—`AC-026`.
+
+## Source-проверка release-ветки
+
+В репозитории остаётся один read-only GitHub Actions workflow `.github/workflows/ci.yml`. Обычные pull request и push в `main` выполняют только обязательный job `Essential checks`. Push в короткую ветку `release/**` запускает отдельный job `Release source gate` с `npm run check:release`; он не имеет прав записи, ничего не публикует и не загружает distribution artifacts.
+
+Это только проверка исходного дерева кандидата. Она не заменяет `npm run test:e2e`, `npm run test:e2e:real-stack`, Debian/Astra target acceptance, реальный LibreOffice, backup/restore, update/rollback, Office-корпус и две независимые пользовательские P5-сессии. Если LibreOffice отсутствует на GitHub runner, его gate обязан явно показать `SKIPPED`, а на целевом стенде тот же пропуск запрещён.
 
 ## Обязательный core gate
 

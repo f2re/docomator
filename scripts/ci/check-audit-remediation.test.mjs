@@ -31,15 +31,20 @@ async function fixture() {
   await write(root, "config/docomator.env.example", "DOCOMATOR_ACCESS_CODE_HASH=\nDOCOMATOR_SESSION_SECRET=\nDOCOMATOR_SESSION_TTL_SECONDS=28800\n");
   await write(root, "scripts/offline/set-access-code.sh", "^[0-9]{4}$\nscryptSync\nrandomBytes(48)\nDOCOMATOR_ACCESS_CODE_HASH\nDOCOMATOR_SESSION_SECRET\nsystemctl restart docomator-api.service\n");
   await write(root, "packages/document-intake/src/intake.ts", "readVerifiedEntry(\nverifiedUncompressedBytes\npackage_size_mismatch\nСуммарный фактически распакованный размер\n");
-  await write(root, "package.json", JSON.stringify({ scripts: { "check:audit": "node scripts/ci/check-audit-remediation.mjs", check: "npm run check:audit", "test:e2e:real-stack": "playwright test" } }));
-  await write(root, "scripts/ci/check-workflow-permissions.mjs", "permissions: write-all\nrunBlockLines(\nAPPROVED_CHECKOUT_ACTION\nrepository_dispatch\n");
+  await write(root, "package.json", JSON.stringify({ scripts: {
+    "check:audit": "node scripts/ci/check-audit-remediation.mjs",
+    check: "npm run check:essential && npm run check:audit",
+    "check:release": "npm run check:essential && npm run check:audit",
+    "test:e2e:real-stack": "playwright test"
+  } }));
+  await write(root, "scripts/ci/check-workflow-permissions.mjs", "permissions: write-all\nALLOWED_ACTIONS\nFORBIDDEN_TRIGGERS\nWRITE_PERMISSION_LINE\nrepository_dispatch\n");
   await write(root, "tests/e2e/playwright.config.mjs", "DOCOMATOR_E2E_REAL_STACK\nreal-stack-document-flow.spec.mjs\n");
   await write(root, "tests/e2e/real-stack-document-flow.spec.mjs", "personal-card.docx\n/api/v1/operations/readiness\n#generationSubmit\nСкачать документ\n");
-  await write(root, ".github/workflows/ci.yml", "npm run start:worker\nnpm run test:e2e:real-stack\n");
+  await write(root, ".github/workflows/ci.yml", "name: Essential checks\nnpm run check\n\"release/**\"\nname: Release source gate\nnpm run check:release\n");
   return root;
 }
 
-test("проверка принимает полный access-code remediation contract", async () => {
+test("проверка принимает актуальный release remediation contract", async () => {
   const root = await fixture();
   try {
     assert.deepEqual(await collectAuditRemediationFindings(root), []);
@@ -65,6 +70,44 @@ test("проверка ловит legacy password key в fresh config", async ()
     await write(root, "config/docomator.env.example", "DOCOMATOR_ACCESS_CODE_HASH=\nDOCOMATOR_ACCESS_PASSWORD_HASH=\nDOCOMATOR_SESSION_SECRET=\nDOCOMATOR_SESSION_TTL_SECONDS=28800\n");
     const findings = await collectAuditRemediationFindings(root);
     assert.ok(findings.some((item) => item.includes("legacy password key")), findings.join("\n"));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("проверка требует audit и в обычном, и в release check", async () => {
+  const root = await fixture();
+  try {
+    await write(root, "package.json", JSON.stringify({ scripts: {
+      "check:audit": "node scripts/ci/check-audit-remediation.mjs",
+      check: "npm run check:essential && npm run check:audit",
+      "check:release": "npm run check:essential",
+      "test:e2e:real-stack": "playwright test"
+    } }));
+    const findings = await collectAuditRemediationFindings(root);
+    assert.ok(findings.some((item) => item.includes("release check")), findings.join("\n"));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("проверка требует актуальную защиту единственного workflow", async () => {
+  const root = await fixture();
+  try {
+    await write(root, "scripts/ci/check-workflow-permissions.mjs", "permissions: write-all\nFORBIDDEN_TRIGGERS\nWRITE_PERMISSION_LINE\nrepository_dispatch\n");
+    const findings = await collectAuditRemediationFindings(root);
+    assert.ok(findings.some((item) => item.includes("ALLOWED_ACTIONS")), findings.join("\n"));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("проверка не разрешает вернуть browser/worker acceptance в source CI", async () => {
+  const root = await fixture();
+  try {
+    await write(root, ".github/workflows/ci.yml", "name: Essential checks\nnpm run check\n\"release/**\"\nname: Release source gate\nnpm run check:release\nnpm run start:worker\nnpm run test:e2e:real-stack\n");
+    const findings = await collectAuditRemediationFindings(root);
+    assert.ok(findings.some((item) => item.includes("browser/worker")), findings.join("\n"));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

@@ -164,6 +164,9 @@ export async function collectAuditRemediationFindings(
     if (!String(packageJson?.scripts?.check ?? "").includes("check:audit")) {
       findings.push("package.json: общий check не запускает check:audit");
     }
+    if (!String(packageJson?.scripts?.["check:release"] ?? "").includes("check:audit")) {
+      findings.push("package.json: release check не запускает check:audit");
+    }
     if (typeof packageJson?.scripts?.["test:e2e:real-stack"] !== "string") {
       findings.push("package.json: отсутствует настоящий браузерный сценарий");
     }
@@ -182,8 +185,9 @@ export async function collectAuditRemediationFindings(
   );
   for (const required of [
     "permissions: write-all",
-    "runBlockLines(",
-    "APPROVED_CHECKOUT_ACTION",
+    "ALLOWED_ACTIONS",
+    "FORBIDDEN_TRIGGERS",
+    "WRITE_PERMISSION_LINE",
     "repository_dispatch"
   ]) {
     if (!workflowGuard.includes(required)) {
@@ -229,11 +233,23 @@ export async function collectAuditRemediationFindings(
   }
 
   const ci = await readRequired(root, ".github/workflows/ci.yml", findings);
-  if (!ci.includes("npm run start:worker")) {
-    findings.push(".github/workflows/ci.yml: Chromium-контур не запускает worker");
+  for (const required of [
+    "name: Essential checks",
+    "npm run check",
+    '"release/**"',
+    "name: Release source gate",
+    "npm run check:release"
+  ]) {
+    if (!ci.includes(required)) {
+      findings.push(
+        `.github/workflows/ci.yml: неполный source/release CI-контур: «${required}»`
+      );
+    }
   }
-  if (!ci.includes("npm run test:e2e:real-stack")) {
-    findings.push(".github/workflows/ci.yml: настоящий браузерный сценарий не запускается");
+  if (ci.includes("npm run test:e2e:real-stack") || ci.includes("npm run start:worker")) {
+    findings.push(
+      ".github/workflows/ci.yml: тяжёлый browser/worker acceptance не должен возвращаться в обязательный GitHub source gate"
+    );
   }
 
   return findings;
