@@ -2,6 +2,7 @@
   const ACCESS_PATH = "/access";
   const ACCESS_API_PREFIX = "/api/v1/access/";
   const DOCOMATOR_GET_TIMEOUT_MS = 12_000;
+  let accessRedirectPending = false;
 
   function safeNextPath() {
     const next = `${location.pathname}${location.search}${location.hash}`;
@@ -9,7 +10,8 @@
   }
 
   function moveToAccessScreen() {
-    if (location.pathname === ACCESS_PATH) return;
+    if (location.pathname === ACCESS_PATH || accessRedirectPending) return;
+    accessRedirectPending = true;
     location.assign(`${ACCESS_PATH}?next=${encodeURIComponent(safeNextPath())}`);
   }
 
@@ -34,6 +36,7 @@
     globalThis.__docomatorAccessFetchInstalled = true;
     const originalFetch = globalThis.fetch.bind(globalThis);
     globalThis.fetch = async (input, init = {}) => {
+      init = init || {};
       const rawUrl = accessFetchUrl(input);
       const url = rawUrl ? new URL(rawUrl, location.origin) : null;
       const method = accessFetchMethod(input, init);
@@ -47,7 +50,11 @@
       const timeoutId =
         controller === null
           ? null
-          : setTimeout(() => controller.abort(), DOCOMATOR_GET_TIMEOUT_MS);
+          : setTimeout(() => controller.abort(new DOMException(
+              "Локальный сервер не ответил за 12 секунд. Данные не изменены; повторите действие.",
+              "TimeoutError"
+            )), DOCOMATOR_GET_TIMEOUT_MS);
+      let jsonBodyDeadline = false;
       try {
         const response = await originalFetch(
           input,
@@ -60,6 +67,11 @@
         ) {
           moveToAccessScreen();
         }
+        // A JSON response can stall after its headers. Keep its abort deadline
+        // through body consumption; the one-shot timer releases its closure.
+        // Binary downloads retain normal streaming semantics.
+        jsonBodyDeadline = controller !== null &&
+          (response.headers.get("content-type") || "").includes("application/json");
         return response;
       } catch (error) {
         if (controller?.signal.aborted) {
@@ -71,7 +83,7 @@
         }
         throw error;
       } finally {
-        if (timeoutId !== null) clearTimeout(timeoutId);
+        if (timeoutId !== null && !jsonBodyDeadline) clearTimeout(timeoutId);
       }
     };
   }
@@ -136,8 +148,12 @@
   }
 
   async function enhanceAccessUi() {
-    const body = await accessStatus();
-    if (body?.data?.enabled && body?.data?.unlocked) installLockControls();
+    try {
+      const body = await accessStatus();
+      if (body?.data?.enabled && body?.data?.unlocked) installLockControls();
+    } catch {
+      // Optional controls must not turn a disconnected startup into an unhandled rejection.
+    }
   }
 
   globalThis.docomatorAccess = Object.freeze({
