@@ -47,6 +47,13 @@ function currentActivationSpaceId() {
   return globalThis.docomatorTemplateWizard?.spaceId() || "";
 }
 
+function activationShouldLoad() {
+  return (
+    activationView?.classList.contains("is-visible") === true &&
+    globalThis.docomatorTemplateWizard?.current?.() === 4
+  );
+}
+
 function clearActivationPolling() {
   activationPollToken += 1;
   if (activationPollTimer !== null) {
@@ -626,6 +633,7 @@ function scheduleActivationReload() {
   clearActivationReload();
   activationReloadTimer = setTimeout(() => {
     activationReloadTimer = null;
+    if (!activationShouldLoad()) return;
     if (activationBusy) {
       scheduleActivationReload();
       return;
@@ -643,11 +651,14 @@ function bindActivationSpaceSelect() {
   activationSpaceSelect = candidate;
   activationSpaceSelect.addEventListener("change", () => {
     clearActivationPolling();
+    if (!activationShouldLoad()) return;
     void loadActivationVersions();
     void loadActiveTemplateCatalog();
   });
-  void loadActivationVersions();
-  void loadActiveTemplateCatalog();
+  if (activationShouldLoad()) {
+    void loadActivationVersions();
+    void loadActiveTemplateCatalog();
+  }
 }
 
 function activationSuccessMarker() {
@@ -680,9 +691,19 @@ if (activationView) {
     }
     if (marker !== activationSourceMarker) {
       activationSourceMarker = marker;
-      scheduleActivationReload();
+      if (activationShouldLoad()) scheduleActivationReload();
     }
   }).observe(activationView, { childList: true, subtree: true, attributes: true });
+  document.addEventListener("docomator:template-wizard-step-completed", (event) => {
+    if (event.detail?.step !== 3 || !activationShouldLoad()) return;
+    void loadActivationVersions();
+    void loadActiveTemplateCatalog();
+  });
+  window.addEventListener("docomator:view-changed", (event) => {
+    if (event.detail?.view !== "templates" || !activationShouldLoad()) return;
+    void loadActivationVersions();
+    void loadActiveTemplateCatalog();
+  });
   window.addEventListener("beforeunload", () => {
     clearActivationPolling();
     clearActivationReload();

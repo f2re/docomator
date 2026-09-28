@@ -73,6 +73,13 @@ function currentTrialSpaceId() {
   return globalThis.docomatorTemplateWizard?.spaceId() || "";
 }
 
+function trialShouldLoad() {
+  return (
+    trialView?.classList.contains("is-visible") === true &&
+    globalThis.docomatorTemplateWizard?.current?.() === 3
+  );
+}
+
 function fieldTypeLabel(valueType) {
   const labels = {
     string: "Короткая строка",
@@ -389,8 +396,10 @@ function bindTrialSpaceSelect() {
   const candidate = document.querySelector("#documentQuarantineSpace");
   if (!candidate || candidate === trialSpaceSelect) return;
   trialSpaceSelect = candidate;
-  trialSpaceSelect.addEventListener("change", loadTrialDrafts);
-  void loadTrialDrafts();
+  trialSpaceSelect.addEventListener("change", () => {
+    if (trialShouldLoad()) void loadTrialDrafts();
+  });
+  if (trialShouldLoad()) void loadTrialDrafts();
 }
 
 async function watchFieldSave() {
@@ -414,6 +423,12 @@ if (trialView) {
   new MutationObserver(bindTrialSpaceSelect).observe(trialView, {
     childList: true,
     subtree: true
+  });
+  document.addEventListener("docomator:template-wizard-step-completed", (event) => {
+    if (event.detail?.step === 2 && trialShouldLoad()) void loadTrialDrafts();
+  });
+  window.addEventListener("docomator:view-changed", (event) => {
+    if (event.detail?.view === "templates" && trialShouldLoad()) void loadTrialDrafts();
   });
   document.addEventListener("click", (event) => {
     if (event.target?.id === "documentFieldSave") void watchFieldSave();
