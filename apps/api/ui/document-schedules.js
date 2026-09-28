@@ -1,4 +1,9 @@
 const scheduleView = document.querySelector('[data-view="automations"]');
+
+function scheduleViewVisible() {
+  return scheduleView?.classList.contains("is-visible") === true;
+}
+
 let scheduleBusy = false;
 let scheduleTemplates = [];
 let scheduleGroups = [];
@@ -697,6 +702,7 @@ function scheduleWorkspaceBindWorkspace() {
 }
 
 async function loadScheduleWorkspace() {
+  if (!scheduleViewVisible()) return;
   scheduleWorkspaceEnsurePanel();
   const holder = document.querySelector("#scheduleContent");
   const spaceId = currentGenerationSpaceId();
@@ -748,7 +754,7 @@ function scheduleWorkspaceHandleSpaceChanged() {
   scheduleWorkspaceFormOpen = false;
   scheduleWorkspaceEditingId = null;
   scheduleWorkspaceDuplicateFromId = null;
-  void loadScheduleWorkspace();
+  if (scheduleViewVisible()) void loadScheduleWorkspace();
 }
 
 document.addEventListener("docomator:space-changed", scheduleWorkspaceHandleSpaceChanged);
@@ -756,10 +762,13 @@ window.addEventListener("docomator:view-changed", (event) => {
   if (event.detail?.view === "automations") void loadScheduleWorkspace();
 });
 window.addEventListener("docomator:groups-changed", (event) => {
-  if (!event.detail?.spaceId || event.detail.spaceId === currentGenerationSpaceId()) {
+  if (
+    scheduleViewVisible() &&
+    (!event.detail?.spaceId || event.detail.spaceId === currentGenerationSpaceId())
+  ) {
     void loadScheduleWorkspace();
   }
 });
 
 scheduleWorkspaceEnsurePanel();
-if (currentGenerationSpaceId()) void loadScheduleWorkspace();
+if (scheduleViewVisible() && currentGenerationSpaceId()) void loadScheduleWorkspace();

@@ -48,7 +48,7 @@
       interfaceStatusExpanded = false;
     }
 
-    ribbon.dataset.interfaceState = kind;
+    if (ribbon.dataset.interfaceState !== kind) ribbon.dataset.interfaceState = kind;
     ribbon.classList.toggle("is-routine", routine);
     ribbon.classList.toggle("is-user-expanded", routine && interfaceStatusExpanded);
     control.dataset.state = kind;
@@ -261,7 +261,9 @@
   }
 
   const statusRibbon = interfaceQuery("#statusRibbon");
-  if (statusRibbon) new MutationObserver(interfaceSyncStatus).observe(statusRibbon, { attributes: true, childList: true, subtree: true });
+  if (statusRibbon) new MutationObserver(interfaceScheduleSync).observe(statusRibbon, {
+    attributes: true, attributeFilter: ["class"], childList: true, characterData: true, subtree: true
+  });
   const documentsView = interfaceQuery('[data-view="documents"]');
   if (documentsView) new MutationObserver(interfaceScheduleSync).observe(documentsView, { childList: true, subtree: true });
   const connectionBadge = interfaceQuery("#connectionBadge");

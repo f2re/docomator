@@ -44,6 +44,13 @@ function currentMultiTrialSpaceId() {
   return globalThis.docomatorTemplateWizard?.spaceId() || "";
 }
 
+function multiTrialShouldLoad() {
+  return (
+    multiTrialView?.classList.contains("is-visible") === true &&
+    globalThis.docomatorTemplateWizard?.current?.() === 3
+  );
+}
+
 function createMultiTrialPanel() {
   if (!multiTrialView || multiTrialPanel()) return;
   const panel = document.createElement("section");
@@ -547,6 +554,7 @@ async function submitMultiTrial(event) {
 window.addEventListener("docomator:template-draft-changed", (event) => {
   const selected = selectedMultiTrialDraft();
   if (
+    multiTrialShouldLoad() &&
     selected &&
     event.detail?.draftId === selected.id &&
     event.detail?.spaceId === currentMultiTrialSpaceId()
@@ -568,8 +576,10 @@ function bindMultiTrialSpaceSelect() {
   const candidate = document.querySelector("#documentQuarantineSpace");
   if (!candidate || candidate === multiTrialSpaceSelect) return;
   multiTrialSpaceSelect = candidate;
-  multiTrialSpaceSelect.addEventListener("change", loadMultiTrialDrafts);
-  void loadMultiTrialDrafts();
+  multiTrialSpaceSelect.addEventListener("change", () => {
+    if (multiTrialShouldLoad()) void loadMultiTrialDrafts();
+  });
+  if (multiTrialShouldLoad()) void loadMultiTrialDrafts();
 }
 
 function multiTrialSourceMarker() {
@@ -594,7 +604,13 @@ if (multiTrialView) {
       multiTrialReloadMarker = "";
     } else if (marker !== multiTrialReloadMarker) {
       multiTrialReloadMarker = marker;
-      scheduleMultiTrialReload();
+      if (multiTrialShouldLoad()) scheduleMultiTrialReload();
     }
   }).observe(multiTrialView, { childList: true, subtree: true, attributes: true });
+  document.addEventListener("docomator:template-wizard-step-completed", (event) => {
+    if (event.detail?.step === 2 && multiTrialShouldLoad()) void loadMultiTrialDrafts();
+  });
+  window.addEventListener("docomator:view-changed", (event) => {
+    if (event.detail?.view === "templates" && multiTrialShouldLoad()) void loadMultiTrialDrafts();
+  });
 }

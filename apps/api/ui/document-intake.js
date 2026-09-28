@@ -46,6 +46,12 @@ function templateWizardSpaceId() {
   return String(select?.value || "").trim();
 }
 
+function templateWizardViewVisible() {
+  return document
+    .querySelector('[data-view="templates"]')
+    ?.classList.contains("is-visible") === true;
+}
+
 function templateWizardState(spaceId = templateWizardSpaceId()) {
   const key = spaceId || "__waiting__";
   if (!templateWizardStates.has(key)) {
@@ -353,7 +359,7 @@ function resetTemplateWizardFrom(step = 1) {
 function setTemplateWizardSpace(spaceId) {
   if (!spaceId) return;
   renderTemplateWizard();
-  void validateTemplateWizardState(spaceId);
+  if (templateWizardViewVisible()) void validateTemplateWizardState(spaceId);
 }
 
 function initializeTemplateWizard() {
@@ -381,6 +387,7 @@ function initializeTemplateWizard() {
 
 globalThis.docomatorTemplateWizard = {
   artifacts: () => ({ ...(templateWizardState().artifacts || {}) }),
+  current: () => templateWizardState().current,
   complete: completeTemplateWizardStep,
   isComplete: (step) => templateWizardState().completed.has(step),
   remember: rememberTemplateWizardArtifacts,
@@ -705,10 +712,10 @@ async function initializeQuarantineControls(report) {
     }
     setTemplateWizardSpace(spaceSelect.value);
     button.addEventListener("click", () => saveCheckedDocument(report));
-    spaceSelect.addEventListener("change", () =>
-      loadSavedDocuments(spaceSelect.value)
-    );
-    await loadSavedDocuments(spaceSelect.value);
+    spaceSelect.addEventListener("change", () => {
+      if (templateWizardViewVisible()) void loadSavedDocuments(spaceSelect.value);
+    });
+    if (templateWizardViewVisible()) await loadSavedDocuments(spaceSelect.value);
   } catch (error) {
     panel.classList.add("is-disabled");
     spaceSelect.disabled = true;
@@ -893,6 +900,14 @@ document.addEventListener("docomator:space-changed", (event) => {
     const changed = spaceSelect.value !== spaceId;
     spaceSelect.value = spaceId;
     if (changed) spaceSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    else void loadSavedDocuments(spaceId);
+    else if (templateWizardViewVisible()) void loadSavedDocuments(spaceId);
   }
+});
+
+window.addEventListener("docomator:view-changed", (event) => {
+  if (event.detail?.view !== "templates") return;
+  const spaceId = templateWizardSpaceId();
+  if (!spaceId) return;
+  void validateTemplateWizardState(spaceId);
+  if (document.querySelector("#documentSourceList")) void loadSavedDocuments(spaceId);
 });

@@ -221,5 +221,4 @@
     genericGenerationTypeKey = "";
   });
 
-  if (currentGenerationSpaceId()) void loadGenerationWorkspace();
 }

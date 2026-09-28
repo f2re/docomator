@@ -155,6 +155,73 @@ for (const [label, pattern] of [
   );
 }
 
+const accessSession = await fs.readFile(path.join(uiDirectory, "access-session.js"), "utf8");
+assert.match(accessSession, /DOCOMATOR_GET_TIMEOUT_MS\s*=\s*12_000/u);
+assert.match(accessSession, /new AbortController\(\)/u);
+assert.match(accessSession, /method === "GET"/u);
+
+const documentIntake = await fs.readFile(path.join(uiDirectory, "document-intake.js"), "utf8");
+assert.match(documentIntake, /function templateWizardViewVisible\(\)/u);
+assert.match(documentIntake, /if \(templateWizardViewVisible\(\)\) void validateTemplateWizardState/u);
+
+const trialScript = await fs.readFile(path.join(uiDirectory, "template-trial.js"), "utf8");
+assert.match(trialScript, /function trialShouldLoad\(\)/u);
+assert.match(trialScript, /docomatorTemplateWizard\?\.current\?\.\(\) === 3/u);
+
+const multiTrialScript = await fs.readFile(path.join(uiDirectory, "template-multi-trial.js"), "utf8");
+assert.match(multiTrialScript, /function multiTrialShouldLoad\(\)/u);
+assert.match(multiTrialScript, /docomatorTemplateWizard\?\.current\?\.\(\) === 3/u);
+assert.match(multiTrialScript, /multiTrialShouldLoad\(\)\s*&&\s*selected/u);
+
+const activationScript = await fs.readFile(path.join(uiDirectory, "template-activation.js"), "utf8");
+assert.match(activationScript, /function activationShouldLoad\(\)/u);
+assert.match(activationScript, /docomatorTemplateWizard\?\.current\?\.\(\) === 4/u);
+assert.match(activationScript, /clearActivationPolling\(\);\s*clearActivationReload\(\);/u);
+
+const generationScript = await fs.readFile(path.join(uiDirectory, "document-generation.js"), "utf8");
+assert.match(generationScript, /function generationViewVisible\(\)/u);
+assert.match(generationScript, /clearGenerationPolling\(\)/u);
+assert.doesNotMatch(
+  generationScript,
+  /if \(currentGenerationSpaceId\(\)\) void loadGenerationWorkspace\(\);/u,
+  "Скрытый экран выпуска не должен загружать workspace при старте bundle."
+);
+
+const genericGenerationScript = await fs.readFile(
+  path.join(uiDirectory, "generic-document-generation.js"),
+  "utf8"
+);
+assert.doesNotMatch(
+  genericGenerationScript,
+  /void loadGenerationWorkspace\(\);/u,
+  "Generic generation не должен создавать второй startup-load."
+);
+
+const schedulesScript = await fs.readFile(path.join(uiDirectory, "document-schedules.js"), "utf8");
+assert.match(schedulesScript, /function scheduleViewVisible\(\)/u);
+assert.match(schedulesScript, /if \(!scheduleViewVisible\(\)\) return;/u);
+
+const resultScript = await fs.readFile(path.join(uiDirectory, "shared-document-results.js"), "utf8");
+assert.match(resultScript, /function sharedDocumentsVisible\(\)/u);
+assert.match(resultScript, /if \(!sharedDocumentsVisible\(\)\) return;/u);
+assert.doesNotMatch(
+  resultScript,
+  /initializeSharedDocumentNavigation\(\);\s*void loadSharedDocumentSummary/u,
+  "Сводка результатов не должна загружаться на скрытой Главной."
+);
+
+const readinessScript = await fs.readFile(path.join(uiDirectory, "operations-readiness.js"), "utf8");
+assert.doesNotMatch(
+  readinessScript,
+  /createOperationsReadinessPanel\(\);\s*void loadOperationsReadiness\(\);/u,
+  "Тяжёлая диагностика не должна стартовать при открытии приложения."
+);
+assert.doesNotMatch(
+  readinessScript,
+  /setInterval\s*\(/u,
+  "Полная диагностика не должна автоматически повторять filesystem/LibreOffice checks."
+);
+
 const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "docomator-ui-check-"));
 try {
   for (const [bundleName, fileNames] of Object.entries(bundles)) {

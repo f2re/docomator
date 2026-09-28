@@ -63,6 +63,10 @@ function currentGenerationSpaceId() {
   return globalThis.docomatorCurrentSpaceId || generationSpaceSelect?.value || "";
 }
 
+function generationViewVisible() {
+  return generationView?.classList.contains("is-visible") === true;
+}
+
 function clearGenerationPolling() {
   generationPollToken += 1;
   if (generationPollTimer !== null) {
@@ -617,14 +621,16 @@ function bindGenerationSpaceSelect() {
   const candidate = document.querySelector("#documentQuarantineSpace");
   if (!candidate || candidate === generationSpaceSelect) return;
   generationSpaceSelect = candidate;
-  generationSpaceSelect.addEventListener("change", loadGenerationWorkspace);
-  void loadGenerationWorkspace();
+  generationSpaceSelect.addEventListener("change", () => {
+    if (generationViewVisible()) void loadGenerationWorkspace();
+  });
+  if (generationViewVisible()) void loadGenerationWorkspace();
 }
 
 function handleGenerationSpaceChanged(event) {
   const spaceId = event?.detail?.spaceId || "";
   if (spaceId) globalThis.docomatorCurrentSpaceId = spaceId;
-  void loadGenerationWorkspace();
+  if (generationViewVisible()) void loadGenerationWorkspace();
 }
 
 function generationSourceMarker() {
@@ -644,10 +650,18 @@ if (generationView) {
   createGenerationPanel();
   bindGenerationSpaceSelect();
   document.addEventListener("docomator:space-changed", handleGenerationSpaceChanged);
-  document.querySelectorAll('[data-view-target="generation"]').forEach((button) =>
-    button.addEventListener("click", loadGenerationWorkspace)
-  );
-  if (currentGenerationSpaceId()) void loadGenerationWorkspace();
+  window.addEventListener("docomator:view-changed", (event) => {
+    if (event.detail?.view === "generation") {
+      void loadGenerationWorkspace();
+      return;
+    }
+    clearGenerationPolling();
+    if (generationReloadTimer !== null) {
+      clearTimeout(generationReloadTimer);
+      generationReloadTimer = null;
+    }
+  });
+  if (generationViewVisible() && currentGenerationSpaceId()) void loadGenerationWorkspace();
   new MutationObserver(() => {
     bindGenerationSpaceSelect();
     const marker = generationSourceMarker();
@@ -655,7 +669,7 @@ if (generationView) {
       generationReloadMarker = "";
     } else if (marker !== generationReloadMarker) {
       generationReloadMarker = marker;
-      scheduleGenerationReload();
+      if (generationViewVisible()) scheduleGenerationReload();
     }
   }).observe(generationView, { childList: true, subtree: true, attributes: true });
   window.addEventListener("beforeunload", clearGenerationPolling);
