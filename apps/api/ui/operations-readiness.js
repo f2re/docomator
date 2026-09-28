@@ -1,8 +1,8 @@
 const operationsMount = document.querySelector("#managementReadinessMount") || document.querySelector('[data-view="overview"]');
 const operationsManagementView = document.querySelector('[data-view="settings"]');
+const operationsReadinessDetails = document.querySelector(".management-diagnostics");
 let operationsReadinessCreated = false;
 let operationsReadinessBusy = false;
-let operationsReadinessTimer = null;
 
 function operationsEscape(value) {
   return String(value ?? "").replace(
@@ -46,7 +46,7 @@ function createOperationsReadinessPanel() {
       <button class="secondary-button" id="operationsReadinessRefresh" type="button">Проверить сейчас</button>
     </div>
     <div id="operationsReadinessSummary" class="operations-readiness-summary" aria-live="polite">
-      <div class="generation-history-empty">Получаем эксплуатационное состояние…</div>
+      <div class="generation-history-empty">Диагностика запускается только после открытия этого раздела.</div>
     </div>
     <div id="operationsReadinessChecks" class="operations-check-list" aria-live="polite"></div>`;
   operationsMount.append(panel);
@@ -178,13 +178,12 @@ async function loadOperationsReadiness() {
 
 if (operationsMount) {
   createOperationsReadinessPanel();
-  void loadOperationsReadiness();
-  operationsReadinessTimer = setInterval(() => {
-    if (operationsManagementView?.classList.contains("is-visible")) {
+  operationsReadinessDetails?.addEventListener("toggle", () => {
+    if (
+      operationsReadinessDetails.open &&
+      operationsManagementView?.classList.contains("is-visible")
+    ) {
       void loadOperationsReadiness();
     }
-  }, 60_000);
-  window.addEventListener("beforeunload", () => {
-    if (operationsReadinessTimer !== null) clearInterval(operationsReadinessTimer);
   });
 }

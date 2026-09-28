@@ -280,16 +280,26 @@ function propertyDefinitionsEndpoint(pathname = "", parameters = {}) {
 globalThis.docomatorPropertyDefinitionsUrl = propertyDefinitionsEndpoint;
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "x-correlation-id": requestCorrelationId(),
-      "x-actor-id": "local-ui",
-      ...(options.headers || {})
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "x-correlation-id": requestCorrelationId(),
+        "x-actor-id": "local-ui",
+        ...(options.headers || {})
+      }
+    });
+  } catch (cause) {
+    if (cause instanceof Error && cause.name === "TimeoutError") {
+      throw new ApiError(cause.message);
     }
-  });
+    throw new ApiError(
+      "Локальный сервер недоступен. Данные не изменены; проверьте службу и повторите действие."
+    );
+  }
   const contentType = response.headers.get("content-type") || "";
   const body = contentType.includes("application/json") ? await response.json() : null;
   if (!response.ok) {

@@ -29,6 +29,10 @@ function sharedDocumentSpaceId() {
   return String(globalThis.docomatorCurrentSpaceId || "").trim();
 }
 
+function sharedDocumentsVisible() {
+  return sharedDocumentsView?.classList.contains("is-visible") === true;
+}
+
 function sharedDocumentEndpoint(spaceId, suffix = "") {
   const identity = String(spaceId || "").trim();
   if (!identity) throw new Error("Сначала выберите раздел данных.");
@@ -276,7 +280,6 @@ function initializeSharedDocumentNavigation() {
       badge.hidden = true;
       button.append(badge);
     }
-    button.addEventListener("click", () => void loadSharedDocuments(false));
   });
   document.querySelectorAll('[data-view-target="automations"] .nav-badge').forEach((badge) => {
     badge.textContent = "Работают";
@@ -504,19 +507,14 @@ function resetSharedDocumentsForSpaceChange() {
   sharedDocumentReloadRequested = sharedDocumentBusy;
   renderSharedDocumentSummary();
   renderSharedDocumentLoading();
-  void loadSharedDocumentSummary(true);
-  if (sharedDocumentsView?.classList.contains("is-visible")) {
-    void loadSharedDocuments(true);
-  }
+  if (sharedDocumentsVisible()) void loadSharedDocuments(true);
 }
 
 function scheduleSharedDocumentPolling() {
   if (sharedDocumentPollTimer !== null) clearInterval(sharedDocumentPollTimer);
   sharedDocumentPollTimer = setInterval(() => {
-    void loadSharedDocumentSummary(true);
-    if (document.querySelector('[data-view="documents"]')?.classList.contains("is-visible")) {
-      void loadSharedDocuments(false);
-    }
+    if (!sharedDocumentsVisible()) return;
+    void loadSharedDocuments(false);
   }, 15_000);
 }
 
@@ -534,7 +532,10 @@ if (sharedDocumentsView) {
   );
   initializeSharedDocumentsView();
   initializeSharedDocumentNavigation();
-  void loadSharedDocumentSummary(true);
+  window.addEventListener("docomator:view-changed", (event) => {
+    if (event.detail?.view === "documents") void loadSharedDocuments(false);
+  });
+  if (sharedDocumentsVisible()) void loadSharedDocuments(true);
   scheduleSharedDocumentPolling();
   window.addEventListener("beforeunload", () => {
     if (sharedDocumentPollTimer !== null) clearInterval(sharedDocumentPollTimer);
