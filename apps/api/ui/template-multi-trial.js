@@ -554,6 +554,7 @@ async function submitMultiTrial(event) {
 window.addEventListener("docomator:template-draft-changed", (event) => {
   const selected = selectedMultiTrialDraft();
   if (
+    multiTrialShouldLoad() &&
     selected &&
     event.detail?.draftId === selected.id &&
     event.detail?.spaceId === currentMultiTrialSpaceId()

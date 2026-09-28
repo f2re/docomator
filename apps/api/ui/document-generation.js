@@ -651,7 +651,15 @@ if (generationView) {
   bindGenerationSpaceSelect();
   document.addEventListener("docomator:space-changed", handleGenerationSpaceChanged);
   window.addEventListener("docomator:view-changed", (event) => {
-    if (event.detail?.view === "generation") void loadGenerationWorkspace();
+    if (event.detail?.view === "generation") {
+      void loadGenerationWorkspace();
+      return;
+    }
+    clearGenerationPolling();
+    if (generationReloadTimer !== null) {
+      clearTimeout(generationReloadTimer);
+      generationReloadTimer = null;
+    }
   });
   if (generationViewVisible() && currentGenerationSpaceId()) void loadGenerationWorkspace();
   new MutationObserver(() => {

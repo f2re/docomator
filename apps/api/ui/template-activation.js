@@ -700,7 +700,11 @@ if (activationView) {
     void loadActiveTemplateCatalog();
   });
   window.addEventListener("docomator:view-changed", (event) => {
-    if (event.detail?.view !== "templates" || !activationShouldLoad()) return;
+    if (event.detail?.view !== "templates" || !activationShouldLoad()) {
+      clearActivationPolling();
+      clearActivationReload();
+      return;
+    }
     void loadActivationVersions();
     void loadActiveTemplateCatalog();
   });

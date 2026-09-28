@@ -171,13 +171,16 @@ assert.match(trialScript, /docomatorTemplateWizard\?\.current\?\.\(\) === 3/u);
 const multiTrialScript = await fs.readFile(path.join(uiDirectory, "template-multi-trial.js"), "utf8");
 assert.match(multiTrialScript, /function multiTrialShouldLoad\(\)/u);
 assert.match(multiTrialScript, /docomatorTemplateWizard\?\.current\?\.\(\) === 3/u);
+assert.match(multiTrialScript, /multiTrialShouldLoad\(\)\s*&&\s*selected/u);
 
 const activationScript = await fs.readFile(path.join(uiDirectory, "template-activation.js"), "utf8");
 assert.match(activationScript, /function activationShouldLoad\(\)/u);
 assert.match(activationScript, /docomatorTemplateWizard\?\.current\?\.\(\) === 4/u);
+assert.match(activationScript, /clearActivationPolling\(\);\s*clearActivationReload\(\);/u);
 
 const generationScript = await fs.readFile(path.join(uiDirectory, "document-generation.js"), "utf8");
 assert.match(generationScript, /function generationViewVisible\(\)/u);
+assert.match(generationScript, /clearGenerationPolling\(\)/u);
 assert.doesNotMatch(
   generationScript,
   /if \(currentGenerationSpaceId\(\)\) void loadGenerationWorkspace\(\);/u,
