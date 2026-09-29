@@ -108,6 +108,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "template-trial.js",
       "template-multi-trial.js",
       "template-activation.js",
+    "template-save.js",
       "document-generation.js",
       "generic-document-generation.js",
       "document-generation-preflight.js",

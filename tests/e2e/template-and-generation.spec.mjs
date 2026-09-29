@@ -94,7 +94,7 @@ async function bindEmployeeField(page, { structureReady = false } = {}) {
   await page.locator("#documentFieldRequired").check();
   await page.locator("#documentFieldSave").click();
   await expect(page.locator("#documentFieldMessage")).toContainText(
-    "Следующий шаг — пробное заполнение"
+    "Можно сохранить шаблон"
   );
   await expect(page.locator("#documentFieldsContinue")).toBeVisible();
   await page.locator("#documentFieldsContinue").click();
@@ -202,7 +202,7 @@ test("мастер сохраняет ограниченные настройк�
   await page.locator("#documentPropertyConfirm").check();
   await page.locator("#documentFieldSave").click();
   await expect(page.locator("#documentFieldMessage")).toContainText(
-    "Следующий шаг — пробное заполнение"
+    "Можно сохранить шаблон"
   );
   expect(scenario.fieldRequests).toHaveLength(1);
   expect(scenario.fieldRequests[0]).toMatchObject({
@@ -238,7 +238,7 @@ test("мастер сохраняет повторяемую строку DOCX �
   await page.locator("#documentPropertyConfirm").check();
   await page.locator("#documentFieldSave").click();
   await expect(page.locator("#documentFieldMessage")).toContainText(
-    "Следующий шаг — пробное заполнение"
+    "Можно сохранить шаблон"
   );
   expect(scenario.fieldRequests).toHaveLength(1);
   expect(scenario.fieldRequests[0]).toMatchObject({ repeatRow: true });
@@ -287,7 +287,7 @@ test("мастер XLSX выбирает повторяемый диапазон
   await page.locator("#documentPropertyConfirm").check();
   await page.locator("#documentFieldSave").click();
   await expect(page.locator("#documentFieldMessage")).toContainText(
-    "Следующий шаг — пробное заполнение"
+    "Можно сохранить шаблон"
   );
 
   expect(scenario.fieldRequests).toHaveLength(1);
@@ -597,7 +597,7 @@ test("мастер предлагает варианты ФИО и отправ�
   );
   await page.locator("#documentFieldSave").click();
   await expect(page.locator("#documentFieldMessage")).toContainText(
-    "Следующий шаг — пробное заполнение"
+    "Можно сохранить шаблон"
   );
 
   expect(scenario.fieldRequests).toHaveLength(1);

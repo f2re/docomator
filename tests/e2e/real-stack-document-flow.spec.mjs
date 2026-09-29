@@ -205,7 +205,7 @@ async function bindCustomEmployeeField(page, fieldLabel) {
   await expect(page.locator("#documentFieldSave")).toBeEnabled();
   await page.locator("#documentFieldSave").click();
   await expect(page.locator("#documentFieldMessage")).toContainText(
-    "Следующий шаг — пробное заполнение",
+    "Можно сохранить шаблон",
     { timeout: 20_000 }
   );
   await page.locator("#documentFieldsContinue").click();
@@ -415,4 +415,73 @@ test("пространство → пользовательское поле →
   } finally {
     await secondContext.close();
   }
+});
+
+test("DOCX со статическими объектами сохраняется и формируется без ручного пробного заполнения", async ({ page, baseURL }) => {
+  test.skip(!realStackEnabled, "Нужны настоящие API, SQLite и worker.");
+  test.setTimeout(180_000);
+  const app = new ОформляторPage(page);
+  await app.open();
+  await expectWorkerReady(page);
+  const suffix = randomUUID().slice(0, 8);
+  const created = await page.request.post("/api/v1/spaces", {
+    headers: { origin: new URL(baseURL).origin }, data: { name: `DOCX без ручной проверки ${suffix}` }
+  });
+  expect(created.status()).toBe(201);
+  const spaceId = (await created.json()).data.id;
+  for (const displayName of ["Иванов Иван Иванович", "Петров Пётр Петрович"]) {
+    const employee = await page.request.post(`/api/v1/spaces/${spaceId}/employees`, {
+      headers: { origin: new URL(baseURL).origin }, data: { displayName }
+    });
+    expect(employee.status()).toBe(201);
+  }
+  await page.evaluate((id) => localStorage.setItem("docomator.space", id), spaceId);
+  await app.open();
+  await app.openView("templates");
+  const source = path.join(currentDirectory, "fixtures/documents/static-word-elements.docx");
+  await page.locator("#documentIntakeFile").setInputFiles(source);
+  await expect(page.locator("#documentIntakeButton")).toBeEnabled();
+  await page.locator("#documentIntakeButton").click();
+  await expect(page.locator("#documentIntakeStatusTitle")).toHaveText("Структура прошла проверку", { timeout: 20_000 });
+  await page.locator("#documentQuarantineButton").click();
+  await expect(page.locator("#documentQuarantineMessage")).toContainText("Следующий этап", { timeout: 20_000 });
+  await page.locator("#documentStructureButton").click();
+  const placeholder = page.locator(".structure-element:visible").filter({ hasText: "____" }).first();
+  await expect(placeholder).toBeVisible({ timeout: 20_000 });
+  await placeholder.click();
+  await page.locator("#documentFieldRepeatRow").check();
+  await page.locator("#documentFieldTextRange").evaluate((control) => {
+    const start = control.value.indexOf("____");
+    control.focus(); control.setSelectionRange(start, start + 4);
+    control.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await page.locator("#documentFieldSave").click();
+  await expect(page.locator("#documentTemplateSave")).toBeVisible();
+  await page.locator("#documentTemplateSave").click();
+  await expect(page.locator("#configuredTemplateSaveStatus")).toContainText("Шаблон сохранён", { timeout: 30_000 });
+  await app.openView("generation");
+  await expect(page.locator('input[name="generationMode"][value="aggregate"]')).toBeChecked();
+  await expect(page.locator("#generationSubmit")).toBeEnabled();
+  await page.locator("#generationSubmit").click();
+  await expect(page.locator('[data-view="documents"].is-visible')).toBeVisible({ timeout: 90_000 });
+  const [download] = await Promise.all([
+    page.waitForEvent("download"), page.getByRole("link", { name: "Скачать документ" }).first().click()
+  ]);
+  const output = await fs.readFile(await download.path());
+  const structure = await analyzeOoxmlBuffer({ buffer: output, fileName: download.suggestedFilename() });
+  const rendered = structure.elements.map((element) => element.text || "").join("\n");
+  expect(rendered).toContain("Иванов Иван Иванович");
+  expect(rendered).toContain("Петров Пётр Петрович");
+  expect(rendered).not.toContain("____");
+  const { readOoxmlPackage, packageEntry } = await import("@docomator/template-compiler");
+  const before = await readOoxmlPackage(await fs.readFile(source));
+  const after = await readOoxmlPackage(output);
+  for (const entry of before) if (entry.name !== "word/document.xml") {
+    expect(packageEntry(after, entry.name).content.equals(entry.content), entry.name).toBe(true);
+  }
+  const xml = packageEntry(after, "word/document.xml").content.toString("utf8");
+  expect((xml.match(/<w:drawing>/gu) || []).length).toBe(2);
+  expect((xml.match(/w:instr="PAGE"/gu) || []).length).toBe(2);
+  const ids = [...xml.matchAll(/<(?:wp:docPr|pic:cNvPr) id="([^"]+)"/gu)].map((match) => match[1]);
+  expect(new Set(ids).size).toBe(4);
 });

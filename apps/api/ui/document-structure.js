@@ -1115,7 +1115,7 @@ async function saveSelectedField(event) {
       }
     );
     message.className = "is-success";
-    message.innerHTML = `Поле «${structureEscape(fieldBody.data.field.label)}» связано с документом. Следующий шаг — пробное заполнение.`;
+    message.innerHTML = `Поле «${structureEscape(fieldBody.data.field.label)}» связано с документом. Можно сохранить шаблон или добавить ещё поле.`;
     button.textContent = "Связано";
     button.hidden = true;
     structureDraft.repeatBinding = fieldBody.data.repeatBinding;
@@ -1131,7 +1131,8 @@ async function saveSelectedField(event) {
       "beforeend",
       `<div class="structure-field-next">
         <button class="secondary-button" id="documentFieldAddAnother" type="button">Добавить ещё поле</button>
-        <button class="primary-button" id="documentFieldsContinue" type="button">Перейти к проверке</button>
+        <button class="secondary-button" id="documentFieldsContinue" type="button">Пробная копия</button>
+        <button class="primary-button" id="documentTemplateSave" type="button" data-save-configured-template>Сохранить шаблон</button>
       </div>`
     );
     actions

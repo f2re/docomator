@@ -643,7 +643,7 @@ test("DOCX repeat renderer resolves deterministic Word ID collisions", async () 
 });
 
 test("DOCX repeat compiler rejects unsafe row structures", async () => {
-  for (const unsafe of ["vMerge", "nested", "complex"] as const) {
+  for (const unsafe of ["vMerge", "nested"] as const) {
     const input = await docxRepeatRowDefinitions({ unsafe });
     await assert.rejects(
       compileScalarFields({

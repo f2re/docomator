@@ -27,11 +27,11 @@ const templateWizardCopy = {
   },
   2: {
     question: "Какие сведения подставлять в документ?",
-    hint: "Покажите место в документе и выберите понятное поле карточки сотрудника. Техническую связь создаст система."
+    hint: "Покажите место в документе, выберите поле и нажмите «Сохранить шаблон». Техническую сборку выполнит система."
   },
   3: {
     question: "Все ли поля заполняются без ошибок?",
-    hint: "Введите пробные значения. Система заполнит безопасную копию и сама считает результат обратно."
+    hint: "Пробная копия — дополнительное действие. Можно сразу нажать «Сохранить шаблон», не вводя примеры вручную."
   },
   4: {
     question: "Готов ли шаблон к работе?",
@@ -323,6 +323,23 @@ function completeTemplateWizardStep(step, artifacts = {}) {
   );
 }
 
+// A server-confirmed activation finishes the wizard in one transition. Replaying
+// intermediate steps would launch stale trial/catalog requests over the result.
+function completeSavedTemplateWizard(artifacts) {
+  const spaceId = templateWizardSpaceId();
+  if (!spaceId || !artifacts?.activeId) return;
+  const state = templateWizardState(spaceId);
+  state.completed = new Set([1, 2, 3, 4]);
+  state.current = 4;
+  state.lastCompleted = 4;
+  state.artifacts = { ...(state.artifacts || {}), ...artifacts };
+  persistTemplateWizardState(spaceId, state);
+  renderTemplateWizard();
+  document.dispatchEvent(new CustomEvent("docomator:template-wizard-step-completed", {
+    detail: { spaceId, step: 4 }
+  }));
+}
+
 function rememberTemplateWizardArtifacts(artifacts = {}) {
   const spaceId = templateWizardSpaceId();
   if (!spaceId || typeof artifacts !== "object" || artifacts === null) return;
@@ -389,6 +406,7 @@ globalThis.docomatorTemplateWizard = {
   artifacts: () => ({ ...(templateWizardState().artifacts || {}) }),
   current: () => templateWizardState().current,
   complete: completeTemplateWizardStep,
+  completeSaved: completeSavedTemplateWizard,
   isComplete: (step) => templateWizardState().completed.has(step),
   remember: rememberTemplateWizardArtifacts,
   render: renderTemplateWizard,
@@ -548,7 +566,7 @@ function decisionPresentation(decision) {
       kind: "warning",
       icon: "!",
       title: "Файл принят с замечаниями",
-      detail: "Исходник можно сохранить после просмотра предупреждений. Пробное формирование будет обязательным."
+      detail: "Исходник можно сохранить после просмотра замечаний. При сохранении шаблона система автоматически соберёт рабочую копию."
     };
   }
   return {

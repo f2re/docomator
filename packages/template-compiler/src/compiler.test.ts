@@ -256,7 +256,7 @@ test("DOCX text-range compiler wraps only selected adjacent runs", async () => {
   const xml = packageEntry(entries, "word/document.xml").content.toString("utf8");
   assert.match(xml, /<w:tbl><w:tr><w:tc><w:p>/u);
   assert.match(xml, /<w:t xml:space="preserve">Должность: <\/w:t>/u);
-  assert.match(xml, /<w:sdt>.*aifield:field-position.*<w:sdtContent><w:r><w:rPr><w:b\/><\/w:rPr><w:t xml:space="preserve">__<\/w:t><\/w:r><w:r><w:rPr><w:b\/><\/w:rPr><w:t xml:space="preserve">__<\/w:t><\/w:r><\/w:sdtContent><\/w:sdt>/u);
+  assert.match(xml, /<w:sdt>.*aifield:field-position.*<w:sdtContent><w:r><w:rPr><w:b\/><\/w:rPr><w:t xml:space="preserve">__<\/w:t><\/w:r><w:r><w:rPr><w:b\/><\/w:rPr><w:t(?: xml:space="preserve")?>__<\/w:t><\/w:r><\/w:sdtContent><\/w:sdt>/u);
   assert.match(xml, /<w:t xml:space="preserve"> \/ штатная<\/w:t>/u);
   assert.match(xml, /<w:t>Неизменяемый текст<\/w:t>/u);
 
@@ -279,7 +279,7 @@ test("DOCX text-range compiler wraps only selected adjacent runs", async () => {
   assert.equal((singleRunXml.match(/<w:sdt>/gu) ?? []).length, 1);
 });
 
-test("DOCX text-range compiler rejects stale, mixed and complex selections", async () => {
+test("DOCX text-range compiler preserves mixed formatting and links while rejecting stale selections", async () => {
   const input = await docxTextRangeInput();
   await assert.rejects(
     compileScalarField({
@@ -299,35 +299,22 @@ test("DOCX text-range compiler rejects stale, mixed and complex selections", asy
   const mixed = await docxTextRangeInput(
     '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Должность: __</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>__</w:t></w:r>'
   );
-  await assert.rejects(
-    compileScalarField({
-      source: mixed.source,
-      fileName: "Кадровая карточка.docx",
-      expectedSourceSha256: mixed.structure.sourceSha256,
-      expectedStructureSha256: mixed.structure.structureSha256,
-      field: mixed.field
-    }),
-    (error: unknown) =>
-      error instanceof TemplateCompilerError &&
-      error.code === "mixed_text_range_formatting"
-  );
+  const mixedCompiled = await compileScalarField({
+    source: mixed.source, fileName: "Кадровая карточка.docx",
+    expectedSourceSha256: mixed.structure.sourceSha256,
+    expectedStructureSha256: mixed.structure.structureSha256, field: mixed.field
+  });
+  assert.equal(mixedCompiled.verification.found, true);
 
   const complex = await docxTextRangeInput(
     '<w:r><w:t xml:space="preserve">Должность: </w:t></w:r><w:hyperlink w:anchor="target"><w:r><w:t>____</w:t></w:r></w:hyperlink>'
   );
-  await assert.rejects(
-    compileScalarField({
-      source: complex.source,
-      fileName: "Кадровая карточка.docx",
-      expectedSourceSha256: complex.structure.sourceSha256,
-      expectedStructureSha256: complex.structure.structureSha256,
-      field: complex.field
-    }),
-    (error: unknown) =>
-      error instanceof TemplateCompilerError &&
-      error.code === "unsupported_text_range" &&
-      /сложный объект/u.test(error.userMessage)
-  );
+  const linked = await compileScalarField({
+    source: complex.source, fileName: "Кадровая карточка.docx",
+    expectedSourceSha256: complex.structure.sourceSha256,
+    expectedStructureSha256: complex.structure.structureSha256, field: complex.field
+  });
+  assert.equal(linked.verification.found, true);
 });
 
 test("XLSX compiler creates a defined name and preserves worksheet bytes", async () => {

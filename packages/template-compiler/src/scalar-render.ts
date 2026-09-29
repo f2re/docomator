@@ -1,3 +1,4 @@
+import { createRepeatContentRewriter } from "./docx-repeat-content.js";
 import { createHash } from "node:crypto";
 
 import {
@@ -752,6 +753,40 @@ function applyXmlReplacements(
   return parts.join("");
 }
 
+function replaceDocxTextValue(xml: string, tags: readonly XmlTag[], start: number,
+  end: number, wordPrefix: string, display: string): XmlReplacement {
+    const prefix = wordPrefix;
+    const replacements: XmlReplacement[] = [];
+    let inserted = false;
+    for (const { tag, index } of tagsInside(tags, start, end)) {
+      if (tag.closing) continue;
+      if ([`${prefix}tab`, `${prefix}br`, `${prefix}cr`].includes(tag.name)) {
+        const close = tags[matchingCloseIndex(tags, index)];
+        if (close === undefined) throwInvalidXml();
+        replacements.push({ start: tag.start, end: close.end, value: "" });
+      } else if (tag.name === `${prefix}t`) {
+        const close = tags[matchingCloseIndex(tags, index)];
+        if (close === undefined) throwInvalidXml();
+        const text = inserted ? "" : xmlText(display);
+        inserted = true;
+        const opening = xml.slice(tag.start, tag.end).replace(/\/>$/u, ">");
+        const preserved = /\sxml:space\s*=/u.test(opening)
+          ? opening.replace(/(\sxml:space\s*=\s*)(["']).*?\2/u, '$1"preserve"')
+          : opening.replace(/>$/u, ' xml:space="preserve">');
+        replacements.push({ start: tag.start, end: close.end,
+          value: `${preserved}${text}</${tag.name}>` });
+      }
+    }
+    if (!inserted) throwInvalidXml();
+    // Retain bookmarks, images, links and run properties inside the selected
+    // content. Only the selected visible value changes.
+    const patched = applyXmlReplacements(xml, replacements);
+    const tailLength = xml.length - end;
+    return { start: start, end: end,
+      value: patched.slice(start, patched.length - tailLength) };
+
+}
+
 function docxValueReplacement(
   xml: string,
   target: ReturnType<typeof docxContentTarget>,
@@ -779,32 +814,26 @@ function docxValueReplacement(
     );
     const paragraphClose = target.tags[paragraphCloseIndex];
     if (paragraphClose === undefined) throwInvalidXml();
-    const paragraphProperties = firstChildXml(
-      xml,
-      target.tags,
-      paragraph.index,
-      paragraphCloseIndex,
-      "pPr"
-    );
-    const runProperties = firstChildXml(
-      xml,
-      target.tags,
-      paragraph.index,
-      paragraphCloseIndex,
-      "rPr"
-    );
-    const prefix = tagPrefix(paragraph.tag.name) || "w:";
+    const prefix = tagPrefix(paragraph.tag.name);
+    const inside = tagsInside(target.tags, paragraph.tag.end, paragraphClose.start);
+    if (inside.some(({ tag }) => !tag.closing && ["fldChar", "fldSimple"].includes(tag.localName))) {
+      throw new TemplateCompilerError("unsupported_paragraph_field",
+        "В выбранном абзаце есть вычисляемое поле Word. Выделите только текст для подстановки; остальные элементы останутся в документе.");
+    }
+    if (inside.some(({ tag }) => !tag.closing && tag.name === `${prefix}t`)) {
+      return replaceDocxTextValue(xml, target.tags, paragraph.tag.end,
+        paragraphClose.start, prefix, value.display);
+    }
+    const runProperties = firstChildXml(xml, target.tags, paragraph.index, paragraphCloseIndex, "rPr");
     const run = `<${prefix}r>${runProperties}<${prefix}t xml:space="preserve">${xmlText(value.display)}</${prefix}t></${prefix}r>`;
-    const opening = xml.slice(paragraph.tag.start, paragraph.tag.end);
-    const closing = paragraph.tag.selfClosing
-      ? `</${paragraph.tag.name}>`
-      : xml.slice(paragraphClose.start, paragraphClose.end);
-    const replacement = `${opening.replace(/\/>$/u, ">")}${paragraphProperties}${run}${closing}`;
-    return {
-      start: paragraph.tag.start,
-      end: paragraphClose.end,
-      value: replacement
-    };
+    if (paragraph.tag.selfClosing) {
+      return { start: paragraph.tag.start, end: paragraph.tag.end,
+        value: `${xml.slice(paragraph.tag.start, paragraph.tag.end).replace(/\/>$/u, ">")}${run}</${paragraph.tag.name}>` };
+    }
+    const bookmarkEnd = inside.find(({ tag }) => !tag.closing && tag.localName === "bookmarkEnd");
+    const position = bookmarkEnd?.tag.start ?? paragraphClose.start;
+    return { start: position, end: position, value: run };
+
   }
   if (binding.kind === "docx.text-range") {
     const run = tagsInside(target.tags, content.end, contentClose.start).find(
@@ -816,21 +845,9 @@ function docxValueReplacement(
         "В технической привязке выбранного текста DOCX отсутствует текстовый фрагмент."
       );
     }
-    const runCloseIndex = matchingCloseIndex(target.tags, run.index);
-    const runProperties = firstChildXml(
-      xml,
-      target.tags,
-      run.index,
-      runCloseIndex,
-      "rPr"
-    );
-    const prefix = tagPrefix(run.tag.name) || "w:";
-    const replacement = `<${prefix}r>${runProperties}<${prefix}t xml:space="preserve">${xmlText(value.display)}</${prefix}t></${prefix}r>`;
-    return {
-      start: content.end,
-      end: contentClose.start,
-      value: replacement
-    };
+    return replaceDocxTextValue(xml, target.tags, content.end,
+      contentClose.start, tagPrefix(run.tag.name), value.display);
+
   }
   throw new TemplateCompilerError(
     "technical_binding_mismatch",
@@ -1440,6 +1457,9 @@ export async function renderDocxRepeatRows(
   const expectedRows: string[][] = [];
   const usedWordIds = existingWordIds(decoded.text);
   const volatileIdentifiers = collectDocxRepeatVolatileIdentifiers(decoded.text);
+  const rewriteContentIds = createRepeatContentRewriter(entries
+    .filter((part) => /^word\/.*\.xml$/u.test(part.name))
+    .map((part) => decodeXml(part.content).text));
   const generatedWordIds = new Set<number>();
   let expandedRowsBytes = 0;
   const renderedRows = input.members.map((member, memberIndex) => {
@@ -1479,7 +1499,7 @@ export async function renderDocxRepeatRows(
       expected[fieldIndex] = normalized.display;
     }
     const row = rewriteDocxRepeatVolatileIdentifiers(
-      stripDocxProofingMarkers(applyXmlReplacements(template, replacements)),
+      rewriteContentIds(stripDocxProofingMarkers(applyXmlReplacements(template, replacements)), memberIndex),
       memberIndex,
       volatileIdentifiers
     );
