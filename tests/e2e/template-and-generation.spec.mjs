@@ -35,19 +35,19 @@ async function expectWizardUiConstraints(page) {
     "в текущем шаге мастера должна быть не более одной основной кнопки"
   ).toBeLessThanOrEqual(1);
 
-  const targets = page.locator(
-    '#templateWizard [data-template-wizard-go]:visible, #templateWizard [data-template-wizard-panel]:visible button:visible'
+  // Measure one DOM snapshot: the optional rich layout may finish between
+  // separate locator calls, but every visible hit target must still be 44px.
+  const sizes = await page.locator("#templateWizard").evaluate((root) =>
+    [...root.querySelectorAll("[data-template-wizard-go], [data-template-wizard-panel] button")]
+      .filter((element) => element.checkVisibility())
+      .map((element) => {
+        const { width, height } = element.getBoundingClientRect();
+        return { label: element.textContent.trim(), width, height };
+      })
   );
-  for (let index = 0; index < (await targets.count()); index += 1) {
-    const target = targets.nth(index);
-    const box = await target.boundingBox();
-    expect(box, `не удалось измерить touch target ${index + 1}`).not.toBeNull();
-    expect(box.height, `высота touch target ${index + 1}`).toBeGreaterThanOrEqual(
-      44
-    );
-    expect(box.width, `ширина touch target ${index + 1}`).toBeGreaterThanOrEqual(
-      44
-    );
+  for (const target of sizes) {
+    expect(target.height, `высота ${target.label}`).toBeGreaterThanOrEqual(44);
+    expect(target.width, `ширина ${target.label}`).toBeGreaterThanOrEqual(44);
   }
 }
 
@@ -57,10 +57,6 @@ async function uploadAndSaveSource(page, templateCase) {
     mimeType: templateCase.mimeType,
     buffer: Buffer.from(`controlled-e2e-${templateCase.format}-fixture`)
   });
-  await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
-    "Файл готов к проверке"
-  );
-  await page.locator("#documentIntakeButton").click();
   await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
     "Структура прошла проверку"
   );
@@ -77,10 +73,9 @@ async function uploadAndSaveSource(page, templateCase) {
 
 async function bindEmployeeField(page, { structureReady = false } = {}) {
   if (!structureReady) {
-    await page.locator("#documentStructureButton").click();
-    await expect(page.locator(".structure-element").first()).toBeVisible();
+    await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
   }
-  await page.locator(".structure-element").first().click();
+  await page.locator("[data-visual-docx]:visible, .structure-element:visible").first().click();
   const textRange = page.locator("#documentFieldTextRange");
   if (await textRange.count()) {
     await expect(page.locator("#documentFieldSave")).toBeDisabled();
@@ -157,6 +152,9 @@ for (const templateCase of templateCases) {
   test(`полный мастер ${templateCase.format.toUpperCase()}: документ → поля → проверка → готово`, async ({
     page
   }) => {
+    // This traverses all four stages and audits every stage's hit targets.
+    // Individual action/expect deadlines remain unchanged.
+    test.setTimeout(60_000);
     await installОформляторApiMock(page);
     const app = new ОформляторPage(page);
     await app.open();
@@ -187,8 +185,8 @@ test("мастер сохраняет ограниченные настройк�
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
-  await page.locator("#documentStructureButton").click();
-  await page.locator(".structure-element").first().click();
+  await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
+  await page.locator("[data-visual-docx]:visible, .structure-element:visible").first().click();
   const textRange = page.locator("#documentFieldTextRange");
   await textRange.evaluate((control) => {
     const start = control.value.indexOf("______");
@@ -223,8 +221,8 @@ test("мастер сохраняет повторяемую строку DOCX �
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
-  await page.locator("#documentStructureButton").click();
-  await page.locator(".structure-element").first().click();
+  await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
+  await page.locator("[data-visual-docx]:visible, .structure-element:visible").first().click();
   await expect(page.locator("#documentFieldRepeatRow")).toBeVisible();
   await page.locator("#documentFieldRepeatRow").check();
   const textRange = page.locator("#documentFieldTextRange");
@@ -260,8 +258,8 @@ test("мастер XLSX выбирает повторяемый диапазон
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[1]);
-  await page.locator("#documentStructureButton").click();
-  await page.locator(".structure-element").first().click();
+  await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
+  await page.locator("[data-visual-docx]:visible, .structure-element:visible").first().click();
 
   await expect(page.locator("#documentFieldRepeatArea")).toBeVisible();
   await page.locator("#documentFieldRepeatArea").check();
@@ -344,8 +342,7 @@ test("после перезагрузки мастер продолжает с �
   await expect(page.locator("#documentIntakeFile")).toHaveValue("");
   await expect(page.locator("#documentStructureButton")).toBeEnabled();
 
-  await page.locator("#documentStructureButton").click();
-  await expect(page.locator(".structure-element").first()).toBeVisible();
+  await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
   expect(scenario.draftRequests).toHaveLength(1);
 
   await page.reload();
@@ -353,8 +350,7 @@ test("после перезагрузки мастер продолжает с �
     "Локальный сервер готов"
   );
   await app.openView("templates");
-  await page.locator("#documentStructureButton").click();
-  await expect(page.locator(".structure-element").first()).toBeVisible();
+  await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
   expect(
     scenario.draftRequests,
     "повторное построение должно читать существующий черновик"
@@ -423,9 +419,8 @@ test("активный шаблон переживает перезагрузк�
   await expect(page.locator("#activeTemplateCatalog")).toContainText(
     "пока нет активных шаблонов"
   );
-  await expect(page.locator("#templateActivationContent")).toContainText(
-    "Нет черновиков"
-  );
+  await expect(page.locator("#templateActivationForm")).toHaveCount(0);
+  await expect(page.locator('[data-template-step="1"]')).toHaveAttribute("data-wizard-state", "current");
 
   await app.openView("settings");
   await app.openView("spaces");
@@ -581,8 +576,8 @@ test("мастер предлагает варианты ФИО и отправ�
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
-  await page.locator("#documentStructureButton").click();
-  await page.locator(".structure-element").first().click();
+  await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
+  await page.locator("[data-visual-docx]:visible, .structure-element:visible").first().click();
   const textRange = page.locator("#documentFieldTextRange");
   await textRange.evaluate((control) => {
     const start = control.value.indexOf("______");
@@ -617,4 +612,40 @@ test("мастер предлагает варианты ФИО и отправ�
       pattern: "{Фамилия} {И}.{О}."
     }
   });
+});
+
+
+test("позднее обновление черновиков не стирает ошибку и пробное значение", async ({ page }) => {
+  await installОформляторApiMock(page, { failTrialOnce: true });
+  const app = new ОформляторPage(page);
+  await app.open();
+  await app.openView("templates");
+  await uploadAndSaveSource(page, templateCases[0]);
+  await bindEmployeeField(page);
+  let release;
+  let requested;
+  const held = new Promise((resolve) => { release = resolve; });
+  const started = new Promise((resolve) => { requested = resolve; });
+  const finished = [];
+  await page.route("**/template-drafts?limit=100", async (route) => {
+    requested();
+    let done;
+    finished.push(new Promise((resolve) => { done = resolve; }));
+    await held;
+    await route.fallback();
+    done();
+  });
+  try {
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("docomator:view-changed", { detail: { view: "templates" } })));
+    await started;
+    await page.locator("#templateTrialValue").fill("Сохраняем пробное значение");
+    await page.locator("#templateTrialSubmit").click();
+    await expect(page.locator("#templateTrialResult")).toContainText("e2e-trial-error-id");
+    release();
+    await Promise.all(finished);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(page.locator("#templateTrialResult")).toContainText("e2e-trial-error-id");
+    await expect(page.locator("#templateTrialValue")).toHaveValue("Сохраняем пробное значение");
+    await expect(page.locator("#templateTrialSubmit")).toBeEnabled();
+  } finally { release(); }
 });

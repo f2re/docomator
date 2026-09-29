@@ -24,6 +24,7 @@ require_root
 require_command getent
 require_command sha256sum
 require_command stat
+require_command runuser
 
 BUNDLE_ROOT="$(absolute_path "$1")"
 [[ -x "$BUNDLE_ROOT/install.sh" ]] || die "В комплекте не найден исполняемый install.sh: $BUNDLE_ROOT"
@@ -33,14 +34,74 @@ BUNDLE_NODE="$BUNDLE_ROOT/payload/runtime/node/bin/node"
 [[ -x "$BUNDLE_NODE" ]] || die "В комплекте не найден встроенный Node.js"
 
 http_check() {
-  "$BUNDLE_NODE" "$BUNDLE_ROOT/http-check.mjs" "$1" "${2:-}"
+  if [[ -f "$TEST_ROOT/workspace-session.json" ]]; then
+    DOCOMATOR_HTTP_SESSION_FILE="$TEST_ROOT/workspace-session.json" \
+      "$BUNDLE_NODE" "$BUNDLE_ROOT/http-check.mjs" "$1" "${2:-}"
+  else
+    "$BUNDLE_NODE" "$BUNDLE_ROOT/http-check.mjs" "$1" "${2:-}"
+  fi
+}
+
+workspace_check() {
+  "$BUNDLE_NODE" --input-type=module - "$1" \
+    "http://127.0.0.1:${DOCOMATOR_PORT}" "$TEST_ROOT/workspace-session.json" <<'NODE'
+import assert from "node:assert/strict";
+import { randomInt } from "node:crypto";
+import fs from "node:fs/promises";
+const [mode, origin, sessionFile] = process.argv.slice(2);
+const request = (pathname, options = {}) => fetch(`${origin}${pathname}`, {
+  ...options, redirect: "manual", signal: AbortSignal.timeout(5000)
+});
+let session;
+if (mode === "setup") {
+  const closed = await request("/");
+  assert.ok([302, 303].includes(closed.status), "fresh UI must require the access code");
+  assert.match(closed.headers.get("location"), /^\/access(?:\?|$)/u);
+  const denied = await request("/api/v1/spaces?limit=10");
+  assert.equal(denied.status, 401, "fresh API must remain closed");
+  assert.equal(denied.headers.get("www-authenticate"), null);
+  const code = String(randomInt(0, 10000)).padStart(4, "0");
+  const setup = await request("/api/v1/access/setup", {
+    method: "POST", headers: { origin, "content-type": "application/json" },
+    body: JSON.stringify({ code })
+  });
+  assert.equal(setup.status, 200, "explicit first-run code setup must succeed");
+  const cookie = setup.headers.getSetCookie().map((value) => value.split(";")[0])
+    .find((value) => value.startsWith("docomator_session="));
+  assert.ok(cookie, "setup must issue a real session");
+  const spaces = await request("/api/v1/spaces?limit=10", { headers: { cookie } });
+  assert.equal(spaces.status, 200);
+  const spaceId = (await spaces.json()).data[0].id;
+  const displayName = "Проверка сохранности после обновления";
+  const created = await request(`/api/v1/spaces/${spaceId}/employees`, {
+    method: "POST", headers: { origin, cookie, "content-type": "application/json" },
+    body: JSON.stringify({ displayName })
+  });
+  assert.equal(created.status, 201);
+  const employee = (await created.json()).data;
+  session = { origin, cookie, spaceId, employeeId: employee.id || employee.entityId, displayName };
+  assert.ok(session.employeeId);
+  await fs.writeFile(sessionFile, JSON.stringify(session), { mode: 0o600, flag: "wx" });
+} else {
+  assert.equal(mode, "verify");
+  session = JSON.parse(await fs.readFile(sessionFile, "utf8"));
+  assert.equal(session.origin, origin);
+}
+const employee = await request(`/api/v1/spaces/${session.spaceId}/employees/${session.employeeId}`, {
+  headers: { cookie: session.cookie }
+});
+assert.equal(employee.status, 200, "the original session and employee must survive the update");
+assert.equal((await employee.json()).data.displayName, session.displayName);
+console.log(mode === "setup" ? "Первый запуск: код настроен, карточка сохранена." : "Обновление: прежняя сессия и карточка сохранены.");
+NODE
 }
 
 if ! id nobody >/dev/null 2>&1; then
   die "Для проверки требуется стандартная учётная запись nobody"
 fi
 TEST_GROUP="$(id -gn nobody)"
-TEST_ROOT="$(mktemp -d "/tmp/docomator-install-smoke.XXXXXX")"
+TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/docomator-install-smoke.XXXXXX")"
+chmod 0755 "$TEST_ROOT"
 INSTALL_ROOT="$TEST_ROOT/opt/docomator"
 DATA_DIR="$TEST_ROOT/var/lib/docomator"
 CONFIG_DIR="$TEST_ROOT/etc/docomator"
@@ -129,38 +190,40 @@ grep -F '"state": "completed"' \
 [[ "$(find "$DATA_DIR/backups" -mindepth 2 -maxdepth 2 -type f -name manifest.json | wc -l)" -ge 1 ]] || \
   die "Автоматический сценарий не создал проверенную копию"
 
-info "Запускаем встроенную службу для проверки готовности"
-"$INSTALL_ROOT/current/runtime/node/bin/node" \
-  "$INSTALL_ROOT/current/app/apps/api/dist/server.js" \
-  >"$TEST_ROOT/api.log" 2>&1 &
-API_PID=$!
-
-READY=0
-for _ in $(seq 1 30); do
-  if http_check "http://127.0.0.1:${DOCOMATOR_PORT}/readyz" >/dev/null 2>&1; then
-    READY=1
-    break
-  fi
-  sleep 0.2
-done
-((READY == 1)) || {
-  cat "$TEST_ROOT/api.log" >&2 || true
-  die "Встроенная служба не перешла в состояние готовности"
+start_api() {
+  info "Запускаем встроенную службу от непривилегированной учётной записи"
+  runuser -u nobody -- "$INSTALL_ROOT/current/runtime/node/bin/node" \
+    "$INSTALL_ROOT/current/app/apps/api/dist/server.js" >"$TEST_ROOT/api.log" 2>&1 &
+  API_PID=$!
+  local ready=0
+  for _ in $(seq 1 30); do
+    if http_check "http://127.0.0.1:${DOCOMATOR_PORT}/readyz" >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 0.2
+  done
+  ((ready == 1)) || {
+    cat "$TEST_ROOT/api.log" >&2 || true
+    die "Встроенная служба не перешла в состояние готовности"
+  }
 }
+start_api
+workspace_check setup
 
-http_check "http://127.0.0.1:${DOCOMATOR_PORT}/" 'Пространства'
+http_check "http://127.0.0.1:${DOCOMATOR_PORT}/" 'id="currentSpaceChip"'
 http_check "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces?limit=10" 'Основное пространство'
 http_check \
   "http://127.0.0.1:${DOCOMATOR_PORT}/api/v1/spaces/00000000-0000-4000-8000-000000000001/active-templates" \
   '"data":[]'
 for expected in \
-  'Проверяем архивную структуру' \
-  'Читаем текст и координаты' \
-  'Сохранить поле' \
-  'Проверить заполнение' \
-  'Проверить все поля' \
-  'Создать предварительный просмотр' \
-  'Активировать версию'; do
+  'inspectSelectedFile' \
+  'analyzeStructure' \
+  'saveSelectedField' \
+  'submitTrialVersion' \
+  'submitMultiTrial' \
+  'requestTemplatePreview' \
+  'activateTemplateVersionDirect'; do
   http_check "http://127.0.0.1:${DOCOMATOR_PORT}/ui/document-intake.js" "$expected"
 done
 for expected in \
@@ -171,12 +234,12 @@ for expected in \
   '.activation-preview-frame'; do
   http_check "http://127.0.0.1:${DOCOMATOR_PORT}/ui/styles.css" "$expected"
 done
-http_check "http://127.0.0.1:${DOCOMATOR_PORT}/" 'Проверить документ'
+http_check "http://127.0.0.1:${DOCOMATOR_PORT}/" 'id="documentIntakeFile"'
 "$INSTALL_ROOT/current/first-run.sh" \
   --url "http://127.0.0.1:${DOCOMATOR_PORT}" \
   --config "$CONFIG_DIR/docomator.env" \
   --check \
-  | grep -F 'Готовность системы' >/dev/null
+  | grep -F 'Локальная служба готова' >/dev/null
 
 kill "$API_PID"
 wait "$API_PID" 2>/dev/null || true
@@ -187,5 +250,9 @@ info "Проверяем автономное обновление той же �
 
 BACKUP_COUNT="$(find "$DATA_DIR/backups" -mindepth 1 -maxdepth 1 -type d | wc -l)"
 ((BACKUP_COUNT >= 2)) || die "Обновление не сохранило автоматическую и предустановочную копии"
+
+start_api
+workspace_check verify
+http_check "http://127.0.0.1:${DOCOMATOR_PORT}/" 'id="currentSpaceChip"'
 
 info "Проверка автономной установки, резервирования и обновления пройдена"

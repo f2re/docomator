@@ -1,10 +1,18 @@
 const operatorState = {
   employeeProfile: null,
+  employeeContext: null,
+  employeeRequestVersion: 0,
+  employeeLoading: false,
+  employeeSaving: false,
   employeeDraftValues: new Map(),
   employeeStagedFields: [],
   employeeFieldConfirmed: false,
   suggestions: new Map(),
   groupEditingId: null,
+  groupContext: null,
+  groupRequestVersion: 0,
+  groupLoading: false,
+  groupSaving: false,
   groupMemberIds: new Set(),
   groupMemberPage: 1,
   groupMemberPageSize: 50,
@@ -67,8 +75,9 @@ function operatorAllowCustom(property) {
 function operatorApplicableProperties() {
   const result = [];
   const seen = new Set();
+  const stagedKeys = new Set(operatorState.employeeStagedFields.map((field) => field.persistedKey).filter(Boolean));
   const add = (definition) => {
-    if (!definition?.key || seen.has(definition.key)) return;
+    if (!definition?.key || seen.has(definition.key) || stagedKeys.has(definition.key)) return;
     if (!operatorEmployeeValueTypes.has(definition.valueType)) return;
     const appliesTo = Array.isArray(definition.appliesTo) ? definition.appliesTo : [];
     if (appliesTo.length > 0 && !appliesTo.includes("person")) return;
@@ -344,19 +353,26 @@ function operatorStageNewField() {
   operatorRenderEmployeeFields();
 }
 
-async function operatorLoadSuggestions() {
+async function operatorLoadSuggestions(context) {
   try {
-    const body = await api(spaceEndpoint("/property-suggestions?limit=30"));
-    operatorState.suggestions = new Map(
-      (Array.isArray(body?.data) ? body.data : []).map((record) => [record.propertyKey, record])
-    );
+    const body = await api(context.endpoint("/property-suggestions?limit=30"));
+    return new Map((Array.isArray(body?.data) ? body.data : []).map((record) => [record.propertyKey, record]));
   } catch {
-    operatorState.suggestions = new Map();
+    return new Map();
   }
 }
 
 async function operatorOpenEmployeeDialog(employeeIdValue = "") {
+  if (operatorState.employeeSaving) return;
+  const context = captureSpaceContext();
+  if (!context.spaceId) return;
+  const version = ++operatorState.employeeRequestVersion;
+  operatorState.employeeContext = context;
+  operatorState.employeeLoading = true;
+  operatorState.employeeSaving = false;
   const dialog = document.querySelector("#employeeDialog");
+  const isCurrent = () => version === operatorState.employeeRequestVersion &&
+    context.isCurrent() && dialog.open && state.employee.editingId === employeeIdValue;
   state.employee.editingId = employeeIdValue;
   state.employee.idempotencyKey = requestCorrelationId();
   operatorState.employeeProfile = null;
@@ -371,15 +387,20 @@ async function operatorOpenEmployeeDialog(employeeIdValue = "") {
   document.querySelector("#employeeDialogTitle").textContent = employeeIdValue ? "Карточка сотрудника" : "Новый сотрудник";
   document.querySelector("#employeeDialogDescription").textContent = "Заполните сразу все нужные сведения. Предыдущие значения используются как подсказки.";
   document.querySelector("#employeeSubmitButton").textContent = employeeIdValue ? "Сохранить изменения" : "Сохранить сотрудника";
+  document.querySelector("#employeeSubmitButton").disabled = true;
+  document.querySelector("#employeeDisplayName").disabled = true;
+  document.querySelector("#employeeStatus").disabled = true;
   if (!dialog.open) dialog.showModal();
   document.querySelector("#employeeFields").innerHTML = '<div class="employee-inline-loading"><span class="state-mark" aria-hidden="true"></span><span>Получаем поля и подсказки…</span></div>';
   try {
-    const [profileResult] = await Promise.all([
+    const [profileResult, suggestions] = await Promise.all([
       employeeIdValue
-        ? api(employeeEndpoint(employeeIdValue)).then((body) => body?.data || null)
+        ? api(context.endpoint(`/employees/${encodeURIComponent(employeeIdValue)}`)).then((body) => body?.data || null)
         : Promise.resolve(null),
-      operatorLoadSuggestions()
+      operatorLoadSuggestions(context)
     ]);
+    if (!isCurrent()) return;
+    operatorState.suggestions = suggestions;
     operatorState.employeeProfile = profileResult;
     if (profileResult) {
       document.querySelector("#employeeDisplayName").value = profileResult.displayName || "";
@@ -392,17 +413,36 @@ async function operatorOpenEmployeeDialog(employeeIdValue = "") {
       );
     }
     operatorRenderEmployeeFields();
-    requestAnimationFrame(() => document.querySelector("#employeeDisplayName")?.focus());
+    document.querySelector("#employeeSubmitButton").disabled = false;
+    requestAnimationFrame(() => { if (isCurrent()) document.querySelector("#employeeDisplayName")?.focus(); });
   } catch (cause) {
+    if (!isCurrent()) return;
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось открыть карточку.");
     document.querySelector("#employeeFields").innerHTML = "";
     showEmployeeFormError(employeeErrorText(error, "открыть карточку"), error);
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "secondary-button";
+    retry.textContent = "Повторить загрузку карточки";
+    retry.addEventListener("click", () => { if (isCurrent()) void operatorOpenEmployeeDialog(employeeIdValue); });
+    document.querySelector("#employeeFormError").append(retry);
+  } finally {
+    if (isCurrent()) {
+      operatorState.employeeLoading = false;
+      document.querySelector("#employeeDisplayName").disabled = false;
+      document.querySelector("#employeeStatus").disabled = false;
+    }
   }
 }
 
 const operatorBaseCloseEmployeeDialog = closeEmployeeDialog;
 openEmployeeDialog = operatorOpenEmployeeDialog;
 closeEmployeeDialog = function operatorCloseEmployeeDialog() {
+  if (operatorState.employeeSaving) return;
+  operatorState.employeeRequestVersion += 1;
+  operatorState.employeeContext = null;
+  operatorState.employeeLoading = false;
+  operatorState.employeeSaving = false;
   operatorState.employeeProfile = null;
   operatorState.employeeDraftValues = new Map();
   operatorState.employeeStagedFields = [];
@@ -424,90 +464,114 @@ function operatorControlJsonValue(control) {
 }
 
 async function operatorPersistEmployee() {
+  if (operatorState.employeeLoading || operatorState.employeeSaving) return;
+  const context = operatorState.employeeContext;
+  const version = operatorState.employeeRequestVersion;
+  const employeeIdValue = state.employee.editingId || "";
+  const editing = Boolean(employeeIdValue);
+  const isCurrent = () => context?.isCurrent() && version === operatorState.employeeRequestVersion &&
+    document.querySelector("#employeeDialog")?.open && employeeIdValue === (state.employee.editingId || "");
+  if (!isCurrent()) return;
+  const displayName = document.querySelector("#employeeDisplayName")?.value.trim() || "";
+  const status = document.querySelector("#employeeStatus")?.value || "active";
+  const idempotencyKey = state.employee.idempotencyKey;
   const button = document.querySelector("#employeeSubmitButton");
+  const unlock = lockDialogForSave(document.querySelector("#employeeDialog"));
+  operatorState.employeeSaving = true;
   button.disabled = true;
   button.textContent = "Сохраняем…";
   clearEmployeeFormError();
   operatorRememberEmployeeDraft();
   try {
+    const existing = [...document.querySelectorAll("[data-operator-employee-field]")]
+      .filter((control) => !control.dataset.stagedId)
+      .map((control) => ({
+        propertyKey: control.dataset.propertyKey,
+        value: operatorControlJsonValue(control),
+        initial: JSON.parse(control.dataset.initialValue || '\"\"')
+      }));
+    const stagedValues = operatorState.employeeStagedFields.map((staged) => {
+      const control = document.querySelector(`[data-staged-id="${CSS.escape(staged.stagedId)}"]`);
+      return { staged, value: control ? operatorControlJsonValue(control) : staged.value };
+    });
     const fields = [];
-    for (const control of document.querySelectorAll("[data-operator-employee-field]")) {
-      if (control.dataset.stagedId) continue;
-      const value = operatorControlJsonValue(control);
-      const initial = JSON.parse(control.dataset.initialValue || '""');
-      if (operatorValueEmpty(value)) continue;
-      if (state.employee.editingId && JSON.stringify(value) === JSON.stringify(initial)) continue;
-      const property = state.data.properties.find((candidate) => candidate.key === control.dataset.propertyKey);
+    for (const { propertyKey, value, initial } of existing) {
+      if (operatorValueEmpty(value) || (editing && JSON.stringify(value) === JSON.stringify(initial))) continue;
+      const property = state.data.properties.find((candidate) => candidate.key === propertyKey);
       if (property?.valueType === "enum") {
-        const options = operatorEnumOptions(property);
-        const known = options.some((option) => option.localeCompare(String(value), "ru-RU", { sensitivity: "accent" }) === 0);
-        if (!known && !operatorAllowCustom(property)) {
-          throw new ApiError(`Для поля «${property.label}» выберите значение из списка.`);
-        }
+        const known = operatorEnumOptions(property).some((option) => option.localeCompare(String(value), "ru-RU", { sensitivity: "accent" }) === 0);
+        if (!known && !operatorAllowCustom(property)) throw new ApiError(`Для поля «${property.label}» выберите значение из списка.`);
         if (!known) {
-          const updated = await api(propertyDefinitionsEndpoint(`/${encodeURIComponent(property.key)}/options`), {
-            method: "POST",
-            body: JSON.stringify({ values: [String(value)] })
+          if (!isCurrent()) return;
+          const updated = await api(context.properties(`/${encodeURIComponent(propertyKey)}/options`), {
+            method: "POST", body: JSON.stringify({ values: [String(value)] })
           });
-          const index = state.data.properties.findIndex((candidate) => candidate.key === property.key);
+          if (!isCurrent()) return;
+          const index = state.data.properties.findIndex((candidate) => candidate.key === propertyKey);
           if (index >= 0) state.data.properties[index] = updated.data;
         }
       }
-      fields.push({ propertyKey: control.dataset.propertyKey, value });
+      fields.push({ propertyKey, value });
     }
-    for (const staged of operatorState.employeeStagedFields) {
-      const control = document.querySelector(`[data-staged-id="${CSS.escape(staged.stagedId)}"]`);
-      const value = control ? operatorControlJsonValue(control) : staged.value;
-      const created = await api(propertyDefinitionsEndpoint(), {
-        method: "POST",
-        body: JSON.stringify(compact({
-          label: staged.label,
-          valueType: staged.valueType,
-          unit: staged.unit,
-          sensitivity: "personal",
-          appliesTo: ["person"],
-          validation: { ...staged.validation, uiGroup: staged.validation?.uiGroup || "common" }
-        }))
-      });
-      if (!state.data.properties.some((property) => property.key === created.data.key)) {
-        state.data.properties.push(created.data);
+    for (const { staged, value } of stagedValues) {
+      if (!isCurrent()) return;
+      if (!staged.persistedKey) {
+        const created = await api(context.properties(), {
+          method: "POST",
+          body: JSON.stringify(compact({
+            label: staged.label, valueType: staged.valueType, unit: staged.unit,
+            sensitivity: "personal", appliesTo: ["person"],
+            validation: { ...staged.validation, uiGroup: staged.validation?.uiGroup || "common" }
+          }))
+        });
+        // Keep the confirmed definition identity if the following card write
+        // fails. A retry must not create the same definition a second time.
+        staged.persistedKey = created.data.key;
+        if (!isCurrent()) return;
+        if (!state.data.properties.some((property) => property.key === created.data.key)) state.data.properties.push(created.data);
       }
-      if (!operatorValueEmpty(value)) {
-        fields.push({ propertyKey: created.data.key, value });
-      }
+      if (!operatorValueEmpty(value)) fields.push({ propertyKey: staged.persistedKey, value });
     }
-    const displayName = document.querySelector("#employeeDisplayName")?.value.trim() || "";
-    const editing = Boolean(state.employee.editingId);
-    const body = await api(employeeEndpoint(state.employee.editingId || ""), {
+    if (!isCurrent()) return;
+    const body = await api(context.endpoint(`/employees${employeeIdValue ? `/${encodeURIComponent(employeeIdValue)}` : ""}`), {
       method: editing ? "PUT" : "POST",
-      body: JSON.stringify({
-        displayName,
-        status: document.querySelector("#employeeStatus")?.value || "active",
-        fields,
-        idempotencyKey: state.employee.idempotencyKey
-      })
+      body: JSON.stringify({ displayName, status, fields, idempotencyKey })
     });
+    if (!isCurrent()) return;
     state.employee.lastSavedName = displayName;
+    unlock();
+    operatorState.employeeSaving = false;
     closeEmployeeDialog();
-    await loadData();
-    selectView("employees");
-    state.employee.lastSavedName = displayName;
-    renderEmployeeSuccess();
-    notify("✅", "Карточка сотрудника сохранена", `Сохранено значений: ${fields.length}. Все текстовые значения доступны как подсказки.`);
     setStatus("success", "✓", "Карточка сотрудника сохранена", `ФИО и ${fields.length} полей подтверждены сервером. Идентификатор операции: ${body?.correlationId || "не указан"}.`);
+    const refreshed = await Promise.allSettled([loadEmployees({ preserveSuccess: true }), loadCurrentSpaceData()]);
+    if (!context.isCurrent()) return;
+    selectView("employees");
+    notify("✅", "Карточка сотрудника сохранена", `Сохранено значений: ${fields.length}.`);
+    if (refreshed.some((result) => result.status === "rejected") || !state.employee.loaded) {
+      setStatus("warning", "!", "Карточка сохранена, список не обновлён", "Изменение подтверждено сервером. Повторите загрузку списка; сохранять карточку заново не требуется.", loadData);
+    }
   } catch (cause) {
+    if (!isCurrent()) return;
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось сохранить карточку.");
     showEmployeeFormError(error.message || employeeErrorText(error, "сохранить карточку"), error);
-    setStatus("error", "!", "Карточка не сохранена", "Введённые значения остались в форме. Исправьте причину и повторите сохранение.");
+    const definitionsSaved = operatorState.employeeStagedFields.some((field) => field.persistedKey);
+    setStatus("error", "!", "Сохранение карточки не подтверждено", definitionsSaved
+      ? "Новые поля уже добавлены в раздел. Значения остались в форме; повторите сохранение карточки."
+      : "Значения остались в форме. Проверьте сообщение и повторите сохранение.");
   } finally {
-    button.disabled = false;
-    button.textContent = state.employee.editingId ? "Сохранить изменения" : "Сохранить сотрудника";
+    unlock();
+    if (version === operatorState.employeeRequestVersion) {
+      operatorState.employeeSaving = false;
+      button.disabled = false;
+      button.textContent = editing ? "Сохранить изменения" : "Сохранить сотрудника";
+    }
   }
 }
 
 function operatorSubmitEmployee(event) {
   event.preventDefault();
   event.stopImmediatePropagation();
+  if (operatorState.employeeLoading || operatorState.employeeSaving) return;
   clearEmployeeFormError();
   if (!document.querySelector("#employeeForm")?.reportValidity()) {
     showEmployeeFormError("Укажите ФИО. Остальные значения сохранены в форме.");
@@ -519,9 +583,10 @@ function operatorSubmitEmployee(event) {
     document.querySelector("#employeeFieldConfirmText").textContent = `${names} станут доступны во всех карточках. Текущие значения сохранятся у этого сотрудника.`;
     const confirmDialog = document.querySelector("#employeeFieldConfirmDialog");
     confirmDialog.returnValue = "";
+    const version = operatorState.employeeRequestVersion;
     confirmDialog.showModal();
     confirmDialog.addEventListener("close", () => {
-      if (confirmDialog.returnValue !== "confirm") return;
+      if (version !== operatorState.employeeRequestVersion || confirmDialog.returnValue !== "confirm") return;
       operatorState.employeeFieldConfirmed = true;
       void operatorPersistEmployee();
     }, { once: true });
@@ -537,6 +602,7 @@ function operatorPropertyOptionsFromForm() {
 }
 
 function operatorRenderPropertyDialog(property = null) {
+  if (dialogSaveLocks.has(document.querySelector("#createDialog"))) return;
   operatorState.propertyEditingKey = property?.key || null;
   state.dialogKind = property ? "operator-property-edit" : "operator-property-create";
   document.querySelector("#dialogEyebrow").textContent = property ? "Настройка поля" : "Структура данных";
@@ -580,7 +646,10 @@ async function operatorSubmitProperty(event) {
   event.preventDefault();
   event.stopImmediatePropagation();
   const form = document.querySelector("#createForm");
-  if (!form.reportValidity()) return;
+  const dialog = document.querySelector("#createDialog");
+  if (dialogSaveLocks.has(dialog) || !form.reportValidity()) return;
+  const context = captureSpaceContext();
+  const unlock = lockDialogForSave(dialog);
   const button = document.querySelector("#dialogSubmitButton");
   button.disabled = true;
   button.textContent = "Сохраняем…";
@@ -614,13 +683,14 @@ async function operatorSubmitProperty(event) {
     });
     const body = await api(
       editing
-        ? propertyDefinitionsEndpoint(`/${encodeURIComponent(operatorState.propertyEditingKey)}`)
-        : propertyDefinitionsEndpoint(),
+        ? context.properties(`/${encodeURIComponent(operatorState.propertyEditingKey)}`)
+        : context.properties(),
       {
         method: editing ? "PUT" : "POST",
         body: JSON.stringify(payload)
       }
     );
+    unlock();
     closeDialog();
     await loadData();
     setKnowledgeTab("properties");
@@ -632,6 +702,7 @@ async function operatorSubmitProperty(event) {
     root.hidden = false;
     root.innerHTML = `${escapeHtml(error.message)}${error.correlationId ? `<code>Идентификатор операции: ${escapeHtml(error.correlationId)}</code>` : ""}`;
   } finally {
+    unlock();
     button.disabled = false;
     button.textContent = state.dialogKind === "operator-property-edit" ? "Сохранить поле" : "Создать поле";
   }
@@ -824,7 +895,8 @@ function operatorEnsureGroupDialog() {
   if (document.querySelector("#operatorGroupDialog")) return;
   const dialog = document.createElement("dialog");
   dialog.id = "operatorGroupDialog";
-  dialog.className = "create-dialog operator-group-dialog operator-group-dialog";
+  dialog.className = "create-dialog operator-group-dialog";
+  dialog.setAttribute("aria-labelledby", "operatorGroupTitle");
   dialog.innerHTML = `<form id="operatorGroupForm" novalidate>
     <header class="dialog-header"><div><p class="eyebrow">Группы сотрудников</p><h2 id="operatorGroupTitle">Новая группа</h2><p>Создавайте и обновляйте большие составы без потери выбранных людей при поиске или переходе между страницами.</p></div><button class="icon-button" id="operatorGroupClose" type="button" aria-label="Закрыть">×</button></header>
     <div class="dialog-body operator-group-dialog-body">
@@ -846,7 +918,15 @@ function operatorEnsureGroupDialog() {
     <footer class="dialog-footer"><p class="save-explanation" id="operatorGroupMessage"></p><div><button class="secondary-button" id="operatorGroupCancel" type="button">Отмена</button><button class="primary-button" id="operatorGroupSave" type="submit">Сохранить группу</button></div></footer>
   </form>`;
   document.body.append(dialog);
-  const close = () => dialog.close();
+  const close = () => { if (!operatorState.groupSaving) dialog.close(); };
+  dialog.addEventListener("cancel", (event) => {
+    if (operatorState.groupSaving) event.preventDefault();
+  });
+  dialog.addEventListener("close", () => {
+    operatorState.groupRequestVersion += 1;
+    operatorState.groupContext = null;
+    operatorState.groupLoading = false;
+  });
   dialog.querySelector("#operatorGroupClose")?.addEventListener("click", close);
   dialog.querySelector("#operatorGroupCancel")?.addEventListener("click", close);
   dialog.querySelector("#operatorGroupNew")?.addEventListener("click", () =>
@@ -880,27 +960,48 @@ function operatorEnsureGroupDialog() {
     operatorRenderGroupMembers();
   });
   dialog.querySelector("#operatorGroupArchive")?.addEventListener("click", async () => {
+    if (operatorState.groupSaving || operatorState.groupLoading) return;
+    const context = operatorState.groupContext;
     const groupId = operatorState.groupEditingId;
+    if (!context?.isCurrent()) return;
     if (!groupId) return;
     if (!confirm("Переместить группу в архив? Она исчезнет из обычного выбора, но история документов сохранится.")) return;
+    const unlock = lockDialogForSave(dialog);
+    operatorState.groupSaving = true;
     try {
-      await api(spaceEndpoint(`/groups/${encodeURIComponent(groupId)}`), {
+      await api(context.endpoint(`/groups/${encodeURIComponent(groupId)}`), {
         method: "PUT",
         body: JSON.stringify({ status: "archived" })
       });
+      unlock();
+      operatorState.groupSaving = false;
       dialog.close();
       await loadCurrentSpaceData();
       notify("✓", "Группа перемещена в архив", "История и ранее созданные снимки состава сохранены.");
     } catch (error) {
+      if (!context.isCurrent()) return;
       const holder = dialog.querySelector("#operatorGroupError");
       holder.hidden = false;
       holder.textContent = error?.message || "Группу не удалось переместить в архив.";
+    } finally {
+      unlock();
+      operatorState.groupSaving = false;
     }
   });
   dialog.querySelector("#operatorGroupForm")?.addEventListener("submit", operatorSaveGroup);
 }
 
 async function operatorSelectGroup(groupId) {
+  if (operatorState.groupSaving) return;
+  const context = operatorState.groupContext;
+  const version = ++operatorState.groupRequestVersion;
+  const current = () => context?.isCurrent() && version === operatorState.groupRequestVersion &&
+    document.querySelector("#operatorGroupDialog")?.open;
+  if (!current()) return;
+  operatorState.groupLoading = Boolean(groupId);
+  const save = document.querySelector("#operatorGroupSave");
+  save.disabled = Boolean(groupId);
+  document.querySelector("#operatorGroupError").hidden = true;
   operatorState.groupEditingId = groupId || null;
   operatorState.groupMemberIds = new Set();
   operatorState.groupMemberPage = 1;
@@ -926,24 +1027,48 @@ async function operatorSelectGroup(groupId) {
     '<div class="employee-inline-loading"><span class="state-mark" aria-hidden="true"></span><span>Получаем полный состав группы…</span></div>';
   try {
     const body = await api(
-      spaceEndpoint(`/groups/${encodeURIComponent(groupId)}/members`)
+      context.endpoint(`/groups/${encodeURIComponent(groupId)}/members`)
     );
+    if (!current()) return;
+    save.disabled = false;
     operatorRenderGroupMembers(
       new Set((body?.data || []).map((member) => member.entityId))
     );
   } catch (error) {
+    if (!current()) return;
     const holder = document.querySelector("#operatorGroupError");
     holder.hidden = false;
-    holder.textContent = error?.message || "Состав группы получить не удалось.";
+    holder.textContent = `${error?.message || "Состав группы получить не удалось."} Состав не изменён. Откройте группу повторно перед сохранением.`;
+  } finally {
+    if (current()) operatorState.groupLoading = false;
   }
 }
 
 async function operatorOpenGroupManager({
   selectAll = false
 } = {}) {
+  if (operatorState.groupSaving || document.querySelector("#operatorGroupDialog")?.open) return;
+  const context = captureSpaceContext();
+  const version = ++operatorState.groupRequestVersion;
+  if (!context.spaceId) return;
   operatorEnsureGroupDialog();
-  if (!state.employee.loaded) await loadEmployees();
-  await loadCurrentSpaceData();
+  try {
+    if (!state.employee.loaded) await loadEmployees();
+    await loadCurrentSpaceData();
+  } catch {
+    if (context.isCurrent()) notify("!", "Группы не загружены", "Данные не изменены. Повторите открытие групп.");
+    return;
+  }
+  if (!context.isCurrent() || version !== operatorState.groupRequestVersion) return;
+  if (!state.employee.loaded) {
+    notify("!", "Список сотрудников не загружен", "Повторите загрузку списка перед изменением группы.");
+    return;
+  }
+  operatorState.groupContext = context;
+  operatorState.groupLoading = false;
+  document.querySelector("#operatorGroupSave").disabled = false;
+  document.querySelector("#operatorGroupSave").textContent = "Создать группу";
+  document.querySelector("#operatorGroupTitle").textContent = "Новая группа";
   operatorState.groupEditingId = null;
   operatorState.groupMemberIds = new Set(
     selectAll
@@ -973,72 +1098,67 @@ async function operatorOpenGroupManager({
 async function operatorSaveGroup(event) {
   event.preventDefault();
   event.stopImmediatePropagation();
+  if (operatorState.groupSaving || operatorState.groupLoading) return;
+  const context = operatorState.groupContext;
+  const version = operatorState.groupRequestVersion;
+  const dialog = document.querySelector("#operatorGroupDialog");
+  const current = () => context?.isCurrent() && version === operatorState.groupRequestVersion && dialog.open;
+  if (!current()) return;
   const name = document.querySelector("#operatorGroupName")?.value.trim() || "";
+  const description = document.querySelector("#operatorGroupDescription")?.value.trim() || null;
   const errorHolder = document.querySelector("#operatorGroupError");
   if (!name) {
     errorHolder.hidden = false;
     errorHolder.textContent = "Укажите понятное название группы.";
     return;
   }
-  const entityIds = groupManagerEmployees()
-    .map(employeeId)
-    .filter((id) => operatorState.groupMemberIds.has(id));
+  const entityIds = groupManagerEmployees().map(employeeId).filter((id) => operatorState.groupMemberIds.has(id));
   const button = document.querySelector("#operatorGroupSave");
-  button.disabled = true;
+  const unlock = lockDialogForSave(dialog);
+  operatorState.groupSaving = true;
   button.textContent = "Сохраняем весь состав…";
   errorHolder.hidden = true;
+  let saved = false;
   try {
     let groupId = operatorState.groupEditingId;
     if (groupId) {
-      await api(spaceEndpoint(`/groups/${encodeURIComponent(groupId)}`), {
-        method: "PUT",
-        body: JSON.stringify({
-          name,
-          description:
-            document.querySelector("#operatorGroupDescription")?.value.trim() || null,
-          status: "active"
-        })
+      await api(context.endpoint(`/groups/${encodeURIComponent(groupId)}`), {
+        method: "PUT", body: JSON.stringify({ name, description, status: "active" })
       });
     } else {
-      const body = await api(spaceEndpoint("/groups"), {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          description:
-            document.querySelector("#operatorGroupDescription")?.value.trim() || undefined
-        })
+      const body = await api(context.endpoint("/groups"), {
+        method: "POST", body: JSON.stringify({ name, description: description || undefined })
       });
       groupId = body.data.id;
+      // Preserve the acknowledged create across a failed membership write.
+      if (current()) operatorState.groupEditingId = groupId;
     }
-    await api(spaceEndpoint(`/groups/${encodeURIComponent(groupId)}/members`), {
-      method: "PUT",
-      body: JSON.stringify({ entityIds })
+    if (!current()) return;
+    await api(context.endpoint(`/groups/${encodeURIComponent(groupId)}/members`), {
+      method: "PUT", body: JSON.stringify({ entityIds })
     });
-    document.querySelector("#operatorGroupDialog").close();
+    if (!current()) return;
+    saved = true;
+    unlock();
+    operatorState.groupSaving = false;
+    dialog.close();
+    notify("✓", "Группа сохранена", `В группе ${entityIds.length} сотрудников. Весь выбранный состав подтверждён сервером.`);
     await loadCurrentSpaceData();
-    notify(
-      "✓",
-      "Группа сохранена",
-      entityIds.length
-        ? `В группе ${entityIds.length} сотрудников. Поиск и страницы не повлияли на состав.`
-        : "Создана пустая группа. Добавьте участников перед выпуском документов."
-    );
-    window.dispatchEvent(
-      new CustomEvent("docomator:groups-changed", {
-        detail: { spaceId: state.currentSpaceId }
-      })
-    );
+    if (context.isCurrent()) window.dispatchEvent(new CustomEvent("docomator:groups-changed", { detail: { spaceId: context.spaceId } }));
   } catch (cause) {
-    const error = cause instanceof ApiError
-      ? cause
-      : new ApiError("Не удалось сохранить группу.");
+    if (!context?.isCurrent()) return;
+    if (saved) {
+      notify("!", "Группа сохранена, список не обновлён", "Повторите загрузку списка. Сохранять группу заново не требуется.");
+      return;
+    }
+    if (!current()) return;
+    const error = cause instanceof ApiError ? cause : new ApiError("Не удалось сохранить группу.");
     errorHolder.hidden = false;
-    errorHolder.textContent = error.message;
+    errorHolder.textContent = `${error.message} Название и выбранный состав остались в форме. Повторите сохранение.`;
   } finally {
-    button.disabled = false;
-    button.textContent = operatorState.groupEditingId
-      ? "Сохранить изменения"
-      : "Создать группу";
+    unlock();
+    operatorState.groupSaving = false;
+    button.textContent = operatorState.groupEditingId ? "Сохранить изменения" : "Создать группу";
   }
 }
 

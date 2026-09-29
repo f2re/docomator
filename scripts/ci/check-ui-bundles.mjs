@@ -44,7 +44,6 @@ const bundles = {
     "storage-maintenance.js",
     "bulk-data-import.js",
     "bulk-data-import-controller.js",
-    "space-isolation-ui.js",
     "operation-center.js",
     "operations-readiness.js",
     "template-row-flow.js",
@@ -143,6 +142,32 @@ assert.match(
   /addEventListener\("drop"/u,
   "Контроллер импорта должен поддерживать drag&drop."
 );
+assert.match(
+  bulkImportController,
+  /`\$\{bulkImportMemoryKey\}\.\$\{spaceId\}`/u,
+  "Память сопоставлений должна быть привязана к текущему разделу данных."
+);
+for (const globalOwner of [
+  "readBulkImportMappingMemory",
+  "writeBulkImportMappingMemory",
+  "renderBulkImportErrors",
+  "renderBulkImportPlan",
+  "renderBulkImportResult",
+  "showBulkImportOperationIssue"
+]) {
+  assert.match(
+    bulkImportController,
+    new RegExp(`(?:^|\\n)\\s*${globalOwner}\\s*=`, "u"),
+    `${globalOwner} должен принадлежать каноническому import controller.`
+  );
+}
+for (const structuredField of ["rowNumber", "column", "rawValue", "suggestedAction"]) {
+  assert.match(
+    bulkImportController,
+    new RegExp(structuredField, "u"),
+    `Контроллер импорта должен использовать структурированное поле ${structuredField}.`
+  );
+}
 for (const [label, pattern] of [
   ["отложенный запуск", /setTimeout\s*\(/u],
   ["синтетический click", /\.click\s*\(/u],
@@ -154,6 +179,11 @@ for (const [label, pattern] of [
     `Контроллер импорта не должен использовать ${label}.`
   );
 }
+
+await assert.rejects(
+  fs.access(path.join(uiDirectory, "space-isolation-ui.js")),
+  "Импортный overlay не должен возвращаться в runtime."
+);
 
 const accessSession = await fs.readFile(path.join(uiDirectory, "access-session.js"), "utf8");
 assert.match(accessSession, /DOCOMATOR_GET_TIMEOUT_MS\s*=\s*12_000/u);

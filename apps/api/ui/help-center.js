@@ -691,7 +691,7 @@ npm run restore</code></pre>
   }
 
   function helpCenterCreateNavigation() {
-    const nav = document.querySelector(".nav-list");
+    const nav = document.querySelector(".sidebar-footer");
     if (nav && !document.querySelector("#helpCenterNavButton")) {
       const button = document.createElement("button");
       button.id = "helpCenterNavButton";
@@ -757,6 +757,11 @@ npm run restore</code></pre>
     );
     helpCenterShowIndex();
     document.querySelector("#helpCenterHeading")?.focus?.();
+    state.view = "help";
+    const more = document.querySelector('.mobile-nav [data-view-target="settings"]');
+    more?.classList.add("is-active");
+    more?.setAttribute("aria-current", "page");
+    window.dispatchEvent(new CustomEvent("docomator:view-changed", { detail: { view: "help" } }));
     window.dispatchEvent(new CustomEvent("docomator:help-opened"));
   }
 

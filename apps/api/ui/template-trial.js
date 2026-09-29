@@ -2,8 +2,11 @@ const trialView = document.querySelector('[data-view="templates"]');
 
 let trialBusy = false;
 let trialDrafts = [];
+let trialReadVersion = 0;
+let trialContextSpace = "";
 let trialSpaceSelect = null;
-let trialFieldSaveWatch = 0;
+let trialHistoryReadVersion = 0;
+let trialSubmitVersion = 0;
 
 function trialEscape(value) {
   return String(value ?? "").replace(
@@ -191,14 +194,19 @@ function renderTrialVersions(versions) {
 }
 
 async function loadTrialVersions() {
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++trialHistoryReadVersion;
   const draft = selectedTrialDraft();
+  const current = () => context.isCurrent() && version === trialHistoryReadVersion && selectedTrialDraft()?.id === draft?.id;
   if (!draft) return renderTrialVersions([]);
   try {
     const body = await trialFetchJson(
       `/api/v1/spaces/${encodeURIComponent(currentTrialSpaceId())}/template-drafts/${encodeURIComponent(draft.id)}/test-versions?limit=20`
     );
+    if (!current()) return;
     renderTrialVersions(body.data);
   } catch (error) {
+    if (!current()) return;
     const holder = document.querySelector("#templateTrialVersions");
     if (holder) {
       holder.innerHTML = `<div class="trial-history-empty is-error"><p>${trialEscape(error?.message || "Историю получить не удалось.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${trialEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateTrialHistoryRetry" type="button">Повторить</button></div>`;
@@ -223,6 +231,9 @@ function updateTrialFields() {
 }
 
 function renderTrialWorkspace() {
+  const previousDraft = selectedTrialDraft()?.id;
+  const previousField = selectedTrialField()?.id;
+  const previousValue = document.querySelector("#templateTrialValue")?.value;
   const content = document.querySelector("#templateTrialContent");
   if (!content) return;
   const usable = trialDrafts.filter(
@@ -273,10 +284,22 @@ function renderTrialWorkspace() {
   content
     .querySelector("#templateTrialForm")
     ?.addEventListener("submit", submitTrialVersion);
+  const draftSelect = content.querySelector("#templateTrialDraft");
+  if (usable.some((draft) => draft.id === previousDraft)) draftSelect.value = previousDraft;
   updateTrialFields();
+  const fieldSelect = content.querySelector("#templateTrialField");
+  if (selectedTrialDraft()?.id === previousDraft && selectedTrialDraft()?.fields.some((field) => field.id === previousField)) {
+    fieldSelect.value = previousField;
+    renderTrialFieldControl();
+    const value = content.querySelector("#templateTrialValue");
+    if (value && previousValue !== undefined) value.value = previousValue;
+  }
 }
 
 async function loadTrialDrafts() {
+  if (trialBusy) return;
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++trialReadVersion;
   createTrialPanel();
   const content = document.querySelector("#templateTrialContent");
   const spaceId = currentTrialSpaceId();
@@ -301,9 +324,15 @@ async function loadTrialDrafts() {
     const body = await trialFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts?limit=100`
     );
-    trialDrafts = Array.isArray(body.data) ? body.data : [];
-    renderTrialWorkspace();
+    if (!context.isCurrent() || version !== trialReadVersion) return;
+    const drafts = Array.isArray(body.data) ? body.data : [];
+    const signature = (items) => JSON.stringify(items.map(({ id, status, fields }) => ({ id, status, fields })));
+    const unchanged = existingForm && signature(drafts) === signature(trialDrafts);
+    trialDrafts = drafts;
+    content.querySelector("#templateTrialReloadState")?.remove();
+    if (!unchanged) renderTrialWorkspace();
   } catch (error) {
+    if (!context.isCurrent() || version !== trialReadVersion) return;
     const operationId = error?.operationId || "";
     content.querySelector("#templateTrialReloadState")?.remove();
     const errorHtml = `<div class="trial-empty is-error" id="templateTrialLoadError"><span aria-hidden="true">⚠️</span><div><strong>Черновики получить не удалось</strong><p>${trialEscape(error?.message || "Повторите действие позже.")} Введённые значения сохранены.</p>${operationId ? `<small>Идентификатор операции: <code>${trialEscape(operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateTrialRetry" type="button">Повторить</button></div></div>`;
@@ -318,6 +347,7 @@ async function loadTrialDrafts() {
 async function submitTrialVersion(event) {
   event.preventDefault();
   if (trialBusy) return;
+  const context = globalThis.docomatorCaptureSpaceContext();
   const draft = selectedTrialDraft();
   const field = selectedTrialField();
   const valueControl = document.querySelector("#templateTrialValue");
@@ -336,6 +366,12 @@ async function submitTrialVersion(event) {
     return;
   }
 
+  const version = ++trialSubmitVersion;
+  trialReadVersion += 1;
+  const current = () => context.isCurrent() && version === trialSubmitVersion;
+  const controls = [...document.querySelectorAll("#templateTrialForm input, #templateTrialForm select, #templateTrialForm button")];
+  const disabled = controls.map((control) => control.disabled);
+  controls.forEach((control) => { control.disabled = true; });
   trialBusy = true;
   button.disabled = true;
   message.className = "is-loading";
@@ -346,13 +382,14 @@ async function submitTrialVersion(event) {
 
   try {
     const body = await trialFetchJson(
-      `/api/v1/spaces/${encodeURIComponent(currentTrialSpaceId())}/template-drafts/${encodeURIComponent(draft.id)}/trial`,
+      `/api/v1/spaces/${encodeURIComponent(context.spaceId)}/template-drafts/${encodeURIComponent(draft.id)}/trial`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ fieldId: field.id, value })
       }
     );
+    if (!current()) return;
     const data = body.data;
     message.className = "is-success";
     message.textContent =
@@ -381,14 +418,16 @@ async function submitTrialVersion(event) {
     });
     await loadTrialVersions();
   } catch (error) {
+    if (!current()) return;
     const operationId = error?.operationId || "";
     message.className = "is-error";
     message.textContent = "Проверка не завершена. Введённое значение сохранено в форме.";
     result.innerHTML = `
       <div class="trial-empty is-error"><span aria-hidden="true">⚠️</span><div><strong>Пробное заполнение не прошло</strong><p>${trialEscape(error?.message || "Повторите действие после исправления значения или шаблона.")}</p>${operationId ? `<small>Идентификатор операции: <code>${trialEscape(operationId)}</code>.</small>` : ""}</div></div>`;
   } finally {
-    trialBusy = false;
-    button.disabled = false;
+    if (version === trialSubmitVersion) trialBusy = false;
+    controls.forEach((control, index) => { if (control.isConnected) control.disabled = disabled[index]; });
+    if (button.isConnected) button.disabled = false;
   }
 }
 
@@ -400,21 +439,6 @@ function bindTrialSpaceSelect() {
     if (trialShouldLoad()) void loadTrialDrafts();
   });
   if (trialShouldLoad()) void loadTrialDrafts();
-}
-
-async function watchFieldSave() {
-  trialFieldSaveWatch += 1;
-  const watch = trialFieldSaveWatch;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    if (watch !== trialFieldSaveWatch) return;
-    const message = document.querySelector("#documentFieldMessage");
-    if (message?.classList.contains("is-success")) {
-      await loadTrialDrafts();
-      return;
-    }
-    if (message?.classList.contains("is-error")) return;
-  }
 }
 
 if (trialView) {
@@ -430,7 +454,16 @@ if (trialView) {
   window.addEventListener("docomator:view-changed", (event) => {
     if (event.detail?.view === "templates" && trialShouldLoad()) void loadTrialDrafts();
   });
-  document.addEventListener("click", (event) => {
-    if (event.target?.id === "documentFieldSave") void watchFieldSave();
-  });
 }
+
+document.addEventListener("docomator:space-changed", (event) => {
+  const spaceId = event.detail?.spaceId || "";
+  if (spaceId === trialContextSpace) return;
+  trialContextSpace = spaceId;
+  trialReadVersion += 1;
+  trialHistoryReadVersion += 1;
+  trialSubmitVersion += 1;
+  trialBusy = false;
+  trialDrafts = [];
+  document.getElementById("templateTrialContent")?.replaceChildren();
+});

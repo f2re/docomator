@@ -70,6 +70,7 @@ if ((RUN_CHECK == 1)); then
   NODE=""
   HEALTHCHECK=""
   for candidate in \
+    "$SCRIPT_DIR/runtime/node/bin/node" \
     /opt/docomator/current/runtime/node/bin/node \
     "$SCRIPT_DIR/payload/runtime/node/bin/node"; do
     [[ -x "$candidate" ]] && NODE="$candidate" && break

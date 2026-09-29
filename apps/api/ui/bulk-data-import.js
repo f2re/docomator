@@ -8,6 +8,8 @@ let bulkImportSpaceId = null;
 let bulkImportPlanSpaceId = null;
 let bulkImportSession = 0;
 let bulkImportPropertyDefinitions = [];
+let bulkImportHistoryVersion = 0;
+let showBulkImportOperationIssue = () => {};
 
 const BULK_IMPORT_VALUE_TYPES = new Set([
   "string",
@@ -92,20 +94,20 @@ async function bulkImportApi(url, options = {}) {
       `Сервер вернул код ${response.status}.`
     );
   }
-  if (url.endsWith("/data-import/execute")) {
-    writeBulkImportMappingMemory(body?.data?.mappingResolutions);
-  }
   return body;
 }
 
 async function loadBulkImportPropertyDefinitions() {
+  const context = globalThis.docomatorCaptureSpaceContext();
   try {
     const body = await bulkImportApi(
       globalThis.docomatorPropertyDefinitionsUrl?.("", { limit: 500 }) ||
         `/api/v1/knowledge/property-definitions?spaceId=${encodeURIComponent(bulkImportCurrentSpaceId())}&limit=500`
     );
+    if (!context.isCurrent()) return;
     bulkImportPropertyDefinitions = Array.isArray(body.data) ? body.data : [];
   } catch {
+    if (!context.isCurrent()) return;
     bulkImportPropertyDefinitions = [];
   }
 }
@@ -425,12 +427,12 @@ async function previewBulkImportBytes(fileName, bytes) {
   if (!message) return;
   const previousPreview = bulkImportPreview;
   const previousSpaceId = bulkImportSpaceId;
-  const spaceId = bulkImportCurrentSpaceId();
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const spaceId = context.spaceId;
   if (!spaceId) {
     message.textContent = "Сначала выберите раздел данных.";
     return;
   }
-  await loadBulkImportPropertyDefinitions();
   const requestSession = ++bulkImportSession;
   bulkImportSpaceId = spaceId;
   bulkImportPlanSpaceId = null;
@@ -439,6 +441,8 @@ async function previewBulkImportBytes(fileName, bytes) {
   message.className = "bulk-import-message is-loading";
   message.textContent = "Разбираем вставленную таблицу и определяем поля…";
   try {
+    await loadBulkImportPropertyDefinitions();
+    if (requestSession !== bulkImportSession || !context.isCurrent()) return;
     const response = await fetch(`/api/v1/spaces/${encodeURIComponent(spaceId)}/data-import/preview?fileName=${encodeURIComponent(fileName)}`, {
       method: "POST",
       headers: { "content-type": "application/octet-stream", accept: "application/json" },
@@ -454,7 +458,7 @@ async function previewBulkImportBytes(fileName, bytes) {
     setBulkImportStep(2);
     document.querySelector("#bulkImportDisplayNameColumn")?.focus();
   } catch (error) {
-    if (requestSession !== bulkImportSession) return;
+    if (requestSession !== bulkImportSession || !context.isCurrent()) return;
     bulkImportPreview = previousPreview;
     bulkImportSpaceId = previousSpaceId;
     message.className = "bulk-import-message is-error";
@@ -757,12 +761,12 @@ async function previewBulkImportFile() {
     if (message) message.textContent = "Выберите файл CSV или XLSX.";
     return;
   }
-  const spaceId = bulkImportCurrentSpaceId();
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const spaceId = context.spaceId;
   if (!spaceId) {
     message.textContent = "Сначала выберите раздел сотрудников.";
     return;
   }
-  await loadBulkImportPropertyDefinitions();
   const requestSession = bulkImportSession + 1;
   bulkImportSession = requestSession;
   bulkImportSpaceId = spaceId;
@@ -773,6 +777,8 @@ async function previewBulkImportFile() {
   message.className = "bulk-import-message is-loading";
   message.textContent = "Читаем файл и показываем первые строки…";
   try {
+    await loadBulkImportPropertyDefinitions();
+    if (requestSession !== bulkImportSession || !context.isCurrent()) return;
     const response = await fetch(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/data-import/preview?fileName=${encodeURIComponent(file.name)}`,
       {
@@ -796,7 +802,7 @@ async function previewBulkImportFile() {
     setBulkImportStep(2);
     document.querySelector("#bulkImportDisplayNameColumn")?.focus();
   } catch (error) {
-    if (requestSession !== bulkImportSession) return;
+    if (requestSession !== bulkImportSession || !context.isCurrent()) return;
     bulkImportPreview = previousPreview;
     bulkImportSpaceId = previousSpaceId;
     message.className = "bulk-import-message is-error";
@@ -976,6 +982,7 @@ async function executeBulkImport() {
       return;
     }
     const result = body.data;
+    writeBulkImportMappingMemory(result?.mappingResolutions);
     message.className = result.state === "completed" ? "bulk-import-message is-success" : "bulk-import-message is-warning";
     message.textContent = `Импорт завершён: добавлено ${result.createdCount}, обновлено ${result.updatedCount}, без изменений ${result.unchangedCount}, с ошибками ${result.failedCount}.`;
     renderBulkImportResult(result);
@@ -1036,7 +1043,9 @@ function renderBulkImportHistory() {
 }
 
 async function loadBulkImportHistory() {
-  const spaceId = bulkImportCurrentSpaceId();
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++bulkImportHistoryVersion;
+  const spaceId = context.spaceId;
   if (!spaceId) return;
   const root = document.querySelector("#bulkImportHistory");
   if (root) root.innerHTML = `<div class="generation-history-empty">Получаем историю…</div>`;
@@ -1044,9 +1053,11 @@ async function loadBulkImportHistory() {
     const body = await bulkImportApi(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/data-import/runs?limit=50`
     );
+    if (version !== bulkImportHistoryVersion || !context.isCurrent()) return;
     bulkImportHistory = Array.isArray(body.data) ? body.data : [];
     renderBulkImportHistory();
   } catch (error) {
+    if (version !== bulkImportHistoryVersion || !context.isCurrent()) return;
     if (root) root.innerHTML = `<div class="generation-history-empty is-error">${escapeHtml(error instanceof Error ? error.message : "История временно недоступна.")}</div>`;
   }
 }
@@ -1061,7 +1072,11 @@ document.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-bulk-import-open]");
   if (trigger) openBulkImportPanel(trigger);
 });
-window.addEventListener("docomator:space-changed", (event) => {
+document.addEventListener("docomator:space-changed", (event) => {
+  bulkImportHistoryVersion += 1;
+  bulkImportHistory = [];
+  bulkImportPropertyDefinitions = [];
+  document.querySelector("#bulkImportHistory")?.replaceChildren();
   const nextSpaceId = event.detail?.spaceId || bulkImportCurrentSpaceId();
   if (bulkImportSpaceId && nextSpaceId !== bulkImportSpaceId) {
     clearBulkImportState(

@@ -2,6 +2,8 @@ const multiTrialView = document.querySelector('[data-view="templates"]');
 
 let multiTrialSpaceSelect = null;
 let multiTrialDrafts = [];
+let multiTrialReadVersion = 0;
+let multiTrialContextSpace = "";
 let multiTrialBusy = false;
 let multiTrialReloadMarker = "";
 let multiTrialReloadTimer = null;
@@ -368,6 +370,8 @@ function renderMultiTrialWorkspace() {
 }
 
 async function loadMultiTrialDrafts() {
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++multiTrialReadVersion;
   createMultiTrialPanel();
   const content = document.querySelector("#templateMultiTrialContent");
   const spaceId = currentMultiTrialSpaceId();
@@ -387,10 +391,12 @@ async function loadMultiTrialDrafts() {
     const body = await multiTrialFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts?limit=100`
     );
+    if (!context.isCurrent() || version !== multiTrialReadVersion) return;
     multiTrialDrafts = Array.isArray(body.data) ? body.data : [];
     renderMultiTrialWorkspace();
     return Boolean(document.querySelector("#templateMultiTrialForm"));
   } catch (error) {
+    if (!context.isCurrent() || version !== multiTrialReadVersion) return;
     content.querySelector("#templateMultiTrialReloadState")?.remove();
     const errorHtml = `<div class="multi-trial-state is-error" id="templateMultiTrialLoadError"><span aria-hidden="true">⚠️</span><div><strong>Черновики получить не удалось</strong><p>${multiTrialEscape(error?.message || "Повторите действие.")} Введённые значения сохранены.</p>${error?.operationId ? `<small>Идентификатор операции: <code>${multiTrialEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateMultiTrialRetry" type="button">Повторить</button></div></div>`;
     if (existingForm) {
@@ -614,3 +620,12 @@ if (multiTrialView) {
     if (event.detail?.view === "templates" && multiTrialShouldLoad()) void loadMultiTrialDrafts();
   });
 }
+
+document.addEventListener("docomator:space-changed", (event) => {
+  const spaceId = event.detail?.spaceId || "";
+  if (spaceId === multiTrialContextSpace) return;
+  multiTrialContextSpace = spaceId;
+  multiTrialReadVersion += 1;
+  multiTrialDrafts = [];
+  document.getElementById("templateMultiTrialContent")?.replaceChildren();
+});

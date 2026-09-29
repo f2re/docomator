@@ -138,6 +138,13 @@ async function assertSecondSpaceIsolation(
   expect(foreignGroupsResponse.status()).toBe(200);
   const foreignGroups = (await foreignGroupsResponse.json())?.data || [];
   expect(foreignGroups.some((item) => item.name === groupName)).toBe(false);
+
+  const draftsResponse = await page.request.get(`/api/v1/spaces/${encodeURIComponent(sourceSpaceId)}/template-drafts?limit=100`);
+  expect(draftsResponse.status()).toBe(200);
+  const drafts = (await draftsResponse.json()).data;
+  expect(drafts).toHaveLength(1);
+  const foreignDraft = await page.request.get(`/api/v1/spaces/${encodeURIComponent(secondSpaceId)}/template-drafts/${encodeURIComponent(drafts[0].id)}`);
+  expect(foreignDraft.status()).toBe(404);
 }
 
 async function uploadAndSaveSource(page) {
@@ -339,6 +346,15 @@ test("пространство → пользовательское поле →
   await expectWorkerReady(page);
 
   const suffix = randomUUID().slice(0, 8);
+  const spaceResponse = await page.request.post("/api/v1/spaces", {
+    headers: { origin: new URL(baseURL).origin },
+    data: { name: `Проверка документа ${suffix}` }
+  });
+  expect(spaceResponse.status()).toBe(201);
+  const isolatedSpaceId = (await spaceResponse.json()).data.id;
+  await page.evaluate((spaceId) => localStorage.setItem("docomator.space", spaceId), isolatedSpaceId);
+  await app.open();
+  expect(await currentSpaceId(page)).toBe(isolatedSpaceId);
   const displayName = `Иванов Иван ${suffix}`;
   const fieldLabel = `Вероисповедание ${suffix}`;
   const fieldValue = `Тестовое значение ${suffix}`;
@@ -378,6 +394,17 @@ test("пространство → пользовательское поле →
     viewport: { width: 1440, height: 1000 }
   });
   try {
+    await secondContext.addInitScript((selectedSpaceId) => {
+      localStorage.setItem("docomator.space", selectedSpaceId);
+    }, spaceId);
+    const codeFile = process.env.DOCOMATOR_E2E_ACCESS_CODE_FILE;
+    if (codeFile) {
+      const code = (await fs.readFile(codeFile, "utf8")).trim();
+      const unlocked = await secondContext.request.post("/api/v1/access/unlock", {
+        headers: { origin: new URL(baseURL).origin }, data: { code }
+      });
+      expect(unlocked.status()).toBe(200);
+    }
     const secondPage = await secondContext.newPage();
     await verifyEmployeeInSecondContext(
       secondPage,
