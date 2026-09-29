@@ -13,6 +13,10 @@ let generationPollToken = 0;
 let generationReloadTimer = null;
 let generationReloadMarker = "";
 let generationAutoOpenJobId = null;
+let generationWorkspaceVersion = 0;
+let generationHistoryVersion = 0;
+let generationWorkspaceRead = null;
+let generationContextSpaceId = "";
 
 function generationEscape(value) {
   return String(value ?? "").replace(
@@ -469,6 +473,7 @@ function renderGenerationJob(payload) {
 }
 
 async function pollGenerationJob(jobId, token = null) {
+  const context = globalThis.docomatorCaptureSpaceContext();
   const spaceId = currentGenerationSpaceId();
   if (!spaceId || !jobId) return;
   const pollToken = token ?? ++generationPollToken;
@@ -476,7 +481,7 @@ async function pollGenerationJob(jobId, token = null) {
     const body = await generationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-jobs/${encodeURIComponent(jobId)}`
     );
-    if (pollToken !== generationPollToken) return;
+    if (pollToken !== generationPollToken || !context.isCurrent()) return;
     renderGenerationJob(body.data);
     const state = body.data.job.state;
     if (["completed", "partial", "failed"].includes(state)) {
@@ -485,13 +490,13 @@ async function pollGenerationJob(jobId, token = null) {
       clearGenerationPolling();
       await loadGenerationHistory();
       if (
-        autoOpenResult &&
+        autoOpenResult && context.isCurrent() && generationViewVisible() &&
         ["completed", "partial"].includes(state) &&
         body.data.resultId
       ) {
         window.dispatchEvent(
           new CustomEvent("docomator:open-document-result", {
-            detail: { resultId: body.data.resultId }
+            detail: { resultId: body.data.resultId, spaceId }
           })
         );
       }
@@ -501,7 +506,7 @@ async function pollGenerationJob(jobId, token = null) {
       if (pollToken === generationPollToken) void pollGenerationJob(jobId, pollToken);
     }, 1_500);
   } catch (error) {
-    if (pollToken !== generationPollToken) return;
+    if (pollToken !== generationPollToken || !context.isCurrent()) return;
     clearGenerationPolling();
     const holder = document.querySelector("#documentGenerationStatus");
     if (holder) {
@@ -547,6 +552,8 @@ function renderGenerationHistory(items) {
 }
 
 async function loadGenerationHistory() {
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++generationHistoryVersion;
   const holder = document.querySelector("#documentGenerationHistory");
   const spaceId = currentGenerationSpaceId();
   if (!holder) return;
@@ -559,61 +566,63 @@ async function loadGenerationHistory() {
     const body = await generationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-jobs?limit=50`
     );
+    if (version !== generationHistoryVersion || !context.isCurrent()) return;
     generationJobs = Array.isArray(body.data) ? body.data : [];
     renderGenerationHistory(generationJobs);
   } catch (error) {
+    if (version !== generationHistoryVersion || !context.isCurrent()) return;
     holder.innerHTML = `<div class="generation-history-empty is-error">${generationEscape(error?.message || "Историю получить не удалось.")}</div>`;
   }
 }
 
 async function loadGenerationWorkspace() {
+  if (!generationViewVisible()) return;
+  if (generationWorkspaceRead?.context.isCurrent()) return generationWorkspaceRead.promise;
   createGenerationPanel();
   clearGenerationPolling();
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++generationWorkspaceVersion;
   const content = document.querySelector("#documentGenerationContent");
-  const spaceId = currentGenerationSpaceId();
+  const spaceId = context.spaceId;
   if (!content) return;
   if (!spaceId) {
     content.innerHTML = `<div class="generation-state"><div><strong>Выберите раздел данных</strong><p>Шаблоны и сотрудники будут взяты только из выбранного раздела.</p></div></div>`;
-    await loadGenerationHistory();
     return;
   }
+  const read = { context, promise: null };
+  generationWorkspaceRead = read;
+  const isCurrent = () => version === generationWorkspaceVersion && context.isCurrent();
   setGenerationStep(1);
   content.innerHTML = `<div class="generation-state" role="status"><div><strong>Готовим новый выпуск</strong><p>Получаем шаблоны, группы и сотрудников выбранного раздела.</p></div></div>`;
-  try {
-    const [templatesBody, groupsBody, entitiesBody] = await Promise.all([
-      generationFetchJson(
-        `/api/v1/spaces/${encodeURIComponent(spaceId)}/active-templates`
-      ),
-      generationFetchJson(
-        `/api/v1/spaces/${encodeURIComponent(spaceId)}/groups?limit=200`
-      ),
-      generationFetchJson(
-        `/api/v1/spaces/${encodeURIComponent(spaceId)}/entities?status=active&limit=1000`
-      )
-    ]);
-    generationTemplates = Array.isArray(templatesBody.data)
-      ? templatesBody.data
-      : [];
-    generationGroups = Array.isArray(groupsBody.data) ? groupsBody.data : [];
-    generationEntities = Array.isArray(entitiesBody.data)
-      ? entitiesBody.data
-      : [];
-    renderGenerationWorkspace();
-  } catch (error) {
-    content.innerHTML = `
-      <div class="generation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Данные для запуска получить не удалось</strong><p>${generationEscape(error?.message || "Повторите действие.")}</p><button class="secondary-button" id="generationWorkspaceRetry" type="button">Повторить</button></div></div>`;
-    content
-      .querySelector("#generationWorkspaceRetry")
-      ?.addEventListener("click", loadGenerationWorkspace);
-  }
-  await loadGenerationHistory();
+  read.promise = (async () => {
+    try {
+      const [templatesBody, groupsBody, entitiesBody] = await Promise.all([
+        generationFetchJson(context.endpoint("/active-templates")),
+        generationFetchJson(context.endpoint("/groups?limit=200")),
+        generationFetchJson(context.endpoint("/entities?status=active&limit=1000"))
+      ]);
+      if (!isCurrent()) return;
+      generationTemplates = Array.isArray(templatesBody.data) ? templatesBody.data : [];
+      generationGroups = Array.isArray(groupsBody.data) ? groupsBody.data : [];
+      generationEntities = Array.isArray(entitiesBody.data) ? entitiesBody.data : [];
+      renderGenerationWorkspace();
+      await loadGenerationHistory();
+    } catch (error) {
+      if (!isCurrent()) return;
+      content.innerHTML = `<div class="generation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Данные для запуска получить не удалось</strong><p>${generationEscape(error?.message || "Повторите действие.")}</p><button class="secondary-button" id="generationWorkspaceRetry" type="button">Повторить</button></div></div>`;
+      content.querySelector("#generationWorkspaceRetry")?.addEventListener("click", loadGenerationWorkspace);
+    } finally {
+      if (generationWorkspaceRead === read) generationWorkspaceRead = null;
+    }
+  })();
+  return read.promise;
 }
 
 function scheduleGenerationReload() {
   if (generationReloadTimer !== null) clearTimeout(generationReloadTimer);
   generationReloadTimer = setTimeout(() => {
     generationReloadTimer = null;
-    void loadGenerationWorkspace();
+    if (generationViewVisible()) void loadGenerationWorkspace();
   }, 500);
 }
 
@@ -629,7 +638,22 @@ function bindGenerationSpaceSelect() {
 
 function handleGenerationSpaceChanged(event) {
   const spaceId = event?.detail?.spaceId || "";
-  if (spaceId) globalThis.docomatorCurrentSpaceId = spaceId;
+  if (spaceId !== generationContextSpaceId) {
+    generationContextSpaceId = spaceId;
+    generationWorkspaceVersion += 1;
+    generationHistoryVersion += 1;
+    generationWorkspaceRead = null;
+    generationTemplates = [];
+    generationGroups = [];
+    generationEntities = [];
+    generationJobs = [];
+    generationAutoOpenJobId = null;
+    clearGenerationPolling();
+    for (const id of ["documentGenerationContent", "documentGenerationStatus", "documentGenerationHistory"]) {
+      const holder = document.getElementById(id);
+      if (holder) holder.replaceChildren();
+    }
+  }
   if (generationViewVisible()) void loadGenerationWorkspace();
 }
 
@@ -655,6 +679,9 @@ if (generationView) {
       void loadGenerationWorkspace();
       return;
     }
+    generationWorkspaceVersion += 1;
+    generationHistoryVersion += 1;
+    generationWorkspaceRead = null;
     clearGenerationPolling();
     if (generationReloadTimer !== null) {
       clearTimeout(generationReloadTimer);

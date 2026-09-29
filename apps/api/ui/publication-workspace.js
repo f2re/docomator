@@ -120,26 +120,6 @@
 
   function publicationInstallShell() {
     if (publicationUi.installed) return;
-    const navigation = document.querySelector(".nav-list");
-    if (navigation && !navigation.querySelector('[data-view-target="publications"]')) {
-      const button = document.createElement("button");
-      button.className = "nav-item";
-      button.type = "button";
-      button.dataset.viewTarget = "publications";
-      button.innerHTML = '<span class="nav-symbol" aria-hidden="true">◫</span><span>Публикации</span>';
-      const entitiesButton = navigation.querySelector('[data-view-target="entities"]');
-      entitiesButton?.after(button);
-    }
-
-    const mobileNavigation = document.querySelector(".mobile-nav");
-    if (mobileNavigation && !mobileNavigation.querySelector('[data-view-target="publications"]')) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.viewTarget = "publications";
-      button.innerHTML = '<span aria-hidden="true">◫</span><small>Статьи</small>';
-      mobileNavigation.append(button);
-    }
-
     const main = document.querySelector("main.main");
     if (main && !main.querySelector('[data-view="publications"]')) {
       const section = document.createElement("section");

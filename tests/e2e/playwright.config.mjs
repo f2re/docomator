@@ -64,6 +64,10 @@ export default defineConfig({
   outputDir: path.join(artifactDirectory, "playwright-results"),
   use: {
     baseURL,
+    launchOptions: {
+      ...(process.platform === "linux" ? { env: { ...process.env, LANG: "C.UTF-8", LC_ALL: "C.UTF-8" } } : {}),
+      ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {})
+    },
     actionTimeout: 7_000,
     deviceScaleFactor: 1,
     locale: "ru-RU",
@@ -72,8 +76,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
     timezoneId: "Europe/Moscow",
     trace: "retain-on-failure",
-    video: "off",
-    ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {})
+    video: "off"
   },
   projects: [
     {

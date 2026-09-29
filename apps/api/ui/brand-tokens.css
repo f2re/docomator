@@ -57,6 +57,7 @@
   --radius: var(--radius-panel);
 
   --touch-target: 44px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
   --content-reading: 72ch;
   --content-max: 1500px;
   --sidebar: 248px;

@@ -41,12 +41,11 @@ test("принимает CSV/XLSX перетаскиванием и не рас�
     );
   });
 
-  await expect(page.locator("#bulkImportMessage")).toContainText("Файл выбран");
+  await expect(page.locator("#bulkImportMessage")).toContainText("Файл прочитан");
   expect(
     await page.locator("#bulkImportFile").evaluate((input) => input.files?.[0]?.name)
   ).toBe("Сотрудники.csv");
 
-  await page.locator("#bulkImportPreviewButton").click();
   await expect(page.locator("[data-bulk-mapping-row]")).toHaveCount(3);
 
   const geometry = await page.locator("#bulkDataImportPanel").evaluate((panel) => ({
@@ -121,13 +120,13 @@ test("typed ошибка подсвечивает поле и точную яч�
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("e2e-xlsx-placeholder", "utf8")
   });
-  await page.locator("#bulkImportPreviewButton").click();
 
   const ageRow = page.locator("[data-bulk-mapping-row]").filter({ hasText: "Возраст" });
   await ageRow.locator("[data-bulk-mapping-mode]").selectOption("create");
   await ageRow.locator("[data-bulk-value-type]").selectOption("number");
   await page.locator("#bulkImportPlanButton").click();
 
+  await expect(page.locator('#bulkImportExecute')).toBeVisible();
   await expect(ageRow).toHaveClass(/has-import-error/u);
   await expect(ageRow.locator("[data-bulk-value-type]")).toHaveAttribute("aria-invalid", "true");
   await expect(page.locator("#bulkImportPlan")).toContainText("Строка 17 · Возраст");
@@ -190,7 +189,6 @@ test("mapping error uses structured column metadata and does not reset the previ
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("e2e-xlsx-placeholder", "utf8")
   });
-  await page.locator("#bulkImportPreviewButton").click();
   const ageRow = page.locator("[data-bulk-mapping-row]").filter({ hasText: "Возраст" });
   await ageRow.locator("[data-bulk-mapping-mode]").selectOption("create");
   await ageRow.locator("[data-bulk-value-type]").selectOption("string");
@@ -233,7 +231,6 @@ test("legacy XLS gives a concrete recovery action and keeps the selected file", 
     mimeType: "application/vnd.ms-excel",
     buffer: Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
   });
-  await page.locator("#bulkImportPreviewButton").click();
   await expect(page.locator("#bulkImportMessage")).toContainText("Excel 97–2003");
   await expect(page.locator("#bulkImportRecoveryHint")).toContainText("сохраните как XLSX или CSV");
   expect(await page.locator("#bulkImportFile").evaluate((input) => input.files?.[0]?.name)).toBe("Сотрудники.xls");

@@ -74,8 +74,58 @@ const state = {
 };
 
 let propertyLoadVersion = 0;
+let spaceLoadVersion = 0;
+let spaceSelectionVersion = 0;
+let spaceContextVersion = 0;
+let publishedSpaceId = "";
+let employeeRead = null;
+let templateCatalogRead = null;
+let groupSelectionReadVersion = 0;
+let snapshotReadVersion = 0;
+const dialogSaveLocks = new Map();
+
+// Freeze a submitted form until its write is acknowledged. Closing or reopening
+// the same dialog must not discard the operation identity or a pending result.
+function lockDialogForSave(dialog) {
+  const controls = [...dialog.querySelectorAll("button, input, select, textarea")];
+  const disabled = controls.map((control) => control.disabled);
+  const token = {};
+  dialogSaveLocks.set(dialog, token);
+  controls.forEach((control) => { control.disabled = true; });
+  return () => {
+    if (dialogSaveLocks.get(dialog) !== token) return;
+    dialogSaveLocks.delete(dialog);
+    controls.forEach((control, index) => { control.disabled = disabled[index]; });
+  };
+}
+
+
+// A read/write keeps its initiating space even when navigation changes while
+// awaiting the server. Revision also rejects an obsolete A -> B -> A response.
+function captureSpaceContext() {
+  const spaceId = state.currentSpaceId || "";
+  const version = spaceContextVersion;
+  return {
+    spaceId,
+    isCurrent: () => spaceId === state.currentSpaceId && version === spaceContextVersion,
+    endpoint: (suffix = "") => {
+      if (!spaceId) throw new ApiError("Сначала выберите раздел данных.");
+      return `/api/v1/spaces/${encodeURIComponent(spaceId)}${suffix}`;
+    },
+    properties: (suffix = "") => {
+      if (!spaceId) throw new ApiError("Сначала выберите раздел данных.");
+      return `/api/v1/knowledge/property-definitions${suffix}?spaceId=${encodeURIComponent(spaceId)}`;
+    }
+  };
+}
+
+globalThis.docomatorCaptureSpaceContext = captureSpaceContext;
 
 function publishCurrentSpace() {
+  if (publishedSpaceId !== state.currentSpaceId) {
+    publishedSpaceId = state.currentSpaceId;
+    spaceContextVersion += 1;
+  }
   window.docomatorCurrentSpaceId = state.currentSpaceId || "";
   document.dispatchEvent(new CustomEvent("docomator:space-changed", {
     detail: { spaceId: window.docomatorCurrentSpaceId }
@@ -91,7 +141,7 @@ const views = {
   generation: ["Новый выпуск", "Создать документы", "Выберите шаблон, сотрудников и проверьте итог перед запуском.", null, null],
   documents: ["Готовые файлы", "Результаты", "Скачивайте документы, комплекты и повторяйте только неуспешные строки.", null, null],
   automations: ["Повторные выпуски", "Расписания", "Управляйте запланированными выпусками и смотрите их состояние.", null, null],
-  settings: ["Дополнительные возможности", "Настройки", "Организация данных, обслуживание и диагностика.", null, null]
+  settings: ["Дополнительные возможности", "Управление", "Организация данных, обслуживание и диагностика.", null, null]
 };
 
 const knowledgeTabs = {
@@ -352,9 +402,15 @@ function applyTheme(theme) {
 function selectView(view) {
   if (!views[view]) return;
   state.view = view;
+  if (view !== "help") {
+    $("#helpCenterNavButton")?.classList.remove("is-active");
+    $("#helpCenterNavButton")?.removeAttribute("aria-current");
+  }
   $$('[data-view]').forEach((element) => element.classList.toggle("is-visible", element.dataset.view === view));
   $$('[data-view-target]').forEach((button) => {
-    const active = button.dataset.viewTarget === view;
+    const mobileMore = button.dataset.viewTarget === "settings" &&
+      button.closest(".mobile-nav") && globalThis.docomatorNavigationContract?.primaryMobileViews.includes(view) === false;
+    const active = button.dataset.viewTarget === view || Boolean(mobileMore);
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
   });
@@ -581,6 +637,8 @@ async function loadCurrentSpaceProperties() {
 }
 
 async function loadCurrentSpaceData() {
+  const context = captureSpaceContext();
+  const version = ++spaceLoadVersion;
   const space = currentSpace();
   if (!space) {
     state.data.spaceEntities = [];
@@ -598,7 +656,7 @@ async function loadCurrentSpaceData() {
       api(`${base}/groups?limit=500`),
       api(`${base}/audience-snapshots?limit=50`)
     ]);
-    if (state.currentSpaceId !== space.id) return;
+    if (version !== spaceLoadVersion || !context.isCurrent()) return;
     state.data.spaceEntities = entities?.data || [];
     state.data.groups = groups?.data || [];
     state.data.snapshots = snapshots?.data || [];
@@ -607,12 +665,13 @@ async function loadCurrentSpaceData() {
     renderSpaces();
     updateMetrics();
   } finally {
-    state.spaceLoading = false;
+    if (version === spaceLoadVersion && context.isCurrent()) state.spaceLoading = false;
   }
 }
 
 async function loadData() {
   if (state.loading) return;
+  let context = captureSpaceContext();
   state.loading = true;
   $("#refreshButton").disabled = true;
   renderLoadingStates();
@@ -623,6 +682,7 @@ async function loadData() {
       api("/api/v1/knowledge/entity-types?limit=500"),
       api("/api/v1/spaces?limit=500")
     ]);
+    if (!context.isCurrent()) return;
     state.data.types = types?.data || [];
     state.data.spaces = spaces?.data || [];
     if (!state.data.spaces.some((space) => space.id === state.currentSpaceId)) {
@@ -630,8 +690,9 @@ async function loadData() {
       if (state.currentSpaceId) localStorage.setItem("docomator.space", state.currentSpaceId);
     }
     publishCurrentSpace();
-    await Promise.all([loadCurrentSpaceProperties(), loadCurrentSpaceData()]);
-    await Promise.all([loadEmployees(), loadActiveTemplates()]);
+    context = captureSpaceContext();
+    await Promise.all([loadCurrentSpaceProperties(), loadCurrentSpaceData(), loadEmployees(), loadActiveTemplates()]);
+    if (!context.isCurrent()) return;
     setConnection("ok", "Локальный сервер готов");
     const detail = state.data.spaces.length === 0
       ? "Пространств пока нет. Создайте первое — интерфейс подскажет следующий шаг."
@@ -640,6 +701,7 @@ async function loadData() {
     renderKnowledge();
     updateMetrics();
   } catch (cause) {
+    if (!context.isCurrent()) return;
     const error = cause instanceof ApiError ? cause : new ApiError("Неизвестная ошибка загрузки.");
     setConnection("error", "Нет связи с локальным сервером");
     setStatus("error", "!", "Не удалось обновить данные", `${error.message}${error.correlationId ? ` Идентификатор операции: ${error.correlationId}.` : ""}`, loadData);
@@ -651,29 +713,49 @@ async function loadData() {
   }
 }
 
-async function selectSpace(spaceId) {
-  if (spaceId === state.currentSpaceId || state.spaceLoading) return;
+async function selectSpace(spaceId, { reload = false } = {}) {
+  if (!reload && spaceId === state.currentSpaceId) return;
+  if (!state.data.spaces.some((space) => space.id === spaceId)) return;
+  // A modal card owns its space. Do not silently discard a live form or move
+  // an in-flight save into another space through programmatic navigation.
+  if ($("#employeeDialog")?.open || $("#createDialog")?.open || $("#operatorGroupDialog")?.open) {
+    notify("!", "Сначала завершите работу с карточкой", "Сохраните карточку или закройте её перед сменой раздела данных.");
+    return;
+  }
+  const selection = ++spaceSelectionVersion;
+  if (reload) spaceContextVersion += 1;
   state.currentSpaceId = spaceId;
   localStorage.setItem("docomator.space", spaceId);
   propertyLoadVersion += 1;
+  spaceLoadVersion += 1;
+  state.spaceLoading = false;
   state.data.properties = [];
-  publishCurrentSpace();
-  state.selectedEntityIds.clear();
+  state.data.spaceEntities = [];
+  state.data.groups = [];
+  state.data.snapshots = [];
   state.data.employees = [];
   state.data.activeTemplates = [];
+  state.selectedEntityIds.clear();
   state.employee.loaded = false;
   state.templateCatalog.loaded = false;
   state.templateCatalog.error = false;
   state.lastPlan = null;
   $("#audiencePlan").innerHTML = "";
+  $("#employeeList").innerHTML = "";
+  renderSpaces();
+  updateHomeEmployeeState();
+  publishCurrentSpace();
+  const context = captureSpaceContext();
   setStatus("", "⏳", "Переключаем пространство", "Получаем его участников, группы, снимки и сохранённые настройки.");
   try {
-    await Promise.all([loadCurrentSpaceProperties(), loadCurrentSpaceData()]);
-    await Promise.all([loadEmployees(), loadActiveTemplates()]);
+    await Promise.all([loadCurrentSpaceProperties(), loadCurrentSpaceData(), loadEmployees(), loadActiveTemplates()]);
+    if (selection !== spaceSelectionVersion || !context.isCurrent()) return;
+    setConnection("ok", "Локальный сервер готов");
     setStatus("success", "✓", "Пространство выбрано", `Рабочий контекст: «${currentSpace()?.name || "пространство"}». Данные других пространств не показаны.`);
   } catch (cause) {
+    if (selection !== spaceSelectionVersion || !context.isCurrent()) return;
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось открыть пространство.");
-    setStatus("error", "!", "Пространство не открыто", `${error.message}${error.correlationId ? ` Идентификатор операции: ${error.correlationId}.` : ""}`, () => selectSpace(spaceId));
+    setStatus("error", "!", "Пространство не открыто", `${error.message}${error.correlationId ? ` Идентификатор операции: ${error.correlationId}.` : ""}`, () => selectSpace(spaceId, { reload: true }));
   }
 }
 
@@ -699,6 +781,7 @@ function fieldHtml([name, label, type, required, placeholder, hint]) {
 }
 
 function openDialog(kind) {
+  if (dialogSaveLocks.has($("#createDialog"))) return;
   if (!dialogs[kind]) return;
   if ((kind === "space-entity" || kind === "group") && !currentSpace()) {
     notify("💡", "Сначала выберите пространство", "Эта операция должна иметь однозначную границу данных.");
@@ -727,12 +810,14 @@ function openDialog(kind) {
 }
 
 function closeDialog() {
+  if (dialogSaveLocks.has($("#createDialog"))) return;
   if ($("#createDialog").open) $("#createDialog").close();
   state.dialogKind = null;
 }
 
 async function submitDialog(event) {
   event.preventDefault();
+  if (dialogSaveLocks.has($("#createDialog"))) return;
   const kind = state.dialogKind;
   const definition = dialogs[kind];
   if (!definition) return;
@@ -746,12 +831,14 @@ async function submitDialog(event) {
   button.textContent = "Сохраняем…";
   $("#formError").hidden = true;
   const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+  const unlock = lockDialogForSave($("#createDialog"));
   setStatus("", "⏳", "Сохраняем изменение", "Проверяем границу пространства, значения и запись в журнале. Форма закроется только после подтверждения сервера.");
   try {
     const endpoint = typeof definition.endpoint === "function" ? definition.endpoint(values) : definition.endpoint;
     const result = await api(endpoint, { method: definition.method || "POST", body: JSON.stringify(definition.payload(values)) });
     if (definition.afterCreate) await definition.afterCreate(result?.data);
     const createdSpaceId = kind === "space" ? result?.data?.id : null;
+    unlock();
     closeDialog();
     notify("✅", definition.success, "Изменение подтверждено сервером и записано в журнал действий.");
     setStatus("success", "✓", definition.success, `Операция завершена. Идентификатор операции: ${result?.correlationId || "не указан"}.`);
@@ -766,20 +853,25 @@ async function submitDialog(event) {
     $("#formError").innerHTML = `${escapeHtml(error.message)}${error.correlationId ? `<code>Идентификатор операции: ${escapeHtml(error.correlationId)}</code>` : ""}`;
     setStatus("error", "!", "Изменение не сохранено", "Введённые данные остались в форме. Исправьте причину или повторите действие.");
   } finally {
+    unlock();
     button.disabled = false;
     button.textContent = definition.submit;
   }
 }
 
 async function loadGroupSelection(groupId) {
+  const context = captureSpaceContext();
+  const version = ++groupSelectionReadVersion;
   setStatus("", "⏳", "Получаем состав группы", "После загрузки участники будут отмечены на вкладке «Участники».");
   try {
-    const result = await api(spaceEndpoint(`/groups/${encodeURIComponent(groupId)}/members`));
+    const result = await api(context.endpoint(`/groups/${encodeURIComponent(groupId)}/members`));
+    if (!context.isCurrent() || version !== groupSelectionReadVersion) return;
     state.selectedEntityIds = new Set((result?.data || []).map((member) => member.entityId));
     renderMembers();
     setSpaceTab("members");
     setStatus("success", "✓", "Состав группы отмечен", `Выбрано ${state.selectedEntityIds.size} участников. Можно изменить отметки или подготовить документ.`);
   } catch (cause) {
+    if (!context.isCurrent() || version !== groupSelectionReadVersion) return;
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось получить состав группы.");
     setStatus("error", "!", "Группа не открыта", error.message, () => loadGroupSelection(groupId));
   }
@@ -797,6 +889,9 @@ async function createAudienceSnapshot() {
     notify("💡", "Сначала выберите пространство", "Снимок аудитории всегда принадлежит одному пространству.");
     return;
   }
+  const context = captureSpaceContext();
+  const version = ++snapshotReadVersion;
+  const isCurrent = () => context.isCurrent() && version === snapshotReadVersion;
   const sourceValue = $("#audienceSource").value;
   const mode = $('input[name="targetMode"]:checked')?.value || "aggregate";
   let source;
@@ -812,15 +907,18 @@ async function createAudienceSnapshot() {
   button.textContent = "Фиксируем состав…";
   setStatus("", "⏳", "Фиксируем аудиторию", "Проверяем принадлежность каждого участника пространству и строим точное число будущих документов.");
   try {
-    const result = await api(spaceEndpoint("/audience-snapshots"), { method: "POST", body: JSON.stringify({ source, targetMode: mode }) });
+    const result = await api(context.endpoint("/audience-snapshots"), { method: "POST", body: JSON.stringify({ source, targetMode: mode }) });
+    if (!isCurrent()) return;
     renderPlan(result.data);
     notify("✅", "План документа готов", mode === "aggregate" ? "Подготовлено одно задание с коллекцией участников." : `Подготовлено ${result.data.plan.documentCount} отдельных единиц.`);
     setStatus("success", "✓", "Состав и режим зафиксированы", `Снимок содержит ${result.data.snapshot.memberCount} участников. Изменение группы не повлияет на этот запуск.`);
-    const snapshots = await api(spaceEndpoint("/audience-snapshots?limit=50"));
+    const snapshots = await api(context.endpoint("/audience-snapshots?limit=50"));
+    if (!isCurrent()) return;
     state.data.snapshots = snapshots?.data || [];
     renderSnapshots();
     updateMetrics();
   } catch (cause) {
+    if (!isCurrent()) return;
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось подготовить план.");
     setStatus("error", "!", "План не создан", `${error.message}${error.correlationId ? ` Идентификатор операции: ${error.correlationId}.` : ""}`);
   } finally {
@@ -830,13 +928,17 @@ async function createAudienceSnapshot() {
 }
 
 async function openSnapshot(snapshotId) {
+  const context = captureSpaceContext();
+  const version = ++snapshotReadVersion;
   setStatus("", "⏳", "Открываем снимок", "Получаем сохранённый состав и исполнимый план без пересчёта группы.");
   try {
-    const result = await api(spaceEndpoint(`/audience-snapshots/${encodeURIComponent(snapshotId)}`));
+    const result = await api(context.endpoint(`/audience-snapshots/${encodeURIComponent(snapshotId)}`));
+    if (!context.isCurrent() || version !== snapshotReadVersion) return;
     renderPlan(result.data);
     setSpaceTab("audience");
     setStatus("success", "✓", "Снимок открыт", `Состав зафиксирован: ${result.data.snapshot.memberCount} участников, ${result.data.plan.documentCount} будущих документов.`);
   } catch (cause) {
+    if (!context.isCurrent() || version !== snapshotReadVersion) return;
     const error = cause instanceof ApiError ? cause : new ApiError("Не удалось открыть снимок.");
     setStatus("error", "!", "Снимок не открыт", error.message, () => openSnapshot(snapshotId));
   }
@@ -944,28 +1046,32 @@ function updateHomeEmployeeState() {
 }
 
 async function loadActiveTemplates() {
-  if (state.templateCatalog.loading) return;
-  if (!state.currentSpaceId) {
-    state.data.activeTemplates = [];
-    state.templateCatalog.loaded = true;
-    state.templateCatalog.error = false;
-    updateHomeEmployeeState();
-    return;
-  }
+  if (templateCatalogRead?.context.isCurrent()) return templateCatalogRead.promise;
+  const context = captureSpaceContext();
+  const read = { context, promise: null };
+  templateCatalogRead = read;
   state.templateCatalog.loading = true;
-  try {
-    const body = await api(spaceEndpoint("/active-templates"));
-    state.data.activeTemplates = Array.isArray(body?.data) ? body.data : [];
-    state.templateCatalog.loaded = true;
-    state.templateCatalog.error = false;
-  } catch {
-    state.data.activeTemplates = [];
-    state.templateCatalog.loaded = false;
-    state.templateCatalog.error = true;
-  } finally {
-    state.templateCatalog.loading = false;
-    updateHomeEmployeeState();
-  }
+  read.promise = (async () => {
+    try {
+      const body = context.spaceId ? await api(context.endpoint("/active-templates")) : null;
+      if (templateCatalogRead !== read || !context.isCurrent()) return;
+      state.data.activeTemplates = Array.isArray(body?.data) ? body.data : [];
+      state.templateCatalog.loaded = true;
+      state.templateCatalog.error = false;
+    } catch {
+      if (templateCatalogRead !== read || !context.isCurrent()) return;
+      state.data.activeTemplates = [];
+      state.templateCatalog.loaded = false;
+      state.templateCatalog.error = true;
+    } finally {
+      if (templateCatalogRead === read) {
+        templateCatalogRead = null;
+        state.templateCatalog.loading = false;
+        if (context.isCurrent()) updateHomeEmployeeState();
+      }
+    }
+  })();
+  return read.promise;
 }
 
 function initializeTemplateCatalogSync() {
@@ -1022,33 +1128,36 @@ function renderEmployeeSuccess() {
 }
 
 async function loadEmployees({ preserveSuccess = false } = {}) {
-  if (state.employee.loading || (!state.currentSpaceId && state.loading)) return;
-  if (!state.currentSpaceId) {
-    state.data.employees = [];
-    state.employee.loaded = true;
-    setEmployeeWorkspaceState("warning", "Не выбран раздел данных", "Откройте настройки и выберите подразделение для списка сотрудников.");
-    renderEmployeeList();
-    updateHomeEmployeeState();
-    return;
-  }
+  if (employeeRead?.context.isCurrent()) return employeeRead.promise;
+  const context = captureSpaceContext();
+  const read = { context, promise: null };
+  employeeRead = read;
   state.employee.loading = true;
   setEmployeeWorkspaceState("loading", "Получаем сотрудников", "Список появится после ответа локального сервера.");
-  try {
-    const body = await api(`${employeeEndpoint()}?limit=1000`);
-    state.data.employees = employeeItems(body);
-    state.employee.loaded = true;
-    renderEmployeeList();
-    if (preserveSuccess) renderEmployeeSuccess();
-    else setEmployeeWorkspaceState("success", "Список сотрудников готов", state.data.employees.length > 0 ? `Загружено карточек: ${state.data.employees.length}.` : "Можно добавить первого сотрудника.");
-    updateHomeEmployeeState();
-  } catch (cause) {
-    const error = cause instanceof ApiError ? cause : new ApiError("Не удалось получить сотрудников.");
-    state.employee.loaded = false;
-    setEmployeeWorkspaceState("error", "Список не загружен", employeeErrorText(error, "получить сотрудников"), error);
-    updateHomeEmployeeState();
-  } finally {
-    state.employee.loading = false;
-  }
+  read.promise = (async () => {
+    try {
+      const body = context.spaceId ? await api(context.endpoint("/employees?limit=1000")) : null;
+      if (employeeRead !== read || !context.isCurrent()) return;
+      state.data.employees = employeeItems(body);
+      state.employee.loaded = true;
+      renderEmployeeList();
+      if (!context.spaceId) setEmployeeWorkspaceState("warning", "Не выбран раздел данных", "Откройте управление и выберите раздел для списка сотрудников.");
+      else if (preserveSuccess) renderEmployeeSuccess();
+      else setEmployeeWorkspaceState("success", "Список сотрудников готов", state.data.employees.length > 0 ? `Загружено карточек: ${state.data.employees.length}.` : "Можно добавить первого сотрудника.");
+    } catch (cause) {
+      if (employeeRead !== read || !context.isCurrent()) return;
+      const error = cause instanceof ApiError ? cause : new ApiError("Не удалось получить сотрудников.");
+      state.employee.loaded = false;
+      setEmployeeWorkspaceState("error", "Список не загружен", employeeErrorText(error, "получить сотрудников"), error);
+    } finally {
+      if (employeeRead === read) {
+        employeeRead = null;
+        state.employee.loading = false;
+        if (context.isCurrent()) updateHomeEmployeeState();
+      }
+    }
+  })();
+  return read.promise;
 }
 
 function employeeInputHtml(field, index) {
@@ -1450,6 +1559,11 @@ function attachEvents() {
     if (spaceId === "" || spaceId === state.currentSpaceId) {
       void loadEmployees({ preserveSuccess: true });
     }
+  });
+  window.addEventListener("beforeunload", (event) => {
+    if (dialogSaveLocks.size === 0) return;
+    event.preventDefault();
+    event.returnValue = "";
   });
   window.addEventListener("online", loadData);
   window.addEventListener("offline", () => {

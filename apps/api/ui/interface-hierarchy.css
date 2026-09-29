@@ -390,3 +390,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .system-status-control[data-state="loading"] .system-status-dot { animation: none; }
 }
+
+/* Mobile primary navigation stays at five tasks; other workspaces live in More. */
+.management-mobile-links { display: none; }
+@media (max-width: 820px) {
+  .management-mobile-links { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-4); }
+  .management-mobile-links > button { flex: 1 1 10rem; }
+}

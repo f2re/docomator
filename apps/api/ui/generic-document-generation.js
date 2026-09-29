@@ -2,6 +2,7 @@
   let genericGenerationAllEntities = [];
   let genericGenerationAllGroups = [];
   let genericGenerationTypeKey = "";
+  let genericGenerationLoadedVersion = -1;
 
   function genericGenerationTypes() {
     const byKey = new Map();
@@ -137,6 +138,11 @@
 
   const genericGenerationBaseRenderWorkspace = renderGenerationWorkspace;
   renderGenerationWorkspace = function renderGenericGenerationWorkspace() {
+    if (genericGenerationLoadedVersion !== generationWorkspaceVersion) {
+      genericGenerationAllEntities = [...generationEntities];
+      genericGenerationAllGroups = [...generationGroups];
+      genericGenerationLoadedVersion = generationWorkspaceVersion;
+    }
     if (genericGenerationAllEntities.length === 0 && generationEntities.length > 0) {
       genericGenerationAllEntities = [...generationEntities];
     }
@@ -146,24 +152,6 @@
     genericGenerationApplyFilter();
     genericGenerationBaseRenderWorkspace();
     genericGenerationAdaptForm();
-    genericGenerationReplaceText(document.querySelector("#documentGenerationPanel"));
-  };
-
-  const genericGenerationBaseLoadWorkspace = loadGenerationWorkspace;
-  loadGenerationWorkspace = async function loadGenericGenerationWorkspace() {
-    genericGenerationAllEntities = [];
-    genericGenerationAllGroups = [];
-    await genericGenerationBaseLoadWorkspace();
-    if (genericGenerationAllEntities.length === 0 && generationEntities.length > 0) {
-      genericGenerationAllEntities = [...generationEntities];
-    }
-    if (genericGenerationAllGroups.length === 0 && generationGroups.length > 0) {
-      genericGenerationAllGroups = [...generationGroups];
-    }
-    if (genericGenerationAllEntities.length > 0 || genericGenerationAllGroups.length > 0) {
-      genericGenerationApplyFilter();
-      renderGenerationWorkspace();
-    }
     genericGenerationReplaceText(document.querySelector("#documentGenerationPanel"));
   };
 

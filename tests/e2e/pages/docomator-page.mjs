@@ -31,9 +31,8 @@ export class ОформляторPage {
       if ((await visibleTarget.count()) > 0) {
         await visibleTarget.click();
       } else {
-        await this.page.locator(`[data-view-target="${name}"]`).first().evaluate(
-          (element) => element.click()
-        );
+        await this.openView("settings");
+        await this.page.locator(`[data-view="settings"] [data-view-target="${name}"]:visible`).first().click();
       }
     }
     await expect(this.page.locator(`[data-view="${name}"]`)).toHaveClass(

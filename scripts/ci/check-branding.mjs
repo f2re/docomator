@@ -73,7 +73,8 @@ export async function checkBranding() {
     "--radius-control: 7px;",
     "--radius-panel: 10px;",
     "--radius-dialog: 14px;",
-    "--touch-target: 44px;"
+    "--touch-target: 44px;",
+    "--safe-bottom: env(safe-area-inset-bottom, 0px);"
   ];
   for (const token of canonicalTokens) requireFragment(findings, tokens, tokensPath, token);
 

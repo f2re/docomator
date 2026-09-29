@@ -290,11 +290,16 @@
     const spaceId = globalThis.docomatorTemplateWizard?.spaceId() || "";
     const draftId = structureDraft?.id || structureWizardArtifacts().draftId || "";
     if (!spaceId || !draftId) return;
+    const isCurrent = () =>
+      requestVersion === visualLayoutRequestVersion &&
+      structureReport === report &&
+      spaceId === globalThis.docomatorTemplateWizard?.spaceId() &&
+      draftId === (structureDraft?.id || structureWizardArtifacts().draftId || "");
     try {
       const response = await structureFetchJson(
         `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts/${encodeURIComponent(draftId)}/visual-layout`
       );
-      if (requestVersion !== visualLayoutRequestVersion) return;
+      if (!isCurrent()) return;
       const layout = response.data;
       if (
         layout?.sourceSha256 !== report.sourceSha256 ||
@@ -304,13 +309,16 @@
           "Визуальное представление не соответствует сохранённому исходнику."
         );
       }
+      // The safe structure already has the same validated coordinates.
+      // Cosmetic enrichment must not destroy a live selection or form input.
+      if (selectedStructureElement || fieldBusy || document.querySelector("#documentFieldForm")) return;
       if (report.format === "docx") {
         renderVisualDocxStructure(report, layout, operationId);
       } else {
         renderVisualXlsxStructure(report, layout, operationId);
       }
     } catch (error) {
-      if (requestVersion !== visualLayoutRequestVersion) return;
+      if (!isCurrent()) return;
       const result = document.querySelector(
         "#documentStructureResult .structure-report"
       );

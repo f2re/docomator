@@ -8,6 +8,10 @@ let activationPollToken = 0;
 let activationBusy = false;
 let activationReloadTimer = null;
 let activationSourceMarker = "";
+let activationContextSpace = "";
+let activationDraftReadVersion = 0;
+let activationVersionReadVersion = 0;
+let activationCatalogReadVersion = 0;
 
 function activationEscape(value) {
   return String(value ?? "").replace(
@@ -264,12 +268,16 @@ function renderPreviewReady(data) {
 }
 
 async function refreshPreviewState(requestId, versionId, token = null) {
-  const spaceId = currentActivationSpaceId();
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const pollToken = token ?? ++activationPollToken;
+  const current = () => context.isCurrent() && pollToken === activationPollToken;
+  const spaceId = context.spaceId;
   if (!spaceId || !requestId) return;
   try {
     const body = await activationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-previews/${encodeURIComponent(requestId)}`
     );
+    if (!current()) return;
     const data = body.data;
     if (data.request.state === "ready") {
       clearActivationPolling();
@@ -282,13 +290,13 @@ async function refreshPreviewState(requestId, versionId, token = null) {
       return;
     }
     renderPreviewPending(data);
-    const pollToken = token ?? ++activationPollToken;
     activationPollTimer = setTimeout(() => {
       if (pollToken === activationPollToken) {
         void refreshPreviewState(requestId, versionId, pollToken);
       }
     }, 1_500);
   } catch (error) {
+    if (!current()) return;
     clearActivationPolling();
     const holder = document.querySelector("#templateActivationStatus");
     if (holder) {
@@ -305,6 +313,7 @@ async function refreshPreviewState(requestId, versionId, token = null) {
 }
 
 async function requestTemplatePreview(versionId = null) {
+  const context = globalThis.docomatorCaptureSpaceContext();
   if (activationBusy) return;
   const version =
     versionId === null
@@ -333,8 +342,10 @@ async function requestTemplatePreview(versionId = null) {
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/${versionCollection}/${encodeURIComponent(version.id)}/preview`,
       { method: "POST" }
     );
+    if (!context.isCurrent()) return;
     await refreshPreviewState(body.data.request.id, version.id);
   } catch (error) {
+    if (!context.isCurrent()) return;
     holder.innerHTML = `
       <div class="activation-state is-error">
         <span aria-hidden="true">⚠️</span>
@@ -342,7 +353,7 @@ async function requestTemplatePreview(versionId = null) {
       </div>`;
     if (button) button.textContent = "Повторить создание PDF";
   } finally {
-    activationBusy = false;
+    if (context.isCurrent()) activationBusy = false;
     if (button) button.disabled = false;
   }
 }
@@ -371,6 +382,7 @@ async function renderActivationSuccess(body) {
 }
 
 async function activateTemplateVersionDirect() {
+  const context = globalThis.docomatorCaptureSpaceContext();
   if (activationBusy) return;
   const version = selectedActivationVersion();
   const spaceId = currentActivationSpaceId();
@@ -396,16 +408,19 @@ async function activateTemplateVersionDirect() {
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/${collection}/${encodeURIComponent(version.id)}/activate`,
       { method: "POST" }
     );
+    if (!context.isCurrent()) return;
     await renderActivationSuccess(body);
   } catch (error) {
+    if (!context.isCurrent()) return;
     holder.innerHTML = `${previous}<div class="activation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Шаблон не сохранён</strong><p>${activationEscape(error?.message || "Повторите действие.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.</small>` : ""}</div></div>`;
   } finally {
-    activationBusy = false;
+    if (context.isCurrent()) activationBusy = false;
     if (button) button.disabled = false;
   }
 }
 
 async function activateTemplateVersion(requestId) {
+  const context = globalThis.docomatorCaptureSpaceContext();
   if (activationBusy) return;
   const spaceId = currentActivationSpaceId();
   const holder = document.querySelector("#templateActivationStatus");
@@ -424,8 +439,10 @@ async function activateTemplateVersion(requestId) {
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-previews/${encodeURIComponent(requestId)}/activate`,
       { method: "POST" }
     );
+    if (!context.isCurrent()) return;
     await renderActivationSuccess(body);
   } catch (error) {
+    if (!context.isCurrent()) return;
     holder.innerHTML = existing;
     holder.insertAdjacentHTML(
       "afterbegin",
@@ -435,12 +452,14 @@ async function activateTemplateVersion(requestId) {
     const confirmation = holder.querySelector("#templateActivationConfirmed");
     if (retryButton && confirmation) retryButton.disabled = !confirmation.checked;
   } finally {
-    activationBusy = false;
+    if (context.isCurrent()) activationBusy = false;
     document.querySelector("#templateActivationProgress")?.remove();
   }
 }
 
 async function loadActivationVersions() {
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++activationDraftReadVersion;
   clearActivationPolling();
   const content = document.querySelector("#templateActivationContent");
   const spaceId = currentActivationSpaceId();
@@ -465,6 +484,7 @@ async function loadActivationVersions() {
     const draftBody = await activationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/template-drafts?limit=100`
     );
+    if (!context.isCurrent() || version !== activationDraftReadVersion) return;
     activationDrafts = Array.isArray(draftBody.data) ? draftBody.data : [];
     if (activationDrafts.length === 0) {
       content.innerHTML = `
@@ -510,6 +530,8 @@ async function loadActivationVersions() {
       ?.addEventListener("click", () => void requestTemplatePreview());
     await updateActivationVersionSelect();
   } catch (error) {
+    if (!context.isCurrent() || version !== activationDraftReadVersion) return;
+
     content.querySelector("#templateActivationReloadState")?.remove();
     const errorHtml = `<div class="activation-state is-error" id="templateActivationLoadError"><span aria-hidden="true">⚠️</span><div><strong>Проверенные версии получить не удалось</strong><p>${activationEscape(error?.message || "Повторите действие.")} Текущий выбор сохранён.</p>${error?.operationId ? `<small>Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="templateActivationReload" type="button">Повторить</button></div></div>`;
     if (existingForm) {
@@ -523,6 +545,8 @@ async function loadActivationVersions() {
 }
 
 async function updateActivationVersionSelect() {
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++activationVersionReadVersion;
   clearActivationPolling();
   const draft = selectedActivationDraft();
   const versionSelect = document.querySelector("#templateActivationVersion");
@@ -540,6 +564,7 @@ async function updateActivationVersionSelect() {
       activationFetchJson(`${base}/test-versions?limit=100`),
       activationFetchJson(`${base}/multi-test-versions?limit=100`)
     ]);
+    if (!context.isCurrent() || version !== activationVersionReadVersion) return;
     const singleVersions = Array.isArray(singleBody.data)
       ? singleBody.data.map((version) => ({
           ...version,
@@ -578,6 +603,8 @@ async function updateActivationVersionSelect() {
     previewButton.disabled = false;
     directButton.disabled = false;
   } catch (error) {
+    if (!context.isCurrent() || version !== activationVersionReadVersion) return;
+
     activationVersions = [];
     versionSelect.innerHTML = "";
     hint.innerHTML = `${activationEscape(error?.message || "Историю получить не удалось.")}${error?.operationId ? ` Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.` : ""} <button class="quiet-button compact" id="templateActivationVersionRetry" type="button">Повторить</button>`;
@@ -588,6 +615,8 @@ async function updateActivationVersionSelect() {
 }
 
 async function loadActiveTemplateCatalog() {
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const version = ++activationCatalogReadVersion;
   const holder = document.querySelector("#activeTemplateCatalog");
   const spaceId = currentActivationSpaceId();
   if (!holder) return;
@@ -600,6 +629,7 @@ async function loadActiveTemplateCatalog() {
     const body = await activationFetchJson(
       `/api/v1/spaces/${encodeURIComponent(spaceId)}/active-templates`
     );
+    if (!context.isCurrent() || version !== activationCatalogReadVersion) return;
     const templates = Array.isArray(body.data) ? body.data : [];
     if (templates.length === 0) {
       holder.innerHTML = `<div class="activation-catalog-empty">В этом пространстве пока нет активных шаблонов.</div>`;
@@ -622,6 +652,8 @@ async function loadActiveTemplateCatalog() {
       )
       .join("");
   } catch (error) {
+    if (!context.isCurrent() || version !== activationCatalogReadVersion) return;
+
     holder.innerHTML = `<div class="activation-catalog-empty is-error"><p>${activationEscape(error?.message || "Каталог получить не удалось.")}</p>${error?.operationId ? `<small>Идентификатор операции: <code>${activationEscape(error.operationId)}</code>.</small>` : ""}<button class="secondary-button" id="activeTemplateCatalogRetry" type="button">Повторить</button></div>`;
     holder
       .querySelector("#activeTemplateCatalogRetry")
@@ -700,16 +732,33 @@ if (activationView) {
     void loadActiveTemplateCatalog();
   });
   window.addEventListener("docomator:view-changed", (event) => {
-    if (event.detail?.view !== "templates" || !activationShouldLoad()) {
+    if (event.detail?.view !== "templates") {
       clearActivationPolling();
       clearActivationReload();
       return;
     }
-    void loadActivationVersions();
     void loadActiveTemplateCatalog();
+    if (activationShouldLoad()) void loadActivationVersions();
   });
   window.addEventListener("beforeunload", () => {
     clearActivationPolling();
     clearActivationReload();
   });
 }
+
+document.addEventListener("docomator:space-changed", (event) => {
+  const spaceId = event.detail?.spaceId || "";
+  if (spaceId === activationContextSpace) return;
+  activationContextSpace = spaceId;
+  activationBusy = false;
+  activationDraftReadVersion += 1;
+  activationVersionReadVersion += 1;
+  activationCatalogReadVersion += 1;
+  activationDrafts = [];
+  activationVersions = [];
+  clearActivationPolling();
+  clearActivationReload();
+  document.getElementById("templateActivationContent")?.replaceChildren();
+  document.getElementById("activeTemplateCatalog")?.replaceChildren();
+  if (activationView?.classList.contains("is-visible")) void loadActiveTemplateCatalog();
+});

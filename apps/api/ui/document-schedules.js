@@ -703,6 +703,7 @@ function scheduleWorkspaceBindWorkspace() {
 
 async function loadScheduleWorkspace() {
   if (!scheduleViewVisible()) return;
+  const context = globalThis.docomatorCaptureSpaceContext();
   scheduleWorkspaceEnsurePanel();
   const holder = document.querySelector("#scheduleContent");
   const spaceId = currentGenerationSpaceId();
@@ -723,7 +724,7 @@ async function loadScheduleWorkspace() {
   const results = await Promise.allSettled(
     endpoints.map(([, url]) => generationFetchJson(url))
   );
-  if (sequence !== scheduleWorkspaceLoadSequence) return;
+  if (sequence !== scheduleWorkspaceLoadSequence || !context.isCurrent()) return;
   scheduleWorkspaceDependencyErrors = [];
   const values = new Map();
   results.forEach((result, index) => {
@@ -751,6 +752,7 @@ async function loadScheduleWorkspace() {
 }
 
 function scheduleWorkspaceHandleSpaceChanged() {
+  scheduleWorkspaceLoadSequence += 1;
   scheduleWorkspaceFormOpen = false;
   scheduleWorkspaceEditingId = null;
   scheduleWorkspaceDuplicateFromId = null;
