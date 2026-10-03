@@ -159,7 +159,7 @@ function visualDocxSelectionOffsets(target, selection) {
 }
 
 let visualDocxSuppressClickId = "";
-let visualDocxSuppressClickUntil = 0;
+
 
 function visualElementByTarget(target) {
   const id =
@@ -195,7 +195,7 @@ function visualDocxCaptureDirectSelection(target) {
   const offsets = visualDocxSelectionOffsets(target, selection);
   if (!offsets || offsets.endOffset > element.text.length) return false;
   visualDocxSuppressClickId = element.id;
-  visualDocxSuppressClickUntil = Date.now() + 400;
+
   renderStructureSelection(element);
   const rangeMode = document.querySelector(
     'input[name="documentFieldParagraphMode"][value="range"]'
@@ -206,6 +206,8 @@ function visualDocxCaptureDirectSelection(target) {
   control.focus({ preventScroll: true });
   control.setSelectionRange(offsets.startOffset, offsets.endOffset);
   captureStructureTextRange();
+  const precision = document.querySelector(".studio-placement");
+  if (precision) precision.open = false;
   return true;
 }
 
@@ -296,6 +298,8 @@ function visualShowXlsxSheet(root, path) {
 }
 
 function attachVisualInteractions(root) {
+  root.addEventListener("mousedown", () => { visualDocxSuppressClickId = ""; });
+  root.addEventListener("keydown", () => { visualDocxSuppressClickId = ""; });
   root.addEventListener("mouseup", (event) => {
     const target = event.target.closest(
       ".template-visual-target[data-visual-docx]"
@@ -308,8 +312,7 @@ function attachVisualInteractions(root) {
       const id = target.getAttribute("data-structure-id") || "";
       if (
         target.hasAttribute("data-visual-docx") &&
-        id === visualDocxSuppressClickId &&
-        Date.now() < visualDocxSuppressClickUntil
+        id === visualDocxSuppressClickId
       ) {
         visualDocxSuppressClickId = "";
         return;

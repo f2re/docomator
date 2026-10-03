@@ -50,12 +50,14 @@
   }
 
   loadStructurePropertyDefinitions = async function loadGenericStructureDefinitions() {
+    const context = globalThis.docomatorCaptureSpaceContext();
     const [types, properties] = await Promise.all([
       structureFetchJson("/api/v1/knowledge/entity-types?limit=500"),
       structureFetchJson(
         globalThis.docomatorPropertyDefinitionsUrl("", { limit: 500 })
       )
     ]);
+    if (!context.isCurrent()) return;
     genericTemplateEntityTypes = Array.isArray(types.data) ? types.data : [];
     structurePropertyDefinitions = Array.isArray(properties.data)
       ? properties.data
@@ -241,7 +243,8 @@
       const groupField = form
         .querySelector("#documentFieldGroup")
         ?.closest("label");
-      grid.insertBefore(field, groupField || grid.firstChild);
+      const sourceOptions = form.querySelector(".studio-source-options-content") || grid;
+      sourceOptions.insertBefore(field, groupField?.parentElement === sourceOptions ? groupField : sourceOptions.firstChild);
       field
         .querySelector("#documentEntityType")
         ?.addEventListener("change", (event) => {

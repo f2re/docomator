@@ -68,17 +68,9 @@ function createStructurePanel() {
   panel.dataset.templateWizardPanel = "2";
   panel.hidden = true;
   panel.innerHTML = `
-    <article class="panel structure-card">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">Поля шаблона</p>
-          <h2>Выберите место для первого поля</h2>
-          <p>Система покажет текст и ячейки документа. Нажмите на нужное место и выберите поле карточки сотрудника.</p>
-        </div>
-        <span class="template-file-mark" aria-hidden="true">Aa</span>
-      </div>
+    <article class="panel structure-card studio-card">
       <div class="structure-actions">
-        <button class="primary-button" id="documentStructureButton" type="button">Построить структуру</button>
+        <button class="secondary-button" id="documentStructureButton" type="button">Построить структуру</button>
         <p id="documentStructureHint">После анализа выберите абзац DOCX и выделите в нём изменяемый текст либо выберите ячейку XLSX.</p>
       </div>
       <div id="documentStructureResult" class="structure-result" aria-live="polite">
@@ -812,6 +804,8 @@ function updateStructureFieldReadiness() {
   const button = form?.querySelector("#documentFieldSave");
   const message = form?.querySelector("#documentFieldMessage");
   if (!form || !button || !message || fieldBusy) return;
+  const saveTemplate = document.querySelector("#documentTemplateSave");
+  if (saveTemplate && !button.hidden) { saveTemplate.classList.remove("primary-button"); saveTemplate.classList.add("secondary-button"); }
   const reason = structureFieldBlockReason(form);
   button.disabled = Boolean(reason);
   message.className = reason ? "is-warning" : "is-ready";
@@ -819,6 +813,8 @@ function updateStructureFieldReadiness() {
 }
 
 function renderStructureSelection(element) {
+  if (fieldBusy || studioEditRun || configuredTemplateSave) return;
+  if (studioRenderExistingField(element)) return;
   selectedStructureElement = element;
   selectedStructureTextRange = null;
   document.querySelectorAll(".structure-element.is-selected").forEach((item) => {
@@ -840,17 +836,18 @@ function renderStructureSelection(element) {
   const fieldUnavailable = formulaUnavailable || outsideCurrentRepeat;
   detail.innerHTML = `
     <div class="structure-selection-content">
-      <strong>${structureEscape(structureLocation(element))}</strong>
+      <div class="studio-inspector-heading"><strong>${structureEscape(structureLocation(element))}</strong><button type="button" class="quiet-button" data-studio-close aria-label="Закрыть назначение поля">×</button></div>
       <p>${structureEscape(structurePreview(element))}</p>
       <form class="structure-field-form" id="documentFieldForm" novalidate>
         <div class="structure-field-grid">
-          ${structureTextRangeControl(element)}
-          ${structureRepeatRowControl(element)}
+          ${element.kind === "paragraph" ? `<details class="studio-options studio-placement" open><summary>Заменяемый текст</summary><div>${structureTextRangeControl(element)}</div></details>` : ""}
+          <details class="studio-options studio-source-options"><summary>Тип данных и раздел полей</summary><div class="studio-source-options-content">
           <label>
             <span>К кому относится значение?</span>
             <select id="documentFieldGroup" name="fieldGroup">${structureGroupSelectOptions(structureInferredFieldGroup(element))}</select>
             <small>Преподавательские и студенческие поля хранятся раздельно, даже если называются одинаково.</small>
           </label>
+          </div></details>
           <label>
             <span>Какое поле поставить сюда?</span>
             <select id="documentFieldProperty" name="propertyKey" data-searchable-select data-searchable-placeholder="Выберите поле" data-searchable-search-placeholder="Найти поле по названию">${structurePropertyOptions(structureInferredFieldGroup(element))}</select>
@@ -870,11 +867,14 @@ function renderStructureSelection(element) {
               <span><strong>Добавить поле всем сотрудникам</strong><small>Поле появится в карточках и будет доступно другим шаблонам.</small></span>
             </label>
           </div>
+          <details class="studio-options studio-output-options"><summary>Формат и обязательность</summary><div>
           <div id="documentFieldFormatter" class="structure-new-property" hidden></div>
           <label class="structure-required-field">
             <input id="documentFieldRequired" name="required" type="checkbox" />
             <span><strong>Обязательное поле</strong><small>Без значения документ нельзя будет завершить.</small></span>
           </label>
+          </div></details>
+          ${structureRepeatRowControl(element) ? `<details class="studio-options studio-repeat-options"><summary>Повторять строку по списку</summary><div>${structureRepeatRowControl(element)}</div></details>` : ""}
         </div>
         <details class="intake-technical">
           <summary>Технические сведения</summary>
@@ -977,6 +977,14 @@ function selectedStructureRepeatArea(form) {
 async function saveSelectedField(event) {
   event.preventDefault();
   if (fieldBusy || !selectedStructureElement || !structureReport) return;
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const draft = structureDraft;
+  const element = selectedStructureElement;
+  const range = selectedStructureTextRange ? { ...selectedStructureTextRange } : null;
+  const requestVersion = structureRequestVersion;
+  const current = () => context.isCurrent() && structureDraft?.id === draft?.id && structureRequestVersion === requestVersion;
+  if (!context.spaceId || !draft?.id) return;
+  const spaceId = context.spaceId;
   const form = event.currentTarget;
   const button = form.querySelector("#documentFieldSave");
   const message = form.querySelector("#documentFieldMessage");
@@ -1021,7 +1029,7 @@ async function saveSelectedField(event) {
     "Проверяем сохранённый исходник, координату и выбранный вариант записи значения.";
 
   try {
-    const { spaceId, draft } = await loadStructureDraft();
+    structureReportFromDraft(draft, structureSource, spaceId);
     if (creatingProperty) {
       const labelMatches = structurePropertyDefinitions.filter(
         (candidate) =>
@@ -1054,6 +1062,7 @@ async function saveSelectedField(event) {
             })
           }
         );
+        if (!current()) return;
         definition = definitionBody.data;
         structurePropertyDefinitions = [
           ...structurePropertyDefinitions,
@@ -1076,6 +1085,7 @@ async function saveSelectedField(event) {
           body: JSON.stringify({ uiGroup: fieldGroup })
         }
       );
+      if (!current()) return;
       definition = classified.data;
       const index = structurePropertyDefinitions.findIndex(
         (candidate) => candidate.key === definition.key
@@ -1083,7 +1093,8 @@ async function saveSelectedField(event) {
       if (index >= 0) structurePropertyDefinitions[index] = definition;
     }
     if (!definition) throw { message: "Выбранное поле сотрудника не найдено." };
-    definition = structureEffectiveDefinition(definition, selectedStructureElement);
+    if (!current()) return;
+    definition = structureEffectiveDefinition(definition, element);
     const decimalPlacesValue =
       form.querySelector("#documentFieldDecimalPlaces")?.value ?? "";
     const timeZone =
@@ -1098,7 +1109,7 @@ async function saveSelectedField(event) {
           label: definition.label,
           valueType: definition.valueType,
           required,
-          elementId: selectedStructureElement.id,
+          elementId: element.id,
           ...(repeatRow ? { repeatRow: true } : {}),
           ...(repeatArea ? { repeatArea } : {}),
           ...(personName ? { personName } : {}),
@@ -1108,12 +1119,13 @@ async function saveSelectedField(event) {
           ...(definition.valueType === "date-time" && timeZone
             ? { timeZone }
             : {}),
-          ...(selectedStructureElement.kind === "paragraph" && paragraphMode === "range"
-            ? { textRange: selectedStructureTextRange }
+          ...(element.kind === "paragraph" && paragraphMode === "range"
+            ? { textRange: range }
             : {})
         })
       }
     );
+    if (!current()) return;
     message.className = "is-success";
     message.innerHTML = `Поле «${structureEscape(fieldBody.data.field.label)}» связано с документом. Можно сохранить шаблон или добавить ещё поле.`;
     button.textContent = "Связано";
@@ -1123,6 +1135,7 @@ async function saveSelectedField(event) {
       ...(Array.isArray(structureDraft.fields) ? structureDraft.fields : []),
       fieldBody.data.field
     ];
+    studioRefreshBindings();
     form.querySelectorAll("input, select, textarea").forEach((control) => {
       control.disabled = true;
     });
@@ -1132,7 +1145,7 @@ async function saveSelectedField(event) {
       `<div class="structure-field-next">
         <button class="secondary-button" id="documentFieldAddAnother" type="button">Добавить ещё поле</button>
         <button class="secondary-button" id="documentFieldsContinue" type="button">Пробная копия</button>
-        <button class="primary-button" id="documentTemplateSave" type="button" data-save-configured-template>Сохранить шаблон</button>
+
       </div>`
     );
     actions
@@ -1156,12 +1169,14 @@ async function saveSelectedField(event) {
         });
       });
   } catch (error) {
+    if (!current()) return;
     const operationId = error?.operationId || "";
     message.className = "is-error";
     message.innerHTML = `${structureEscape(error?.message || "Сохранить поле не удалось.")}${operationId ? ` Идентификатор операции: <code>${structureEscape(operationId)}</code>.` : ""}`;
     button.disabled = false;
   } finally {
     fieldBusy = false;
+    studioRefreshBindings();
   }
 }
 
@@ -1172,6 +1187,8 @@ function renderStructure(report, operationId) {
   const analyzeButton = document.querySelector("#documentStructureButton");
   if (!result) return;
   if (analyzeButton) analyzeButton.hidden = true;
+  const hint = document.querySelector("#documentStructureHint");
+  if (hint) hint.hidden = true;
 
   const summary = report.summary;
   const metrics =
@@ -1202,17 +1219,11 @@ function renderStructure(report, operationId) {
     .join("");
 
   result.innerHTML = `
-    <article class="structure-report">
-      <header>
-        <div><p class="eyebrow">Поля документа</p><h3>${structureEscape(report.fileName)}</h3><p>В DOCX пустой абзац можно заполнить сразу; в абзаце с текстом выберите фрагмент или замену всего абзаца. В XLSX выберите нужную ячейку.</p></div>
-        <span class="pill pill-success">Готово</span>
-      </header>
-      <div class="structure-metrics">${metrics
-        .map(([value, label]) => `<div><strong>${value}</strong><span>${label}</span></div>`)
-        .join("")}</div>
+    <article class="structure-report studio-editor">
+      ${studioToolbar(report)}
       ${report.truncated ? '<div class="structure-warning"><span aria-hidden="true">ℹ️</span><p><strong>Показана ограниченная выборка.</strong> Полные количества сохранены в сводке, а страница не перегружена.</p></div>' : ""}
-      <div class="structure-element-list" role="list">${items || '<div class="structure-empty"><span aria-hidden="true">📭</span><div><strong>Элементы не найдены</strong><p>Документ не содержит доступных абзацев или ячеек.</p></div></div>'}</div>
-      <div class="structure-selection" id="documentStructureSelection" hidden></div>
+      <div class="template-visual-workspace"><div class="template-visual-canvas" aria-label="Список мест документа"><div class="structure-element-list" role="list">${items || '<div class="structure-empty"><span aria-hidden="true">📭</span><div><strong>Элементы не найдены</strong><p>Документ не содержит доступных абзацев или ячеек.</p></div></div>'}</div>
+      </div><aside class="structure-selection template-visual-inspector" id="documentStructureSelection" hidden></aside></div>
       <details class="intake-technical">
         <summary>Технические сведения</summary>
         <dl>
@@ -1224,6 +1235,7 @@ function renderStructure(report, operationId) {
       </details>
     </article>`;
 
+  studioRefreshBindings();
   result.querySelectorAll(".structure-element").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.getAttribute("data-structure-id");
@@ -1353,12 +1365,15 @@ if (structureElements.input && structureElements.statusTitle && structureElement
   document.addEventListener(
     "docomator:template-wizard-step-completed",
     (event) => {
-      if (event.detail?.step === 1) refreshStructureAvailability();
+      if (event.detail?.step === 1) { refreshStructureAvailability(); void analyzeStructure(); }
     }
   );
   document.addEventListener("docomator:space-changed", () => {
     resetStructurePanel();
     refreshStructureAvailability();
+  });
+  window.addEventListener("docomator:view-changed", (event) => {
+    if (event.detail?.view === "templates" && structureAllowed() && !structureReport) void analyzeStructure();
   });
   refreshStructureAvailability();
 }

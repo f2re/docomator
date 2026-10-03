@@ -17,13 +17,15 @@ function configuredTemplateSample(field, definitions) {
 async function saveConfiguredTemplate(button) {
   const context = globalThis.docomatorCaptureSpaceContext();
   const draftId = structureDraft?.id || globalThis.docomatorTemplateWizard?.artifacts().draftId;
-  if (!context.spaceId || !draftId || configuredTemplateSave) return;
+  if (!context.spaceId || !draftId || configuredTemplateSave || fieldBusy || rowEditorBusy || studioEditRun) return;
   const run = { context, draftId };
   configuredTemplateSave = run;
   const current = () => context.isCurrent() &&
     draftId === (structureDraft?.id || globalThis.docomatorTemplateWizard?.artifacts().draftId);
   let finalMessage = "";
   let finalState = "";
+  let savedActiveId = null;
+  document.querySelectorAll("[data-studio-handoff]").forEach((item) => item.remove());
   let message = document.querySelector("#configuredTemplateSaveStatus");
   if (!message) {
     message = document.createElement("p");
@@ -74,6 +76,7 @@ async function saveConfiguredTemplate(button) {
     const wizard = globalThis.docomatorTemplateWizard;
     wizard?.completeSaved({ sourceId: draft.sourceRecordId, draftId, versionId,
       versionKind: multiple ? "multi" : "single", activeId: activated.data.active.id });
+    savedActiveId = activated.data.active.id;
     finalState = "is-success";
     finalMessage = "Шаблон сохранён и доступен для формирования документов.";
     try { await renderActivationSuccess(activated); }
@@ -88,10 +91,12 @@ async function saveConfiguredTemplate(button) {
     if (current() && button.isConnected) { button.textContent = previousText; button.disabled = false; }
     if (current()) {
       globalThis.docomatorTemplateWizard?.render();
+      studioRefreshBindings();
       if (message?.isConnected && finalMessage) {
         message.className = finalState;
         message.textContent = finalMessage;
         if (finalState === "is-error") message.scrollIntoView({ block: "nearest" });
+        else if (savedActiveId) studioSavedAction(savedActiveId, context.spaceId);
       }
     }
   }

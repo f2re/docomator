@@ -43,12 +43,10 @@ async function uploadRoster(page) {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     buffer: Buffer.from("controlled-e2e-student-roster")
   });
-  await page.locator("#documentIntakeButton").click();
   await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
     "Структура прошла проверку"
   );
   await page.locator("#documentQuarantineButton").click();
-  await page.locator("#documentStructureButton").click();
   await expect(page.locator(".structure-element").first()).toBeVisible();
 }
 
@@ -67,6 +65,7 @@ test("поля преподавателя и студента разделены
   await page
     .locator('[data-structure-id="word/document.xml#paragraph:data-2"]')
     .click();
+  await page.locator("#rowEditorEntry > summary").click();
   await page.locator("#rowEditorOpen").click();
   await expect(page.locator("[data-row-editor-column]")).toHaveCount(4);
 

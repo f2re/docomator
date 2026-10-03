@@ -181,6 +181,16 @@ test("API safely updates, remaps and removes fields of a repeat row", async () =
       pattern: "{Фамилия} {И}.{О}."
     });
 
+    const requiredOnly = await app.inject({
+      method: "PUT",
+      url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields/${nameField.id}`,
+      headers: { "content-type": "application/json" },
+      payload: { key: "subject.display_name_2", label: "ФИО студента", valueType: "string", required: false }
+    });
+    assert.equal(requiredOnly.statusCode, 200, requiredOnly.body);
+    assert.deepEqual(requiredOnly.json().data.field.formatter, update.json().data.field.formatter);
+    assert.equal(requiredOnly.json().data.field.required, false);
+
     const deleteName = await app.inject({
       method: "DELETE",
       url: `/api/v1/spaces/${DEFAULT_SPACE_ID}/template-drafts/${draft.id}/fields/${nameField.id}`

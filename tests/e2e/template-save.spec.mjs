@@ -15,7 +15,7 @@ async function configured(page, { format = "docx", repeat = false, fail = false 
   await page.locator("#documentQuarantineButton").click();
   await expect(page.locator(".structure-element:visible").first()).toBeVisible();
   await page.locator(".structure-element:visible").first().click();
-  if (repeat) await page.locator("#documentFieldRepeatRow").check();
+  if (repeat) { await page.locator(".studio-repeat-options > summary").click(); await page.locator("#documentFieldRepeatRow").check(); }
   const range = page.locator("#documentFieldTextRange");
   if (await range.count()) await range.evaluate((control) => {
     const start = control.value.indexOf("______");

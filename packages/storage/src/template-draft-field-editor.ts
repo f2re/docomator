@@ -17,6 +17,7 @@ export interface UpdateTemplateDraftFieldInput {
   valueType: TemplateFieldValueType;
   required: boolean;
   formatter: JsonValue;
+  preserveFormatter?: boolean;
 }
 
 export interface DeleteTemplateDraftFieldResult {
@@ -211,13 +212,15 @@ export class TemplateDraftFieldEditor {
     const label = requiredText(input.label, "label", 500);
     const valueType = fieldValueType(input.valueType);
     const formatter = toJsonValue(input.formatter);
-    const formatterJson = stringifyJson(formatter);
+    const requestedFormatterJson = stringifyJson(formatter);
     const context = contextValue(contextInput);
 
     return this.store.transaction((connection) => {
       const spaceId = requireSpaceId(connection, spaceIdentity);
       const draft = requireDraft(connection, spaceId, draftIdValue);
       const current = requireField(connection, draft.id, fieldIdValue);
+      const formatterJson = input.preserveFormatter && current.field_key === key && current.value_type === valueType
+        ? current.formatter_json : requestedFormatterJson;
       const duplicate = connection
         .prepare(
           "SELECT id FROM template_draft_fields WHERE draft_id = ? AND field_key = ? AND id <> ?"

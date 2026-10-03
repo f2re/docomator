@@ -660,6 +660,7 @@ async function rowEditorSave() {
 
     latest = await rowEditorLatestDraft(spaceId, draft.id);
     structureDraft = latest;
+    studioRefreshBindings();
     panel.innerHTML = `
       <div class="roster-assistant-finished"><span aria-hidden="true">✓</span><div><h3>Строка сохранена</h3><p>Заполняются ${latest.fields.length} полей. Создано: ${createdCount}, изменено: ${updatedCount}, удалено: ${deletedCount}. При сводном выпуске эта строка повторится для каждого ${rowEditorIsPerson() ? "участника" : "объекта"}.</p></div></div>
       <div class="roster-assistant-actions"><button class="secondary-button" id="rowEditorContinueEditing" type="button">Вернуться к строке</button><button class="primary-button" id="rowEditorContinueTrial" type="button">Перейти к проверке шаблона</button></div>`;
@@ -698,6 +699,7 @@ async function rowEditorSave() {
     button.textContent = "Сохранить настройки строки";
   } finally {
     rowEditorBusy = false;
+    studioRefreshBindings();
   }
 }
 
@@ -757,11 +759,12 @@ function rowEditorInstallEntry(element) {
   const detail = document.querySelector("#documentStructureSelection");
   if (!detail || rows.length < 2) return;
   const linked = rows.filter((row) => rowEditorExistingField(row)).length;
-  const entry = document.createElement("section");
+  const entry = document.createElement("details");
   entry.id = "rowEditorEntry";
   entry.className = "roster-assistant-entry";
   entry.innerHTML = `
-    <div><strong>${linked ? `Строка уже настроена: ${linked} из ${rows.length} колонок` : rowEditorIsPerson() ? "Заполнить всю строку как список участников" : "Заполнить всю строку как список объектов"}</strong><p>${linked ? (rowEditorIsPerson() ? "Откройте редактор, чтобы изменить поле, формат ФИО, обязательность или исключить колонку." : "Откройте редактор, чтобы изменить поле, обязательность или исключить колонку.") : rowEditorIsPerson() ? "Удобно для реестров, списков студентов и таблиц сотрудников: одна настройка для всех колонок строки." : "Подходит для реестров аудиторий, статей, оборудования и других однотипных объектов."}</p></div>
+    <summary>Строка таблицы${linked ? ` · назначено ${linked} из ${rows.length} колонок` : ""}</summary>
+    <p>Настройте колонки вместе, чтобы повторять строку по списку.</p>
     <button class="secondary-button" id="rowEditorOpen" type="button">${linked ? "Изменить строку" : "Настроить строку"}</button>`;
   detail.prepend(entry);
   entry.querySelector("#rowEditorOpen")?.addEventListener("click", () => rowEditorOpen(element));

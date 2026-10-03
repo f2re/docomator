@@ -175,7 +175,8 @@ export function registerTemplateDraftFieldEditRoutes(
           label: request.body.label,
           valueType: request.body.valueType,
           required: request.body.required ?? false,
-          formatter: formatterFor(request.body)
+          formatter: formatterFor(request.body),
+          preserveFormatter: request.body.personName === undefined && request.body.decimalPlaces === undefined && request.body.timeZone === undefined
         },
         mutationContextFromRequest(request)
       );

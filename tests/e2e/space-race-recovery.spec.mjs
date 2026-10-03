@@ -110,6 +110,7 @@ test("позднее оформление сохраняет выбранное 
     await page.locator(".structure-element").first().click();
     await page.locator("#documentFieldProperty").selectOption("__new__", { force: true });
     await page.locator("#documentFieldLabel").fill("Сохраняем выбранное поле");
+    await page.locator(".studio-output-options > summary").click();
     await page.locator("#documentFieldRequired").check();
     held.resolve();
     await finished.promise;

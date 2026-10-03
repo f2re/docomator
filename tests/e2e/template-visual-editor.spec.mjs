@@ -18,10 +18,6 @@ async function openVisualTemplate(page, options = {}) {
   await app.openView("templates");
   await page.locator("#documentIntakeFile").setInputFiles(docxTemplate);
   await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
-    "Файл готов к проверке"
-  );
-  await page.locator("#documentIntakeButton").click();
-  await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
     "Структура прошла проверку"
   );
   await page.locator("#documentQuarantineButton").click();
@@ -29,7 +25,6 @@ async function openVisualTemplate(page, options = {}) {
     "data-wizard-state",
     "current"
   );
-  await page.locator("#documentStructureButton").click();
   await expect(page.locator(".template-visual-editor")).toBeVisible();
   return scenario;
 }
@@ -81,9 +76,8 @@ test("DOCX показывается как документ и прямое вы
   await expect(page.locator('[data-visual-region="body"]')).toContainText(
     "ФИО: ______"
   );
-  await expect(page.locator(".template-visual-accuracy-note")).toContainText(
-    "Верстка не подменяет Word"
-  );
+  await expect(page.locator(".studio-toolbar")).toContainText("Сохранить шаблон");
+  await expect(page.locator(".studio-direction")).toContainText("Выделите текст");
 
   await selectTextInVisualTarget(page, "______");
   await expect(page.locator("#documentStructureSelection")).toBeVisible();
@@ -155,6 +149,7 @@ test("шаблонизатор не скрывает поля пространс
 
   await page.locator(".template-visual-target").first().click();
   await expect(page.locator("#documentStructureSelection")).toBeVisible();
+  await page.locator(".studio-source-options > summary").click();
   await page.locator("#documentFieldGroup").selectOption("student");
 
   const values = await page.locator("#documentFieldProperty option").evaluateAll((options) =>
@@ -208,8 +203,8 @@ test("рабочая область разделяет документ и со�
   const inspectorBox = await inspector.boundingBox();
   expect(canvasBox).not.toBeNull();
   expect(inspectorBox).not.toBeNull();
-  expect(inspectorBox.y).toBeGreaterThan(canvasBox.y + canvasBox.height - 2);
-  expect(inspectorBox.width).toBeGreaterThanOrEqual(canvasBox.width - 2);
+  expect(inspectorBox.x).toBeGreaterThanOrEqual(canvasBox.x + canvasBox.width - 2);
+  expect(canvasBox.width).toBeGreaterThan(inspectorBox.width);
 
   const customSelect = page
     .locator("#documentFieldProperty")
@@ -271,9 +266,7 @@ test("XLSX продолжает использовать проверенный 
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("controlled-visual-xlsx-fixture")
   });
-  await page.locator("#documentIntakeButton").click();
   await page.locator("#documentQuarantineButton").click();
-  await page.locator("#documentStructureButton").click();
 
   await expect(page.locator(".template-visual-editor")).toHaveCount(0);
   await expect(page.locator(".structure-element").first()).toBeVisible();
