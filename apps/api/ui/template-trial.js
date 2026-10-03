@@ -266,7 +266,8 @@ function renderTrialWorkspace() {
         <div id="templateTrialValueHolder"></div>
       </div>
       <div class="trial-actions">
-        <button class="primary-button" id="templateTrialSubmit" type="submit">Проверить заполнение</button>
+        <button class="primary-button" type="button" data-save-configured-template>Сохранить шаблон</button>
+        <button class="secondary-button" id="templateTrialSubmit" type="submit">Проверить заполнение</button>
         <p id="templateTrialMessage">Система создаст две новые неизменяемые копии. Исходный документ останется без изменений.</p>
       </div>
     </form>

@@ -30,6 +30,7 @@ const bundles = {
     "template-trial.js",
     "template-multi-trial.js",
     "template-activation.js",
+    "template-save.js",
     "document-generation.js",
     "document-generation-preflight.js",
     "document-data-correction.js",

@@ -1,3 +1,4 @@
+import { validateRepeatContent } from "./docx-repeat-content.js";
 import { createHash } from "node:crypto";
 
 import {
@@ -672,6 +673,8 @@ interface DocxTextRun {
   textStart: number;
   textEnd: number;
   safe: boolean;
+  parentStart: number;
+  children: Array<{ xml: string; text: string; offset: number; name: string }>;
 }
 
 function matchingCloseIndex(tags: readonly XmlTag[], openingIndex: number): number {
@@ -730,8 +733,23 @@ function decodeXmlText(value: string): string {
   );
 }
 
-function collectDocxTextRuns(xml: string): DocxTextRun[] {
+function docxFieldDepthAfterTag(depth: number, tag: XmlTag): number {
+  if (tag.closing || tag.localName !== "fldChar") return depth;
+  const rawType = /\s(?:[A-Za-z_][\w.-]*:)?fldCharType\s*=\s*(["'])(.*?)\1/u.exec(tag.raw)?.[2];
+  const type = rawType === undefined ? "" : decodeXmlText(rawType);
+  if (type === "begin") return depth + 1;
+  if (type === "end") return Math.max(0, depth - 1);
+  return depth;
+}
+
+function collectDocxTextRuns(xml: string, initialFieldDepth = 0): DocxTextRun[] {
   const tags = scanXmlTags(xml);
+  const fieldDepthByTag: number[] = [];
+  let fieldDepth = initialFieldDepth;
+  for (const tag of tags) {
+    fieldDepthByTag.push(fieldDepth);
+    fieldDepth = docxFieldDepthAfterTag(fieldDepth, tag);
+  }
   const ranges = new Map<number, number>();
   for (let index = 0; index < tags.length; index += 1) {
     const tag = tags[index];
@@ -767,8 +785,11 @@ function collectDocxTextRuns(xml: string): DocxTextRun[] {
     const closeIndex = ranges.get(index);
     const close = closeIndex === undefined ? undefined : tags[closeIndex];
     if (closeIndex === undefined || close === undefined) throwInvalidXml();
-    const directRun = ![...ranges].some(
+    const parents = [...ranges].filter(
       ([open, rangeClose]) => open < index && rangeClose > closeIndex
+    );
+    const directRun = parents.every(([open]) =>
+      ["hyperlink", "smartTag"].includes(tags[open]?.localName ?? "")
     );
     const directChildren: Array<{ open: number; close: number; tag: XmlTag }> = [];
     for (let childIndex = index + 1; childIndex < closeIndex; childIndex += 1) {
@@ -788,17 +809,27 @@ function collectDocxTextRuns(xml: string): DocxTextRun[] {
       ({ tag }) => tag.localName === "rPr"
     );
     const texts = directChildren.filter(({ tag }) => tag.localName === "t");
-    const allowedDirectChildren = directChildren.every(
-      ({ tag }) => tag.localName === "rPr" || tag.localName === "t"
+    const allowedDirectChildren = directChildren.every(({ tag, open, close: end }) =>
+      ["rPr", "t", "tab", "br", "cr", "drawing", "lastRenderedPageBreak",
+        "noBreakHyphen", "softHyphen", "footnoteReference", "endnoteReference",
+        "commentReference"].includes(tag.localName) &&
+      !tags.slice(open + 1, end).some((child) => !child.closing && child.localName === "p")
     );
-    const text = texts
+    let childOffset = 0;
+    const children = directChildren.filter(({ tag }) => tag.localName !== "rPr")
       .map(({ tag, close: textCloseIndex }) => {
         const textClose = tags[textCloseIndex];
-        if (tag.selfClosing) return "";
         if (textClose === undefined) throwInvalidXml();
-        return decodeXmlText(xml.slice(tag.end, textClose.start));
-      })
-      .join("");
+        const text = tag.localName === "t"
+          ? (tag.selfClosing ? "" : decodeXmlText(xml.slice(tag.end, textClose.start)))
+          : tag.localName === "tab" ? "\t"
+          : ["br", "cr"].includes(tag.localName) ? "\n" : "";
+        const child = { xml: xml.slice(tag.start, textClose.end), text,
+          offset: childOffset, name: tag.name };
+        childOffset += text.length;
+        return child;
+      });
+    const text = children.map((child) => child.text).join("");
     const property = properties[0];
     const propertyClose = property === undefined ? undefined : tags[property.close];
     const propertyXml =
@@ -819,8 +850,11 @@ function collectDocxTextRuns(xml: string): DocxTextRun[] {
       text,
       textStart: textOffset,
       textEnd: textOffset + text.length,
+      parentStart: parents.at(-1)?.[0] ?? -1,
+      children,
       safe:
         directRun &&
+        fieldDepthByTag[index] === 0 &&
         properties.length <= 1 &&
         texts.length > 0 &&
         allowedDirectChildren
@@ -842,10 +876,20 @@ function isUtf16Boundary(text: string, offset: number): boolean {
   );
 }
 
-function textRunXml(run: DocxTextRun, text: string): string {
-  if (text.length === 0) return "";
-  const prefix = tagPrefix(run.name);
-  return `${run.opening}${run.properties}<${prefix}t xml:space="preserve">${xmlText(text)}</${prefix}t>${run.closing}`;
+function textRunXml(run: DocxTextRun, start: number, end: number, trailing = false): string {
+  const pieces = run.children.flatMap((child) => {
+    if (child.text.length === 0) {
+      return child.offset >= start && (child.offset < end || (trailing && child.offset === end))
+        ? [child.xml] : [];
+    }
+    const left = Math.max(start, child.offset) - child.offset;
+    const right = Math.min(end, child.offset + child.text.length) - child.offset;
+    if (left >= right) return [];
+    if (left === 0 && right === child.text.length) return [child.xml];
+    const prefix = tagPrefix(child.name);
+    return [`<${prefix}t xml:space="preserve">${xmlText(child.text.slice(left, right))}</${prefix}t>`];
+  });
+  return pieces.length === 0 ? "" : `${run.opening}${run.properties}${pieces.join("")}${run.closing}`;
 }
 
 function compileDocxParagraph(
@@ -925,7 +969,11 @@ function compileDocxTextRange(
     paragraph.openEnd,
     paragraph.closeStart
   );
-  const runs = collectDocxTextRuns(paragraphContent);
+  // Complex Word fields can start in an earlier paragraph (for example a TOC).
+  // The cached display is not editable template text even when it is a plain run.
+  const initialFieldDepth = scanXmlTags(decoded.text.slice(0, paragraph.openEnd))
+    .reduce(docxFieldDepthAfterTag, 0);
+  const runs = collectDocxTextRuns(paragraphContent, initialFieldDepth);
   const fullText = runs.map((run) => run.text).join("");
   if (
     binding.endOffset > fullText.length ||
@@ -948,17 +996,10 @@ function compileDocxTextRange(
       "Выбранный фрагмент текста DOCX не найден."
     );
   }
-  if (selectedRuns.some((run) => !run.safe)) {
+  if (selectedRuns.some((run) => !run.safe || run.parentStart !== selectedRuns[0]?.parentStart)) {
     throw new TemplateCompilerError(
       "unsupported_text_range",
-      "Выбранный текст пересекает гиперссылку, поле, рисунок, разрыв или другой сложный объект DOCX. Выберите обычный текстовый фрагмент."
-    );
-  }
-  const runProperties = selectedRuns[0]?.properties ?? "";
-  if (selectedRuns.some((run) => run.properties !== runProperties)) {
-    throw new TemplateCompilerError(
-      "mixed_text_range_formatting",
-      "Выбранный текст использует разное оформление. Выберите фрагмент с единым оформлением."
+      "Выделение пересекает вычисляемое поле Word или разные контейнеры. Исходник и разметка сохранены; выделите текст внутри одного абзаца или одной ссылки."
     );
   }
   for (let index = 1; index < selectedRuns.length; index += 1) {
@@ -967,11 +1008,13 @@ function compileDocxTextRange(
     if (
       previous === undefined ||
       current === undefined ||
-      !/^\s*$/u.test(paragraphContent.slice(previous.end, current.start))
+      scanXmlTags(paragraphContent.slice(previous.end, current.start)).some((tag) =>
+        ["fldChar", "instrText", "fldSimple", "sdt", "ins", "del", "moveFrom", "moveTo"].includes(tag.localName)
+      )
     ) {
       throw new TemplateCompilerError(
         "unsupported_text_range",
-        "Между выбранными текстовыми фрагментами находится сложный объект DOCX. Выберите непрерывный обычный текст."
+        "Выделение пересекает вычисляемое поле или незавершённое исправление Word. Исходник и разметка сохранены; выберите текст по одну сторону этого элемента."
       );
     }
   }
@@ -979,26 +1022,24 @@ function compileDocxTextRange(
   const last = selectedRuns.at(-1);
   if (first === undefined || last === undefined) throwInvalidXml();
   const selectedXml = selectedRuns
-    .map((run) => {
+    .map((run, index) => {
       const start = Math.max(binding.startOffset, run.textStart) - run.textStart;
       const end = Math.min(binding.endOffset, run.textEnd) - run.textStart;
-      return textRunXml(run, run.text.slice(start, end));
-    })
-    .join("");
-  const prefixText = first.text.slice(
-    0,
-    Math.max(0, binding.startOffset - first.textStart)
-  );
-  const suffixText = last.text.slice(
-    Math.min(last.text.length, binding.endOffset - last.textStart)
-  );
+      const next = selectedRuns[index + 1];
+      const gap = next === undefined ? "" : paragraphContent.slice(run.end, next.start);
+      return textRunXml(run, start, end, end === run.text.length) + gap;
+    }).join("");
+  const prefixXml = textRunXml(first, 0, binding.startOffset - first.textStart);
+  const suffixOffset = binding.endOffset - last.textStart;
+  const suffixXml = suffixOffset < last.text.length
+    ? textRunXml(last, suffixOffset, last.text.length, true) : "";
   const prefix = tagPrefix(paragraph.name) || "w:";
   const namespace =
     tagPrefix(paragraph.name).length === 0
       ? ' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
       : "";
   const wrapper = `<${prefix}sdt${namespace}><${prefix}sdtPr><${prefix}alias ${prefix}val="${xmlAttribute(field.label)}"/><${prefix}tag ${prefix}val="${xmlAttribute(tagValue)}"/><${prefix}id ${prefix}val="${deterministicWordId(field.id)}"/></${prefix}sdtPr><${prefix}sdtContent>${selectedXml}</${prefix}sdtContent></${prefix}sdt>`;
-  const replacement = `${textRunXml(first, prefixText)}${wrapper}${textRunXml(last, suffixText)}`;
+  const replacement = `${prefixXml}${wrapper}${suffixXml}`;
   const replaceStart = paragraph.openEnd + first.start;
   const replaceEnd = paragraph.openEnd + last.end;
   const updated =
@@ -1407,8 +1448,6 @@ export async function compileDocxRepeatRow(
   }
   const unsupportedRepeatRowElements = new Set([
     "altChunk",
-    "bookmarkStart",
-    "bookmarkEnd",
     "commentRangeStart",
     "commentRangeEnd",
     "commentReference",
@@ -1419,14 +1458,9 @@ export async function compileDocxRepeatRow(
     "customXmlInsRangeEnd",
     "customXmlInsRangeStart",
     "del",
-    "drawing",
     "endnoteReference",
-    "fldSimple",
-    "fldChar",
     "footnoteReference",
-    "hyperlink",
     "ins",
-    "instrText",
     "moveFrom",
     "moveFromRangeEnd",
     "moveFromRangeStart",
@@ -1437,7 +1471,6 @@ export async function compileDocxRepeatRow(
     "permStart",
     "permEnd",
     "pict",
-    "smartTag",
     "subDoc"
   ]);
   if (
@@ -1447,9 +1480,10 @@ export async function compileDocxRepeatRow(
   ) {
     throw new TemplateCompilerError(
       "unsupported_repeat_row",
-      "Строка содержит рисунок, поле, ссылку, исправления или другой сложный объект DOCX. Упростите только строку-образец и повторите проверку."
+      "В строке есть незавершённые исправления, примечания или встроенный активный объект. Исходник и разметка сохранены; завершите исправления только в строке-образце."
     );
   }
+  validateRepeatContent(rowXml, entries, binding.part);
   const sdtCount = rowTags.filter(
     (tag) => !tag.closing && tag.localName === "sdt"
   ).length;
@@ -1544,11 +1578,13 @@ async function verifyTechnicalBinding(
       .filter(
         ({ tag }) =>
           !tag.closing &&
-          tag.localName === "t" &&
+          ["t", "tab", "br", "cr"].includes(tag.localName) &&
           tag.start >= content.openEnd &&
           tag.end <= content.closeStart
       )
       .map(({ tag, tagIndex }) => {
+        if (tag.localName === "tab") return "\t";
+        if (tag.localName === "br" || tag.localName === "cr") return "\n";
         if (tag.selfClosing) return "";
         const close = tags[matchingCloseIndex(tags, tagIndex)];
         if (close === undefined) throwInvalidXml();

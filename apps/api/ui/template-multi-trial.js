@@ -351,7 +351,8 @@ function renderMultiTrialWorkspace() {
       </label>
       <div id="templateMultiTrialFields" class="multi-trial-fields"></div>
       <div class="multi-trial-actions">
-        <button class="primary-button" id="templateMultiTrialSubmit" type="submit">Создать и проверить пробную копию</button>
+        <button class="primary-button" type="button" data-save-configured-template>Сохранить шаблон</button>
+        <button class="secondary-button" id="templateMultiTrialSubmit" type="submit">Создать и проверить пробную копию</button>
         <p id="templateMultiTrialMessage">Пробная версия сохранится только если каждое тестовое значение будет считано обратно без расхождений.</p>
       </div>
     </form>
