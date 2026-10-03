@@ -11,16 +11,15 @@ const DOCX = {
 
 async function openConfiguredRow(page) {
   await page.locator("#documentIntakeFile").setInputFiles(DOCX);
-  await page.locator("#documentIntakeButton").click();
   await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
     "Структура прошла проверку"
   );
   await page.locator("#documentQuarantineButton").click();
-  await page.locator("#documentStructureButton").click();
   await page
     .locator(".structure-element")
     .filter({ hasText: "Таблица 1, строка 2, ячейка 1" })
     .click();
+  await page.locator("#rowEditorEntry > summary").click();
   await page.locator("#rowEditorOpen").click();
   await page.locator("#rowEditorSave").click();
   await expect(page.locator("#rowEditorPanel")).toContainText("Строка сохранена");

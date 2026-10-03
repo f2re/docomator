@@ -91,6 +91,7 @@ async function bindEmployeeField(page, { structureReady = false } = {}) {
   await page.locator("#documentFieldLabel").fill("ФИО");
   await page.locator("#documentFieldType").selectOption("string");
   await page.locator("#documentPropertyConfirm").check();
+  await page.locator(".studio-output-options > summary").click();
   await page.locator("#documentFieldRequired").check();
   await page.locator("#documentFieldSave").click();
   await expect(page.locator("#documentFieldMessage")).toContainText(
@@ -161,8 +162,8 @@ for (const templateCase of templateCases) {
     await app.openView("templates");
 
     await expect(page.locator(".template-step-rail")).toContainText("Документ");
-    await expect(page.locator(".template-step-rail")).toContainText("Поля");
-    await expect(page.locator(".template-step-rail")).toContainText("Проверка");
+    await expect(page.locator(".template-step-rail")).toContainText("Разметка");
+    await expect(page.locator('[data-template-step="3"]')).toBeHidden();
     await expect(page.locator(".template-step-rail")).toContainText("Готово");
     await expectWizardUiConstraints(page);
 
@@ -197,6 +198,7 @@ test("мастер сохраняет ограниченные настройк�
   await page.locator("#documentFieldProperty").selectOption("__new__", { force: true });
   await page.locator("#documentFieldLabel").fill("Ставка");
   await page.locator("#documentFieldType").selectOption("number");
+  await page.locator(".studio-output-options > summary").click();
   await expect(page.locator("#documentFieldDecimalPlaces")).toBeVisible();
   await page.locator("#documentFieldDecimalPlaces").selectOption("2");
   await page.locator("#documentPropertyConfirm").check();
@@ -223,6 +225,7 @@ test("мастер сохраняет повторяемую строку DOCX �
   await uploadAndSaveSource(page, templateCases[0]);
   await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
   await page.locator("[data-visual-docx]:visible, .structure-element:visible").first().click();
+  await page.locator(".studio-repeat-options > summary").click();
   await expect(page.locator("#documentFieldRepeatRow")).toBeVisible();
   await page.locator("#documentFieldRepeatRow").check();
   const textRange = page.locator("#documentFieldTextRange");
@@ -261,6 +264,7 @@ test("мастер XLSX выбирает повторяемый диапазон
   await expect(page.locator("[data-visual-docx]:visible, .structure-element:visible").first()).toBeVisible();
   await page.locator("[data-visual-docx]:visible, .structure-element:visible").first().click();
 
+  await page.locator(".studio-repeat-options > summary").click();
   await expect(page.locator("#documentFieldRepeatArea")).toBeVisible();
   await page.locator("#documentFieldRepeatArea").check();
   await expect(page.locator("#documentFieldRepeatAreaOptions")).toBeVisible();
@@ -326,6 +330,7 @@ test("после перезагрузки мастер продолжает с �
   await app.open();
   await app.openView("templates");
   await uploadAndSaveSource(page, templateCases[0]);
+  await expect(page.locator(".studio-toolbar")).toBeVisible();
 
   await page.reload();
   await expect(page.locator("#connectionBadge")).toContainText(
@@ -589,6 +594,7 @@ test("мастер предлагает варианты ФИО и отправ�
   await expect(page.locator("#documentFieldProperty")).toHaveValue(
     "__system_display_name__"
   );
+  await page.locator(".studio-output-options > summary").click();
   await page
     .locator("#documentFieldTextPresentation")
     .selectOption("family-initials");

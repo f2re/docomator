@@ -306,6 +306,7 @@ function renderGenerationWorkspace() {
       <div class="generation-state is-warning"><div><strong>Сначала подключите шаблон</strong><p>Проверьте документ, свяжите его с полями сотрудников и сохраните проверенную версию. PDF можно создать отдельно только для визуального контроля.</p><button class="primary-button" type="button" data-view-target="templates">Открыть шаблоны</button></div></div>`;
     return;
   }
+  generationTemplates = studioPrioritizeTemplates(generationTemplates, currentGenerationSpaceId());
   const repeatByDefault = generationTemplateHasRepeat(generationTemplates[0]);
   content.innerHTML = `
     <form class="generation-form generation-wizard" id="documentGenerationForm" novalidate>

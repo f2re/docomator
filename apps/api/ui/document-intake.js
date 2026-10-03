@@ -1,3 +1,4 @@
+let intakeRevision = 0;
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 
 const elements = {
@@ -185,7 +186,10 @@ async function validateTemplateWizardState(spaceId) {
     }
   }
   persistTemplateWizardState(spaceId, state);
-  if (templateWizardSpaceId() === spaceId) renderTemplateWizard();
+  if (templateWizardSpaceId() === spaceId) {
+    renderTemplateWizard();
+    if (state.current === 2 && state.completed.has(1) && !structureReport && templateWizardViewVisible()) void analyzeStructure();
+  }
 }
 
 function templateWizardSpaceName(spaceId) {
@@ -229,7 +233,7 @@ function renderTemplateWizard() {
   const space = root.querySelector("#templateWizardSpace");
   const back = root.querySelector("#templateWizardBack");
   const status = root.querySelector("#templateWizardStatus");
-  if (stepLabel) stepLabel.textContent = `Шаг ${current} из 4`;
+  if (stepLabel) stepLabel.textContent = current === 3 ? "Пробная копия · дополнительно" : current === 4 ? "Готовый шаблон" : current === 2 ? "Разметка документа" : "Документ-основа";
   if (question) question.textContent = copy.question;
   if (hint) hint.textContent = copy.hint;
   if (space) space.textContent = templateWizardSpaceName(spaceId);
@@ -255,6 +259,7 @@ function renderTemplateWizard() {
     const button = item.querySelector("[data-template-wizard-go]");
     const isCurrent = step === current;
     const isComplete = state.completed.has(step);
+    item.hidden = step === 3 && !isCurrent;
     const isAvailable = step <= available || isComplete;
     item.dataset.wizardState = isCurrent
       ? "current"
@@ -269,7 +274,7 @@ function renderTemplateWizard() {
       else button.removeAttribute("aria-current");
       button.setAttribute(
         "aria-label",
-        `${step}. ${button.querySelector("strong")?.textContent || "Шаг"}${isComplete ? ". Завершено" : isCurrent ? ". Текущий шаг" : isAvailable ? "" : ". Сначала завершите предыдущий шаг"}`
+        `${step === 3 ? "Дополнительно" : step === 4 ? 3 : step}. ${button.querySelector("strong")?.textContent || "Шаг"}${isComplete ? ". Завершено" : isCurrent ? ". Текущий шаг" : isAvailable ? "" : ". Сначала завершите предыдущий шаг"}`
       );
     }
   });
@@ -462,6 +467,7 @@ function resetResult() {
 }
 
 function clearSelection({ resetWizard = true } = {}) {
+  intakeRevision += 1;
   if (resetWizard) globalThis.docomatorTemplateWizard?.resetFrom(1);
   selectedFile = null;
   lastReport = null;
@@ -486,6 +492,7 @@ function fileExtension(file) {
 
 function selectFile(file) {
   if (inspecting || saving) return;
+  intakeRevision += 1;
   globalThis.docomatorTemplateWizard?.resetFrom(1);
   const extension = fileExtension(file);
   if (extension !== "docx" && extension !== "xlsx") {
@@ -544,6 +551,7 @@ function selectFile(file) {
     "После нажатия файл будет передан только локальному серверу. Сохранение потребует отдельного подтверждения."
   );
   resetResult();
+  void inspectSelectedFile();
 }
 
 function issueSeverityLabel(severity) {
@@ -665,6 +673,10 @@ async function saveCheckedDocument(report) {
     return;
   }
 
+  const file = selectedFile;
+  const revision = intakeRevision;
+  const context = globalThis.docomatorCaptureSpaceContext();
+  const current = () => context.isCurrent() && revision === intakeRevision && selectedFile === file;
   saving = true;
   button.disabled = true;
   spaceSelect.disabled = true;
@@ -674,23 +686,26 @@ async function saveCheckedDocument(report) {
 
   try {
     const savedBody = await fetchJson(
-      `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-sources/quarantine?fileName=${encodeURIComponent(selectedFile.name)}`,
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/document-sources/quarantine?fileName=${encodeURIComponent(file.name)}`,
       {
         method: "POST",
         headers: {
-          "content-type": selectedFile.type || "application/octet-stream"
+          "content-type": file.type || "application/octet-stream"
         },
-        body: selectedFile
+        body: file
       }
     );
+    if (!current()) return;
     message.className = "quarantine-message is-success";
     message.textContent = "Исходник сохранён в выбранном разделе. Следующий этап — выбрать изменяемые поля.";
     button.textContent = "Исходник сохранён";
     await loadSavedDocuments(spaceId);
+    if (!current()) return;
     globalThis.docomatorTemplateWizard?.complete(1, {
       sourceId: savedBody.data.id
     });
   } catch (error) {
+    if (!current()) return;
     const operationId = typeof error?.operationId === "string" ? error.operationId : "";
     message.className = "quarantine-message is-error";
     message.innerHTML = `${escapeHtml(error?.message || "Сохранить исходник не удалось.")}${operationId ? ` Идентификатор операции: <code>${escapeHtml(operationId)}</code>.` : ""}`;
@@ -780,14 +795,14 @@ function renderReport(report, operationId) {
           <div class="quarantine-heading">
             <span aria-hidden="true">🔒</span>
             <div>
-              <strong>Сохранить проверенный исходник</strong>
-              <p>Сохранение выполняется только после вашего подтверждения. Неизменяемая копия будет относиться к выбранному пространству.</p>
+              <strong>Документ готов к разметке</strong>
+              <p>Кнопка сохранит исходник в текущем разделе и откроет документ. Настройки можно продолжить позже.</p>
             </div>
           </div>
           <div class="quarantine-form">
             <label for="documentQuarantineSpace" hidden>Раздел данных</label>
             <select id="documentQuarantineSpace" aria-describedby="documentQuarantineMessage" aria-hidden="true" tabindex="-1" hidden><option>Получаем список…</option></select>
-            <button class="primary-button" id="documentQuarantineButton" type="button">Сохранить исходник</button>
+            <button class="primary-button" id="documentQuarantineButton" type="button">Открыть для разметки</button>
           </div>
           <p class="quarantine-message" id="documentQuarantineMessage">После сохранения система покажет следующий шаг.</p>
           <div class="quarantine-list-heading"><strong>Сохранённые исходники раздела</strong><small>Повторная загрузка того же файла не создаёт дубликат.</small></div>
@@ -831,6 +846,9 @@ function renderReport(report, operationId) {
 
 async function inspectSelectedFile() {
   if (selectedFile === null || inspecting || saving) return;
+  const file = selectedFile;
+  const revision = intakeRevision;
+  const current = () => revision === intakeRevision && selectedFile === file;
   inspecting = true;
   lastReport = null;
   elements.inspectButton.disabled = true;
@@ -849,17 +867,19 @@ async function inspectSelectedFile() {
 
   try {
     const body = await fetchJson(
-      `/api/v1/document-intake/inspect?fileName=${encodeURIComponent(selectedFile.name)}`,
+      `/api/v1/document-intake/inspect?fileName=${encodeURIComponent(file.name)}`,
       {
         method: "POST",
         headers: {
-          "content-type": selectedFile.type || "application/octet-stream"
+          "content-type": file.type || "application/octet-stream"
         },
-        body: selectedFile
+        body: file
       }
     );
+    if (!current()) return;
     renderReport(body.data, body.correlationId);
   } catch (error) {
+    if (!current()) return;
     const message =
       typeof error?.message === "string"
         ? error.message
@@ -879,6 +899,7 @@ async function inspectSelectedFile() {
       </div>`;
   } finally {
     inspecting = false;
+    if (!current()) return;
     elements.inspectButton.disabled = selectedFile === null;
     elements.clearButton.disabled = false;
   }

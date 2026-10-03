@@ -22,12 +22,10 @@ test("повторяемую строку Word можно сохранить, п
   await app.openView("templates");
 
   await page.locator("#documentIntakeFile").setInputFiles(DOCX);
-  await page.locator("#documentIntakeButton").click();
   await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
     "Структура прошла проверку"
   );
   await page.locator("#documentQuarantineButton").click();
-  await page.locator("#documentStructureButton").click();
 
   await expect(page.locator(".structure-table-row")).toHaveCount(2);
   await expect(
@@ -42,8 +40,9 @@ test("повторяемую строку Word можно сохранить, п
     "Выбрана пустая ячейка таблицы"
   );
   await expect(page.locator("#rowEditorEntry")).toContainText(
-    "Заполнить всю строку как список участников"
+    "Строка таблицы"
   );
+  await page.locator("#rowEditorEntry > summary").click();
   await page.locator("#rowEditorOpen").click();
 
   const panel = page.locator("#rowEditorPanel");
@@ -81,6 +80,8 @@ test("повторяемую строку Word можно сохранить, п
   await panel.locator("#rowEditorSave").click();
   await expect(panel).toContainText("Строка сохранена");
   expect(scenario.fieldRequests).toHaveLength(4);
+  await expect(page.locator("#studioFieldCount")).toHaveText("4");
+  await expect(page.locator("#documentTemplateSave")).toBeEnabled();
   expect(scenario.fieldRequests[0]).toMatchObject({
     key: "subject.position",
     repeatRow: true

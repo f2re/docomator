@@ -150,10 +150,6 @@ async function assertSecondSpaceIsolation(
 async function uploadAndSaveSource(page) {
   await page.locator("#documentIntakeFile").setInputFiles(personalCardFixture);
   await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
-    "Файл готов к проверке"
-  );
-  await page.locator("#documentIntakeButton").click();
-  await expect(page.locator("#documentIntakeStatusTitle")).toHaveText(
     "Структура прошла проверку",
     { timeout: 20_000 }
   );
@@ -169,7 +165,6 @@ async function uploadAndSaveSource(page) {
 }
 
 async function bindCustomEmployeeField(page, fieldLabel) {
-  await page.locator("#documentStructureButton").click();
   const placeholder = "ФИО сотрудника";
   const fullNameParagraph = page
     .locator(".structure-element")
@@ -200,6 +195,7 @@ async function bindCustomEmployeeField(page, fieldLabel) {
   await page.locator("#documentFieldProperty").selectOption(propertyKey, {
     force: true
   });
+  await page.locator(".studio-output-options > summary").click();
   const required = page.locator("#documentFieldRequired");
   if (!(await required.isChecked())) await required.check();
   await expect(page.locator("#documentFieldSave")).toBeEnabled();
@@ -440,15 +436,13 @@ test("DOCX со статическими объектами сохраняетс
   await app.openView("templates");
   const source = path.join(currentDirectory, "fixtures/documents/static-word-elements.docx");
   await page.locator("#documentIntakeFile").setInputFiles(source);
-  await expect(page.locator("#documentIntakeButton")).toBeEnabled();
-  await page.locator("#documentIntakeButton").click();
   await expect(page.locator("#documentIntakeStatusTitle")).toHaveText("Структура прошла проверку", { timeout: 20_000 });
   await page.locator("#documentQuarantineButton").click();
   await expect(page.locator("#documentQuarantineMessage")).toContainText("Следующий этап", { timeout: 20_000 });
-  await page.locator("#documentStructureButton").click();
   const placeholder = page.locator(".structure-element:visible").filter({ hasText: "____" }).first();
   await expect(placeholder).toBeVisible({ timeout: 20_000 });
   await placeholder.click();
+  await page.locator(".studio-repeat-options > summary").click();
   await page.locator("#documentFieldRepeatRow").check();
   await page.locator("#documentFieldTextRange").evaluate((control) => {
     const start = control.value.indexOf("____");
@@ -457,6 +451,12 @@ test("DOCX со статическими объектами сохраняетс
   });
   await page.locator("#documentFieldSave").click();
   await expect(page.locator("#documentTemplateSave")).toBeVisible();
+  await expect(page.locator("#documentTemplateSave")).toBeEnabled();
+  await page.locator("[data-studio-fields]").click();
+  await page.locator("[data-studio-field]").first().click();
+  await page.locator("#studioEditRequired").check();
+  await page.locator("#studioEditForm").getByRole("button", { name: "Сохранить назначение" }).click();
+  await expect(page.locator("#studioEditStatus")).toContainText("Назначение сохранено");
   await page.locator("#documentTemplateSave").click();
   await expect(page.locator("#configuredTemplateSaveStatus")).toContainText("Шаблон сохранён", { timeout: 30_000 });
   await app.openView("generation");

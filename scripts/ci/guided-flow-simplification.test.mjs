@@ -24,10 +24,10 @@ test("automatic helpers are bundled after their base handlers", async () => {
   assert.ok(guided > rowFlow, "guided simplification must run after existing UI handlers");
 });
 
-test("automatic helper names only read-only preparation controls", async () => {
+test("legacy guided helper owns no document startup or mutation controls", async () => {
   const source = await read("apps/api/ui/guided-flow-simplification.js");
   for (const selector of ["#documentIntakeButton", "#documentStructureButton"]) {
-    assert.ok(source.includes(selector), `missing safe control ${selector}`);
+    assert.equal(source.includes(selector), false, `document startup belongs to its native handler, not ${selector}`);
   }
   assert.equal(
     source.includes("#bulkImportPreviewButton"),
@@ -53,6 +53,15 @@ test("automatic helper names only read-only preparation controls", async () => {
       `automatic helper must not trigger mutation control ${mutationSelector}`
     );
   }
+});
+
+test("document intake and saved source open use native calls without synthetic clicks", async () => {
+  const intake = await read("apps/api/ui/document-intake.js");
+  const structure = await read("apps/api/ui/document-structure.js");
+  const guided = await read("apps/api/ui/guided-flow-simplification.js");
+  assert.match(intake, /void inspectSelectedFile\(\);/u);
+  assert.match(structure, /event\.detail\?\.step === 1[\s\S]*?void analyzeStructure\(\);/u);
+  assert.doesNotMatch(guided, /guidedFlowSchedule|guidedFlowAutoDelayMs|\.click\s*\(/u);
 });
 
 test("bulk import starts directly from its controller without delayed synthetic clicks", async () => {

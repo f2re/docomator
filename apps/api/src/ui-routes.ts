@@ -72,6 +72,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
       "interface-hierarchy.css",
       "interface-stability.css",
       "template-row-flow.css",
+      "template-studio.css",
       "brand-tokens.css"
     ],
     contentType: "text/css; charset=utf-8",
@@ -99,6 +100,7 @@ const assets: Readonly<Record<string, UiAsset>> = {
   "/ui/document-intake.js": {
     fileName: "document-intake.js",
     appendFileNames: [
+      "template-studio.js",
       "document-structure.js",
       "template-visual-editor.js",
       "generic-template-entities.js",
