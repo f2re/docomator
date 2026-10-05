@@ -1,0 +1,172 @@
+name: Post-merge exact-main verification
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-exact-main-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+env:
+  VERIFIED_MAIN_SHA: 14266eee9076c7aa7514e0beefa3ca8628e3219e
+
+jobs:
+  verify:
+    name: Exact main repository gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact merged main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.VERIFIED_MAIN_SHA }}
+          fetch-depth: 2
+      - name: Assert exact commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$VERIFIED_MAIN_SHA"
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify repository
+        run: npm run check
+      - name: Smoke-test fresh migration
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-data
+        run: npm run migrate
+
+  browser:
+    name: Exact main Chromium and real-stack
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact merged main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.VERIFIED_MAIN_SHA }}
+      - name: Assert exact commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$VERIFIED_MAIN_SHA"
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install locked Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build application
+        run: npm run build
+      - name: Prepare browser database
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
+        run: npm run migrate
+      - name: Start local application and worker
+        env:
+          DOCOMATOR_DATA_DIR: ${{ runner.temp }}/docomator-browser-data
+          DOCOMATOR_PORT: 18080
+          DOCOMATOR_PREVIEW_ENABLED: "false"
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run start:api > "$RUNNER_TEMP/docomator-browser-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/docomator-browser-api.pid"
+          ready=false
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/readyz > /dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          [[ "$ready" == "true" ]] || { cat "$RUNNER_TEMP/docomator-browser-api.log"; exit 1; }
+          npm run start:worker > "$RUNNER_TEMP/docomator-browser-worker.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/docomator-browser-worker.pid"
+          sleep 1
+          kill -0 "$(cat "$RUNNER_TEMP/docomator-browser-worker.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/docomator-browser-worker.log"; exit 1; }
+      - name: Run Chromium user flows
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        run: npm run test:e2e
+      - name: Run real-stack Chromium smoke
+        env:
+          DOCOMATOR_E2E_BASE_URL: http://127.0.0.1:18080
+        run: npm run test:e2e:real-stack
+
+  offline:
+    name: Exact main offline archive
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact merged main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.VERIFIED_MAIN_SHA }}
+      - name: Assert exact commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$VERIFIED_MAIN_SHA"
+      - name: Read Node.js version
+        id: node
+        shell: bash
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Assemble generic offline archive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          NODE_RUNTIME_ROOT="$(dirname "$(dirname "$(command -v node)")")"
+          scripts/offline/prepare-bundle.sh \
+            --target-profile generic \
+            --node-runtime-dir "$NODE_RUNTIME_ROOT" \
+            --without-llm \
+            --without-preview \
+            --without-ux-acceptance \
+            --skip-tests \
+            --force
+      - name: Verify archive after extraction
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          VERSION="$(cat VERSION)"
+          case "$(dpkg --print-architecture)" in
+            amd64) NODE_ARCH=x64 ;;
+            arm64) NODE_ARCH=arm64 ;;
+            *) exit 1 ;;
+          esac
+          ARCHIVE="offline-bundles/docomator-${VERSION}-linux-${NODE_ARCH}.tar.gz"
+          CHECKSUM="${ARCHIVE}.sha256"
+          (cd "$(dirname "$ARCHIVE")" && sha256sum --check --strict --quiet "$(basename "$CHECKSUM")")
+          EXTRACTED="$RUNNER_TEMP/docomator-offline-extracted"
+          mkdir -p "$EXTRACTED"
+          while IFS= read -r member; do
+            [[ -n "$member" && "$member" != /* ]] || exit 1
+            case "/$member/" in */../*) exit 1 ;; esac
+          done < <(tar -tzf "$ARCHIVE")
+          tar -xzf "$ARCHIVE" -C "$EXTRACTED"
+          BUNDLE="$EXTRACTED/docomator-${VERSION}-linux-${NODE_ARCH}"
+          "$BUNDLE/verify-bundle.sh" "$BUNDLE"
