@@ -361,6 +361,11 @@
 }
 
 /* Visual Template Studio: контейнеры не расширяют страницу на 320 px/200% zoom. */
+.structure-card {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .template-visual-editor,
 .template-visual-workspace,
 .template-visual-canvas,
