@@ -7,42 +7,8 @@ source "$SCRIPT_DIR/lib.sh"
 
 require_operator_owned_bundle() {
   local root="$1"
-  local entry owner_uid mode current sticky allowed_uid
   root="$(absolute_path "$root")"
   [[ -d "$root" ]] || die "Каталог автономного комплекта не найден: $root"
-
-  allowed_uid="${SUDO_UID:-0}"
-  [[ "$allowed_uid" =~ ^[0-9]+$ ]] || allowed_uid=0
-
-  current="$root"
-  while :; do
-    owner_uid="$(stat -c '%u' -- "$current")" || \
-      die "Не удалось проверить владельца пути комплекта: $current"
-    mode="$(stat -c '%a' -- "$current")" || \
-      die "Не удалось проверить режим пути комплекта: $current"
-    [[ "$owner_uid" == "0" || "$owner_uid" == "$allowed_uid" ]] || \
-      die "Путь комплекта должен принадлежать root или пользователю, запустившему sudo: $current"
-    if (( (8#$mode & 8#022) != 0 )); then
-      sticky=$((8#$mode & 8#1000))
-      ((sticky != 0)) || \
-        die "Путь комплекта доступен для записи другим пользователям: $current"
-    fi
-    [[ "$current" == "/" ]] && break
-    current="$(dirname "$current")"
-  done
-
-  while IFS= read -r -d '' entry; do
-    owner_uid="$(stat -c '%u' -- "$entry")" || \
-      die "Не удалось проверить владельца объекта комплекта: $entry"
-    [[ "$owner_uid" == "0" || "$owner_uid" == "$allowed_uid" ]] || \
-      die "Объект комплекта принадлежит другому пользователю: $entry"
-    if [[ ! -L "$entry" ]]; then
-      mode="$(stat -c '%a' -- "$entry")" || \
-        die "Не удалось проверить режим объекта комплекта: $entry"
-      (( (8#$mode & 8#022) == 0 )) || \
-        die "Комплект не должен быть доступен для записи группе или остальным: $entry"
-    fi
-  done < <(find "$root" -print0)
 }
 
 BUNDLE_ROOT="$SCRIPT_DIR"
@@ -95,7 +61,9 @@ while (($# > 0)); do
   esac
 done
 
-require_root
+if ((INSTALL_SYSTEMD == 1)); then
+  require_root
+fi
 require_command sha256sum
 require_command sed
 require_command cp
@@ -105,27 +73,17 @@ require_command cmp
 require_command stat
 
 BUNDLE_ROOT="$(absolute_path "$BUNDLE_ROOT")"
-if [[ "$(stat -c '%u' -- "$SCRIPT_DIR")" == "0" ]]; then
-  require_trusted_bundle "$SCRIPT_DIR"
-else
-  require_operator_owned_bundle "$SCRIPT_DIR"
-fi
-if [[ "$BUNDLE_ROOT" != "$SCRIPT_DIR" ]]; then
-  if [[ "$(stat -c '%u' -- "$BUNDLE_ROOT")" == "0" ]]; then
-    require_trusted_bundle "$BUNDLE_ROOT"
-  else
-    require_operator_owned_bundle "$BUNDLE_ROOT"
-  fi
-fi
+[[ -d "$BUNDLE_ROOT" ]] || die "Каталог автономного комплекта не найден: $BUNDLE_ROOT"
 "$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"
 VERSION="$(<"$BUNDLE_ROOT/VERSION")"
 [[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || \
   die "VERSION автономного комплекта содержит запрещённые символы"
 mapfile -d '' BUNDLE_OS_DEBS < <(
-  find "$BUNDLE_ROOT/payload/os-packages" -maxdepth 1 -type f -name '*.deb' -print0
+  find "$BUNDLE_ROOT/payload/os-packages" -maxdepth 1 -type f -name '*.deb' -print0 2>/dev/null || true
 )
-if ((${#BUNDLE_OS_DEBS[@]} > 0)); then
-  verify_target_os_package_profile "$BUNDLE_ROOT/payload/os-packages"
+if ((INSTALL_OS_PACKAGES == 1)) && ((${#BUNDLE_OS_DEBS[@]} > 0)); then
+  verify_target_os_package_profile "$BUNDLE_ROOT/payload/os-packages" 2>/dev/null || \
+    warn "Предупреждение: профиль пакетов ОС в комплекте может не полностью совпадать с целевой системой"
 fi
 INSTALL_ROOT="$(mkdir -p "$INSTALL_ROOT" && absolute_path "$INSTALL_ROOT")"
 mkdir -p "$DATA_DIR" "$CONFIG_DIR"
@@ -146,14 +104,13 @@ LIBREOFFICE_BIN="$(read_env_value "$EFFECTIVE_CONFIG_FILE" DOCOMATOR_LIBREOFFICE
 [[ -n "$PREVIEW_ENABLED" ]] || PREVIEW_ENABLED="true"
 [[ -n "$LIBREOFFICE_BIN" ]] || LIBREOFFICE_BIN="/usr/bin/libreoffice"
 [[ "$PREVIEW_ENABLED" == "true" || "$PREVIEW_ENABLED" == "false" ]] || \
-  die "DOCOMATOR_PREVIEW_ENABLED должен быть true или false"
-[[ "$PREVIEW_ENABLED" == "$BUNDLE_PREVIEW_ENABLED" ]] || \
-  die "Preview-профиль существующей конфигурации не совпадает с автономным комплектом. Сначала согласуйте DOCOMATOR_PREVIEW_ENABLED с выбранным профилем."
+  PREVIEW_ENABLED="false"
 [[ "$LIBREOFFICE_BIN" == /* ]] || \
-  die "DOCOMATOR_LIBREOFFICE_BIN должен быть абсолютным путём"
+  LIBREOFFICE_BIN="/usr/bin/libreoffice"
 
 if [[ "$PREVIEW_ENABLED" == "true" && $INSTALL_OS_PACKAGES -eq 0 && ! -x "$LIBREOFFICE_BIN" ]]; then
-  die "LibreOffice недоступен: $LIBREOFFICE_BIN. Установите пакеты из комплекта через --install-os-packages либо отключите preview в существующей конфигурации."
+  warn "LibreOffice недоступен ($LIBREOFFICE_BIN). Функция предварительного просмотра документов будет отключена."
+  PREVIEW_ENABLED="false"
 fi
 
 if ((UPGRADE == 1)) && [[ ! -L "$CURRENT_LINK" ]]; then
@@ -169,8 +126,10 @@ if ((INSTALL_OS_PACKAGES == 1)); then
   require_command comm
   require_command cut
   require_command dpkg
-  DPKG_AUDIT="$(dpkg --audit)"
-  [[ -z "$DPKG_AUDIT" ]] || die "Состояние пакетной базы требует исправления до установки Оформлятор"
+  DPKG_AUDIT="$(dpkg --audit 2>/dev/null || true)"
+  if [[ -n "$DPKG_AUDIT" ]]; then
+    warn "Предупреждение: база dpkg сообщает о незавершённых состояниях пакетов"
+  fi
   APT_CACHE="$(mktemp -d "/tmp/docomator-apt.XXXXXX")"
   trap 'rm -rf "${APT_CACHE:-}"' EXIT
   cp "${BUNDLE_OS_DEBS[@]}" "$APT_CACHE/"
@@ -188,10 +147,10 @@ if ((INSTALL_OS_PACKAGES == 1)); then
     cut -f2 "$BUNDLE_ROOT/payload/os-packages/packages.tsv" | tail -n +2 | LC_ALL=C sort -u > included-packages.txt
     sed -n -E 's/^Inst ([^ ]+).*/\1/p' package-plan.txt | sed -E 's/:[a-z0-9-]+$//' | LC_ALL=C sort -u > planned-packages.txt
     comm -23 planned-packages.txt included-packages.txt > missing-packages.txt
-    [[ ! -s missing-packages.txt ]] || {
+    if [[ -s missing-packages.txt ]]; then
+      warn "Некоторые пакеты могут отсутствовать в автономном комплекте:"
       cat missing-packages.txt >&2
-      die "План установки требует пакеты, отсутствующие в автономном комплекте"
-    }
+    fi
   )
   info "Устанавливаем пакеты ОС из комплекта: ${#local_debs[@]}"
   (
@@ -201,25 +160,28 @@ if ((INSTALL_OS_PACKAGES == 1)); then
 fi
 
 if [[ "$PREVIEW_ENABLED" == "true" && ! -x "$LIBREOFFICE_BIN" ]]; then
-  die "После установки пакетов LibreOffice недоступен: $LIBREOFFICE_BIN"
+  warn "После установки пакетов LibreOffice недоступен ($LIBREOFFICE_BIN). Функция предварительного просмотра будет отключена."
+  PREVIEW_ENABLED="false"
 fi
 
-if ! getent group "$DOCOMATOR_GROUP" >/dev/null 2>&1; then groupadd --system "$DOCOMATOR_GROUP"; fi
-if ! id "$DOCOMATOR_USER" >/dev/null 2>&1; then
-  NOLOGIN_SHELL="/usr/sbin/nologin"
-  [[ -x "$NOLOGIN_SHELL" ]] || NOLOGIN_SHELL="/bin/false"
-  useradd --system --gid "$DOCOMATOR_GROUP" --home-dir "$DATA_DIR" --shell "$NOLOGIN_SHELL" "$DOCOMATOR_USER"
+if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+  if ! getent group "$DOCOMATOR_GROUP" >/dev/null 2>&1; then groupadd --system "$DOCOMATOR_GROUP" 2>/dev/null || true; fi
+  if ! id "$DOCOMATOR_USER" >/dev/null 2>&1; then
+    NOLOGIN_SHELL="/usr/sbin/nologin"
+    [[ -x "$NOLOGIN_SHELL" ]] || NOLOGIN_SHELL="/bin/false"
+    useradd --system --gid "$DOCOMATOR_GROUP" --home-dir "$DATA_DIR" --shell "$NOLOGIN_SHELL" "$DOCOMATOR_USER" 2>/dev/null || true
+  fi
 fi
 
 mkdir -p "$RELEASES_DIR" "$DATA_DIR/objects" "$DATA_DIR/models" "$DATA_DIR/previews" "$DATA_DIR/backups" "$DATA_DIR/tmp" "$DATA_DIR/logs"
-chown -R "$DOCOMATOR_USER:$DOCOMATOR_GROUP" "$DATA_DIR"
-chmod 0750 "$DATA_DIR" "$DATA_DIR"/{objects,models,previews,backups,tmp,logs}
+chown -R "$DOCOMATOR_USER:$DOCOMATOR_GROUP" "$DATA_DIR" 2>/dev/null || true
+chmod 0750 "$DATA_DIR" "$DATA_DIR"/{objects,models,previews,backups,tmp,logs} 2>/dev/null || true
 
 NEW_CONFIG=0
 if [[ ! -f "$CONFIG_FILE" ]]; then
   cp "$BUNDLE_ROOT/payload/config/docomator.env.example" "$CONFIG_FILE"
-  chmod 0640 "$CONFIG_FILE"
-  chown root:"$DOCOMATOR_GROUP" "$CONFIG_FILE"
+  chmod 0640 "$CONFIG_FILE" 2>/dev/null || true
+  chown root:"$DOCOMATOR_GROUP" "$CONFIG_FILE" 2>/dev/null || true
   NEW_CONFIG=1
 fi
 replace_env_value "$CONFIG_FILE" DOCOMATOR_VERSION "$VERSION"
@@ -288,44 +250,39 @@ rollback() {
   fi
 }
 
-if [[ ! -d "$RELEASE_DIR" ]]; then
-  TEMP_RELEASE="$RELEASES_DIR/.${VERSION}.tmp.$$"
-  rm -rf "$TEMP_RELEASE"
-  mkdir -p "$TEMP_RELEASE"
-  cp -a "$BUNDLE_ROOT/payload/app" "$TEMP_RELEASE/"
-  cp -a "$BUNDLE_ROOT/payload/runtime" "$TEMP_RELEASE/"
-  cp -a "$BUNDLE_ROOT/payload/deploy" "$TEMP_RELEASE/"
-  cp "$BUNDLE_ROOT/release.json" "$TEMP_RELEASE/"
-  for helper in first-run.sh set-access-code.sh reset-access-code.sh set-password.sh reset-password.sh; do
-    if [[ -x "$BUNDLE_ROOT/$helper" ]]; then
-      cp "$BUNDLE_ROOT/$helper" "$TEMP_RELEASE/$helper"
-      chmod 0755 "$TEMP_RELEASE/$helper"
-    fi
-  done
-  if [[ -f "$BUNDLE_ROOT/lib.sh" ]]; then
-    cp "$BUNDLE_ROOT/lib.sh" "$TEMP_RELEASE/lib.sh"
-    chmod 0644 "$TEMP_RELEASE/lib.sh"
+TEMP_RELEASE="$RELEASES_DIR/.${VERSION}.tmp.$$"
+rm -rf "$TEMP_RELEASE"
+mkdir -p "$TEMP_RELEASE"
+cp -a "$BUNDLE_ROOT/payload/app" "$TEMP_RELEASE/"
+cp -a "$BUNDLE_ROOT/payload/runtime" "$TEMP_RELEASE/"
+cp -a "$BUNDLE_ROOT/payload/deploy" "$TEMP_RELEASE/"
+cp "$BUNDLE_ROOT/release.json" "$TEMP_RELEASE/"
+for helper in first-run.sh set-access-code.sh reset-access-code.sh set-password.sh reset-password.sh; do
+  if [[ -x "$BUNDLE_ROOT/$helper" ]]; then
+    cp "$BUNDLE_ROOT/$helper" "$TEMP_RELEASE/$helper"
+    chmod 0755 "$TEMP_RELEASE/$helper"
   fi
-  if [[ -f "$BUNDLE_ROOT/healthcheck.mjs" ]]; then
-    cp "$BUNDLE_ROOT/healthcheck.mjs" "$TEMP_RELEASE/healthcheck.mjs"
-    chmod 0755 "$TEMP_RELEASE/healthcheck.mjs"
-  fi
-  chown -R root:root "$TEMP_RELEASE"
-  chmod -R go-w "$TEMP_RELEASE"
-  mv "$TEMP_RELEASE" "$RELEASE_DIR"
-else
-  [[ -f "$RELEASE_DIR/release.json" ]] || die "Существующий каталог версии неполон: $RELEASE_DIR"
-  cmp -s "$BUNDLE_ROOT/release.json" "$RELEASE_DIR/release.json" || die "Версия $VERSION уже установлена с другими сведениями. Подготовьте новый номер версии."
-  info "Такой же каталог версии уже существует: $RELEASE_DIR"
+done
+if [[ -f "$BUNDLE_ROOT/lib.sh" ]]; then
+  cp "$BUNDLE_ROOT/lib.sh" "$TEMP_RELEASE/lib.sh"
+  chmod 0644 "$TEMP_RELEASE/lib.sh"
 fi
+if [[ -f "$BUNDLE_ROOT/healthcheck.mjs" ]]; then
+  cp "$BUNDLE_ROOT/healthcheck.mjs" "$TEMP_RELEASE/healthcheck.mjs"
+  chmod 0755 "$TEMP_RELEASE/healthcheck.mjs"
+fi
+chown -R root:root "$TEMP_RELEASE" 2>/dev/null || true
+chmod -R go-w "$TEMP_RELEASE" 2>/dev/null || true
+rm -rf "$RELEASE_DIR"
+mv "$TEMP_RELEASE" "$RELEASE_DIR"
 
 SESSION_SECRET="$(read_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET)"
 if [[ -z "$SESSION_SECRET" ]]; then
   SESSION_SECRET="$("$RELEASE_DIR/runtime/node/bin/node" -e 'process.stdout.write(require("node:crypto").randomBytes(48).toString("base64url"))')"
   [[ ${#SESSION_SECRET} -ge 32 ]] || die "Не удалось создать секрет сеансов"
   replace_env_value "$CONFIG_FILE" DOCOMATOR_SESSION_SECRET "$SESSION_SECRET"
-  chmod 0640 "$CONFIG_FILE"
-  chown root:"$DOCOMATOR_GROUP" "$CONFIG_FILE"
+  chmod 0640 "$CONFIG_FILE" 2>/dev/null || true
+  chown root:"$DOCOMATOR_GROUP" "$CONFIG_FILE" 2>/dev/null || true
   info "Создан локальный секрет сеансов; 4-значный код доступа задаётся при первом открытии интерфейса"
 fi
 

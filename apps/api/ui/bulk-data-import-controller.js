@@ -14,15 +14,106 @@
     message.textContent = text;
   }
 
-  function bulkImportControllerRecoveryHint(action = "") {
+  function bulkImportControllerRecoveryHint(action = "", error = null) {
     document.querySelector("#bulkImportRecoveryHint")?.remove();
     const message = document.querySelector("#bulkImportMessage");
     if (!message || !action) return;
     const hint = document.createElement("div");
     hint.id = "bulkImportRecoveryHint";
     hint.className = "bulk-import-recovery-hint";
-    hint.innerHTML = `<strong>Что сделать</strong><span>${escapeHtml(action)}</span>`;
+    hint.innerHTML = `<strong>Что сделать</strong><span>${escapeHtml(action)}</span>
+      <div class="bulk-import-llm-actions">
+        <button type="button" class="secondary-button" id="bulkImportLlmDiagnoseBtn">Анализ ошибки через ИИ</button>
+      </div>
+      <div id="bulkImportLlmDiagnosticResult" hidden></div>`;
     message.insertAdjacentElement("afterend", hint);
+
+    hint
+      .querySelector("#bulkImportLlmDiagnoseBtn")
+      ?.addEventListener("click", async () => {
+        const btn = hint.querySelector("#bulkImportLlmDiagnoseBtn");
+        const resEl = hint.querySelector("#bulkImportLlmDiagnosticResult");
+        if (btn) btn.disabled = true;
+        try {
+          const spaceId =
+            typeof bulkImportCurrentSpaceId === "function"
+              ? bulkImportCurrentSpaceId()
+              : String(globalThis.docomatorCurrentSpaceId || "").trim();
+          if (!spaceId) {
+            if (resEl) {
+              resEl.hidden = false;
+              resEl.className = "bulk-import-llm-diagnostic";
+              resEl.innerHTML = "<strong>Раздел не выбран</strong><p>Сначала выберите рабочий раздел данных.</p>";
+            }
+            return;
+          }
+
+          const response = await fetch(
+            `/api/v1/spaces/${encodeURIComponent(spaceId)}/llm/diagnose-error`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                errorCode: error?.code || error?.issue?.code || "import_validation_error",
+                errorMessage: error?.message || error?.issue?.message || action,
+                stage: "import",
+                context: {
+                  column: error?.column || error?.issue?.column,
+                  propertyKey: error?.propertyKey || error?.issue?.propertyKey,
+                  headers: typeof bulkImportPreview !== "undefined" && Array.isArray(bulkImportPreview?.headers)
+                    ? bulkImportPreview.headers
+                    : []
+                }
+              })
+            }
+          );
+
+          const payload = await response.json();
+          const diagnosis = payload?.data;
+          if (resEl && diagnosis) {
+            resEl.hidden = false;
+            resEl.className = "bulk-import-llm-diagnostic";
+            const autoFix = diagnosis.autoFix;
+            const hasMappingsFix = autoFix?.applicable && autoFix?.columnMappings && Object.keys(autoFix.columnMappings).length > 0;
+
+            resEl.innerHTML = `
+              <strong>Разбор причины</strong>
+              <p>${escapeHtml(diagnosis.explanationRu || "Анализ завершён.")}</p>
+              <strong>Рекомендация</strong>
+              <p>${escapeHtml(diagnosis.suggestedActionRu || "Проверьте сопоставления.")}</p>
+              ${hasMappingsFix ? '<div class="bulk-import-llm-actions"><button type="button" class="primary-button" id="bulkImportApplyLlmFixBtn">Применить исправление сопоставления</button></div>' : ""}
+            `;
+
+            if (hasMappingsFix) {
+              resEl.querySelector("#bulkImportApplyLlmFixBtn")?.addEventListener("click", () => {
+                const mappings = autoFix.columnMappings || {};
+                const allRows = document.querySelectorAll("[data-bulk-mapping-row]");
+                for (const [col, targetProp] of Object.entries(mappings)) {
+                  const targetRow = [...allRows].find((r) => r.dataset.column === col);
+                  if (targetRow) {
+                    const select = targetRow.querySelector("[data-bulk-mapping-mode]");
+                    if (select) {
+                      select.value = targetProp ? `existing:${targetProp}` : "skip";
+                    }
+                  }
+                }
+                if (typeof updateBulkImportMappingVisibility === "function") {
+                  updateBulkImportMappingVisibility();
+                }
+                resEl.insertAdjacentHTML("beforeend", '<p class="bulk-import-confidence is-ready">Исправление применено к таблице сопоставления.</p>');
+              });
+            }
+          }
+        } catch (diagError) {
+          if (resEl) {
+            resEl.hidden = false;
+            resEl.className = "bulk-import-llm-diagnostic";
+            resEl.innerHTML = `<strong>Сервер ИИ недоступен</strong><p>${escapeHtml(diagError?.message || "Используйте стандартные рекомендации выше.")}</p>`;
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      });
   }
 
   function bulkImportControllerScopedMemoryKey() {
@@ -405,7 +496,7 @@
       error?.issue && typeof error.issue === "object" ? error.issue : null;
     if (!issue) return;
     const suggestedAction = bulkImportControllerErrorHint(issue);
-    bulkImportControllerRecoveryHint(suggestedAction);
+    bulkImportControllerRecoveryHint(suggestedAction, issue);
     if (issue.scope === "file") {
       document
         .querySelector("#bulkImportFile")

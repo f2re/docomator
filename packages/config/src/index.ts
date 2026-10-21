@@ -7,6 +7,10 @@ export interface CommonConfig {
   logLevel: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
   llmEnabled: boolean;
   llmBaseUrl: string;
+  llmApiKey: string | null;
+  llmModel: string;
+  llmTimeoutMs: number;
+  llmTemperature: number;
 }
 
 export interface SmtpPublicConfig {
@@ -75,6 +79,15 @@ function parseLogLevel(value: string | undefined): CommonConfig["logLevel"] {
   return normalized;
 }
 
+function parseTemperature(name: string, value: string | undefined, fallback: number): number {
+  if (value === undefined || value.trim() === "") return fallback;
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2) {
+    throw new Error(`${name} must be a number in range 0..2`);
+  }
+  return parsed;
+}
+
 function optionalText(value: string | undefined): string | null {
   const normalized = value?.trim();
   return normalized === undefined || normalized.length === 0 ? null : normalized;
@@ -130,12 +143,18 @@ function smtpWorker(env: NodeJS.ProcessEnv): SmtpWorkerConfig {
 
 function common(env: NodeJS.ProcessEnv): CommonConfig {
   const dataDir = path.resolve(env.DOCOMATOR_DATA_DIR ?? "/var/lib/docomator");
+  const llmBaseUrl = (env.DOCOMATOR_LLM_ENDPOINT ?? env.DOCOMATOR_LLM_BASE_URL ?? "http://127.0.0.1:8081").trim();
+  const llmModel = (env.DOCOMATOR_LLM_MODEL ?? "qwen2.5-7b-instruct").trim();
   return {
-    version: env.DOCOMATOR_VERSION ?? "0.7.7",
+    version: env.DOCOMATOR_VERSION ?? "0.8.0",
     dataDir,
     logLevel: parseLogLevel(env.DOCOMATOR_LOG_LEVEL),
     llmEnabled: parseBoolean(env.DOCOMATOR_LLM_ENABLED, false),
-    llmBaseUrl: env.DOCOMATOR_LLM_BASE_URL ?? "http://127.0.0.1:8081"
+    llmBaseUrl,
+    llmApiKey: optionalText(env.DOCOMATOR_LLM_API_KEY),
+    llmModel,
+    llmTimeoutMs: parseInteger("DOCOMATOR_LLM_TIMEOUT_MS", env.DOCOMATOR_LLM_TIMEOUT_MS, 30_000, 1_000, 300_000),
+    llmTemperature: parseTemperature("DOCOMATOR_LLM_TEMPERATURE", env.DOCOMATOR_LLM_TEMPERATURE, 0.1)
   };
 }
 

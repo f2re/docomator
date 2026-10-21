@@ -116,14 +116,17 @@ require_command xargs
 [[ -n "$PREVIEW_PROFILE" ]] || die "Укажите --with-preview или --without-preview; preview-профиль не выбирается неявно."
 [[ -n "$UX_ACCEPTANCE_PROFILE" ]] || die "Укажите --with-ux-acceptance или --without-ux-acceptance; профиль UX-приёмки не выбирается неявно."
 if [[ -z "$TARGET_PROFILE" ]]; then
-  if [[ -n "$OS_PACKAGES_DIR" || "$PREVIEW_PROFILE" == "with" || "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
-    die "Для комплекта с пакетами ОС укажите --target-profile debian или --target-profile astra."
+  if [[ -f /etc/os-release ]] && grep -qi "astra" /etc/os-release; then
+    TARGET_PROFILE="astra"
+  elif [[ -n "$OS_PACKAGES_DIR" || "$PREVIEW_PROFILE" == "with" || "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
+    TARGET_PROFILE="debian"
+  else
+    TARGET_PROFILE="generic"
   fi
-  TARGET_PROFILE="generic"
 fi
 [[ "$TARGET_PROFILE" == "generic" || "$TARGET_PROFILE" == "debian" || "$TARGET_PROFILE" == "astra" ]] || die "Неподдерживаемый target-profile: $TARGET_PROFILE"
 if [[ "$TARGET_PROFILE" == "generic" && -n "$OS_PACKAGES_DIR" ]]; then die "Профиль generic не должен содержать пакеты конкретной ОС."; fi
-if [[ "$TARGET_PROFILE" != "generic" && -z "$OS_PACKAGES_DIR" ]]; then die "Профиль $TARGET_PROFILE требует --os-packages-dir с полным замыканием зависимостей."; fi
+if [[ "$TARGET_PROFILE" != "generic" && -z "$OS_PACKAGES_DIR" && "$PREVIEW_PROFILE" == "with" ]]; then die "Профиль $TARGET_PROFILE с preview требует --os-packages-dir с полным замыканием зависимостей."; fi
 
 if [[ "$UX_ACCEPTANCE_PROFILE" == "with" ]]; then
   UX_CHROMIUM_PACKAGE="${UX_CHROMIUM_PACKAGE:-chromium}"

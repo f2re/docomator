@@ -109,6 +109,18 @@
   color: var(--danger);
 }
 
+.generation-correction-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.generation-correction-result.is-llm {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+}
+
 @media (max-width: 980px) {
   .generation-correction-item {
     grid-template-columns: 1fr;

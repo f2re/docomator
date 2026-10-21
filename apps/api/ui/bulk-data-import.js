@@ -609,7 +609,17 @@ function renderBulkImportPreview(preview) {
       <label class="generation-field"><span>Колонка с ФИО</span><select id="bulkImportDisplayNameColumn">${preview.headers.map((header) => `<option value="${escapeHtml(header)}"${header === displayNameColumn ? " selected" : ""}>${escapeHtml(header)}</option>`).join("")}</select><small>Это имя будет показано в карточке и списках.</small></label>
       <label class="generation-field"><span>Как узнавать прежнюю запись</span><select id="bulkImportIdentityColumn">${preview.headers.map((header) => `<option value="${escapeHtml(header)}"${header === identityColumn ? " selected" : ""}>${escapeHtml(header)}</option>`).join("")}</select><small>При следующей загрузке запись с тем же ключом будет обновлена, а не создана повторно.</small></label>
     </div>
-    <div class="panel-heading compact-heading"><div><h3>Сопоставление колонок</h3><p>Система уверенно сопоставила ${confidentCount} колонок. Проверьте отмеченные как новые или неуверенные.</p></div><span class="operator-counter">${preview.headers.length} колонок</span></div>
+    <div class="panel-heading compact-heading">
+      <div>
+        <h3>Сопоставление колонок</h3>
+        <p>Система уверенно сопоставила ${confidentCount} колонок. Проверьте отмеченные как новые или неуверенные.</p>
+      </div>
+      <div class="bulk-import-llm-actions">
+        <button type="button" class="secondary-button" id="bulkImportLlmAutoMapBtn">Подобрать сопоставление через ИИ</button>
+        <span class="operator-counter">${preview.headers.length} колонок</span>
+      </div>
+    </div>
+    <div id="bulkImportLlmNotice" hidden></div>
     <div id="bulkImportMappings" class="bulk-import-mappings">${mappingHtml}</div>
     <label class="bulk-import-group-option"><input id="bulkImportCreateGroup" type="checkbox"${studentDetected ? " checked" : ""} /><span><strong>Собрать импортированных людей в группу</strong><small>Группа нужна для одного сводного документа и расписаний.</small></span></label>
     <div id="bulkImportGroupFields" class="bulk-import-group-fields"${studentDetected ? "" : " hidden"}><label class="generation-field"><span>Название группы</span><input id="bulkImportGroupName" type="text" maxlength="300" value="${studentDetected ? "Студенты — темы научных работ" : `Импорт от ${new Date().toLocaleDateString("ru-RU")}`}" /></label></div>
@@ -619,6 +629,89 @@ function renderBulkImportPreview(preview) {
   </section>`;
   decorateBulkImportPreview(preview);
   updateBulkImportMappingVisibility();
+  document
+    .querySelector("#bulkImportLlmAutoMapBtn")
+    ?.addEventListener("click", () => void triggerBulkImportLlmAutoMap());
+}
+
+async function triggerBulkImportLlmAutoMap() {
+  const button = document.querySelector("#bulkImportLlmAutoMapBtn");
+  const noticeEl = document.querySelector("#bulkImportLlmNotice");
+  if (!bulkImportPreview?.headers?.length) return;
+  if (button) button.disabled = true;
+  try {
+    const spaceId = bulkImportCurrentSpaceId();
+    if (!spaceId) {
+      if (noticeEl) {
+        noticeEl.hidden = false;
+        noticeEl.className = "bulk-import-notice is-warning";
+        noticeEl.innerHTML = "<strong>Раздел не выбран</strong><p>Сначала выберите рабочий раздел данных.</p>";
+      }
+      return;
+    }
+
+    const samples = {};
+    for (const h of bulkImportPreview.headers) {
+      samples[h] = (bulkImportPreview.sampleRows || [])
+        .map((r) => r[h])
+        .filter((v) => v !== undefined && v !== null && String(v).trim() !== "")
+        .slice(0, 3);
+    }
+
+    const response = await fetch(`/api/v1/spaces/${encodeURIComponent(spaceId)}/llm/suggest-mappings`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        headers: bulkImportPreview.headers,
+        samples,
+        targetProperties: bulkImportPersonProperties()
+      })
+    });
+
+    const payload = await response.json();
+    const mappings = payload?.data?.mappings || [];
+
+    if (mappings.length > 0) {
+      let appliedCount = 0;
+      const allRows = document.querySelectorAll("[data-bulk-mapping-row]");
+      for (const m of mappings) {
+        const row = [...allRows].find((r) => r.dataset.column === m.column);
+        if (!row) continue;
+        const select = row.querySelector("[data-bulk-mapping-mode]");
+        if (select && m.propertyKey) {
+          select.value = `existing:${m.propertyKey}`;
+          appliedCount += 1;
+          const confEl = row.querySelector(".bulk-import-confidence");
+          if (confEl) {
+            confEl.className = "bulk-import-confidence is-llm";
+            confEl.textContent = `ИИ ${Math.round((m.confidence || 0.9) * 100)}%`;
+            confEl.title = m.rationaleRu || "Подобрано ИИ";
+          }
+        }
+      }
+      updateBulkImportMappingVisibility();
+
+      if (noticeEl) {
+        noticeEl.hidden = false;
+        noticeEl.className = "bulk-import-notice is-ready";
+        noticeEl.innerHTML = `<strong>Сопоставление подобрано (${appliedCount})</strong><p>${escapeHtml(payload?.data?.source === "llm" ? "ИИ сформировал правила сопоставления." : "Применены правила сопоставления.")} Проверьте распределение колонок перед запуском проверки.</p>`;
+      }
+    } else {
+      if (noticeEl) {
+        noticeEl.hidden = false;
+        noticeEl.className = "bulk-import-notice is-warning";
+        noticeEl.innerHTML = "<strong>Сервер ИИ недоступен</strong><p>Применены стандартные правила сопоставления.</p>";
+      }
+    }
+  } catch (err) {
+    if (noticeEl) {
+      noticeEl.hidden = false;
+      noticeEl.className = "bulk-import-notice is-warning";
+      noticeEl.innerHTML = `<strong>Сервер ИИ недоступен</strong><p>${escapeHtml(err?.message || "Используются стандартные правила сопоставления.")}</p>`;
+    }
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function bulkImportRequestBody() {

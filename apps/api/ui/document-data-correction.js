@@ -157,8 +157,12 @@ async function appendGenerationCorrectionEditor(preflight, token) {
     section.innerHTML = `
       <div class="generation-history-heading">
         <div><p class="eyebrow">Быстрое исправление</p><h3>Заполнить недостающие значения здесь</h3></div>
-        ${correctableRows.length > 0 ? '<button class="primary-button" id="generationCorrectionSave" type="button">Сохранить заполненные</button>' : ""}
+        <div class="generation-correction-actions">
+          ${correctableRows.length > 0 ? '<button class="secondary-button" id="generationCorrectionLlmFill" type="button">Заполнить через ИИ</button>' : ""}
+          ${correctableRows.length > 0 ? '<button class="primary-button" id="generationCorrectionSave" type="button">Сохранить заполненные</button>' : ""}
+        </div>
       </div>
+      <div id="generationCorrectionLlmNotice" hidden></div>
       <p class="generation-correction-description">Значения сохраняются в карточке сотрудника и будут доступны для следующих документов.</p>
       ${unlinkedRows.length > 0 ? `<div class="generation-state is-warning"><div><strong>Некоторые поля шаблона нужно связать заново</strong><p>Откройте «Шаблоны» и выберите понятное поле карточки для: ${generationEscape([...new Set(unlinkedRows.map((row) => row.fieldLabel))].join(", "))}.</p><button class="secondary-button" type="button" data-view-target="templates">Открыть шаблоны</button></div></div>` : ""}
       <div class="generation-correction-list">
@@ -186,12 +190,98 @@ async function appendGenerationCorrectionEditor(preflight, token) {
     section
       .querySelector("#generationCorrectionSave")
       ?.addEventListener("click", saveGenerationCorrections);
+    section
+      .querySelector("#generationCorrectionLlmFill")
+      ?.addEventListener("click", () => void fillGenerationCorrectionsWithLlm(preflight));
   } catch (error) {
     if (token !== generationCorrectionRenderToken) return;
     holder.insertAdjacentHTML(
       "beforeend",
       `<div class="generation-state is-error"><span aria-hidden="true">⚠️</span><div><strong>Форму исправления подготовить не удалось</strong><p>${generationEscape(error?.message || "Повторите проверку.")}</p></div></div>`
     );
+  }
+}
+
+async function fillGenerationCorrectionsWithLlm(preflight) {
+  const button = document.querySelector("#generationCorrectionLlmFill");
+  const noticeEl = document.querySelector("#generationCorrectionLlmNotice");
+  if (button) button.disabled = true;
+  try {
+    const spaceId = String(globalThis.docomatorCurrentSpaceId || "").trim();
+    if (!spaceId) {
+      if (noticeEl) {
+        noticeEl.hidden = false;
+        noticeEl.className = "generation-state is-warning";
+        noticeEl.innerHTML = "<div><strong>Раздел не выбран</strong><p>Сначала выберите раздел данных.</p></div>";
+      }
+      return;
+    }
+
+    const rows = generationCorrectionRows(preflight);
+    const correctableRows = rows.filter((row) => generationPropertyDefinition(row.fieldKey));
+    if (correctableRows.length === 0) return;
+
+    const uniqueMissingMap = new Map();
+    for (const r of correctableRows) {
+      if (!uniqueMissingMap.has(r.fieldKey)) {
+        uniqueMissingMap.set(r.fieldKey, {
+          key: r.fieldKey,
+          label: r.fieldLabel,
+          valueType: r.valueType
+        });
+      }
+    }
+    const missingFields = [...uniqueMissingMap.values()];
+
+    const body = await generationFetchJson(
+      `/api/v1/spaces/${encodeURIComponent(spaceId)}/llm/fill-values`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          templateTitle: preflight.templateTitle || "",
+          missingFields
+        })
+      }
+    );
+
+    const filledValues = body?.data?.filledValues || {};
+    const details = body?.data?.details || [];
+    let filledCount = 0;
+
+    document.querySelectorAll("[data-correction-row]").forEach((row) => {
+      const fieldKey = row.dataset.fieldKey;
+      const control = row.querySelector("[data-correction-value]");
+      if (control && fieldKey && fieldKey in filledValues && (!control.value || control.value.trim() === "")) {
+        control.value = String(filledValues[fieldKey]);
+        filledCount += 1;
+        const resEl = row.querySelector("[data-correction-result]");
+        if (resEl) {
+          resEl.className = "generation-correction-result is-llm";
+          const rationale = details.find((d) => d.propertyKey === fieldKey)?.rationaleRu || "подобрано ИИ";
+          resEl.textContent = "ИИ: " + rationale;
+        }
+      }
+    });
+
+    if (noticeEl) {
+      noticeEl.hidden = false;
+      if (filledCount > 0) {
+        noticeEl.className = "generation-state is-success";
+        noticeEl.innerHTML = `<div><strong>Значения заполнены ИИ (${filledCount})</strong><p>${generationEscape(body?.data?.rationaleRu || "Проверьте значения и нажмите «Сохранить заполненные».")}</p></div>`;
+      } else {
+        noticeEl.className = "generation-state is-warning";
+        noticeEl.innerHTML = `<div><strong>Автоматическое заполнение завершено</strong><p>${generationEscape(body?.data?.rationaleRu || "Сервер ИИ недоступен. Заполните поля вручную.")}</p></div>`;
+      }
+    }
+  } catch (error) {
+    if (noticeEl) {
+      noticeEl.hidden = false;
+      noticeEl.className = "generation-state is-warning";
+      noticeEl.innerHTML = `<div><strong>Сервер ИИ недоступен</strong><p>${generationEscape(error?.message || "Заполните недостающие значения вручную.")}</p></div>`;
+    }
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 

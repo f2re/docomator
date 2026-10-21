@@ -90,6 +90,7 @@ import { registerDocumentScheduleRoutes } from "./document-schedule-routes.js";
 import { registerEmailRecipientRoutes } from "./email-recipient-routes.js";
 import { registerEmployeeRoutes } from "./employee-routes.js";
 import { registerKnowledgeRoutes } from "./knowledge-routes.js";
+import { registerLlmRoutes } from "./llm-routes.js";
 import { registerMultiFieldTestVersionRoutes } from "./multi-field-test-version-routes.js";
 import { registerOperationCenterRoutes } from "./operation-center-routes.js";
 import { loadReleaseIdentity } from "./release-identity.js";
@@ -627,6 +628,7 @@ export function buildApp(
     objectStore,
     templatePreviewActivationRegistry
   );
+  registerLlmRoutes(app, config, spaceRegistry);
 
   return app;
 }

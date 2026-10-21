@@ -8,8 +8,50 @@ test("api config applies safe defaults", () => {
   assert.equal(config.host, "127.0.0.1");
   assert.equal(config.port, 8080);
   assert.equal(config.llmEnabled, false);
+  assert.equal(config.llmBaseUrl, "http://127.0.0.1:8081");
+  assert.equal(config.llmApiKey, null);
+  assert.equal(config.llmModel, "qwen2.5-7b-instruct");
+  assert.equal(config.llmTimeoutMs, 30_000);
+  assert.equal(config.llmTemperature, 0.1);
   assert.equal(config.releaseMetadataPath, null);
   assert.match(config.dataDir, /tmp-data$/);
+});
+
+test("llm remote server configuration is parsed accurately", () => {
+  const config = loadApiConfig({
+    DOCOMATOR_DATA_DIR: "./tmp-data",
+    DOCOMATOR_LLM_ENABLED: "true",
+    DOCOMATOR_LLM_ENDPOINT: "http://192.168.1.100:8081/v1/",
+    DOCOMATOR_LLM_API_KEY: "secret-token-123",
+    DOCOMATOR_LLM_MODEL: "custom-instruct-model",
+    DOCOMATOR_LLM_TIMEOUT_MS: "45000",
+    DOCOMATOR_LLM_TEMPERATURE: "0.2"
+  });
+  assert.equal(config.llmEnabled, true);
+  assert.equal(config.llmBaseUrl, "http://192.168.1.100:8081/v1/");
+  assert.equal(config.llmApiKey, "secret-token-123");
+  assert.equal(config.llmModel, "custom-instruct-model");
+  assert.equal(config.llmTimeoutMs, 45_000);
+  assert.equal(config.llmTemperature, 0.2);
+});
+
+test("invalid llm parameters are rejected", () => {
+  assert.throws(
+    () =>
+      loadApiConfig({
+        DOCOMATOR_DATA_DIR: "./tmp-data",
+        DOCOMATOR_LLM_TEMPERATURE: "3.5"
+      }),
+    /DOCOMATOR_LLM_TEMPERATURE must be a number in range 0\.\.2/
+  );
+  assert.throws(
+    () =>
+      loadApiConfig({
+        DOCOMATOR_DATA_DIR: "./tmp-data",
+        DOCOMATOR_LLM_TIMEOUT_MS: "500"
+      }),
+    /DOCOMATOR_LLM_TIMEOUT_MS must be an integer in range 1000\.\.300000/
+  );
 });
 
 test("api config resolves installed release metadata path", () => {

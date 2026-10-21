@@ -56,8 +56,8 @@ if (typeof release.osPackagesIncluded !== "boolean") {
 }
 
 if (!release.osPackagesIncluded) {
-  if (release.targetProfile !== "generic") {
-    fail("Комплект без пакетов ОС должен иметь targetProfile=generic.");
+  if (!["generic", "debian", "astra"].includes(release.targetProfile)) {
+    fail("Комплект без пакетов ОС содержит неизвестный targetProfile.");
   }
   if (release.dependencyClosure !== "not-applicable") {
     fail("Комплект без пакетов ОС должен иметь dependencyClosure=not-applicable.");

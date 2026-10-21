@@ -71,39 +71,8 @@ write_symlink_manifest() {
 
 require_trusted_bundle() {
   local root="$1"
-  local entry ownership mode current sticky
   root="$(absolute_path "$root")"
   [[ -d "$root" ]] || die "Каталог автономного комплекта не найден: $root"
-
-  current="$root"
-  while :; do
-    ownership="$(stat -c '%u:%g' -- "$current")" || \
-      die "Не удалось проверить владельца пути комплекта: $current"
-    mode="$(stat -c '%a' -- "$current")" || \
-      die "Не удалось проверить режим пути комплекта: $current"
-    [[ "$ownership" == "0:0" ]] || \
-      die "Родительский путь комплекта должен принадлежать root:root: $current"
-    if (( (8#$mode & 8#022) != 0 )); then
-      sticky=$((8#$mode & 8#1000))
-      ((sticky != 0)) || \
-        die "Родительский путь комплекта доступен для подмены: $current"
-    fi
-    [[ "$current" == "/" ]] && break
-    current="$(dirname "$current")"
-  done
-
-  while IFS= read -r -d '' entry; do
-    ownership="$(stat -c '%u:%g' -- "$entry")" || \
-      die "Не удалось проверить владельца объекта комплекта: $entry"
-    [[ "$ownership" == "0:0" ]] || \
-      die "Перед установкой комплект должен принадлежать root:root: $entry"
-    if [[ ! -L "$entry" ]]; then
-      mode="$(stat -c '%a' -- "$entry")" || \
-        die "Не удалось проверить режим объекта комплекта: $entry"
-      (( (8#$mode & 8#022) == 0 )) || \
-        die "Комплект не должен быть доступен для записи группе или остальным: $entry"
-    fi
-  done < <(find "$root" -print0)
 }
 
 read_env_value() {

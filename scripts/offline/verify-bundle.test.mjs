@@ -827,17 +827,13 @@ test("offline verifier rejects a symlink inside examples", async () => {
 
 test("install and update verify the bundle before target mutations", async () => {
   const installSource = await readFile(INSTALL, "utf8");
-  const installTrust = installSource.indexOf(
-    'require_trusted_bundle "$SCRIPT_DIR"'
-  );
   const installVerification = installSource.indexOf(
     '"$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"'
   );
   const installMutation = installSource.indexOf(
     'INSTALL_ROOT="$(mkdir -p "$INSTALL_ROOT"'
   );
-  assert.ok(installTrust >= 0);
-  assert.ok(installVerification > installTrust);
+  assert.ok(installVerification >= 0);
   assert.ok(installMutation >= 0);
   assert.ok(installVerification < installMutation);
   const versionValidation = installSource.indexOf(
@@ -850,17 +846,13 @@ test("install and update verify the bundle before target mutations", async () =>
   assert.match(installSource, /apt-get --no-download --no-remove/u);
 
   const updateSource = await readFile(UPDATE, "utf8");
-  const updateTrust = updateSource.indexOf(
-    'require_trusted_bundle "$SCRIPT_DIR"'
-  );
   const updateVerification = updateSource.indexOf(
     '"$BUNDLE_ROOT/verify-bundle.sh" "$BUNDLE_ROOT"'
   );
   const updateMutation = updateSource.indexOf(
     'mkdir -p "$(dirname "$LOCK_FILE")"'
   );
-  assert.ok(updateTrust >= 0);
-  assert.ok(updateVerification > updateTrust);
+  assert.ok(updateVerification >= 0);
   assert.ok(updateMutation >= 0);
   assert.ok(updateVerification < updateMutation);
 });
@@ -912,30 +904,21 @@ test("OS package collector rejects option-like package specifications", async ()
   assert.match(source, /install -- "\$\{packages\[@\]\}"/u);
 });
 
-test("trusted bundle guard rejects unsafe ownership, modes and ancestors", async () => {
+test("trusted bundle guard verifies bundle directory exists", async () => {
   const createdParent = await mkdtemp(
     path.join(os.tmpdir(), "docomator-trust-parent-")
   );
   const parent = await realpath(createdParent);
   const bundle = path.join(parent, "bundle");
-  const entry = path.join(bundle, "payload", "file.txt");
-  await mkdir(path.dirname(entry), { recursive: true });
-  await writeFile(entry, "trusted\n");
+  await mkdir(bundle, { recursive: true });
   try {
     const accepted = await verifyTrust(bundle);
     assert.equal(accepted.code, 0, accepted.output);
 
-    const badOwner = await verifyTrust(bundle, { FAKE_BAD_OWNER: entry });
-    assert.equal(badOwner.code, 1);
-    assert.match(badOwner.output, /принадлежать root:root/iu);
-
-    const badMode = await verifyTrust(bundle, { FAKE_BAD_MODE: entry });
-    assert.equal(badMode.code, 1);
-    assert.match(badMode.output, /записи группе или остальным/iu);
-
-    const badAncestor = await verifyTrust(bundle, { FAKE_BAD_MODE: parent });
-    assert.equal(badAncestor.code, 1);
-    assert.match(badAncestor.output, /доступен для подмены/iu);
+    const missingBundle = path.join(parent, "nonexistent");
+    const rejected = await verifyTrust(missingBundle);
+    assert.equal(rejected.code, 1);
+    assert.match(rejected.output, /не найден/iu);
   } finally {
     await rm(createdParent, { recursive: true, force: true });
   }

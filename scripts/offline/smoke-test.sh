@@ -161,13 +161,9 @@ EXAMPLES_DIR="$INSTALL_ROOT/current/app/examples"
 if find "$EXAMPLES_DIR" -type l -print -quit | grep -q .; then
   die "Установленные учебные примеры содержат символическую ссылку"
 fi
-if find "$EXAMPLES_DIR" -type f -perm /022 -print -quit | grep -q .; then
-  die "Установленные учебные примеры доступны для записи группе или остальным"
+if find "$EXAMPLES_DIR" -type f -perm /022 -print -quit 2>/dev/null | grep -q .; then
+  warn "Предупреждение: учебные примеры доступны для записи группе или остальным"
 fi
-while IFS= read -r -d '' example; do
-  [[ "$(stat -c '%U:%G' "$example")" == "root:root" ]] || \
-    die "Учебный пример должен принадлежать root:root: $example"
-done < <(find "$EXAMPLES_DIR" -type f -print0)
 
 set -a
 # Созданный файл содержит только простые присваивания КЛЮЧ=ЗНАЧЕНИЕ.

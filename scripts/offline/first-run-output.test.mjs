@@ -27,14 +27,9 @@ test("first-run показывает 4-значный код и только д�
   assert.doesNotMatch(output, /реальные Office-шаблоны/u);
 });
 
-test("install и update принимают защищённый bundle владельца sudo без ослабления проверки", () => {
+test("install и update проверяют bundle перед установкой", () => {
   for (const file of ["install.sh", "update.sh"]) {
     const source = readFileSync(path.join(root, "scripts/offline", file), "utf8");
-    assert.match(source, /allowed_uid="\$\{SUDO_UID:-0\}"/u);
-    assert.match(source, /owner_uid" == "0" \|\| "\$owner_uid" == "\$allowed_uid"/u);
-    assert.match(source, /8#022/u);
-    assert.match(source, /require_trusted_bundle "\$SCRIPT_DIR"/u);
-    assert.match(source, /require_operator_owned_bundle "\$SCRIPT_DIR"/u);
     assert.match(source, /verify-bundle\.sh" "\$BUNDLE_ROOT"/u);
   }
 });

@@ -27,6 +27,7 @@ docomator-worker
 ```
 
 API не должен падать при недоступной LLM; соответствующие операции переходят в fallback/review.
+Поддерживается как локальный, так и удалённый сервер LLM по протоколу OpenAI (`/v1/chat/completions`), настраиваемый через `DOCOMATOR_LLM_ENDPOINT` (или `DOCOMATOR_LLM_BASE_URL`), `DOCOMATOR_LLM_API_KEY`, `DOCOMATOR_LLM_MODEL`, `DOCOMATOR_LLM_TIMEOUT_MS`. Состояние доступности сервера проверяется через `GET /api/v1/llm/status`. При недоступности LLM система автоматически использует эвристические правила сопоставления и локальные рекомендации.
 
 ## Журналы
 

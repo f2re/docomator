@@ -565,6 +565,35 @@
   font-size: 0.78rem;
 }
 
+.bulk-import-llm-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+  flex-wrap: wrap;
+}
+
+.bulk-import-llm-diagnostic {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  margin-top: 0.5rem;
+}
+
+.bulk-import-llm-diagnostic p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.bulk-import-confidence.is-llm {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
 @media (max-width: 620px) {
   .bulk-import-normalization {
     padding: 13px;
