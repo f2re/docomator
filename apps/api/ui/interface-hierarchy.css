@@ -244,13 +244,26 @@ body {
 
 .management-view { display: none; gap: 28px; }
 .management-view.is-visible { display: grid; }
-.management-overview { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.75fr); gap: 14px; }
+.management-overview { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.9fr) minmax(260px, 0.9fr); gap: 14px; }
+@media (max-width: 1100px) {
+  .management-overview { grid-template-columns: 1fr; }
+}
 .management-context-card,
 .management-health-card,
 .management-section,
 .management-diagnostics { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .management-context-card,
 .management-health-card { display: grid; align-items: center; gap: 18px; min-height: 164px; padding: 22px; }
+.management-llm-card { align-items: start; }
+.management-llm-card .management-health-icon[data-state="disabled"] { color: var(--muted); background: var(--surface-2); }
+.management-llm-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.management-llm-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.management-llm-chip { font-size: 0.75rem; color: var(--muted); background: var(--surface-2); padding: 2px 7px; border-radius: var(--radius-sm); border: 1px solid var(--border); overflow-wrap: anywhere; }
+.management-llm-test-result { margin-top: 10px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); font-size: 0.82rem; }
+.management-llm-test-result[data-state="success"] { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.management-llm-test-result[data-state="error"] { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+.management-llm-test-result small { display: block; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+.management-llm-test-result p { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .management-context-card {
   grid-template-columns: minmax(0, 1fr) auto;
   background: radial-gradient(circle at 92% 20%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 38%), var(--surface);

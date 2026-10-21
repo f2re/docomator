@@ -80,6 +80,9 @@ function operationsDataDetail(check) {
   if (check.id === "results" && typeof data.waitingCount === "number") {
     return `Новых: ${data.newCount}; ожидают работы: ${data.waitingCount}; забрано: ${data.collectedCount}.`;
   }
+  if (check.id === "llm" && data.endpoint) {
+    return `Адрес: ${operationsEscape(data.endpoint)}${data.model ? ` · Модель: ${operationsEscape(data.model)}` : ""}${typeof data.latencyMs === "number" ? ` · Задержка: ${data.latencyMs} мс` : ""}`;
+  }
   return "";
 }
 

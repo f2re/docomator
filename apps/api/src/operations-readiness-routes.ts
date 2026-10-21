@@ -15,6 +15,7 @@ import {
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { correlationId } from "./request-context.js";
+import { diagnoseLlm } from "./llm/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -520,6 +521,53 @@ function resultCounts(store: SqliteStore): OperationsCheck {
   }
 }
 
+async function llmCheck(config: ApiConfig): Promise<OperationsCheck> {
+  if (!config.llmEnabled) {
+    return check({
+      id: "llm",
+      title: "Нейросетевой помощник (LLM)",
+      state: "disabled",
+      required: false,
+      summary: "Отключено в настройках",
+      detail: "Автосопоставление и диагностика работают по встроенным локальным правилам.",
+      remediation: null,
+      data: { enabled: false }
+    });
+  }
+  const result = await diagnoseLlm(config);
+  if (result.status === "ready") {
+    return check({
+      id: "llm",
+      title: "Нейросетевой помощник (LLM)",
+      state: "ok",
+      required: false,
+      summary: `Готово (${result.latencyMs ?? 0} мс)`,
+      detail: `Сервер ${result.endpoint || ""} доступен, модель: ${result.model || "по умолчанию"}.`,
+      remediation: null,
+      data: {
+        enabled: true,
+        endpoint: result.endpoint || null,
+        model: result.model || null,
+        latencyMs: result.latencyMs ?? 0
+      }
+    });
+  }
+  return check({
+    id: "llm",
+    title: "Нейросетевой помощник (LLM)",
+    state: "warning",
+    required: false,
+    summary: "LLM-сервер недоступен",
+    detail: `Сервер ${result.endpoint || ""} не отвечает (${result.reason || "ошибка соединения"}). Система работает в штатном автономном режиме.`,
+    remediation: "Проверьте сетевой адрес DOCOMATOR_LLM_BASE_URL и доступность LLM-сервера с этого хоста.",
+    data: {
+      enabled: true,
+      endpoint: result.endpoint || null,
+      reason: result.reason || null
+    }
+  });
+}
+
 export function registerOperationsReadinessRoutes(
   app: FastifyInstance,
   config: ApiConfig,
@@ -548,7 +596,8 @@ export function registerOperationsReadinessRoutes(
       networkFolderCheck(config),
       Promise.resolve(smtpCheck(config)),
       backupCheck(config.dataDir),
-      Promise.resolve(resultCounts(store))
+      Promise.resolve(resultCounts(store)),
+      llmCheck(config)
     ]);
     const summary = {
       ok: checks.filter((item) => item.state === "ok").length,

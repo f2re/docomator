@@ -130,6 +130,30 @@ test("LLM routes suite", async (t) => {
     assert.equal(body.data.filledValues["short_name"], "Сидоров С.С.");
   });
 
+  await t.test("POST /api/v1/llm/test handles disabled LLM safely", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/llm/test",
+      payload: { prompt: "Тестовая проверка" }
+    });
+    assert.equal(res.statusCode, 200);
+    const body = res.json() as { data: { success: boolean; status: string } };
+    assert.equal(body.data.success, false);
+    assert.equal(body.data.status, "disabled");
+  });
+
+  await t.test("POST /api/v1/spaces/:spaceId/llm/test handles space-level test prompt", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/spaces/${spaceId}/llm/test`,
+      payload: { prompt: "Тестовая проверка" }
+    });
+    assert.equal(res.statusCode, 200);
+    const body = res.json() as { data: { success: boolean; status: string } };
+    assert.equal(body.data.success, false);
+    assert.equal(body.data.status, "disabled");
+  });
+
   await t.test("LLM endpoints reject non-existent space", async () => {
     const res = await app.inject({
       method: "POST",

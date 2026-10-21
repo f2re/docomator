@@ -11,7 +11,15 @@ function studioToolbar(report) {
       <label class="studio-zoom"><span>Масштаб</span><select aria-label="Масштаб документа" data-studio-zoom><option value="fit">По ширине</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>
       <button type="button" class="primary-button" id="documentTemplateSave" data-save-configured-template${count ? '' : ' disabled'}>Сохранить шаблон</button>
     </div>
-  </header><p class="studio-direction">Выделите текст или выберите ячейку → назначьте поле → сохраните шаблон.</p>
+  </header>
+  <div class="studio-guidance-rail" aria-label="Порядок действий">
+    <span class="studio-guidance-step"><span class="studio-step-num">1</span> Выберите текст или ячейку слева</span>
+    <span class="studio-guidance-arrow" aria-hidden="true">→</span>
+    <span class="studio-guidance-step"><span class="studio-step-num">2</span> Назначьте поле в панели</span>
+    <span class="studio-guidance-arrow" aria-hidden="true">→</span>
+    <span class="studio-guidance-step"><span class="studio-step-num">3</span> Сохраните шаблон</span>
+  </div>
+  <p class="studio-direction">Выделите текст или выберите ячейку → назначьте поле → сохраните шаблон.</p>
   <section id="studioFieldList" class="studio-field-list" aria-label="Назначенные поля" hidden></section>`;
 }
 
@@ -208,7 +216,8 @@ document.addEventListener('click', (event) => {
     if (!element || fieldBusy || configuredTemplateSave || studioEditRun) return;
     renderStructureSelection(element);
     const target = document.querySelector(`[data-structure-id="${CSS.escape(element.id)}"]`);
-    target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    target?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest', inline: 'nearest' });
     document.querySelector('#studioEditProperty')?.focus({ preventScroll: true });
     return;
   }

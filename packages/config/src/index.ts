@@ -146,7 +146,7 @@ function common(env: NodeJS.ProcessEnv): CommonConfig {
   const llmBaseUrl = (env.DOCOMATOR_LLM_ENDPOINT ?? env.DOCOMATOR_LLM_BASE_URL ?? "http://127.0.0.1:8081").trim();
   const llmModel = (env.DOCOMATOR_LLM_MODEL ?? "qwen2.5-7b-instruct").trim();
   return {
-    version: env.DOCOMATOR_VERSION ?? "0.8.0",
+    version: env.DOCOMATOR_VERSION ?? "0.8.1",
     dataDir,
     logLevel: parseLogLevel(env.DOCOMATOR_LOG_LEVEL),
     llmEnabled: parseBoolean(env.DOCOMATOR_LLM_ENABLED, false),

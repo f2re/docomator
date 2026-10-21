@@ -68,7 +68,7 @@
 
     const managementStatus = interfaceQuery("#managementSystemStatus");
     const managementDetail = interfaceQuery("#managementSystemDetail");
-    const healthIcon = interfaceQuery(".management-health-icon");
+    const healthIcon = interfaceQuery("#managementSystemHealthIcon") || interfaceQuery(".management-health-icon");
     if (managementStatus) managementStatus.textContent = label.textContent;
     if (managementDetail) managementDetail.textContent = detail || "Локальный сервер отвечает.";
     if (healthIcon) {
@@ -242,12 +242,142 @@
       <button class="secondary-button" type="button" data-scroll-result-attention>Показать</button>`;
   }
 
+  let interfaceLlmBusy = false;
+
+  async function interfaceCheckLlmStatus() {
+    if (interfaceLlmBusy) return;
+    const card = interfaceQuery("#managementLlmCard");
+    const statusEl = interfaceQuery("#managementLlmStatus");
+    const detailEl = interfaceQuery("#managementLlmDetail");
+    const iconEl = interfaceQuery("#managementLlmIcon");
+    const metaEl = interfaceQuery("#managementLlmMeta");
+    const endpointEl = interfaceQuery("#managementLlmEndpoint");
+    const modelEl = interfaceQuery("#managementLlmModel");
+    const latencyEl = interfaceQuery("#managementLlmLatency");
+    const checkBtn = interfaceQuery("#managementLlmCheckBtn");
+
+    if (!card || !statusEl || !detailEl) return;
+    interfaceLlmBusy = true;
+    if (checkBtn) checkBtn.disabled = true;
+    statusEl.textContent = "Проверяем подключение…";
+    detailEl.textContent = "Запрашиваем состояние LLM-сервера…";
+    if (iconEl) {
+      iconEl.dataset.state = "loading";
+      iconEl.textContent = "…";
+    }
+
+    try {
+      const spaceId = typeof currentSpaceId === "function" ? currentSpaceId() : null;
+      const url = spaceId ? `/api/v1/spaces/${encodeURIComponent(spaceId)}/llm/status` : "/api/v1/llm/status";
+      const res = await fetch(url, { headers: { accept: "application/json" } });
+      const json = await res.json();
+      const data = json?.data || {};
+
+      if (data.status === "ready") {
+        statusEl.textContent = "LLM подключен";
+        detailEl.textContent = "Сервер отвечает, модель готова к автосопоставлению и анализу ошибок.";
+        if (iconEl) {
+          iconEl.dataset.state = "success";
+          iconEl.textContent = "✓";
+        }
+        if (metaEl) {
+          metaEl.hidden = false;
+          if (endpointEl) endpointEl.textContent = `Адрес: ${data.endpoint || "—"}`;
+          if (modelEl) modelEl.textContent = `Модель: ${data.model || "по умолчанию"}`;
+          if (latencyEl) latencyEl.textContent = `Отклик: ${data.latencyMs ?? 0} мс`;
+        }
+      } else if (data.status === "disabled") {
+        statusEl.textContent = "LLM выключен";
+        detailEl.textContent = "Нейросетевой помощник отключён в настройках. Система работает полностью автономно.";
+        if (iconEl) {
+          iconEl.dataset.state = "disabled";
+          iconEl.textContent = "○";
+        }
+        if (metaEl) metaEl.hidden = true;
+      } else {
+        statusEl.textContent = "LLM недоступен";
+        detailEl.textContent = `Сервер не отвечает (${data.reason || "ошибка соединения"}). Система работает в обычном ручном режиме.`;
+        if (iconEl) {
+          iconEl.dataset.state = "error";
+          iconEl.textContent = "!";
+        }
+        if (metaEl) {
+          metaEl.hidden = false;
+          if (endpointEl) endpointEl.textContent = `Адрес: ${data.endpoint || "не задан"}`;
+          if (modelEl) modelEl.textContent = "";
+          if (latencyEl) latencyEl.textContent = "";
+        }
+      }
+    } catch {
+      statusEl.textContent = "Ошибка проверки";
+      detailEl.textContent = "Не удалось выполнить запрос к локальному серверу.";
+      if (iconEl) {
+        iconEl.dataset.state = "error";
+        iconEl.textContent = "!";
+      }
+    } finally {
+      interfaceLlmBusy = false;
+      if (checkBtn) checkBtn.disabled = false;
+    }
+  }
+
+  async function interfaceTestLlmPrompt() {
+    const testBtn = interfaceQuery("#managementLlmTestBtn");
+    const resultBox = interfaceQuery("#managementLlmTestResult");
+    const resultLabel = interfaceQuery("#managementLlmTestLabel");
+    const resultContent = interfaceQuery("#managementLlmTestContent");
+
+    if (!testBtn || !resultBox || !resultContent) return;
+    testBtn.disabled = true;
+    testBtn.textContent = "Отправляем…";
+    resultBox.hidden = false;
+    resultBox.dataset.state = "loading";
+    if (resultLabel) resultLabel.textContent = "Ожидание ответа:";
+    resultContent.textContent = "Отправляем проверочный запрос к LLM-серверу…";
+
+    try {
+      const spaceId = typeof currentSpaceId === "function" ? currentSpaceId() : null;
+      const url = spaceId ? `/api/v1/spaces/${encodeURIComponent(spaceId)}/llm/test` : "/api/v1/llm/test";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ prompt: "Ответь кратко на русском языке: подтверди готовность к работе с документами." })
+      });
+      const json = await res.json();
+      const data = json?.data || {};
+
+      if (data.success && data.reply) {
+        if (resultLabel) resultLabel.textContent = `Ответ модели (${data.durationMs ?? 0} мс):`;
+        resultContent.textContent = data.reply;
+        resultBox.dataset.state = "success";
+      } else if (data.status === "disabled") {
+        if (resultLabel) resultLabel.textContent = "LLM выключен:";
+        resultContent.textContent = "Нейросетевой помощник выключен (DOCOMATOR_LLM_ENABLED=false). Включите его в настройках сервера для отправки запросов.";
+        resultBox.dataset.state = "disabled";
+      } else {
+        if (resultLabel) resultLabel.textContent = "Ошибка запроса:";
+        resultContent.textContent = `Модель не ответила: ${data.error || "ошибка соединения"}.`;
+        resultBox.dataset.state = "error";
+      }
+    } catch {
+      if (resultLabel) resultLabel.textContent = "Ошибка:";
+      resultContent.textContent = "Не удалось связаться с локальным сервером для проверки LLM.";
+      resultBox.dataset.state = "error";
+    } finally {
+      testBtn.disabled = false;
+      testBtn.textContent = "Тестовый запрос";
+    }
+  }
+
   function interfaceSyncView() {
     const current = document.querySelector(".view.is-visible")?.dataset.view || state.view || "overview";
     document.body.dataset.currentView = current;
     interfaceSyncWorkflow();
     interfaceSyncManagement();
     interfaceSyncResultSummary();
+    if (current === "settings") {
+      void interfaceCheckLlmStatus();
+    }
   }
 
   function interfaceScheduleSync() {
@@ -295,6 +425,15 @@
     }
     if (event.target.closest("[data-management-refresh]")) {
       void loadData();
+      void interfaceCheckLlmStatus();
+      return;
+    }
+    if (event.target.closest("#managementLlmCheckBtn")) {
+      void interfaceCheckLlmStatus();
+      return;
+    }
+    if (event.target.closest("#managementLlmTestBtn")) {
+      void interfaceTestLlmPrompt();
       return;
     }
     if (event.target.closest("[data-scroll-result-attention]")) {

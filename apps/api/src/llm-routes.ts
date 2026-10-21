@@ -8,12 +8,17 @@ import {
   diagnoseError,
   suggestMappings,
   fillMissingValues,
+  chatCompletionWithLlm,
   type TargetPropertyCandidate,
   type MissingFieldDefinition
 } from "./llm/index.js";
 
 interface SpaceParams {
   spaceId: string;
+}
+
+interface TestPromptBody {
+  prompt?: string | undefined;
 }
 
 interface DiagnoseErrorBody {
@@ -79,6 +84,85 @@ export function registerLlmRoutes(
       const result = await diagnoseLlm(config);
       reply.header("cache-control", "no-store");
       return responseEnvelope(request, result);
+    }
+  );
+
+  // System-level LLM test completion
+  app.post<{ Body: TestPromptBody }>(
+    "/api/v1/llm/test",
+    {
+      schema: {
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            prompt: { type: "string", maxLength: 1000 }
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      const prompt = request.body?.prompt?.trim() ||
+        "Ответь кратко на русском языке: подтверди готовность к работе с документами.";
+      const result = await chatCompletionWithLlm({
+        config,
+        systemPrompt: "Ты — интеллектуальный помощник системы документационного оборота Оформлятор. Отвечай кратко, чётко и вежливо на русском языке.",
+        userPrompt: prompt,
+        maxTokens: 256
+      });
+      reply.header("cache-control", "no-store");
+      return responseEnvelope(request, {
+        success: result.success,
+        status: result.status,
+        reply: result.content || "",
+        model: result.model || config.llmModel || null,
+        endpoint: result.endpoint || config.llmBaseUrl || null,
+        durationMs: result.durationMs,
+        error: result.error || null
+      });
+    }
+  );
+
+  // Space-level LLM test completion
+  app.post<{ Params: SpaceParams; Body: TestPromptBody }>(
+    "/api/v1/spaces/:spaceId/llm/test",
+    {
+      schema: {
+        params: {
+          type: "object",
+          additionalProperties: false,
+          required: ["spaceId"],
+          properties: { spaceId: idSchema }
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            prompt: { type: "string", maxLength: 1000 }
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      spaceRegistry.getSpace(request.params.spaceId);
+      const prompt = request.body?.prompt?.trim() ||
+        "Ответь кратко на русском языке: подтверди готовность к работе с документами.";
+      const result = await chatCompletionWithLlm({
+        config,
+        systemPrompt: "Ты — интеллектуальный помощник системы документационного оборота Оформлятор. Отвечай кратко, чётко и вежливо на русском языке.",
+        userPrompt: prompt,
+        maxTokens: 256
+      });
+      reply.header("cache-control", "no-store");
+      return responseEnvelope(request, {
+        success: result.success,
+        status: result.status,
+        reply: result.content || "",
+        model: result.model || config.llmModel || null,
+        endpoint: result.endpoint || config.llmBaseUrl || null,
+        durationMs: result.durationMs,
+        error: result.error || null
+      });
     }
   );
 
